@@ -1,0 +1,103 @@
+{
+    "common": {
+        "loading": "Loading...",
+        "saving": "Saving...",
+        "submit": "Submit",
+        "cancel": "Cancel",
+        "confirm": "Confirm",
+        "delete": "Delete",
+        "edit": "Edit",
+        "save": "Save",
+        "back": "Back",
+        "next": "Next",
+        "previous": "Previous",
+        "close": "Close",
+        "menu": "Menu",
+        "search": "Search",
+        "filter": "Filter",
+        "sort": "Sort",
+        "upload": "Upload",
+        "download": "Download",
+        "view": "View",
+        "hide": "Hide",
+        "show": "Show",
+        "yes": "Yes",
+        "no": "No",
+        "ok": "OK"
+    },
+    "auth": {
+        "signIn": "Sign In",
+        "signOut": "Sign Out",
+        "signUp": "Sign Up",
+        "register": "Register",
+        "login": "Login",
+        "logout": "Logout",
+        "email": "Email",
+        "password": "Password",
+        "confirmPassword": "Confirm Password",
+        "forgotPassword": "Forgot Password?",
+        "resetPassword": "Reset Password",
+        "rememberMe": "Remember Me",
+        "noAccount": "Don't have an account?",
+        "haveAccount": "Already have an account?",
+        "orContinueWith": "Or continue with",
+        "google": "Google",
+        "github": "GitHub"
+    },
+    "dashboard": {
+        "title": "Dashboard",
+        "welcome": "Welcome back",
+        "overview": "Overview",
+        "stats": "Statistics",
+        "quickActions": "Quick Actions",
+        "recentActivity": "Recent Activity",
+        "systemInfo": "System Info"
+    },
+    "profile": {
+        "title": "Profile",
+        "settings": "Settings",
+        "accountSettings": "Account Settings",
+        "personalInfo": "Personal Information",
+        "security": "Security",
+        "appearance": "Appearance",
+        "notifications": "Notifications",
+        "changePassword": "Change Password",
+        "currentPassword": "Current Password",
+        "newPassword": "New Password",
+        "confirmNewPassword": "Confirm New Password",
+        "avatar": "Avatar",
+        "uploadAvatar": "Upload Avatar",
+        "removeAvatar": "Remove Avatar"
+    },
+    "validation": {
+        "required": "This field is required",
+        "invalidEmail": "Please enter a valid email",
+        "invalidPhone": "Please enter a valid phone number",
+        "passwordTooShort": "Password must be at least 8 characters",
+        "passwordsDontMatch": "Passwords don't match",
+        "minLength": "Must be at least {min} characters",
+        "maxLength": "Must be at most {max} characters"
+    },
+    "messages": {
+        "success": "Success",
+        "error": "Error",
+        "warning": "Warning",
+        "info": "Info",
+        "profileUpdated": "Profile updated successfully",
+        "passwordChanged": "Password changed successfully",
+        "loginSuccess": "Login successful",
+        "logoutSuccess": "Logout successful",
+        "registrationSuccess": "Registration successful"
+    },
+    "navigation": {
+        "home": "Home",
+        "dashboard": "Dashboard",
+        "profile": "Profile",
+        "settings": "Settings",
+        "admin": "Admin"
+    },
+    "darkMode": {
+        "label": "Dark Mode",
+        "description": "Switch between light and dark themes"
+    }
+}

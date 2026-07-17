@@ -1,0 +1,58 @@
+run:
+  timeout: 5m
+  tests: false
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - prealloc
+    - gocritic
+    - revive
+    - nilerr
+    - errorlint
+    - gosec
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+  gocritic:
+    enabled-tags:
+      - performance
+      - style
+      - diagnostic
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+      - name: blank-imports
+      - name: context-as-argument
+      - name: error-naming
+      - name: error-return
+      - name: indent-error-flow
+      - name: unreachable-code
+      - name: unused-parameter
+  gosec:
+    excludes:
+      - G404 # Allow math/rand for non-crypto use
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+    - path: app/queries/
+      linters:
+        - errcheck
+        - revive
+        - gocritic
+    - path: templates/.*_templ\.go
+      linters:
+        - all

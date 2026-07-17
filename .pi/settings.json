@@ -1,0 +1,30 @@
+{
+  "subagents": {
+    "agentOverrides": {
+      "scout": {
+        "model": "deepseek-v4-flash",
+        "thinking": "low"
+      },
+      "researcher": {
+        "model": "deepseek-v4-flash",
+        "thinking": "low"
+      },
+      "planner": {
+        "model": "minimax-m3",
+        "thinking": "high"
+      },
+      "worker": {
+        "model": "deepseek-v4-pro",
+        "thinking": "high"
+      },
+      "reviewer": {
+        "model": "deepseek-v4-pro",
+        "thinking": "high"
+      },
+      "oracle": {
+        "model": "glm-5.2",
+        "thinking": "high"
+      }
+    }
+  }
+}

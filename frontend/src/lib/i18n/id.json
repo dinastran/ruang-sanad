@@ -1,0 +1,103 @@
+{
+    "common": {
+        "loading": "Memuat...",
+        "saving": "Menyimpan...",
+        "submit": "Kirim",
+        "cancel": "Batal",
+        "confirm": "Konfirmasi",
+        "delete": "Hapus",
+        "edit": "Edit",
+        "save": "Simpan",
+        "back": "Kembali",
+        "next": "Lanjut",
+        "previous": "Sebelumnya",
+        "close": "Tutup",
+        "menu": "Menu",
+        "search": "Cari",
+        "filter": "Filter",
+        "sort": "Urutkan",
+        "upload": "Unggah",
+        "download": "Unduh",
+        "view": "Lihat",
+        "hide": "Sembunyikan",
+        "show": "Tampilkan",
+        "yes": "Ya",
+        "no": "Tidak",
+        "ok": "OK"
+    },
+    "auth": {
+        "signIn": "Masuk",
+        "signOut": "Keluar",
+        "signUp": "Daftar",
+        "register": "Daftar",
+        "login": "Masuk",
+        "logout": "Keluar",
+        "email": "Email",
+        "password": "Kata Sandi",
+        "confirmPassword": "Konfirmasi Kata Sandi",
+        "forgotPassword": "Lupa Kata Sandi?",
+        "resetPassword": "Atur Ulang Kata Sandi",
+        "rememberMe": "Ingat Saya",
+        "noAccount": "Belum punya akun?",
+        "haveAccount": "Sudah punya akun?",
+        "orContinueWith": "Atau lanjut dengan",
+        "google": "Google",
+        "github": "GitHub"
+    },
+    "dashboard": {
+        "title": "Dasbor",
+        "welcome": "Selamat datang kembali",
+        "overview": "Ikhtisar",
+        "stats": "Statistik",
+        "quickActions": "Aksi Cepat",
+        "recentActivity": "Aktivitas Terbaru",
+        "systemInfo": "Info Sistem"
+    },
+    "profile": {
+        "title": "Profil",
+        "settings": "Pengaturan",
+        "accountSettings": "Pengaturan Akun",
+        "personalInfo": "Informasi Pribadi",
+        "security": "Keamanan",
+        "appearance": "Tampilan",
+        "notifications": "Notifikasi",
+        "changePassword": "Ubah Kata Sandi",
+        "currentPassword": "Kata Sandi Saat Ini",
+        "newPassword": "Kata Sandi Baru",
+        "confirmNewPassword": "Konfirmasi Kata Sandi Baru",
+        "avatar": "Avatar",
+        "uploadAvatar": "Unggah Avatar",
+        "removeAvatar": "Hapus Avatar"
+    },
+    "validation": {
+        "required": "Bidang ini wajib diisi",
+        "invalidEmail": "Masukkan email yang valid",
+        "invalidPhone": "Masukkan nomor telepon yang valid",
+        "passwordTooShort": "Kata sandi minimal 8 karakter",
+        "passwordsDontMatch": "Kata sandi tidak cocok",
+        "minLength": "Minimal {min} karakter",
+        "maxLength": "Maksimal {max} karakter"
+    },
+    "messages": {
+        "success": "Berhasil",
+        "error": "Kesalahan",
+        "warning": "Peringatan",
+        "info": "Info",
+        "profileUpdated": "Profil berhasil diperbarui",
+        "passwordChanged": "Kata sandi berhasil diubah",
+        "loginSuccess": "Login berhasil",
+        "logoutSuccess": "Logout berhasil",
+        "registrationSuccess": "Pendaftaran berhasil"
+    },
+    "navigation": {
+        "home": "Beranda",
+        "dashboard": "Dasbor",
+        "profile": "Profil",
+        "settings": "Pengaturan",
+        "admin": "Admin"
+    },
+    "darkMode": {
+        "label": "Mode Gelap",
+        "description": "Ganti antara tema terang dan gelap"
+    }
+}

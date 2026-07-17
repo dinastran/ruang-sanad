@@ -1,0 +1,47 @@
+# Air configuration for Laju Go
+# Docs: https://github.com/air-verse/air/blob/master/air_example.toml
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+# Command to build the Go application
+cmd = "go build -o ./tmp/main ./cmd/laju-go"
+# Binary name (relative to tmp_dir)
+bin = "./tmp/main"
+# Delay before sending the build result after file changes (milliseconds)
+delay = 100
+# Include file extensions to watch
+include_ext = ["go", "tpl", "tmpl", "html"]
+# Exclude directories from watching
+exclude_dir = ["frontend", "node_modules", "dist", "tmp", "data", "storage", "public","docs","scripts","systemd","cmd"]
+# Include specific directories to watch
+include_dir = [".", "app", "routes", "migrations"]
+# Exclude files from watching
+exclude_file = []
+# Exclude specific regex patterns from watching
+exclude_regex = ["_test\\.go$", "_mock\\.go$"]
+# Stop running old binary when new build starts
+stop_on_error = false
+# Send interrupt signal before killing the old process
+send_interrupt = true
+# Delay after sending interrupt signal (milliseconds)
+kill_delay = 500
+# Log build output
+log = "air.log"
+
+[log]
+# Log level: debug, info, warn, error, panic
+level = "info"
+# Log time format (Go time format)
+time_format = "2006-01-02 15:04:05"
+
+[misc]
+# Delete tmp directory on exit
+clean_on_exit = true
+
+[proxy]
+# Proxy configuration (optional, for port forwarding)
+enabled = false
+proxy_port = 8090
+app_port = 8080

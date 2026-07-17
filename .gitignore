@@ -1,0 +1,54 @@
+# Go
+go.sum
+vendor/
+
+# Environment
+.env
+
+# Database
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# User uploads
+storage/*
+!storage/.gitkeep
+
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+.deploy
+.vite-port
+# Build artifacts
+tmp/
+dist
+
+# Binaries
+laju-go
+laju-go.exe
+
+
+# LLM Wiki (track wiki/ + raw/; ignore auto-generated meta + outputs)
+.llm-wiki/outputs/
+.llm-wiki/meta/
+/wiki
+

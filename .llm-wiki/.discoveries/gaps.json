@@ -1,0 +1,116 @@
+{
+  "gaps": [
+    {
+      "topic": "entity-go-fiber",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001",
+        "sources/laju-go-docs-sync-actual-codebase"
+      ]
+    },
+    {
+      "topic": "entity-svelte-5",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "entity-inertia-js",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "entity-sqlite",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001",
+        "sources/laju-go-docs-sync-actual-codebase"
+      ]
+    },
+    {
+      "topic": "entity-templ",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "entity-sqlc",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "entity-goose-migration",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "entity-agent-browser",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "entity-vite",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "concept-three-tier-architecture",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "concept-csrf-protection",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "concept-code-generation",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "concept-single-table-migration",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "concept-inertia-spa-navigation",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "concept-svelte-5-reactivity-rules",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "concept-e2e-browser-testing",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "concept-mobile-first-design",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001"
+      ]
+    },
+    {
+      "topic": "concept-cgo-cross-compilation",
+      "mentionedBy": [
+        "sources/SRC-2026-07-06-001",
+        "sources/laju-go-docs-sync-actual-codebase"
+      ]
+    }
+  ],
+  "generated": "2026-07-11T23:43:52.021Z"
+}

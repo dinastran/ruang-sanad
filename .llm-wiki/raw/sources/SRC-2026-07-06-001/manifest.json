@@ -1,0 +1,11 @@
+{
+  "id": "SRC-2026-07-06-001",
+  "captured": "2026-07-06",
+  "packet_version": "1.0",
+  "title": "AGENTS.md",
+  "file_path": "/Volumes/data/Project/laju/laju-go/AGENTS.md",
+  "format": "markdown",
+  "extractor": "passthrough",
+  "extraction_status": "success",
+  "content_type": "text/markdown"
+}

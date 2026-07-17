@@ -1,0 +1,21 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    schema: "migrations/"
+    queries: "queries/"
+    gen:
+      go:
+        package: "queries"
+        out: "app/queries"
+        overrides:
+          - db_type: "DATETIME"
+            go_type:
+              type: "time.Time"
+          - column: "users.password"
+            go_type:
+              import: "database/sql"
+              type: "NullString"
+          - column: "users.google_id"
+            go_type:
+              import: "database/sql"
+              type: "NullString"
