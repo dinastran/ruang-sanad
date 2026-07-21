@@ -69,9 +69,9 @@ echo -e "${YELLOW}Building frontend...${NC}"
 npm run build
 echo -e "${GREEN}✓ Frontend built${NC}"
 
-# Build Go binary for Linux (pure Go SQLite = no CGO needed)
+# Build Go binary for Linux (pure Go SQLite via modernc = no CGO, fully static)
 echo -e "${YELLOW}Building Go binary (linux/amd64)...${NC}"
-GOOS=linux GOARCH=amd64 go build -o "$APP_NAME" .
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o "$APP_NAME" ./cmd/laju-go
 echo -e "${GREEN}✓ Binary built: $APP_NAME${NC}"
 
 echo ""

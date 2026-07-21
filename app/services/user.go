@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/maulanashalihin/laju-go/app/models"
 	"github.com/maulanashalihin/laju-go/app/queries"
@@ -105,4 +106,42 @@ func (s *UserService) IsAdmin(userID int64) (bool, error) {
 	}
 
 	return user.Role == models.RoleAdmin, nil
+}
+
+// ListUsers returns all users
+func (s *UserService) ListUsers() ([]models.UserResponse, error) {
+	users, err := s.querier.ListUsers(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	result := make([]models.UserResponse, len(users))
+	for i, u := range users {
+		avatar := ""
+		if u.Avatar.Valid {
+			avatar = u.Avatar.String
+		}
+		result[i] = models.UserResponse{
+			ID:            u.ID,
+			Email:         u.Email,
+			Name:          u.Name,
+			Avatar:        avatar,
+			Role:          models.UserRole(u.Role),
+			EmailVerified: u.EmailVerified,
+		}
+	}
+	return result, nil
+}
+
+// UpdateUserRole updates a user's role
+func (s *UserService) UpdateUserRole(id int64, role string) error {
+	return s.querier.UpdateUserRole(context.Background(), queries.UpdateUserRoleParams{
+		Role:      role,
+		UpdatedAt: time.Now(),
+		ID:        id,
+	})
+}
+
+// GetUserRole returns a user's role string
+func (s *UserService) GetUserRole(id int64) (string, error) {
+	return s.querier.GetUserRole(context.Background(), id)
 }

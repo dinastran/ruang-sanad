@@ -23,6 +23,9 @@ func NewAppHandler(userService *services.UserService, store *session.Store, iner
 
 // sessionUser builds a UserResponse from session values.
 func sessionUser(sess *session.Session) *models.UserResponse {
+	if sess == nil {
+		return &models.UserResponse{}
+	}
 	return &models.UserResponse{
 		ID:            sess.Get("user_id").(int64),
 		Name:          toStr(sess.Get("name")),

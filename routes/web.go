@@ -18,28 +18,27 @@ type Handlers struct {
 	App           *handlers.AppHandler
 	Upload        *handlers.UploadHandler
 	PasswordReset *handlers.PasswordResetHandler
+	Santri        *handlers.SantriHandler
+	Kelas         *handlers.KelasHandler
+	Master        *handlers.MasterHandler
+	Import        *handlers.ImportHandler
+	Laporan       *handlers.LaporanHandler
+	Admin         *handlers.AdminHandler
+	Dashboard     *handlers.DashboardHandler
 }
 
-func SetupRoutes(app *fiber.App, handlers Handlers, store *session.Store, userService *services.UserService, mailerService *services.MailerService, csrfMiddleware *middlewares.CSRFMiddleware) {
-	// Setup static file serving
+func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, mailerService *services.MailerService, csrfMiddleware *middlewares.CSRFMiddleware) {
 	setupStaticRoutes(app)
-
-	// Setup public routes
-	setupPublicRoutes(app, handlers.Public)
-
-	// Setup auth routes
-	setupAuthRoutes(app, handlers.Auth, handlers.PasswordReset, store, mailerService, csrfMiddleware)
-
-	// Setup app routes (protected)
-	setupAppRoutes(app, handlers.App, handlers.Upload, store, userService, csrfMiddleware)
+	setupPublicRoutes(app, h.Public)
+	setupAuthRoutes(app, h.Auth, h.PasswordReset, store, mailerService, csrfMiddleware)
+	setupAppRoutes(app, h, store, userService, csrfMiddleware)
+	setupAdminRoutes(app, h, store, userService, csrfMiddleware)
 }
 
 func setupStaticRoutes(app *fiber.App) {
-	// Static assets with aggressive caching — hashed filenames from Vite are immutable
-	// Compress: true caches compressed (brotli/gzip) versions in memory, minimizing CPU reuse.
 	app.Static("/dist", "./dist", fiber.Static{
 		CacheDuration: 365 * 24 * time.Hour,
-		MaxAge:        31536000, // 1 year in seconds
+		MaxAge:        31536000,
 		Compress:      true,
 	})
 	app.Static("/assets", "./dist/assets", fiber.Static{
@@ -47,12 +46,10 @@ func setupStaticRoutes(app *fiber.App) {
 		MaxAge:        31536000,
 		Compress:      true,
 	})
-	// Public assets (non-hashed, short cache)
 	app.Static("/public", "./public", fiber.Static{
 		CacheDuration: 1 * time.Hour,
 		MaxAge:        3600,
 	})
-	// Uploaded files (avatars, completed uploads — moderate cache)
 	app.Static("/storage", "./storage", fiber.Static{
 		CacheDuration: 24 * time.Hour,
 		MaxAge:        86400,
@@ -65,63 +62,111 @@ func setupPublicRoutes(app *fiber.App, handler *handlers.PublicHandler) {
 }
 
 func setupAuthRoutes(app *fiber.App, authHandler *handlers.AuthHandler, passwordResetHandler *handlers.PasswordResetHandler, store *session.Store, mailerService *services.MailerService, csrfMiddleware *middlewares.CSRFMiddleware) {
-	// Login routes (with Guest middleware)
 	app.Get("/login", middlewares.Guest(store), authHandler.ShowLoginForm)
 	app.Post("/login", middlewares.Guest(store), authHandler.Login, middlewares.AuthRateLimit.Limit())
-
-	// Register routes (with Guest middleware)
 	app.Get("/register", middlewares.Guest(store), authHandler.ShowRegisterForm)
 	app.Post("/register", middlewares.Guest(store), authHandler.Register, middlewares.AuthRateLimit.Limit())
-
-	// OAuth routes
 	app.Get("/auth/google", authHandler.GoogleLogin)
 	app.Get("/auth/google/callback", authHandler.GoogleCallback)
-
-	// Logout (requires auth + CSRF protection)
 	app.Post("/logout", middlewares.AuthRequired(store), csrfMiddleware.Protect(), authHandler.Logout)
-
-	// Password reset routes
 	app.Get("/forgot-password", passwordResetHandler.ShowForgotPasswordForm)
 	app.Post("/forgot-password", passwordResetHandler.SendResetLink, middlewares.PasswordResetRateLimit.Limit())
 	app.Get("/reset-password/:token", passwordResetHandler.ShowResetPasswordForm)
 	app.Post("/reset-password/:token", passwordResetHandler.ResetPassword)
 }
 
-func setupAppRoutes(app *fiber.App, appHandler *handlers.AppHandler, uploadHandler *handlers.UploadHandler, store *session.Store, userService *services.UserService, csrfMiddleware *middlewares.CSRFMiddleware) {
-	// Protected app routes with CSRF protection
+func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, csrfMiddleware *middlewares.CSRFMiddleware) {
 	protected := app.Group("/app", middlewares.AuthRequired(store))
 	protected.Use(csrfMiddleware.Protect())
 
-	// Dashboard
-	protected.Get("/", appHandler.Dashboard)
+	// Dashboard (all roles)
+	protected.Get("/", h.Dashboard.Index)
 
 	// Profile
-	protected.Get("/profile", appHandler.Profile)
-	protected.Put("/profile", appHandler.UpdateProfile)
-	protected.Put("/profile/password", appHandler.UpdatePassword)
+	protected.Get("/profile", h.App.Profile)
+	protected.Put("/profile", h.App.UpdateProfile)
+	protected.Put("/profile/password", h.App.UpdatePassword)
 
-	// Upload Test page
-	protected.Get("/upload", appHandler.UploadTest)
+	// Upload
+	protected.Get("/upload", h.App.UploadTest)
+	protected.Post("/upload", h.Upload.AvatarUpload)
 
-	// Avatar upload (legacy multipart, for Profile page)
-	protected.Post("/upload", uploadHandler.AvatarUpload)
-
-	// TUS resumable upload protocol endpoints — directly on app.
-	// AuthRequired applied internally by RegisterTUSRoutes via /tus prefix middleware.
-	// BasePath = /tus/files/ so Location URLs correctly include /tus/ prefix.
+	// TUS routes
 	authMiddleware := middlewares.AuthRequired(store)
-	uploadHandler.RegisterTUSRoutes(app, authMiddleware)
+	h.Upload.RegisterTUSRoutes(app, authMiddleware)
 
-	// Admin-only routes
-	admin := app.Group("/admin", middlewares.AdminRequired(store, userService))
-	admin.Get("/", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"message": "Admin dashboard",
-		})
-	})
+	// Role middleware is attached PER-ROUTE (not via empty-prefix groups).
+	// Fiber mounts an empty-prefix Group's middleware at the parent path, so it
+	// leaks onto every later /app/* route — which previously blocked each role
+	// from routes owned by another role group. Route-level middleware is scoped
+	// to exactly one route and does not leak.
+	csRole := middlewares.RoleRequired(store, userService, "cs", "super_admin")
+	akRole := middlewares.RoleRequired(store, userService, "admin_kelas", "super_admin")
+	kuRole := middlewares.RoleRequired(store, userService, "keuangan", "super_admin")
+	// Data Santri is viewable (read-only) by admin_kelas as well; the mutating
+	// routes below stay CS-only so admin_kelas can look but not edit.
+	santriViewRole := middlewares.RoleRequired(store, userService, "cs", "admin_kelas", "super_admin")
+
+	// CS routes (cs + super_admin); list & detail also viewable by admin_kelas
+	protected.Get("/santri", santriViewRole, h.Santri.Index)
+	protected.Get("/santri/new", csRole, h.Santri.New)
+	protected.Post("/santri", csRole, h.Santri.Store)
+	protected.Get("/santri/:id", santriViewRole, h.Santri.Show)
+	protected.Put("/santri/:id/cs", csRole, h.Santri.UpdateCS)
+
+	// Admin Kelas routes (admin_kelas + super_admin)
+	protected.Get("/perlu-dilengkapi", akRole, h.Santri.PerluDilengkapi)
+	protected.Put("/santri/:id/kelas-data", akRole, h.Santri.UpdateAdminKelas)
+	protected.Post("/santri/:id/pindah", akRole, h.Santri.PindahKelas)
+	protected.Get("/kelas", akRole, h.Kelas.Index)
+	protected.Get("/kelas/:id", akRole, h.Kelas.Show)
+	protected.Put("/kelas/:id/guru", akRole, h.Kelas.AssignGuru)
+	protected.Put("/kelas/:id/status", akRole, h.Kelas.SetAktif)
+	protected.Delete("/kelas/:id", akRole, h.Kelas.Delete)
+
+	// Keuangan routes (keuangan + super_admin)
+	protected.Get("/keuangan", kuRole, h.Santri.Keuangan)
+	protected.Put("/santri/:id/keuangan", kuRole, h.Santri.UpdateKeuangan)
+	protected.Get("/laporan/keuangan", kuRole, h.Laporan.Keuangan)
+
+	// Master data API (all authenticated)
+	api := protected.Group("/api")
+	api.Get("/master/angkatan", h.Master.Angkatan)
+	api.Get("/master/level", h.Master.Level)
+	api.Get("/master/jadwal", h.Master.Jadwal)
+	api.Get("/master/guru", h.Master.Guru)
+	api.Get("/master/kode-kelas", h.Master.KodeKelas)
+
+	// Master data management (admin_kelas + super_admin)
+	protected.Get("/master", akRole, h.Master.Index)
+	protected.Post("/master/angkatan", akRole, h.Master.CreateAngkatan)
+	protected.Put("/master/angkatan/:id", akRole, h.Master.UpdateAngkatan)
+	protected.Delete("/master/angkatan/:id", akRole, h.Master.DeleteAngkatan)
+	protected.Post("/master/level", akRole, h.Master.CreateLevel)
+	protected.Put("/master/level/:id", akRole, h.Master.UpdateLevel)
+	protected.Delete("/master/level/:id", akRole, h.Master.DeleteLevel)
+	protected.Post("/master/jadwal", akRole, h.Master.CreateJadwal)
+	protected.Put("/master/jadwal/:id", akRole, h.Master.UpdateJadwal)
+	protected.Delete("/master/jadwal/:id", akRole, h.Master.DeleteJadwal)
+	protected.Post("/master/guru", akRole, h.Master.CreateGuru)
+	protected.Put("/master/guru/:id", akRole, h.Master.UpdateGuru)
+	protected.Delete("/master/guru/:id", akRole, h.Master.DeleteGuru)
+	protected.Post("/master/kode-kelas", akRole, h.Master.CreateKodeKelas)
+	protected.Put("/master/kode-kelas/:id", akRole, h.Master.UpdateKodeKelas)
+	protected.Delete("/master/kode-kelas/:id", akRole, h.Master.DeleteKodeKelas)
 }
 
-// SetupCSRFMiddleware sets up the CSRF middleware
+func setupAdminRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, csrfMiddleware *middlewares.CSRFMiddleware) {
+	sa := app.Group("/admin", middlewares.RoleRequired(store, userService, "super_admin"))
+	sa.Use(csrfMiddleware.Protect())
+	sa.Get("/", h.Admin.Dashboard)
+	sa.Get("/users", h.Admin.Users)
+	sa.Put("/users/:id/role", h.Admin.UpdateUserRole)
+	sa.Get("/import", h.Import.Show)
+	sa.Post("/import", h.Import.Upload)
+	sa.Get("/import/template", h.Import.Template)
+}
+
 func SetupCSRFMiddleware(secret string, secure bool) *middlewares.CSRFMiddleware {
 	config := middlewares.DefaultCSRFConfig(secret)
 	config.Secure = secure
@@ -129,12 +174,10 @@ func SetupCSRFMiddleware(secret string, secure bool) *middlewares.CSRFMiddleware
 	return middlewares.NewCSRFMiddleware(config)
 }
 
-// SetupMailerService sets up the mailer service
 func SetupMailerService(querier *queries.Querier, smtpHost string, smtpPort int, smtpUser, smtpPass, fromEmail, fromName, appURL string) *services.MailerService {
 	return services.NewMailerService(querier, smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, fromName, appURL)
 }
 
-// SetupPasswordResetHandler sets up the password reset handler
 func SetupPasswordResetHandler(
 	mailerService *services.MailerService,
 	userService *services.UserService,
@@ -149,7 +192,6 @@ func SetupPasswordResetHandler(
 	)
 }
 
-// GetAppURL returns the application URL based on environment
 func GetAppURL(appPort string, appEnv string) string {
 	if appEnv == "production" {
 		return "https://yourdomain.com"

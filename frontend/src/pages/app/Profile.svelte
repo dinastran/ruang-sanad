@@ -131,7 +131,7 @@
 
     <!-- Page Header -->
     <div class="pt-8 pb-12 border-b border-neutral-200/80 dark:border-white/[0.04]">
-        <div class="max-w-5xl mx-auto px-6">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6">
             <div class="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400 mb-4">
                 <a href="/app" use:inertia class="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Dashboard</a>
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -139,7 +139,7 @@
                 </svg>
                 <span class="text-neutral-700 dark:text-neutral-300">Settings</span>
             </div>
-            <h1 class="text-3xl font-bold text-neutral-900 dark:text-white mb-2">
+            <h1 class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white mb-2">
                 Account Settings
             </h1>
             <p class="text-neutral-600 dark:text-neutral-400">
@@ -149,7 +149,7 @@
     </div>
 
     <!-- Content Area -->
-    <div class="relative max-w-5xl mx-auto px-6 py-12">
+    <div class="relative max-w-5xl mx-auto px-4 sm:px-6 py-12">
         <!-- Flash Messages -->
         {#if success}
             <div

@@ -275,7 +275,7 @@
 <AppLayout {user} group="upload">
 	<!-- Page Header -->
 	<div class="pt-8 pb-10 border-b border-neutral-200/80 dark:border-white/[0.04]">
-		<div class="max-w-6xl mx-auto px-6">
+		<div class="max-w-6xl mx-auto px-4 sm:px-6">
 			<div class="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400 mb-4">
 				<a href="/app" use:inertia class="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Dashboard</a>
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -285,7 +285,7 @@
 			</div>
 			<div class="flex items-start justify-between gap-4 flex-wrap">
 				<div>
-					<h1 class="text-3xl font-bold text-neutral-900 dark:text-white mb-2 tracking-tight">File Upload Test</h1>
+					<h1 class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white mb-2 tracking-tight">File Upload Test</h1>
 					<p class="text-neutral-600 dark:text-neutral-400 max-w-xl">
 						Test the TUS resumable upload protocol. Big files, chunked uploads, progress tracking —
 						all powered by <a href="https://github.com/maulanashalihin/tusdfiber" target="_blank" rel="noopener" class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 font-medium underline underline-offset-2">tusdfiber</a>.
@@ -296,20 +296,20 @@
 	</div>
 
 	<!-- Content Area -->
-	<div class="relative max-w-6xl mx-auto px-6 py-8 space-y-6">
+	<div class="relative max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
 		<!-- Stats bar -->
 		<div class="grid grid-cols-3 gap-4" in:fly={{ y: 20, duration: 600 }}>
 			<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-5">
 				<p class="text-sm text-neutral-500 dark:text-neutral-400 mb-1">Uploaded Files</p>
-				<p class="text-3xl font-bold text-neutral-900 dark:text-white font-mono">{totalUploaded}</p>
+				<p class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white font-mono">{totalUploaded}</p>
 			</div>
 			<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-5">
 				<p class="text-sm text-neutral-500 dark:text-neutral-400 mb-1">Total Size</p>
-				<p class="text-3xl font-bold text-neutral-900 dark:text-white font-mono">{formatBytes(totalBytes)}</p>
+				<p class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white font-mono">{formatBytes(totalBytes)}</p>
 			</div>
 			<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-5">
 				<p class="text-sm text-neutral-500 dark:text-neutral-400 mb-1">Active Uploads</p>
-				<p class="text-3xl font-bold text-neutral-900 dark:text-white font-mono">{activeUploads}</p>
+				<p class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white font-mono">{activeUploads}</p>
 			</div>
 		</div>
 

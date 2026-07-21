@@ -9,6 +9,70 @@ import (
 	"time"
 )
 
+type Angkatan struct {
+	ID         int64
+	Kode       string
+	Keterangan string
+	IsAktif    int64
+	CreatedAt  time.Time
+}
+
+type Guru struct {
+	ID           int64
+	Nama         string
+	JenisKelamin string
+	IsAktif      int64
+}
+
+type ImportLog struct {
+	ID         int64
+	UserID     int64
+	NamaFile   string
+	TotalBaris int64
+	Berhasil   int64
+	Gagal      int64
+	Catatan    string
+	CreatedAt  time.Time
+}
+
+type Jadwal struct {
+	ID   int64
+	Nama string
+}
+
+type Kela struct {
+	ID           int64
+	KunciKelas   string
+	Angkatan     string
+	Tipe         string
+	JenisKelamin string
+	Level        string
+	Frekuensi    string
+	Jadwal       string
+	SubIndex     int64
+	NamaKelas    string
+	GuruID       sql.NullInt64
+	Kapasitas    int64
+	JumlahSantri int64
+	CreatedAt    time.Time
+	IsAktif      int64
+}
+
+type KodeKela struct {
+	ID        int64
+	Kode      string
+	Tipe      string
+	Frekuensi string
+	Urutan    int64
+}
+
+type Level struct {
+	ID     int64
+	Kode   string
+	Nama   string
+	Urutan int64
+}
+
 type PasswordReset struct {
 	Token     string
 	UserID    int64
@@ -16,6 +80,39 @@ type PasswordReset struct {
 	ExpiresAt time.Time
 	Used      int64
 	CreatedAt time.Time
+}
+
+type Santri struct {
+	ID                    int64
+	IDMahasantri          string
+	KelasKode             string
+	Nama                  string
+	JenisKelamin          string
+	Nominal               int64
+	TanggalDaftar         sql.NullTime
+	Angkatan              string
+	Usia                  sql.NullInt64
+	Domisili              string
+	Fu                    string
+	TanggalVn             sql.NullTime
+	HasilVn               string
+	MasukGrup             string
+	MulaiBelajar          sql.NullTime
+	Jumlah                sql.NullInt64
+	Level                 string
+	Jadwal                string
+	Guru                  string
+	JadwalCatatan         string
+	InfaqTerakhir         string
+	KeteranganTidakLanjut string
+	Tipe                  string
+	Frekuensi             string
+	IsLengkap             int64
+	KelasID               sql.NullInt64
+	Status                string
+	CreatedBy             sql.NullInt64
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 }
 
 type Session struct {

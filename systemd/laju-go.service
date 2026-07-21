@@ -1,13 +1,15 @@
 [Unit]
-Description=Laju Go Application
+Description=APP_NAME Application
 After=network.target
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
-WorkingDirectory=/opt/laju-go
-ExecStart=/opt/laju-go/laju-go
+# Runs as root for simplicity (single-app personal server). first-deploy.sh
+# rewrites the /opt/APP_NAME paths and APP_NAME below to your real values.
+User=root
+Group=root
+WorkingDirectory=/opt/APP_NAME
+ExecStart=/opt/APP_NAME/APP_NAME
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -19,10 +21,10 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/laju-go/data /opt/laju-go/storage
+ReadWritePaths=/opt/APP_NAME/data /opt/APP_NAME/storage /opt/APP_NAME/backups
 
 # Environment
-EnvironmentFile=/opt/laju-go/.env
+EnvironmentFile=/opt/APP_NAME/.env
 
 [Install]
 WantedBy=multi-user.target

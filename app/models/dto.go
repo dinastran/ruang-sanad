@@ -37,3 +37,7 @@ func (u *User) ToResponse() UserResponse {
 		EmailVerified: u.EmailVerified,
 	}
 }
+
+func ValidRoles() []UserRole {
+	return []UserRole{RoleUser, RoleAdmin, RoleCS, RoleAdminKelas, RoleKeuangan, RoleSuperAdmin}
+}

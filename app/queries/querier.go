@@ -318,6 +318,37 @@ func (q *Querier) EncodeSessionData(data *models.SessionData) (string, error) {
 	return sessionDataToJSON(data)
 }
 
+// --- Import Log operations (hand-written, no sqlc queries yet) ---
+
+const createImportLog = `INSERT INTO import_log (user_id, nama_file, total_baris, berhasil, gagal, catatan, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+
+func (q *Querier) CreateImportLog(ctx context.Context, userID int64, namaFile string, totalBaris, berhasil, gagal int64, catatan string) error {
+	_, err := q.Queries.db.ExecContext(ctx, createImportLog, userID, namaFile, totalBaris, berhasil, gagal, catatan, time.Now())
+	return err
+}
+
+const listImportLogs = `SELECT id, user_id, nama_file, total_baris, berhasil, gagal, catatan, created_at FROM import_log ORDER BY created_at DESC`
+
+func (q *Querier) ListImportLogs(ctx context.Context) ([]ImportLog, error) {
+	rows, err := q.Queries.db.QueryContext(ctx, listImportLogs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ImportLog
+	for rows.Next() {
+		var i ImportLog
+		if err := rows.Scan(&i.ID, &i.UserID, &i.NamaFile, &i.TotalBaris, &i.Berhasil, &i.Gagal, &i.Catatan, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	return items, rows.Err()
+}
+
 // isDuplicateEmail checks if the error is a duplicate email error
 func isDuplicateEmail(err error) bool {
 	if err == nil {
