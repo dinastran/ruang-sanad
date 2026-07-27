@@ -124,7 +124,7 @@
 	function handlePindahkanSantri() {
 		if (!pindahKelasId) return;
 		isPindahLoading = true;
-		router.put("/app/santri/" + pindahModal.santriId + "/pindah-kelas", { kelas_id: pindahKelasId }, {
+		router.put("/app/santri/" + pindahModal.santriId + "/pindah", { kelas_tujuan_id: pindahKelasId }, {
 			preserveScroll: true,
 			onSuccess: () => {
 				Toast("Santri berhasil dipindahkan", "success");
@@ -138,6 +138,7 @@
 			},
 		});
 	}
+
 </script>
 
 <AppLayout {user} group="dashboard">

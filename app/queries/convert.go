@@ -1,6 +1,8 @@
 package queries
 
 import (
+	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/maulanashalihin/laju-go/app/models"
@@ -16,8 +18,10 @@ func (s Santri) ToResponse() models.SantriResponse {
 		Nominal:               s.Nominal,
 		Angkatan:              s.Angkatan,
 		Domisili:              s.Domisili,
+		NoWA:                  s.NoWa,
 		Fu:                    s.Fu,
 		HasilVn:               s.HasilVn,
+		KeteranganVn:          s.KeteranganVn,
 		MasukGrup:             s.MasukGrup,
 		Level:                 s.Level,
 		Jadwal:                s.Jadwal,
@@ -53,28 +57,43 @@ func (s Santri) ToResponse() models.SantriResponse {
 	if s.CreatedBy.Valid {
 		r.CreatedBy = &s.CreatedBy.Int64
 	}
+	if s.VoiceNoteUrl != "" {
+		r.VoiceNoteURL = fmt.Sprintf("/app/santri/%d/voice-note/audio", s.ID)
+	}
 	return r
 }
 
 func (k Kela) ToResponse() models.KelasResponse {
+	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.IsAktif, k.CreatedAt)
+}
+
+func (k ListKelasByAngkatanRow) ToResponse() models.KelasResponse {
+	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.IsAktif, k.CreatedAt)
+}
+
+func (k GetKelasByIDRow) ToResponse() models.KelasResponse {
+	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.IsAktif, k.CreatedAt)
+}
+
+func kelasResponse(id int64, kunciKelas, angkatan, tipe, jenisKelamin, level, frekuensi, jadwal string, subIndex int64, namaKelas string, guruID sql.NullInt64, kapasitas, jumlahSantri, isAktif int64, createdAt time.Time) models.KelasResponse {
 	r := models.KelasResponse{
-		ID:           k.ID,
-		KunciKelas:   k.KunciKelas,
-		Angkatan:     k.Angkatan,
-		Tipe:         k.Tipe,
-		JenisKelamin: k.JenisKelamin,
-		Level:        k.Level,
-		Frekuensi:    k.Frekuensi,
-		Jadwal:       k.Jadwal,
-		SubIndex:     k.SubIndex,
-		NamaKelas:    k.NamaKelas,
-		Kapasitas:    k.Kapasitas,
-		JumlahSantri: k.JumlahSantri,
-		IsAktif:      k.IsAktif == 1,
-		CreatedAt:    k.CreatedAt.Format("2006-01-02 15:04:05"),
+		ID:           id,
+		KunciKelas:   kunciKelas,
+		Angkatan:     angkatan,
+		Tipe:         tipe,
+		JenisKelamin: jenisKelamin,
+		Level:        level,
+		Frekuensi:    frekuensi,
+		Jadwal:       jadwal,
+		SubIndex:     subIndex,
+		NamaKelas:    namaKelas,
+		Kapasitas:    kapasitas,
+		JumlahSantri: jumlahSantri,
+		IsAktif:      isAktif == 1,
+		CreatedAt:    createdAt.Format("2006-01-02 15:04:05"),
 	}
-	if k.GuruID.Valid {
-		r.GuruID = &k.GuruID.Int64
+	if guruID.Valid {
+		r.GuruID = &guruID.Int64
 	}
 	return r
 }

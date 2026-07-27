@@ -77,12 +77,18 @@ func (h *SantriHandler) New(c *fiber.Ctx) error {
 	user := sessionUser(sess)
 
 	angkatanList, _ := h.masterService.ListAngkatan()
+	levelList, _ := h.masterService.ListLevel()
+	jadwalList, _ := h.masterService.ListJadwal()
+	guruList, _ := h.masterService.ListGuru()
 	kodeKelasList, _ := h.masterService.ListKodeKelas()
 
 	return h.inertiaService.Render(c, "app/SantriForm", fiber.Map{
 		"user":       user,
 		"santri":     nil,
 		"angkatan":   angkatanList,
+		"levels":     levelList,
+		"jadwals":    jadwalList,
+		"gurus":      guruList,
 		"kode_kelas": kodeKelasList,
 	})
 }

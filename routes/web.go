@@ -39,12 +39,18 @@ func setupStaticRoutes(app *fiber.App) {
 	app.Static("/dist", "./dist", fiber.Static{
 		CacheDuration: 365 * 24 * time.Hour,
 		MaxAge:        31536000,
-		Compress:      true,
+		// Compress disabled on purpose: Fiber's Static compression writes cached
+		// .fiber.gz/.br files next to the assets, which fails when dist is a
+		// read-only deploy dir (systemd ProtectSystem=strict) → 404 on gzip
+		// requests. Cloudflare (and any reverse proxy) compresses at the edge.
 	})
 	app.Static("/assets", "./dist/assets", fiber.Static{
 		CacheDuration: 365 * 24 * time.Hour,
 		MaxAge:        31536000,
-		Compress:      true,
+		// Compress disabled on purpose: Fiber's Static compression writes cached
+		// .fiber.gz/.br files next to the assets, which fails when dist is a
+		// read-only deploy dir (systemd ProtectSystem=strict) → 404 on gzip
+		// requests. Cloudflare (and any reverse proxy) compresses at the edge.
 	})
 	app.Static("/public", "./public", fiber.Static{
 		CacheDuration: 1 * time.Hour,
@@ -117,6 +123,8 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	// Admin Kelas routes (admin_kelas + super_admin)
 	protected.Get("/perlu-dilengkapi", akRole, h.Santri.PerluDilengkapi)
 	protected.Put("/santri/:id/kelas-data", akRole, h.Santri.UpdateAdminKelas)
+	protected.Post("/santri/:id/voice-note", akRole, middlewares.UploadRateLimit.Limit(), h.Santri.UploadVoiceNote)
+	protected.Get("/santri/:id/voice-note/audio", akRole, h.Santri.ServeVoiceNote)
 	protected.Post("/santri/:id/pindah", akRole, h.Santri.PindahKelas)
 	protected.Get("/kelas", akRole, h.Kelas.Index)
 	protected.Get("/kelas/:id", akRole, h.Kelas.Show)

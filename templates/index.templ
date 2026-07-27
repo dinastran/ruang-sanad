@@ -7,8 +7,13 @@ templ LandingPage(title string, isDev bool, viteURL string, mainCSS string) {
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>{ title } - Ruang Sanad</title>
-			<meta name="description" content="Sistem Dashboard Pengelolaan Mahasantri Ruang Sanad"/>
-			<meta name="theme-color" content="#f8fafc"/>
+			<meta name="description" content="Sistem pengelolaan mahasantri Ruang Sanad — pendaftaran, pembagian kelas, jadwal, dan laporan keuangan."/>
+			<link rel="icon" href="/public/favicon.ico" sizes="any"/>
+			<link rel="icon" type="image/png" sizes="32x32" href="/public/favicon.png"/>
+			<link rel="icon" type="image/png" sizes="16x16" href="/public/favicon-16.png"/>
+			<link rel="apple-touch-icon" href="/public/android-chrome-512x512.png"/>
+			<link rel="manifest" href="/public/site.webmanifest"/>
+			<meta name="theme-color" content="#14b8a6"/>
 			<style>
 				@keyframes fade-in-up {
 					from { opacity: 0; transform: translateY(20px); }
@@ -24,17 +29,8 @@ templ LandingPage(title string, isDev bool, viteURL string, mainCSS string) {
 		<body class="bg-neutral-50 text-neutral-900 antialiased min-h-screen font-sans">
 			<main class="min-h-screen flex flex-col items-center justify-center px-6 py-16">
 				<div class="max-w-lg w-full text-center anim-fade-up">
-					<div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-400/20 mb-6">
-						<svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-							<rect width="32" height="32" rx="8" fill="url(#logoGrad)"/>
-							<path d="M19 7L10 17h5l-1 8 9-10h-5l1-8Z" fill="white"/>
-							<defs>
-								<linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-									<stop offset="0%" stop-color="#22d3ee"/>
-									<stop offset="100%" stop-color="#a855f7"/>
-								</linearGradient>
-							</defs>
-						</svg>
+					<div class="inline-flex items-center justify-center mb-6">
+						<img src="/public/android-chrome-512x512.png" alt="Ruang Sanad" width="72" height="72" class="w-[72px] h-[72px] object-contain"/>
 					</div>
 					<h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">
 						Ruang <span class="text-brand-500">Sanad</span>

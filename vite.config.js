@@ -62,7 +62,9 @@ export default defineConfig({
 	},
 	build: {
 		outDir: "../dist",
-		emptyOutDir: true,
+		// Retain prior content-hashed chunks while a browser still runs an older
+		// entry bundle during a local rebuild or deployment.
+		emptyOutDir: false,
 		manifest: true,
 		target: "es2022",
 		rollupOptions: {

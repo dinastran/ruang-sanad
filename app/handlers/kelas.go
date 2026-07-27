@@ -66,6 +66,13 @@ func (h *KelasHandler) Show(c *fiber.Ctx) error {
 
 	santriList, _ := h.kelasService.GetSantriByKelasID(id)
 	guruList, _ := h.masterService.ListGuruAll()
+	kelasList, _ := h.kelasService.ListByAngkatan(kelas.Angkatan)
+	kelasLain := make([]models.KelasResponse, 0, len(kelasList))
+	for _, item := range kelasList {
+		if item.ID != kelas.ID && item.IsAktif {
+			kelasLain = append(kelasLain, item)
+		}
+	}
 
 	if kelas.GuruID != nil {
 		for _, g := range guruList {
@@ -77,10 +84,11 @@ func (h *KelasHandler) Show(c *fiber.Ctx) error {
 	}
 
 	return h.inertiaService.Render(c, "app/KelasDetail", fiber.Map{
-		"user":   user,
-		"kelas":  kelas,
-		"santri": santriList,
-		"gurus":  guruList,
+		"user":       user,
+		"kelas":      kelas,
+		"santri":     santriList,
+		"gurus":      guruList,
+		"kelas_lain": kelasLain,
 	})
 }
 

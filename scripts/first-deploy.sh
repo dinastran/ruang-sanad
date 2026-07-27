@@ -72,16 +72,18 @@ if [ ! -f "$SERVICE_FILE" ]; then
 fi
 
 if [ -f "$SERVICE_FILE" ]; then
-    # Upload and configure service file
-    scp "$SERVICE_FILE" "$SERVER_USER@$SERVER_HOST:/etc/systemd/system/$SERVICE_NAME.service"
+    # Upload to a temp path (deploy user can't write /etc directly), then move
+    # into place and template it — all via sudo (passwordless sudo required).
+    scp "$SERVICE_FILE" "$SERVER_USER@$SERVER_HOST:/tmp/$SERVICE_NAME.service"
     ssh "$SERVER_USER@$SERVER_HOST" "
-        sed -i 's|/opt/APP_NAME|$SERVER_PATH|g' /etc/systemd/system/$SERVICE_NAME.service
-        sed -i 's|APP_NAME|$APP_NAME|g' /etc/systemd/system/$SERVICE_NAME.service
-        sed -i 's|SyslogIdentifier=laju-go|SyslogIdentifier=$SERVICE_NAME|g' /etc/systemd/system/$SERVICE_NAME.service
+        sudo mv /tmp/$SERVICE_NAME.service /etc/systemd/system/$SERVICE_NAME.service
+        sudo sed -i 's|/opt/APP_NAME|$SERVER_PATH|g' /etc/systemd/system/$SERVICE_NAME.service
+        sudo sed -i 's|APP_NAME|$APP_NAME|g' /etc/systemd/system/$SERVICE_NAME.service
+        sudo sed -i 's|SyslogIdentifier=laju-go|SyslogIdentifier=$SERVICE_NAME|g' /etc/systemd/system/$SERVICE_NAME.service
     "
 else
     # Create service file directly on server
-    ssh "$SERVER_USER@$SERVER_HOST" "cat > /etc/systemd/system/$SERVICE_NAME.service << 'SERVICEEOF'
+    ssh "$SERVER_USER@$SERVER_HOST" "sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null << 'SERVICEEOF'
 [Unit]
 Description=$APP_NAME Application
 After=network.target
@@ -112,9 +114,9 @@ fi
 
 # Enable and start
 ssh "$SERVER_USER@$SERVER_HOST" "
-    systemctl daemon-reload
-    systemctl enable $SERVICE_NAME
-    systemctl start $SERVICE_NAME
+    sudo systemctl daemon-reload
+    sudo systemctl enable $SERVICE_NAME
+    sudo systemctl start $SERVICE_NAME
 "
 
 sleep 2
@@ -136,7 +138,7 @@ if ssh "$SERVER_USER@$SERVER_HOST" "systemctl is-active $SERVICE_NAME" > /dev/nu
     echo -e "${GREEN}✓ Service is running${NC}"
 else
     echo -e "${RED}Service failed to start. Check logs:${NC}"
-    ssh "$SERVER_USER@$SERVER_HOST" "journalctl -u $SERVICE_NAME -n 30 --no-pager"
+    ssh "$SERVER_USER@$SERVER_HOST" "sudo journalctl -u $SERVICE_NAME -n 30 --no-pager"
     exit 1
 fi
 

@@ -90,13 +90,24 @@ echo ""
 # Upload artifacts — only what's needed at runtime
 echo -e "${BLUE}Uploading artifacts...${NC}"
 
-# Create remote directory if needed
-ssh "$SERVER_USER@$SERVER_HOST" "mkdir -p $SERVER_PATH"
+# On updates, stop the running service first — otherwise scp can't overwrite the
+# in-use binary ("Text file busy" / dest open Failure).
+if [ "$IS_FIRST" = false ]; then
+    ssh "$SERVER_USER@$SERVER_HOST" "sudo systemctl stop $SERVICE_NAME" || true
+fi
 
-# Upload binary, frontend assets, and migrations
+# Create remote directory if needed (uses sudo because /opt is root-owned, then
+# hands ownership to the deploy user so scp uploads work without sudo).
+ssh "$SERVER_USER@$SERVER_HOST" "sudo mkdir -p $SERVER_PATH && sudo chown $SERVER_USER:$SERVER_USER $SERVER_PATH"
+
+# Upload binary, frontend assets, and migrations.
+# Keep old hashed Vite chunks so clients running a previously loaded entry bundle
+# can finish navigation after a deploy. The new manifest is copied with the build.
 scp "$APP_NAME" "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/"
-scp -r dist "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/dist"
+ssh "$SERVER_USER@$SERVER_HOST" "mkdir -p $SERVER_PATH/dist && rm -rf $SERVER_PATH/migrations $SERVER_PATH/public"
+scp -r dist/. "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/dist/"
 scp -r migrations "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/migrations"
+scp -r public "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/public"
 ssh "$SERVER_USER@$SERVER_HOST" "chmod +x $SERVER_PATH/$APP_NAME"
 echo -e "${GREEN}✓ Binary + assets uploaded${NC}"
 
@@ -129,8 +140,8 @@ fi
 
 echo ""
 echo -e "${CYAN}Useful commands:${NC}"
-echo "  View logs:     ssh $SERVER_USER@$SERVER_HOST 'journalctl -u $SERVICE_NAME -f'"
+echo "  View logs:     ssh $SERVER_USER@$SERVER_HOST 'sudo journalctl -u $SERVICE_NAME -f'"
 echo "  Check status:  ssh $SERVER_USER@$SERVER_HOST 'systemctl status $SERVICE_NAME'"
-echo "  Restart:       ssh $SERVER_USER@$SERVER_HOST 'systemctl restart $SERVICE_NAME'"
+echo "  Restart:       ssh $SERVER_USER@$SERVER_HOST 'sudo systemctl restart $SERVICE_NAME'"
 echo ""
 echo -e "${GREEN}Deployment complete!${NC}"

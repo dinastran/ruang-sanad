@@ -27,6 +27,7 @@
 		angkatan: string;
 		usia: number;
 		domisili: string;
+		no_wa: string;
 		level: string;
 		tipe: string;
 		frekuensi: string;
@@ -113,6 +114,7 @@
 		{ key: "index", label: "No", class: "w-12 text-center" },
 		{ key: "id_mahasantri", label: "ID Mahasantri" },
 		{ key: "nama", label: "Nama" },
+		{ key: "no_wa", label: "No. WhatsApp" },
 		{ key: "jenis_kelamin", label: "Jenis Kelamin" },
 		{ key: "angkatan", label: "Angkatan" },
 		{ key: "level", label: "Level" },
@@ -125,7 +127,8 @@
 			index: startRow + i,
 			id: s.id,
 			id_mahasantri: s.id_mahasantri || "-",
-			nama: s.nama,
+				nama: s.nama,
+				no_wa: s.no_wa || "-",
 			jenis_kelamin: s.jenis_kelamin,
 			angkatan: s.angkatan,
 			level: s.level || "-",
@@ -200,6 +203,7 @@
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider w-12 text-center">No</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">ID Mahasantri</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Nama</th>
+						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">No. WhatsApp</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Jenis Kelamin</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Angkatan</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Level</th>
@@ -210,7 +214,7 @@
 				<tbody class="divide-y divide-neutral-200/80 dark:divide-white/[0.04]">
 					{#if santri.length === 0}
 						<tr>
-							<td colspan="8" class="px-4 py-12 text-center text-neutral-500 dark:text-neutral-400">
+							<td colspan="9" class="px-4 py-12 text-center text-neutral-500 dark:text-neutral-400">
 								Tidak ada data santri
 							</td>
 						</tr>
@@ -226,6 +230,7 @@
 								<td class="px-4 py-3 text-neutral-600 dark:text-neutral-400 text-center">{startRow + i}</td>
 								<td class="px-4 py-3 font-mono text-xs text-neutral-600 dark:text-neutral-400">{s.id_mahasantri || '-'}</td>
 								<td class="px-4 py-3 font-medium text-neutral-900 dark:text-white">{s.nama}</td>
+								<td class="px-4 py-3 text-neutral-700 dark:text-neutral-300">{s.no_wa || '-'}</td>
 								<td class="px-4 py-3"><GenderBadge gender={s.jenis_kelamin} /></td>
 								<td class="px-4 py-3 text-neutral-700 dark:text-neutral-300">{s.angkatan}</td>
 								<td class="px-4 py-3 text-neutral-700 dark:text-neutral-300">{s.level || '-'}</td>

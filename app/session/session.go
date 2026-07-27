@@ -3,10 +3,11 @@ package session
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
-	"net"
 	"strings"
 	"time"
 
@@ -51,7 +52,7 @@ type SessionData struct {
 // Pass nil for sessionCache to disable caching. sessionTTL is the session lifetime.
 func New(querier *queries.Querier, sessionCache *cache.SessionCache, sessionTTL time.Duration) *Store {
 	if sessionTTL <= 0 {
-		sessionTTL = 24 * time.Hour
+		sessionTTL = 720 * time.Hour // 30 days
 	}
 	return &Store{
 		querier:      querier,
@@ -89,49 +90,12 @@ func (s *Store) Get(c *fiber.Ctx) (*Session, error) {
 				// Check if the DB session has expired (cache TTL may outlive session TTL)
 				if cached.ExpiresAt.Before(time.Now()) {
 					s.sessionCache.Invalidate(cookieValue)
-				} else if cached.IP != "" && cached.IP != ClientIP(c) {
-					// IP mismatch — possible session hijack
-					if !isValidIP(cached.IP) {
-						// Stored IP is garbage — silently fix & fall through to DB path
-						slog.Warn("session fingerprint mismatch (cache) — fixing garbage IP",
-							"session_id", cookieValue,
-							"stored_ip", cached.IP, "got_ip", ClientIP(c))
-						s.sessionCache.Set(cookieValue, cache.CachedSessionData{
-							UserID:        cached.UserID,
-							Name:          cached.Name,
-							Email:         cached.Email,
-							Avatar:        cached.Avatar,
-							EmailVerified: cached.EmailVerified,
-							Role:          cached.Role,
-							CSRFToken:     cached.CSRFToken,
-							CSRFExpiry:    cached.CSRFExpiry,
-							IP:            ClientIP(c),
-							UserAgent:     c.Get("User-Agent"),
-							ExpiresAt:     cached.ExpiresAt,
-						})
-					} else {
-						// Valid IP mismatch — possible session hijack, invalidate
-						slog.Warn("session fingerprint mismatch (cache) — invalidating",
-							"session_id", cookieValue,
-							"expected_ip", cached.IP, "got_ip", ClientIP(c))
-						s.sessionCache.Invalidate(cookieValue)
-						s.deleteSession(context.Background(), cookieValue)
-						c.ClearCookie(s.sessionName)
-					}
 				} else if isPageRequest(c) && cached.UserAgent != "" && cached.UserAgent != c.Get("User-Agent") {
-					// UA mismatch on page request — possible session hijack, invalidate
-					slog.Warn("session fingerprint mismatch (cache) — invalidating",
-						"session_id", cookieValue,
-						"expected_ua", cached.UserAgent, "got_ua", c.Get("User-Agent"))
+					slog.Warn("session user-agent mismatch — invalidating", "session_id", cookieValue)
 					s.sessionCache.Invalidate(cookieValue)
 					s.deleteSession(context.Background(), cookieValue)
 					c.ClearCookie(s.sessionName)
 				} else {
-					// Capture fingerprint for existing sessions without one
-					if cached.IP == "" {
-						s.setFingerprint(c, cookieValue, cached)
-					}
-
 					session.id = cookieValue
 					session.userID = cached.UserID
 					session.expiresAt = cached.ExpiresAt
@@ -172,37 +136,8 @@ func (s *Store) Get(c *fiber.Ctx) (*Session, error) {
 				// Decode session data
 				var data SessionData
 				if err := json.Unmarshal([]byte(dbSession.Data), &data); err == nil {
-					// Validate fingerprint
-					if data.IP != "" && data.IP != ClientIP(c) {
-						// IP mismatch — possible session hijack
-						if !isValidIP(data.IP) {
-							// Stored IP is garbage — silently fix it
-							slog.Warn("session fingerprint mismatch (db) — fixing garbage IP",
-								"session_id", cookieValue,
-								"stored_ip", data.IP, "got_ip", ClientIP(c))
-							data.IP = ClientIP(c)
-							data.UserAgent = c.Get("User-Agent")
-							newJSON, _ := json.Marshal(data)
-							dbSession.Data = string(newJSON)
-							s.querier.UpdateSession(context.Background(), dbSession)
-						} else {
-							// Valid IP mismatch — invalidate session
-							slog.Warn("session fingerprint mismatch (db) — invalidating",
-								"session_id", cookieValue,
-								"expected_ip", data.IP, "got_ip", ClientIP(c))
-							s.deleteSession(context.Background(), cookieValue)
-							if s.sessionCache != nil {
-								s.sessionCache.Invalidate(cookieValue)
-							}
-							c.ClearCookie(s.sessionName)
-							c.Locals("session", session)
-							return session, nil
-						}
-					} else if isPageRequest(c) && data.UserAgent != "" && data.UserAgent != c.Get("User-Agent") {
-						// UA mismatch on page request — possible session hijack, invalidate
-						slog.Warn("session fingerprint mismatch (db) — invalidating",
-							"session_id", cookieValue,
-							"expected_ua", data.UserAgent, "got_ua", c.Get("User-Agent"))
+					if isPageRequest(c) && data.UserAgent != "" && data.UserAgent != c.Get("User-Agent") {
+						slog.Warn("session user-agent mismatch — invalidating", "session_id", cookieValue)
 						s.deleteSession(context.Background(), cookieValue)
 						if s.sessionCache != nil {
 							s.sessionCache.Invalidate(cookieValue)
@@ -210,15 +145,6 @@ func (s *Store) Get(c *fiber.Ctx) (*Session, error) {
 						c.ClearCookie(s.sessionName)
 						c.Locals("session", session)
 						return session, nil
-					} else {
-						// Capture fingerprint for existing sessions without one
-						if data.IP == "" {
-							data.IP = ClientIP(c)
-							data.UserAgent = c.Get("User-Agent")
-							newJSON, _ := json.Marshal(data)
-							dbSession.Data = string(newJSON)
-							s.querier.UpdateSession(context.Background(), dbSession)
-						}
 					}
 
 					session.values["user_id"] = data.UserID
@@ -256,11 +182,13 @@ func (s *Store) Get(c *fiber.Ctx) (*Session, error) {
 					}
 				}
 			}
-		} else {
-			// Session not found or expired in DB — invalidate stale cache entry
+		} else if errors.Is(err, sql.ErrNoRows) {
+			// Session no longer exists in DB — invalidate a stale cache entry.
 			if s.sessionCache != nil {
 				s.sessionCache.Invalidate(cookieValue)
 			}
+		} else {
+			return nil, err
 		}
 	}
 
@@ -587,21 +515,10 @@ func (s *Store) GetFlash(c *fiber.Ctx, key string) string {
 	return value
 }
 
-// isValidIP returns true if s is a syntactically valid IPv4 or IPv6 address.
-func isValidIP(s string) bool {
-	return net.ParseIP(s) != nil
-}
-
-// isPageRequest returns true if the request is an actual page navigation
-// (Inertia XHR or initial HTML load), not an API/asset/DevTools side request.
+// isPageRequest limits user-agent verification to navigations, avoiding false
+// positives from non-browser background requests that do not share a UA header.
 func isPageRequest(c *fiber.Ctx) bool {
-	// Inertia requests (JS-driven page transitions)
-	if c.Get("X-Inertia") == "true" {
-		return true
-	}
-	// Initial page load (Accept: text/html)
-	accept := c.Get("Accept")
-	return strings.Contains(accept, "text/html")
+	return c.Get("X-Inertia") == "true" || strings.Contains(c.Get("Accept"), "text/html")
 }
 
 // ClientIP extracts the real client IP behind Cloudflare proxy or reverse proxy.
@@ -614,63 +531,6 @@ func ClientIP(c *fiber.Ctx) string {
 		return strings.TrimSpace(strings.Split(xff, ",")[0])
 	}
 	return c.IP()
-}
-
-// setFingerprint captures and persists the client IP+UserAgent for an existing session
-// that was loaded from cache but didn't have a fingerprint yet.
-func (s *Store) setFingerprint(c *fiber.Ctx, sessionID string, cached *cache.CachedSessionData) {
-	ip := ClientIP(c)
-	ua := c.Get("User-Agent")
-
-	// Reconstruct full session data JSON with fingerprint
-	newData := SessionData{
-		UserID:        cached.UserID,
-		Name:          cached.Name,
-		Email:         cached.Email,
-		Avatar:        cached.Avatar,
-		EmailVerified: cached.EmailVerified,
-		Role:          cached.Role,
-		CSRFToken:     cached.CSRFToken,
-		CSRFExpiry:    cached.CSRFExpiry,
-		IP:            ip,
-		UserAgent:     ua,
-	}
-	newJSON, err := json.Marshal(newData)
-	if err != nil {
-		slog.Error("setFingerprint marshal error", "error", err)
-		return
-	}
-
-	// Update DB
-	dbSession := &queries.Session{
-		ID:        sessionID,
-		UserID:    cached.UserID,
-		Data:      string(newJSON),
-		ExpiresAt: cached.ExpiresAt,
-	}
-	if err := s.querier.UpdateSession(context.Background(), dbSession); err != nil {
-		slog.Error("setFingerprint db update error", "error", err)
-	}
-
-	// Update cache
-	if s.sessionCache != nil {
-		s.sessionCache.Set(sessionID, cache.CachedSessionData{
-			UserID:        cached.UserID,
-			Name:          cached.Name,
-			Email:         cached.Email,
-			Avatar:        cached.Avatar,
-			EmailVerified: cached.EmailVerified,
-			Role:          cached.Role,
-			CSRFToken:     cached.CSRFToken,
-			CSRFExpiry:    cached.CSRFExpiry,
-			IP:            ip,
-			UserAgent:     ua,
-			ExpiresAt:     cached.ExpiresAt,
-		})
-	}
-
-	slog.Debug("fingerprint captured for existing session",
-		"session_id", sessionID, "ip", ip, "ua", ua)
 }
 
 // deleteSession removes a session from the database and logs any error.

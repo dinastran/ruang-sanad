@@ -10,6 +10,7 @@ data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
+data/voice-notes/
 
 # User uploads
 storage/*
@@ -51,4 +52,3 @@ laju-go.exe
 .llm-wiki/outputs/
 .llm-wiki/meta/
 /wiki
-

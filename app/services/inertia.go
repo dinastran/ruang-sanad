@@ -74,6 +74,13 @@ func renderInertiaHTML(c *fiber.Ctx, page *fiberinertia.Page, assetService *Asse
 	}
 
 	title, _ := page.Props["Title"].(string)
+	// Default document title for the initial (pre-JS) paint; per-page titles are
+	// then set client-side in main.ts on navigation.
+	if title == "" {
+		title = "Ruang Sanad — Pengelolaan Mahasantri"
+	} else {
+		title = title + " — Ruang Sanad"
+	}
 	isDev := assetService.IsDevelopment()
 
 	// Vite dev server URL (from .vite-port file)
@@ -101,9 +108,14 @@ func renderInertiaHTML(c *fiber.Ctx, page *fiberinertia.Page, assetService *Asse
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>%s - Laju</title>
-    <meta name="description" content="Laju Go Fiber - High Performance SaaS Boilerplate">
-    <link rel="icon" href="/public/favicon.png">
+    <title>%s</title>
+    <meta name="description" content="Sistem pengelolaan mahasantri Ruang Sanad — pendaftaran, pembagian kelas, jadwal, dan laporan keuangan.">
+    <link rel="icon" href="/public/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/public/favicon.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/public/favicon-16.png">
+    <link rel="apple-touch-icon" href="/public/android-chrome-512x512.png">
+    <link rel="manifest" href="/public/site.webmanifest">
+    <meta name="theme-color" content="#14b8a6">
     <meta name="csrf-token" content="%s">
 </head>
 <body class="bg-gray-50 text-gray-900">
@@ -120,9 +132,14 @@ func renderInertiaHTML(c *fiber.Ctx, page *fiberinertia.Page, assetService *Asse
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>%s - Laju</title>
-    <meta name="description" content="Laju Go Fiber - High Performance SaaS Boilerplate">
-    <link rel="icon" href="/public/favicon.png">
+    <title>%s</title>
+    <meta name="description" content="Sistem pengelolaan mahasantri Ruang Sanad — pendaftaran, pembagian kelas, jadwal, dan laporan keuangan.">
+    <link rel="icon" href="/public/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/public/favicon.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/public/favicon-16.png">
+    <link rel="apple-touch-icon" href="/public/android-chrome-512x512.png">
+    <link rel="manifest" href="/public/site.webmanifest">
+    <meta name="theme-color" content="#14b8a6">
     <meta name="csrf-token" content="%s">
     <link rel="stylesheet" href="%s">
 </head>

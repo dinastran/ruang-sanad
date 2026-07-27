@@ -31,6 +31,7 @@ func (h *ImportHandler) Show(c *fiber.Ctx) error {
 
 func (h *ImportHandler) Upload(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(int64)
+	sess, _ := h.store.Get(c)
 
 	file, err := c.FormFile("file")
 	if err != nil {
@@ -52,7 +53,7 @@ func (h *ImportHandler) Upload(c *fiber.Ctx) error {
 	}
 
 	return h.inertiaService.Render(c, "app/ImportCSV", fiber.Map{
-		"user":    sessionUser(nil),
+		"user":    sessionUser(sess),
 		"result":  result,
 		"success": "Import selesai",
 	})

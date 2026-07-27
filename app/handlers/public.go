@@ -32,7 +32,7 @@ func (h *PublicHandler) Index(c *fiber.Ctx) error {
 	mainCSS := h.assetService.GetMainCSS()
 
 	c.Set("Content-Type", "text/html; charset=utf-8")
-	return templates.LandingPage("Welcome to Laju", isDev, viteURL, mainCSS).Render(c.Context(), c.Response().BodyWriter())
+	return templates.LandingPage("Pengelolaan Mahasantri", isDev, viteURL, mainCSS).Render(c.Context(), c.Response().BodyWriter())
 }
 
 // About renders the about page

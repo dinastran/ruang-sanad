@@ -3,8 +3,7 @@
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import { Toast } from "@lib/notifications/toast";
-	import { getCSRFToken } from "@lib/utils/csrf";
-	import type { User } from "@lib/types";
+	import type { Flash, User } from "@lib/types";
 	import { Upload, Download, FileSpreadsheet, CheckCircle, XCircle, AlertTriangle } from "lucide-svelte";
 
 	interface ImportResult {
@@ -19,9 +18,10 @@
 		result: ImportResult | null;
 		success?: string;
 		error?: string;
+		flash?: Flash;
 	}
 
-	let { user, result = null, success, error }: Props = $props();
+	let { user, result = null, success, error, flash }: Props = $props();
 
 	let isDragOver = $state(false);
 	let isUploading = $state(false);
@@ -73,32 +73,20 @@
 		const formData = new FormData();
 		formData.append("file", selectedFile);
 
-		fetch("/admin/import", {
-			method: "POST",
-			headers: {
-				"X-XSRF-TOKEN": getCSRFToken(),
+		router.post("/admin/import", formData, {
+			forceFormData: true,
+			onHttpException: () => {
+				Toast("Gagal mengimpor file", "error");
+				return false;
 			},
-			body: formData,
-		})
-			.then(async (res) => {
-				if (res.redirected) {
-					window.location.href = res.url;
-					return;
-				}
-				const data = await res.json();
-				if (res.ok) {
-					Toast("Import berhasil", "success");
-					router.reload();
-				} else {
-					Toast(data.error || "Gagal mengimpor file", "error");
-				}
-			})
-			.catch(() => {
-				Toast("Gagal mengupload file", "error");
-			})
-			.finally(() => {
+			onNetworkError: () => {
+				Toast("Gagal menghubungi server", "error");
+				return false;
+			},
+			onFinish: () => {
 				isUploading = false;
-			});
+			},
+		});
 	}
 
 	function resetForm() {
@@ -136,9 +124,9 @@
 			</div>
 		{/if}
 
-		{#if error}
+		{#if error || flash?.error}
 			<div class="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-2xl p-4 flex items-center gap-3" in:fly={{ y: 20, duration: 300 }}>
-				<p class="text-sm font-medium">{error}</p>
+				<p class="text-sm font-medium">{error || flash?.error}</p>
 			</div>
 		{/if}
 

@@ -53,7 +53,7 @@
 </script>
 
 <svelte:head>
-	<title>{pageTitle ?? title} - Laju Go</title>
+	<title>{pageTitle ?? title} - Ruang Sanad</title>
 </svelte:head>
 
 <section class="min-h-screen bg-white dark:bg-neutral-950 flex">

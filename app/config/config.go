@@ -110,10 +110,10 @@ func parseAllowedOrigins() []string {
 }
 
 func getSessionTTL() time.Duration {
-	val := getEnv("SESSION_TTL", "24h")
+	val := getEnv("SESSION_TTL", "720h")
 	d, err := time.ParseDuration(val)
 	if err != nil {
-		return 24 * time.Hour
+		return 720 * time.Hour // 30 days
 	}
 	return d
 }

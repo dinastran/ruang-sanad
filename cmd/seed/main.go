@@ -15,7 +15,7 @@ import (
 	"github.com/pressly/goose/v3"
 	"golang.org/x/crypto/argon2"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite" // pure-Go SQLite driver (no CGO → easy cross-compile)
 )
 
 type seedUser struct {
@@ -33,7 +33,7 @@ func main() {
 		dbPath = "./data/app.db"
 	}
 
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		log.Fatalf("gagal buka db: %v", err)
 	}
@@ -54,9 +54,11 @@ func main() {
 
 	users := []seedUser{
 		{Name: "Super Admin", Email: "dinastran@gmail.com", Role: "super_admin", Password: defaultPassword},
+		{Name: "Admin", Email: "admin@ruangsanad.com", Role: "admin", Password: defaultPassword},
 		{Name: "CS Staff", Email: "cs@ruangsanad.com", Role: "cs", Password: defaultPassword},
 		{Name: "Admin Kelas", Email: "adminkelas@ruangsanad.com", Role: "admin_kelas", Password: defaultPassword},
 		{Name: "Keuangan Staff", Email: "keuangan@ruangsanad.com", Role: "keuangan", Password: defaultPassword},
+		{Name: "User Biasa", Email: "user@ruangsanad.com", Role: "user", Password: defaultPassword},
 	}
 
 	for _, u := range users {

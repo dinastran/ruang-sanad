@@ -36,14 +36,14 @@
 </script>
 
 <AuthLayout
-    title="Sign in"
-    subtitle="Enter your credentials to continue"
-    headline="Welcome back"
-    subheadline="Sign in to continue building amazing applications with the high-performance Go + Svelte framework."
+    title="Masuk"
+    subtitle="Masukkan email dan kata sandi Anda untuk melanjutkan"
+    headline="Selamat datang kembali"
+    subheadline="Masuk untuk mengelola pendaftaran, pembagian kelas, jadwal, dan laporan mahasantri Ruang Sanad."
     stats={[
-        { value: "11x", label: "Faster" },
-        { value: "1.5ms", label: "Latency" },
-        { value: "99.9%", label: "Uptime" },
+        { value: "4", label: "Peran Akses" },
+        { value: "Auto", label: "Bagi Kelas" },
+        { value: "24/7", label: "Akses" },
     ]}
     {flash}
 >
@@ -69,7 +69,7 @@
                 fill="#EA4335"
             />
         </svg>
-        Continue with Google
+        Lanjutkan dengan Google
     </a>
 
     <div class="relative my-8">
@@ -77,7 +77,7 @@
             <div class="w-full border-t border-neutral-200/80 dark:border-white/[0.04]"></div>
         </div>
         <div class="relative flex justify-center">
-            <span class="px-4 text-sm text-neutral-500 bg-white dark:bg-neutral-925">or continue with email</span>
+            <span class="px-4 text-sm text-neutral-500 bg-white dark:bg-neutral-925">atau lanjutkan dengan email</span>
         </div>
     </div>
 
@@ -98,7 +98,7 @@
                     name="email"
                     id="email"
                     class="w-full pl-12 pr-4 py-3 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700/80 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20 transition-colors duration-200"
-                    placeholder="you@example.com"
+                    placeholder="nama@email.com"
                 />
             </div>
         </div>
@@ -107,7 +107,7 @@
             <label
                 for="password"
                 class="block text-sm font-medium text-neutral-700 dark:text-neutral-300"
-            >Password</label>
+            >Kata Sandi</label>
             <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Lock class="w-5 h-5 text-neutral-500" />
@@ -141,7 +141,7 @@
                 use:inertia
                 class="text-sm text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 transition-colors"
             >
-                Forgot password?
+                Lupa kata sandi?
             </a>
         </div>
 
@@ -155,22 +155,22 @@
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Signing in...
+                Memproses...
             {:else}
-                Sign in
+                Masuk
                 <ArrowRight class="w-5 h-5" />
             {/if}
         </button>
     </form>
 
     <p class="mt-8 text-center text-sm text-neutral-600 dark:text-neutral-400">
-        Don't have an account?
+        Belum punya akun?
         <a
             href="/register"
             use:inertia
             class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 font-medium transition-colors"
         >
-            Create one
+            Daftar di sini
         </a>
     </p>
 </AuthLayout>

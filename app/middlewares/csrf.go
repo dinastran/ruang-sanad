@@ -36,7 +36,7 @@ func DefaultCSRFConfig(secret string) CSRFConfig {
 		CookieName:  "XSRF-TOKEN",
 		HeaderName:  "X-XSRF-TOKEN",
 		TokenLength: 32,
-		Expiry:      24 * time.Hour,
+		Expiry:      720 * time.Hour, // 30 days — match session lifetime
 		Secure:      false, // Set to true in production with HTTPS
 		SameSite:    "Lax",
 		SkipMethods: []string{fiber.MethodGet, fiber.MethodHead, fiber.MethodOptions},

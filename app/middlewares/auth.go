@@ -31,14 +31,14 @@ func AuthRequired(store *session.Store) fiber.Handler {
 
 		if userID == nil {
 			slog.Warn("not authenticated, redirecting to login")
-			// For Inertia requests, return redirect in JSON format
+			store.Flash(c, "error", "Sesi berakhir. Silakan login kembali.")
+			// For Inertia XHR requests we must speak the Inertia protocol: a plain
+			// JSON body breaks the client ("must receive a valid Inertia response").
+			// Respond with 409 + X-Inertia-Location so Inertia performs a full-page
+			// visit to /login. Non-Inertia requests get a normal redirect.
 			if c.Get("X-Inertia") == "true" {
-				return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-					"component": "Login",
-					"props": fiber.Map{
-						"error": "Please login to continue",
-					},
-				})
+				c.Set("X-Inertia-Location", "/login")
+				return c.SendStatus(fiber.StatusConflict)
 			}
 			return c.Redirect("/login")
 		}

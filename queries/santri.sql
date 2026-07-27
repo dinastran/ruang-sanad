@@ -1,11 +1,11 @@
 -- name: CreateSantri :execresult
 INSERT INTO santri (
     id_mahasantri, kelas_kode, nama, jenis_kelamin, nominal, tanggal_daftar,
-    angkatan, usia, domisili, tipe, frekuensi, is_lengkap, kelas_id,
+    angkatan, usia, domisili, no_wa, tipe, frekuensi, is_lengkap, kelas_id,
     status, created_by, created_at, updated_at
 ) VALUES (
     ?, ?, ?, ?, ?, ?,
-    ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?
 );
 
@@ -41,8 +41,13 @@ WHERE (@angkatan = '' OR angkatan = @angkatan)
 -- name: UpdateSantriCS :exec
 UPDATE santri
 SET kelas_kode = ?, nama = ?, jenis_kelamin = ?, nominal = ?,
-    tanggal_daftar = ?, angkatan = ?, usia = ?, domisili = ?,
+    tanggal_daftar = ?, angkatan = ?, usia = ?, domisili = ?, no_wa = ?,
     updated_at = ?
+WHERE id = ?;
+
+-- name: UpdateSantriVoiceNote :exec
+UPDATE santri
+SET voice_note_url = ?, keterangan_vn = ?, updated_at = ?
 WHERE id = ?;
 
 -- name: UpdateSantriAdminKelas :exec

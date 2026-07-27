@@ -36,7 +36,7 @@
         e.preventDefault();
 
         if (form.password !== form.password_confirmation) {
-            passwordError = "Passwords do not match";
+            passwordError = "Kata sandi tidak cocok";
             return;
         }
         passwordError = "";
@@ -53,10 +53,10 @@
 </script>
 
 <AuthLayout
-    title="Create account"
-    subtitle="Get started with your free account"
-    headline="Start building today"
-    subheadline="Join developers who build blazing-fast applications with the high-performance Go + Svelte framework."
+    title="Daftar"
+    subtitle="Buat akun untuk mengakses Ruang Sanad"
+    headline="Bergabung dengan Ruang Sanad"
+    subheadline="Kelola pendaftaran, pembagian kelas, jadwal, dan keuangan mahasantri dalam satu sistem terintegrasi."
     {flash}
 >
     <a
@@ -69,7 +69,7 @@
             <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
             <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
         </svg>
-        Sign up with Google
+        Daftar dengan Google
     </a>
 
     <div class="relative my-6">
@@ -77,13 +77,13 @@
             <div class="w-full border-t border-neutral-200/80 dark:border-white/[0.04]"></div>
         </div>
         <div class="relative flex justify-center">
-            <span class="px-4 text-sm text-neutral-500 bg-white dark:bg-neutral-925">or sign up with email</span>
+            <span class="px-4 text-sm text-neutral-500 bg-white dark:bg-neutral-925">atau daftar dengan email</span>
         </div>
     </div>
 
     <form class="space-y-4" onsubmit={submitForm}>
         <div class="space-y-2">
-            <label for="name" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Full Name</label>
+            <label for="name" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Nama Lengkap</label>
             <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <User class="w-5 h-5 text-neutral-500" />
@@ -95,7 +95,7 @@
                     name="name"
                     id="name"
                     class="w-full pl-12 pr-4 py-3 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700/80 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20 transition-colors duration-200"
-                    placeholder="John Doe"
+                    placeholder="Nama lengkap Anda"
                 />
             </div>
         </div>
@@ -113,13 +113,13 @@
                     name="email"
                     id="email"
                     class="w-full pl-12 pr-4 py-3 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700/80 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20 transition-colors duration-200"
-                    placeholder="you@example.com"
+                    placeholder="nama@email.com"
                 />
             </div>
         </div>
 
         <div class="space-y-2">
-            <label for="password" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Password</label>
+            <label for="password" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Kata Sandi</label>
             <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Lock class="w-5 h-5 text-neutral-500" />
@@ -151,12 +151,12 @@
                 class="text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 transition-colors flex items-center gap-1"
             >
                 <Sparkles class="w-3 h-3" />
-                Generate secure password
+                Buat kata sandi otomatis
             </button>
         </div>
 
         <div class="space-y-2">
-            <label for="confirm-password" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Confirm Password</label>
+            <label for="confirm-password" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Konfirmasi Kata Sandi</label>
             <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Lock class="w-5 h-5 text-neutral-500" />
@@ -186,16 +186,16 @@
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Creating account...
+                Membuat akun...
             {:else}
-                Create account
+                Daftar
                 <ArrowRight class="w-5 h-5" />
             {/if}
         </button>
     </form>
 
     <p class="mt-6 text-center text-sm text-neutral-600 dark:text-neutral-400">
-        Already have an account?
-        <a href="/login" use:inertia class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 font-medium transition-colors">Sign in</a>
+        Sudah punya akun?
+        <a href="/login" use:inertia class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 font-medium transition-colors">Masuk</a>
     </p>
 </AuthLayout>

@@ -2,8 +2,10 @@
 	import { inertia, router } from "@inertiajs/svelte";
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
+	import { Toast } from "@lib/notifications/toast";
+	import { getCSRFToken } from "@lib/utils/csrf";
 	import type { User } from "@lib/types";
-	import { Check, ChevronDown, ChevronUp, Save, BookOpen, Calendar, Users, Hash, ClipboardList, AlertCircle, ArrowRight, Plus, Trash2 } from "lucide-svelte";
+	import { Check, ChevronDown, ChevronUp, Save, BookOpen, Calendar, Users, Hash, ClipboardList, AlertCircle, ArrowRight, Plus, Trash2, Search, X, Upload } from "lucide-svelte";
 
 	interface SantriItem {
 		id: number;
@@ -16,6 +18,8 @@
 		fu: string;
 		tanggal_vn: string;
 		hasil_vn: string;
+		voice_note_url: string;
+		keterangan_vn: string;
 		masuk_grup: string;
 		mulai_belajar: string;
 		jumlah: number;
@@ -47,15 +51,34 @@
 
 	let expandedId = $state<number | null>(null);
 	let savingId = $state<number | null>(null);
+	let search = $state("");
 
-	let incompleteSantri = $derived(santri.filter((s) => !s.is_lengkap));
-	let completedCount = $derived(santri.length - incompleteSantri.length);
+	// All santri that still need completing — used for the counters (unaffected
+	// by the search box so the header always shows the true totals).
+	let allIncomplete = $derived(santri.filter((s) => !s.is_lengkap));
+	let completedCount = $derived(santri.length - allIncomplete.length);
+
+	// The list actually rendered, narrowed by the search query (nama / id / angkatan).
+	let incompleteSantri = $derived(
+		allIncomplete.filter((s) => {
+			const q = search.trim().toLowerCase();
+			if (!q) return true;
+			return (
+				(s.nama || "").toLowerCase().includes(q) ||
+				(s.id_mahasantri || "").toLowerCase().includes(q) ||
+				(s.angkatan || "").toLowerCase().includes(q)
+			);
+		}),
+	);
 
 	let forms = $state<Record<number, { fu: string; tanggal_vn: string; hasil_vn: string; masuk_grup: string; mulai_belajar: string; jumlah: number; level: string; jadwal: string; guru: string }>>({});
 
 	// Multi-jadwal per santri: a class can meet more than once (2x/pekan, private
 	// 4x/16x). Sessions are stored joined by " & " in the single jadwal field.
 	let jadwalRowsMap = $state<Record<number, string[]>>({});
+	let voiceNoteDescriptions = $state<Record<number, string>>({});
+	let voiceNoteFiles = $state<Record<number, File | null>>({});
+	let voiceNoteSavingId = $state<number | null>(null);
 
 	// Initialise a santri's form lazily — but ONLY from an event handler, never
 	// during render. Mutating $state inside the template ({@const ...}) throws
@@ -74,6 +97,7 @@
 				guru: s.guru || "",
 			};
 			jadwalRowsMap[s.id] = s.jadwal ? s.jadwal.split(" & ").map((x) => x.trim()) : [""];
+			voiceNoteDescriptions[s.id] = s.keterangan_vn || "";
 		}
 	}
 
@@ -103,6 +127,36 @@
 		}
 		ensureForm(s);
 		expandedId = s.id;
+	}
+
+	function handleVoiceNoteFile(santriID: number, event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		voiceNoteFiles[santriID] = input.files?.[0] ?? null;
+	}
+
+	async function saveVoiceNote(s: SantriItem) {
+		const formData = new FormData();
+		const file = voiceNoteFiles[s.id];
+		if (file) formData.append("file", file);
+		formData.append("keterangan_vn", voiceNoteDescriptions[s.id] ?? s.keterangan_vn ?? "");
+		voiceNoteSavingId = s.id;
+
+		try {
+			const response = await fetch(`/app/santri/${s.id}/voice-note`, {
+				method: "POST",
+				headers: { "X-XSRF-TOKEN": getCSRFToken() },
+				body: formData,
+			});
+			const data = await response.json();
+			if (!response.ok || !data.success) throw new Error(data.error || "Gagal menyimpan VN");
+			Toast("Voice note berhasil disimpan", "success");
+			voiceNoteFiles[s.id] = null;
+			router.reload({ only: ["santri"] });
+		} catch (error) {
+			Toast(error instanceof Error ? error.message : "Gagal menyimpan VN", "error");
+		} finally {
+			voiceNoteSavingId = null;
+		}
 	}
 
 	const pipelineSteps = [
@@ -135,7 +189,7 @@
 				<div>
 					<h1 class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white mb-2 tracking-tight">Perlu Dilengkapi</h1>
 					<p class="text-neutral-600 dark:text-neutral-400">
-						{incompleteSantri.length} santri perlu dilengkapi data kelasnya
+						{allIncomplete.length} santri perlu dilengkapi data kelasnya
 					</p>
 				</div>
 				<div class="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm font-medium">
@@ -159,13 +213,41 @@
 			</div>
 		{/if}
 
-		{#if incompleteSantri.length === 0}
+		{#if allIncomplete.length > 0}
+			<div class="relative" in:fly={{ y: 20, duration: 400 }}>
+				<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+					<Search class="w-4 h-4 text-neutral-500" />
+				</div>
+				<input
+					type="text"
+					bind:value={search}
+					placeholder="Cari nama, ID mahasantri, atau angkatan..."
+					class="w-full pl-12 pr-12 py-3 rounded-xl bg-white dark:bg-neutral-925/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white placeholder-neutral-500 transition-all outline-none"
+				/>
+				{#if search}
+					<button type="button" onclick={() => (search = "")} aria-label="Hapus pencarian"
+						class="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300">
+						<X class="w-4 h-4" />
+					</button>
+				{/if}
+			</div>
+		{/if}
+
+		{#if allIncomplete.length === 0}
 			<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-12 text-center" in:fly={{ y: 20, duration: 500 }}>
 				<div class="w-16 h-16 rounded-2xl bg-green-500/10 flex items-center justify-center mx-auto mb-4">
 					<Check class="w-8 h-8 text-green-500" />
 				</div>
 				<h3 class="text-lg font-semibold text-neutral-900 dark:text-white mb-2">Semua Data Lengkap</h3>
 				<p class="text-neutral-500 dark:text-neutral-400">Tidak ada santri yang perlu dilengkapi data kelasnya.</p>
+			</div>
+		{:else if incompleteSantri.length === 0}
+			<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-12 text-center" in:fly={{ y: 20, duration: 500 }}>
+				<div class="w-16 h-16 rounded-2xl bg-neutral-200/60 dark:bg-neutral-800 flex items-center justify-center mx-auto mb-4">
+					<Search class="w-8 h-8 text-neutral-400" />
+				</div>
+				<h3 class="text-lg font-semibold text-neutral-900 dark:text-white mb-2">Tidak Ada Hasil</h3>
+				<p class="text-neutral-500 dark:text-neutral-400">Tidak ada santri yang cocok dengan "{search}".</p>
 			</div>
 		{/if}
 
@@ -260,6 +342,42 @@
 										class="w-full px-4 py-2.5 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white placeholder-neutral-500 transition-all outline-none"
 										placeholder="Nama grup"
 									/>
+								</div>
+							</div>
+
+							<div class="rounded-xl border border-brand-500/20 bg-brand-500/5 p-4 space-y-4">
+								<div>
+									<h4 class="text-sm font-semibold text-neutral-900 dark:text-white">Voice Note</h4>
+									<p class="text-xs text-neutral-600 dark:text-neutral-400 mt-1">Unggah rekaman VN dan tambahkan keterangannya.</p>
+								</div>
+								{#if s.voice_note_url}
+									<audio controls src={s.voice_note_url} class="w-full h-10">Browser tidak mendukung pemutar audio.</audio>
+								{/if}
+								<div>
+									<label for="keterangan_vn-{s.id}" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Keterangan VN</label>
+									<textarea
+										id="keterangan_vn-{s.id}"
+										bind:value={voiceNoteDescriptions[s.id]}
+										rows="3"
+										placeholder="Tulis keterangan voice note"
+										class="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white placeholder-neutral-500 transition-all outline-none"
+									></textarea>
+								</div>
+								<div class="flex flex-col sm:flex-row sm:items-center gap-3">
+									<label class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-700/80 text-sm font-medium text-neutral-700 dark:text-neutral-300 cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+										<Upload class="w-4 h-4" />
+										<span>{voiceNoteFiles[s.id]?.name || "Pilih file audio"}</span>
+										<input type="file" accept="audio/*" class="sr-only" onchange={(event) => handleVoiceNoteFile(s.id, event)} />
+									</label>
+									<button
+										type="button"
+										onclick={() => saveVoiceNote(s)}
+										disabled={voiceNoteSavingId === s.id}
+										class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+									>
+										<Save class="w-4 h-4" />
+										{voiceNoteSavingId === s.id ? "Menyimpan VN..." : "Simpan VN"}
+									</button>
 								</div>
 							</div>
 

@@ -3,7 +3,14 @@ package services
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/maulanashalihin/laju-go/app/models"
@@ -49,6 +56,7 @@ func (s *SantriService) Create(req models.CreateSantriRequest, createdBy int64) 
 		Angkatan:      req.Angkatan,
 		Usia:          sql.NullInt64{Int64: req.Usia, Valid: req.Usia > 0},
 		Domisili:      req.Domisili,
+		NoWa:          req.NoWA,
 		Tipe:          tipe,
 		Frekuensi:     frekuensi,
 		IsLengkap:     0,
@@ -168,6 +176,7 @@ func (s *SantriService) UpdateByCS(id int64, req models.UpdateSantriCSRequest) e
 		Angkatan:      req.Angkatan,
 		Usia:          sql.NullInt64{Int64: req.Usia, Valid: req.Usia > 0},
 		Domisili:      req.Domisili,
+		NoWa:          req.NoWA,
 		UpdatedAt:     now,
 		ID:            id,
 	}); err != nil {
@@ -181,6 +190,117 @@ func (s *SantriService) UpdateByCS(id int64, req models.UpdateSantriCSRequest) e
 		return err
 	}
 	return s.engine.ProcessSantri(context.Background(), &santri)
+}
+
+const maxVoiceNoteSize = 20 * 1024 * 1024
+
+var voiceNoteExtensions = map[string]string{
+	"audio/mpeg":      ".mp3",
+	"audio/ogg":       ".ogg",
+	"application/ogg": ".ogg",
+	"audio/wav":       ".wav",
+	"audio/wave":      ".wav",
+	"audio/x-wav":     ".wav",
+	"audio/mp4":       ".m4a",
+	"audio/webm":      ".webm",
+}
+
+func (s *SantriService) UpdateVoiceNote(id int64, description string, file io.ReadSeeker, fileSize int64) (*models.SantriResponse, error) {
+	if len(description) > 2000 {
+		return nil, errors.New("keterangan voice note maksimal 2000 karakter")
+	}
+	santri, err := s.querier.GetSantriByID(context.Background(), id)
+	if err != nil {
+		return nil, err
+	}
+
+	voiceNoteURL := santri.VoiceNoteUrl
+	newVoiceNotePath := ""
+	if file != nil {
+		if fileSize > maxVoiceNoteSize {
+			return nil, errors.New("ukuran voice note maksimal 20 MB")
+		}
+
+		buffer := make([]byte, 512)
+		read, err := file.Read(buffer)
+		if err != nil && err != io.EOF {
+			return nil, errors.New("gagal membaca voice note")
+		}
+		if read == 0 {
+			return nil, errors.New("voice note kosong")
+		}
+		extension, allowed := voiceNoteExtensions[http.DetectContentType(buffer[:read])]
+		if !allowed {
+			return nil, errors.New("format voice note harus MP3, OGG, WAV, M4A, atau WebM")
+		}
+
+		if err := os.MkdirAll("data/voice-notes", 0755); err != nil {
+			return nil, err
+		}
+		filename := fmt.Sprintf("santri-%d-%d%s", id, time.Now().UnixNano(), extension)
+		path := filepath.Join("data", "voice-notes", filename)
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return nil, err
+		}
+		destination, err := os.Create(path)
+		if err != nil {
+			return nil, err
+		}
+		_, copyErr := io.Copy(destination, file)
+		closeErr := destination.Close()
+		if copyErr != nil || closeErr != nil {
+			_ = os.Remove(path)
+			if copyErr != nil {
+				return nil, copyErr
+			}
+			return nil, closeErr
+		}
+		voiceNoteURL = filepath.ToSlash(filepath.Join("voice-notes", filename))
+		newVoiceNotePath = path
+	}
+
+	if err := s.querier.UpdateSantriVoiceNote(context.Background(), queries.UpdateSantriVoiceNoteParams{
+		VoiceNoteUrl: voiceNoteURL,
+		KeteranganVn: description,
+		UpdatedAt:    time.Now(),
+		ID:           id,
+	}); err != nil {
+		if newVoiceNotePath != "" {
+			_ = os.Remove(newVoiceNotePath)
+		}
+		return nil, err
+	}
+	if santri.VoiceNoteUrl != "" && santri.VoiceNoteUrl != voiceNoteURL {
+		if err := os.Remove(filepath.Join("data", filepath.FromSlash(santri.VoiceNoteUrl))); err != nil && !os.IsNotExist(err) {
+			slog.Warn("failed to remove replaced voice note", "santri_id", id, "path", santri.VoiceNoteUrl, "error", err)
+		}
+	}
+
+	updated, err := s.querier.GetSantriByID(context.Background(), id)
+	if err != nil {
+		return nil, err
+	}
+	response := updated.ToResponse()
+	return &response, nil
+}
+
+func (s *SantriService) VoiceNotePath(id int64) (string, error) {
+	santri, err := s.querier.GetSantriByID(context.Background(), id)
+	if err != nil {
+		return "", err
+	}
+	if santri.VoiceNoteUrl == "" {
+		return "", errors.New("voice note belum tersedia")
+	}
+	path := filepath.Clean(filepath.FromSlash(santri.VoiceNoteUrl))
+	if path == "." || strings.HasPrefix(path, "..") || !strings.HasPrefix(filepath.ToSlash(path), "voice-notes/") {
+		return "", errors.New("lokasi voice note tidak valid")
+	}
+	fullPath := filepath.Join("data", path)
+	if _, err := os.Stat(fullPath); err != nil {
+		return "", err
+	}
+	return fullPath, nil
 }
 
 func (s *SantriService) UpdateByAdminKelas(id int64, req models.UpdateSantriAdminKelasRequest) error {

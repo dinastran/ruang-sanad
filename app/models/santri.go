@@ -9,6 +9,7 @@ type CreateSantriRequest struct {
 	Angkatan      string `json:"angkatan"`
 	Usia          int64  `json:"usia"`
 	Domisili      string `json:"domisili"`
+	NoWA          string `json:"no_wa"`
 }
 
 type UpdateSantriCSRequest struct {
@@ -20,6 +21,7 @@ type UpdateSantriCSRequest struct {
 	Angkatan      string `json:"angkatan"`
 	Usia          int64  `json:"usia"`
 	Domisili      string `json:"domisili"`
+	NoWA          string `json:"no_wa"`
 }
 
 type UpdateSantriAdminKelasRequest struct {
@@ -64,9 +66,12 @@ type SantriResponse struct {
 	Angkatan              string `json:"angkatan"`
 	Usia                  int64  `json:"usia"`
 	Domisili              string `json:"domisili"`
+	NoWA                  string `json:"no_wa"`
 	Fu                    string `json:"fu"`
 	TanggalVn             string `json:"tanggal_vn"`
 	HasilVn               string `json:"hasil_vn"`
+	VoiceNoteURL          string `json:"voice_note_url"`
+	KeteranganVn          string `json:"keterangan_vn"`
 	MasukGrup             string `json:"masuk_grup"`
 	MulaiBelajar          string `json:"mulai_belajar"`
 	Jumlah                int64  `json:"jumlah"`

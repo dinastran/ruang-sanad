@@ -16,10 +16,11 @@ import (
 type ImportService struct {
 	querier *queries.Querier
 	engine  *KelasEngineService
+	santri  *SantriService
 }
 
-func NewImportService(querier *queries.Querier, engine *KelasEngineService) *ImportService {
-	return &ImportService{querier: querier, engine: engine}
+func NewImportService(querier *queries.Querier, engine *KelasEngineService, santri *SantriService) *ImportService {
+	return &ImportService{querier: querier, engine: engine, santri: santri}
 }
 
 func (s *ImportService) ProcessCSV(r io.Reader, userID int64, namaFile string) (*models.ImportResult, error) {
@@ -87,12 +88,18 @@ func (s *ImportService) ProcessCSV(r io.Reader, userID int64, namaFile string) (
 			continue
 		}
 
-		if td := parseDate(strings.TrimSpace(row[4])); td.Valid {
-			idMahasantri := fmt.Sprintf("MHS.%s.%04d.%s", strings.TrimSpace(row[5]), id, td.Time.Format("012006"))
-			_ = s.querier.UpdateSantriIdMahasantri(context.Background(), queries.UpdateSantriIdMahasantriParams{
-				IDMahasantri: idMahasantri,
-				ID:           id,
-			})
+		tanggalDaftar := parseDate(strings.TrimSpace(row[4]))
+		if !tanggalDaftar.Valid {
+			tanggalDaftar = sql.NullTime{Time: now, Valid: true}
+		}
+		idMahasantri := s.santri.GenerateIDMahasantri(strings.TrimSpace(row[5]), id, tanggalDaftar.Time)
+		if err := s.querier.UpdateSantriIdMahasantri(context.Background(), queries.UpdateSantriIdMahasantriParams{
+			IDMahasantri: idMahasantri,
+			ID:           id,
+		}); err != nil {
+			gagal++
+			catatanParts = append(catatanParts, fmt.Sprintf("Baris %d: update ID mahasantri gagal", i+2))
+			continue
 		}
 
 		santri, err := s.querier.GetSantriByID(context.Background(), id)

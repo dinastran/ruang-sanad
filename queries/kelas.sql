@@ -13,7 +13,7 @@ ORDER BY sub_index ASC;
 SELECT id, kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, guru_id, kapasitas,
     (SELECT COUNT(*) FROM santri s WHERE s.kelas_id = kelas.id AND s.status != 'tidak_lanjut') AS jumlah_santri,
     created_at, is_aktif
-FROM kelas WHERE id = ?;
+FROM kelas WHERE kelas.id = ?;
 
 -- name: CreateKelas :execresult
 INSERT INTO kelas (
