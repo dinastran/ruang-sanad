@@ -59,6 +59,8 @@ func main() {
 		{Name: "Admin Kelas", Email: "adminkelas@ruangsanad.com", Role: "admin_kelas", Password: defaultPassword},
 		{Name: "Keuangan Staff", Email: "keuangan@ruangsanad.com", Role: "keuangan", Password: defaultPassword},
 		{Name: "User Biasa", Email: "user@ruangsanad.com", Role: "user", Password: defaultPassword},
+		{Name: "Guru Test", Email: "guru@ruangsanad.com", Role: "guru", Password: defaultPassword},
+		{Name: "Koordinator Guru", Email: "koordinator@ruangsanad.com", Role: "koordinator_guru", Password: defaultPassword},
 	}
 
 	for _, u := range users {
@@ -83,6 +85,76 @@ func main() {
 			log.Fatalf("gagal buat user %s: %v", u.Email, err)
 		}
 		fmt.Printf("✓  %s (%s) — password: %s\n", u.Email, u.Role, defaultPassword)
+	}
+
+	// Create guru master records and link to guru/koordinator user accounts
+	guruUser, err := querier.GetUserByEmail(context.Background(), "guru@ruangsanad.com")
+	if err == nil {
+		// Check if guru record already exists for this user
+		_, err := querier.GuruGetByUserID(context.Background(), sql.NullInt64{Int64: guruUser.ID, Valid: true})
+		if err != nil {
+			// Create guru master record
+			if err := querier.CreateGuru(context.Background(), queries.CreateGuruParams{
+				Nama:         "Guru Test",
+				JenisKelamin: "Laki-laki",
+				IsAktif:      1,
+			}); err != nil {
+				log.Fatalf("gagal buat guru master: %v", err)
+			}
+			// Get the newly created guru (first guru with nama Guru Test)
+			gurus, _ := querier.GuruListAll(context.Background())
+			var guruID int64
+			for _, g := range gurus {
+				if g.Nama == "Guru Test" && !g.UserID.Valid {
+					guruID = g.ID
+					break
+				}
+			}
+			if guruID > 0 {
+				if err := querier.UpdateGuruUserID(context.Background(), queries.UpdateGuruUserIDParams{
+					UserID: sql.NullInt64{Int64: guruUser.ID, Valid: true},
+					ID:     guruID,
+				}); err != nil {
+					log.Fatalf("gagal link guru ke user: %v", err)
+				}
+				fmt.Printf("✓  Guru Test linked to user (guru_id=%d, user_id=%d)\n", guruID, guruUser.ID)
+			}
+		} else {
+			fmt.Printf("✓  Guru Test already linked\n")
+		}
+	}
+
+	koordinatorUser, err := querier.GetUserByEmail(context.Background(), "koordinator@ruangsanad.com")
+	if err == nil {
+		_, err := querier.GuruGetByUserID(context.Background(), sql.NullInt64{Int64: koordinatorUser.ID, Valid: true})
+		if err != nil {
+			if err := querier.CreateGuru(context.Background(), queries.CreateGuruParams{
+				Nama:         "Koordinator Guru",
+				JenisKelamin: "Laki-laki",
+				IsAktif:      1,
+			}); err != nil {
+				log.Fatalf("gagal buat guru koordinator: %v", err)
+			}
+			gurus, _ := querier.GuruListAll(context.Background())
+			var guruID int64
+			for _, g := range gurus {
+				if g.Nama == "Koordinator Guru" && !g.UserID.Valid {
+					guruID = g.ID
+					break
+				}
+			}
+			if guruID > 0 {
+				if err := querier.UpdateGuruUserID(context.Background(), queries.UpdateGuruUserIDParams{
+					UserID: sql.NullInt64{Int64: koordinatorUser.ID, Valid: true},
+					ID:     guruID,
+				}); err != nil {
+					log.Fatalf("gagal link koordinator ke user: %v", err)
+				}
+				fmt.Printf("✓  Koordinator Guru linked to user (guru_id=%d, user_id=%d)\n", guruID, koordinatorUser.ID)
+			}
+		} else {
+			fmt.Printf("✓  Koordinator Guru already linked\n")
+		}
 	}
 
 	fmt.Println("\n✅ Seed selesai. Silakan login dengan password: " + defaultPassword)

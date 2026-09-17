@@ -3,7 +3,6 @@ package session
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -182,11 +181,20 @@ func (s *Store) Get(c *fiber.Ctx) (*Session, error) {
 					}
 				}
 			}
-		} else if errors.Is(err, sql.ErrNoRows) {
+		} else if errors.Is(err, queries.ErrSessionNotFound) {
 			// Session no longer exists in DB — invalidate a stale cache entry.
 			if s.sessionCache != nil {
 				s.sessionCache.Invalidate(cookieValue)
 			}
+			c.Cookie(&fiber.Cookie{
+				Name:     s.sessionName,
+				Value:    "",
+				Path:     "/",
+				HTTPOnly: true,
+				Secure:   s.secure,
+				SameSite: "Lax",
+				MaxAge:   -1,
+			})
 		} else {
 			return nil, err
 		}

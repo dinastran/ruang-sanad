@@ -235,20 +235,20 @@
 			<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 overflow-hidden" in:fly={{ y: 20, duration: 600, delay: 150 }}>
 				<div class="flex items-center gap-2.5 px-6 py-4 border-b border-neutral-200/80 dark:border-white/[0.04]">
 					<Wallet class="w-5 h-5 text-neutral-500" />
-					<h3 class="text-base font-semibold text-neutral-900 dark:text-white">Nominal per Angkatan</h3>
+					<h3 class="text-base font-semibold text-neutral-900 dark:text-white">Nominal per Angkatan Pendaftaran</h3>
 				</div>
 				<div class="overflow-x-auto">
 					<table class="w-full">
 						<thead>
 							<tr class="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider bg-neutral-50 dark:bg-neutral-900/50">
-								<th class="text-left px-6 py-3">Angkatan</th>
+							<th class="text-left px-6 py-3">Angkatan Pendaftaran</th>
 								<th class="text-right px-6 py-3">Total Nominal</th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-neutral-200/80 dark:divide-white/[0.04]">
 							{#each stats.nominal_per_angkatan as na}
 								<tr class="hover:bg-neutral-50/50 dark:hover:bg-white/[0.015] transition-colors">
-									<td class="px-6 py-3.5 text-sm font-medium text-neutral-900 dark:text-white">Angkatan {na.angkatan}</td>
+								<td class="px-6 py-3.5 text-sm font-medium text-neutral-900 dark:text-white">Angkatan Pendaftaran {na.angkatan}</td>
 									<td class="px-6 py-3.5 text-sm font-mono text-right text-neutral-700 dark:text-neutral-300">{rupiah(na.total_nominal)}</td>
 								</tr>
 							{/each}

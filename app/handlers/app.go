@@ -171,6 +171,22 @@ func toStr(v interface{}) string {
 	return s
 }
 
+// toInt64 safely extracts an int64 from an interface{}, defaulting to 0.
+func toInt64(v interface{}) int64 {
+	if v == nil {
+		return 0
+	}
+	switch val := v.(type) {
+	case int64:
+		return val
+	case float64:
+		return int64(val)
+	case int:
+		return int64(val)
+	}
+	return 0
+}
+
 // toBool safely extracts a bool from an interface{}, defaulting to false.
 func toBool(v interface{}) bool {
 	if v == nil {

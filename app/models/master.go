@@ -28,6 +28,11 @@ type GuruResponse struct {
 	Nama         string `json:"nama"`
 	JenisKelamin string `json:"jenis_kelamin"`
 	IsAktif      bool   `json:"is_aktif"`
+	Status       string `json:"status,omitempty"`
+	NoWa         string `json:"no_wa,omitempty"`
+	Email        string `json:"email,omitempty"`
+	TanggalGabung string `json:"tanggal_gabung,omitempty"`
+	Foto         string `json:"foto,omitempty"`
 }
 
 type KodeKelasResponse struct {

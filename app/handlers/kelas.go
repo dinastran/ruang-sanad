@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"net/url"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -29,8 +30,7 @@ func (h *KelasHandler) Index(c *fiber.Ctx) error {
 	sess, _ := h.store.Get(c)
 	user := sessionUser(sess)
 
-	angkatan := c.Query("angkatan", "")
-	list, err := h.kelasService.ListByAngkatan(angkatan)
+	list, err := h.kelasService.ListByAngkatan("")
 	if err != nil {
 		return h.inertiaService.Render(c, "app/KelasList", fiber.Map{
 			"user":  user,
@@ -46,6 +46,14 @@ func (h *KelasHandler) Index(c *fiber.Ctx) error {
 		"user":     user,
 		"kelas":    list,
 		"angkatan": angkatanList,
+		"filters": fiber.Map{
+			"q":        c.Query("q", ""),
+			"guru_id":  c.Query("guru_id", ""),
+			"angkatan": c.Query("angkatan", ""),
+			"status":   c.Query("status", ""),
+			"gender":   c.Query("gender", ""),
+			"level":    c.Query("level", ""),
+		},
 	})
 }
 
@@ -58,15 +66,15 @@ func (h *KelasHandler) Show(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, "/app/kelas")
 	}
 
-	kelas, err := h.kelasService.GetByID(id)
+	kelas, santriList, err := h.kelasService.GetDetail(id)
 	if err != nil {
-		h.store.Flash(c, "error", "Kelas tidak ditemukan")
+		h.store.Flash(c, "error", "Gagal memuat detail kelas")
 		return h.inertiaService.Redirect(c, "/app/kelas")
 	}
 
-	santriList, _ := h.kelasService.GetSantriByKelasID(id)
+	hasPertemuan, _ := h.kelasService.HasPertemuan(id)
 	guruList, _ := h.masterService.ListGuruAll()
-	kelasList, _ := h.kelasService.ListByAngkatan(kelas.Angkatan)
+	kelasList, _ := h.kelasService.ListAll()
 	kelasLain := make([]models.KelasResponse, 0, len(kelasList))
 	for _, item := range kelasList {
 		if item.ID != kelas.ID && item.IsAktif {
@@ -84,12 +92,42 @@ func (h *KelasHandler) Show(c *fiber.Ctx) error {
 	}
 
 	return h.inertiaService.Render(c, "app/KelasDetail", fiber.Map{
-		"user":       user,
-		"kelas":      kelas,
-		"santri":     santriList,
-		"gurus":      guruList,
-		"kelas_lain": kelasLain,
+		"user":          user,
+		"kelas":         kelas,
+		"santri":        santriList,
+		"gurus":         guruList,
+		"kelas_lain":    kelasLain,
+		"has_pertemuan": hasPertemuan,
+		"return_to":     kelasListReturnURL(c),
 	})
+}
+
+// kelasListReturnURL only permits returning to the internal class list.
+func kelasListReturnURL(c *fiber.Ctx) string {
+	returnTo := c.Query("return_to", "")
+	parsed, err := url.Parse(returnTo)
+	if err != nil || parsed.IsAbs() || parsed.Path != "/app/kelas" || parsed.Fragment != "" {
+		return "/app/kelas"
+	}
+	if parsed.RawQuery == "" {
+		return "/app/kelas"
+	}
+	return "/app/kelas?" + parsed.RawQuery
+}
+
+func kelasDetailReturnURL(c *fiber.Ctx, id string) string {
+	returnTo := kelasListReturnURL(c)
+	if returnTo == "/app/kelas" {
+		return "/app/kelas/" + id
+	}
+	return "/app/kelas/" + id + "?return_to=" + url.QueryEscape(returnTo)
+}
+
+func kelasStatusReturnURL(c *fiber.Ctx, id string) string {
+	if c.Query("from_detail") == "1" {
+		return kelasDetailReturnURL(c, id)
+	}
+	return kelasListReturnURL(c)
 }
 
 // fillGuruNama populates GuruNama on each kelas from the guru master list.
@@ -117,16 +155,34 @@ func (h *KelasHandler) AssignGuru(c *fiber.Ctx) error {
 	}
 	if err := c.BodyParser(&req); err != nil {
 		h.store.Flash(c, "error", "Data tidak valid")
-		return h.inertiaService.Redirect(c, "/app/kelas/"+c.Params("id"))
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 	}
 
 	if err := h.kelasService.AssignGuru(id, req.GuruID); err != nil {
 		h.store.Flash(c, "error", "Gagal assign guru")
-		return h.inertiaService.Redirect(c, "/app/kelas/"+c.Params("id"))
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 	}
 
 	h.store.Flash(c, "success", "Guru berhasil diassign")
-	return h.inertiaService.Redirect(c, "/app/kelas/"+c.Params("id"))
+	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+}
+
+func (h *KelasHandler) SetPertemuanTerakhir(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return h.inertiaService.Redirect(c, "/app/kelas")
+	}
+	var req models.SetPertemuanTerakhirRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data nomor pertemuan tidak valid")
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	if err := h.kelasService.SetPertemuanTerakhir(id, req.PertemuanTerakhir); err != nil {
+		h.store.Flash(c, "error", err.Error())
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	h.store.Flash(c, "success", "Nomor pertemuan awal kelas tersimpan")
+	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 }
 
 func (h *KelasHandler) SetAktif(c *fiber.Ctx) error {
@@ -140,12 +196,12 @@ func (h *KelasHandler) SetAktif(c *fiber.Ctx) error {
 	}
 	if err := c.BodyParser(&req); err != nil {
 		h.store.Flash(c, "error", "Data tidak valid")
-		return h.inertiaService.Redirect(c, "/app/kelas")
+		return h.inertiaService.Redirect(c, kelasStatusReturnURL(c, c.Params("id")))
 	}
 
 	if err := h.kelasService.SetAktif(id, req.IsAktif); err != nil {
 		h.store.Flash(c, "error", "Gagal mengubah status kelas")
-		return h.inertiaService.Redirect(c, "/app/kelas")
+		return h.inertiaService.Redirect(c, kelasStatusReturnURL(c, c.Params("id")))
 	}
 
 	if req.IsAktif {
@@ -153,7 +209,7 @@ func (h *KelasHandler) SetAktif(c *fiber.Ctx) error {
 	} else {
 		h.store.Flash(c, "success", "Kelas dinonaktifkan")
 	}
-	return h.inertiaService.Redirect(c, c.Get("Referer", "/app/kelas"))
+	return h.inertiaService.Redirect(c, kelasStatusReturnURL(c, c.Params("id")))
 }
 
 func (h *KelasHandler) Delete(c *fiber.Ctx) error {
@@ -164,9 +220,9 @@ func (h *KelasHandler) Delete(c *fiber.Ctx) error {
 
 	if err := h.kelasService.Delete(id); err != nil {
 		h.store.Flash(c, "error", "Gagal menghapus kelas")
-		return h.inertiaService.Redirect(c, "/app/kelas")
+		return h.inertiaService.Redirect(c, kelasListReturnURL(c))
 	}
 
 	h.store.Flash(c, "success", "Kelas berhasil dihapus")
-	return h.inertiaService.Redirect(c, "/app/kelas")
+	return h.inertiaService.Redirect(c, kelasListReturnURL(c))
 }

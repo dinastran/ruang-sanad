@@ -29,6 +29,18 @@ func (h *DashboardHandler) Index(c *fiber.Ctx) error {
 	sess, _ := h.store.Get(c)
 	user := sessionUser(sess)
 	role := toStr(sess.Get("role"))
+	switch role {
+	case "user":
+		return h.inertiaService.Redirect(c, "/app/profile")
+	case "cs":
+		return h.inertiaService.Redirect(c, "/app/santri")
+	case "admin_kelas":
+		return h.inertiaService.Redirect(c, "/app/kelas")
+	case "guru":
+		return h.inertiaService.Redirect(c, "/app/guru")
+	case "koordinator_guru":
+		return h.inertiaService.Redirect(c, "/app/koordinator-guru")
+	}
 
 	stats, err := h.laporanService.GetDashboardStats()
 	if err != nil {

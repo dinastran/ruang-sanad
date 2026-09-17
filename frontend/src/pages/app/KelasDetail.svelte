@@ -25,6 +25,9 @@
 		guru_nama?: string;
 		kapasitas: number;
 		jumlah_santri: number;
+		pertemuan_terakhir: number;
+		tanggal_pertemuan_terakhir: string;
+		materi_terakhir: string;
 		is_aktif: boolean;
 		created_at: string;
 	}
@@ -36,6 +39,12 @@
 		status: string;
 		jenis_kelamin: string;
 		kelas_id?: number;
+		total_hadir: number;
+		total_izin: number;
+		total_sakit: number;
+		total_alpa: number;
+		total_telat: number;
+		persen_hadir: number;
 	}
 
 	interface Guru {
@@ -50,15 +59,19 @@
 		santri: SantriResponse[];
 		gurus: Guru[];
 		kelas_lain?: KelasResponse[];
+		has_pertemuan?: boolean;
+		return_to?: string;
 		success?: string;
 		error?: string;
 	}
 
-	let { user, kelas, santri = [], gurus = [], kelas_lain = [], success, error }: Props = $props();
+	let { user, kelas, santri = [], gurus = [], kelas_lain = [], has_pertemuan = false, return_to = "/app/kelas", success, error }: Props = $props();
 
 	let selectedGuruId = $state<number | null>(null);
 	let isAssignLoading = $state(false);
 	let showGuruDropdown = $state(false);
+	let pertemuanTerakhir = $state(kelas.pertemuan_terakhir);
+	let isPertemuanLoading = $state(false);
 
 	let pindahModal = $state<{ open: boolean; santriId: number; santriNama: string }>({ open: false, santriId: 0, santriNama: "" });
 	let pindahKelasId = $state<number | null>(null);
@@ -81,7 +94,7 @@
 	function handleAssignGuru() {
 		if (!selectedGuruId) return;
 		isAssignLoading = true;
-		router.put("/app/kelas/" + kelas.id + "/guru", { guru_id: selectedGuruId }, {
+		router.put(`/app/kelas/${kelas.id}/guru?return_to=${encodeURIComponent(return_to)}`, { guru_id: selectedGuruId }, {
 			preserveScroll: true,
 			onSuccess: () => {
 				Toast("Guru berhasil di-assign", "success");
@@ -96,6 +109,15 @@
 		});
 	}
 
+	function simpanPertemuanTerakhir() {
+		if (pertemuanTerakhir < 0) return;
+		isPertemuanLoading = true;
+		router.put(`/app/kelas/${kelas.id}/pertemuan-terakhir?return_to=${encodeURIComponent(return_to)}`, { pertemuan_terakhir: pertemuanTerakhir }, {
+			preserveScroll: true,
+			onFinish: () => { isPertemuanLoading = false; },
+		});
+	}
+
 	function openPindahModal(s: SantriResponse) {
 		pindahModal = { open: true, santriId: s.id, santriNama: s.nama };
 		pindahKelasId = null;
@@ -106,7 +128,7 @@
 	function toggleAktif() {
 		isStatusLoading = true;
 		const menjadiAktif = !kelas.is_aktif;
-		router.put("/app/kelas/" + kelas.id + "/status", { is_aktif: menjadiAktif }, {
+		router.put(`/app/kelas/${kelas.id}/status?from_detail=1&return_to=${encodeURIComponent(return_to)}`, { is_aktif: menjadiAktif }, {
 			preserveScroll: true,
 			onSuccess: () => Toast(menjadiAktif ? "Kelas diaktifkan" : "Kelas dinonaktifkan", "success"),
 			onError: () => Toast("Gagal mengubah status kelas", "error"),
@@ -116,7 +138,7 @@
 
 	function hapusKelas() {
 		if (!confirm(`Hapus kelas "${kelas.nama_kelas}"?\nSantri di kelas ini akan dilepas (kelasnya dikosongkan).`)) return;
-		router.delete("/app/kelas/" + kelas.id, {
+		router.delete(`/app/kelas/${kelas.id}?return_to=${encodeURIComponent(return_to)}`, {
 			onError: () => Toast("Gagal menghapus kelas", "error"),
 		});
 	}
@@ -124,7 +146,7 @@
 	function handlePindahkanSantri() {
 		if (!pindahKelasId) return;
 		isPindahLoading = true;
-		router.put("/app/santri/" + pindahModal.santriId + "/pindah", { kelas_tujuan_id: pindahKelasId }, {
+		router.post("/app/santri/" + pindahModal.santriId + "/pindah", { kelas_tujuan_id: pindahKelasId }, {
 			preserveScroll: true,
 			onSuccess: () => {
 				Toast("Santri berhasil dipindahkan", "success");
@@ -149,14 +171,14 @@
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 				</svg>
-				<a href="/app/kelas" use:inertia class="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Kelas</a>
+				<a href={return_to} use:inertia class="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Kelas</a>
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 				</svg>
 				<span class="text-neutral-700 dark:text-neutral-300">{kelas.nama_kelas}</span>
 			</div>
 
-			<a href="/app/kelas" use:inertia class="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors mb-4">
+			<a href={return_to} use:inertia class="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors mb-4">
 				<ArrowLeft class="w-4 h-4" />
 				Kembali ke daftar kelas
 			</a>
@@ -177,7 +199,7 @@
 							{/if}
 						</div>
 						<p class="text-neutral-600 dark:text-neutral-400">
-							Angkatan {kelas.angkatan} · {kelas.tipe}{kelas.sub_index > 0 ? ` · Sub ${kelas.sub_index}` : ""} · {kelas.level} · {kelas.frekuensi}
+						Angkatan Kelas {kelas.angkatan} · {kelas.tipe}{kelas.sub_index > 0 ? ` · Sub ${kelas.sub_index}` : ""} · {kelas.level} · {kelas.frekuensi}
 						</p>
 					</div>
 				</div>
@@ -236,6 +258,40 @@
 						<span class="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Jenis Kelamin</span>
 						<p class="mt-1"><GenderBadge gender={kelas.jenis_kelamin} /></p>
 					</div>
+				</div>
+
+				<div class="mt-6 pt-6 border-t border-neutral-200/80 dark:border-white/[0.04]">
+					<div class="rounded-xl border border-brand-400/20 bg-brand-400/5 p-4">
+						<div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+							<div>
+								<h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Pertemuan terakhir sebelum sistem</h3>
+								<p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">Isi nomor pertemuan riil kelas lama. Pertemuan berikutnya akan menjadi {pertemuanTerakhir + 1}, dan periode tagihan tetap mengikuti nomor riil.</p>
+							</div>
+							<div class="flex items-center gap-2">
+								<input type="number" min="0" bind:value={pertemuanTerakhir} disabled={has_pertemuan} aria-label="Pertemuan terakhir sebelum sistem" class="w-24 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-mono text-neutral-900 outline-none focus:border-brand-400 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white" />
+								<button onclick={simpanPertemuanTerakhir} disabled={has_pertemuan || isPertemuanLoading || pertemuanTerakhir < 0} class="rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-400">Simpan</button>
+							</div>
+						</div>
+						<p class="mt-3 text-xs text-amber-700 dark:text-amber-400">{has_pertemuan ? "Pengaturan terkunci karena kelas sudah memiliki pertemuan di aplikasi." : "Pengaturan ini akan terkunci setelah pertemuan pertama dicatat di aplikasi."}</p>
+					</div>
+				</div>
+
+				<div class="mt-6 pt-6 border-t border-neutral-200/80 dark:border-white/[0.04]">
+					<h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Pertemuan Terakhir</h3>
+					{#if kelas.tanggal_pertemuan_terakhir}
+						<div class="mt-3 grid gap-3 sm:grid-cols-2">
+							<div class="rounded-xl bg-neutral-50 p-3 dark:bg-neutral-900/50">
+								<p class="text-xs font-medium uppercase tracking-wider text-neutral-500">Pertemuan</p>
+								<p class="mt-1 text-sm font-semibold text-neutral-900 dark:text-white">Ke-{kelas.pertemuan_terakhir} · {kelas.tanggal_pertemuan_terakhir}</p>
+							</div>
+							<div class="rounded-xl bg-neutral-50 p-3 dark:bg-neutral-900/50">
+								<p class="text-xs font-medium uppercase tracking-wider text-neutral-500">Materi</p>
+								<p class="mt-1 text-sm font-semibold text-neutral-900 dark:text-white">{kelas.materi_terakhir || "Belum diisi"}</p>
+							</div>
+						</div>
+					{:else}
+						<p class="mt-2 text-sm text-neutral-500 dark:text-neutral-400">Belum ada pertemuan selesai yang tercatat di aplikasi.</p>
+					{/if}
 				</div>
 
 				<div class="mt-6 pt-6 border-t border-neutral-200/80 dark:border-white/[0.04]">
@@ -352,6 +408,9 @@
 								<th class="text-left px-6 py-3">ID Mahasantri</th>
 								<th class="text-left px-6 py-3">Nama</th>
 								<th class="text-left px-6 py-3">Status</th>
+								<th class="text-center px-6 py-3">Hadir</th>
+								<th class="text-center px-6 py-3">I/S/A/T</th>
+								<th class="text-center px-6 py-3">%</th>
 								<th class="text-right px-6 py-3">Aksi</th>
 							</tr>
 						</thead>
@@ -368,6 +427,9 @@
 									<td class="px-6 py-3.5">
 										<StatusBadge status={s.status} />
 									</td>
+									<td class="px-6 py-3.5 text-center text-sm font-mono text-green-600 dark:text-green-400">{s.total_hadir}</td>
+									<td class="px-6 py-3.5 text-center text-xs font-mono text-neutral-500 dark:text-neutral-400">{s.total_izin}/{s.total_sakit}/{s.total_alpa}/{s.total_telat}</td>
+									<td class="px-6 py-3.5 text-center text-sm font-mono text-neutral-700 dark:text-neutral-300">{s.persen_hadir.toFixed(0)}%</td>
 									<td class="px-6 py-3.5 text-right">
 										<button
 											onclick={() => openPindahModal(s)}
@@ -445,7 +507,7 @@
 			>
 				<option value={null} disabled>Pilih kelas tujuan</option>
 				{#each kelas_lain as kl}
-					<option value={kl.id}>{kl.nama_kelas} - {kl.level} ({kl.jadwal})</option>
+					<option value={kl.id}>Angkatan {kl.angkatan} · {kl.nama_kelas} - {kl.level} ({kl.jadwal})</option>
 				{/each}
 			</select>
 

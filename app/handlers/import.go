@@ -62,7 +62,7 @@ func (h *ImportHandler) Upload(c *fiber.Ctx) error {
 func (h *ImportHandler) Template(c *fiber.Ctx) error {
 	c.Set("Content-Type", "text/csv")
 	c.Set("Content-Disposition", "attachment; filename=template-import-santri.csv")
-	c.Write([]byte("kelas_kode,nama,jenis_kelamin,nominal,tanggal_daftar,angkatan,usia,domisili\n"))
-	c.Write([]byte("R 1X,Nama Santri,L,100000,2026-01-15,AKA38,25,Jakarta\n"))
+	c.Write([]byte("kelas_kode,nama,no_whatsapp,email,jenis_kelamin,nominal,tanggal_daftar,angkatan,usia,domisili\n"))
+	c.Write([]byte("R 1X,Nama Santri,081234567890,santri@example.com,L,100000,2026-01-15,AKA38,25,Jakarta\n"))
 	return nil
 }

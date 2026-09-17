@@ -40,7 +40,6 @@
 	let angkatanForm = $state({ kode: "", keterangan: "" });
 	let levelForm = $state({ kode: "", nama: "", urutan: 0 });
 	let jadwalForm = $state({ hari: "Senin", jam: "" });
-	let guruForm = $state({ nama: "", jenis_kelamin: "L" });
 	let kodeKelasForm = $state({ kode: "", tipe: "Reguler", frekuensi: "1x/pekan", urutan: 0 });
 
 	// Combine hari + jam into the stored jadwal name, e.g. "Senin, jam 20.00 WIB".
@@ -330,37 +329,14 @@
 					<h2 class="font-semibold text-neutral-900 dark:text-white">Guru</h2>
 					<span class="ml-auto text-xs font-mono text-neutral-500">{gurus.length}</span>
 				</div>
-				<form onsubmit={(e) => { e.preventDefault(); submit("guru", "/app/master/guru", { ...guruForm }, () => guruForm = { nama: "", jenis_kelamin: "L" }); }}
-					class="p-4 flex flex-col sm:flex-row gap-2.5 border-b border-neutral-200/80 dark:border-white/[0.04]">
-					<input bind:value={guruForm.nama} placeholder="Nama guru" class={inputCls} required />
-					<select bind:value={guruForm.jenis_kelamin} class="{inputCls} sm:w-32">
-						<option value="L">Laki-laki</option>
-						<option value="P">Perempuan</option>
-					</select>
-					<button type="submit" disabled={loading === "guru"}
-						class="shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-all disabled:opacity-50">
-						<Plus class="w-4 h-4" /> Tambah
-					</button>
-				</form>
 				<ul class="divide-y divide-neutral-200/80 dark:divide-white/[0.04] max-h-72 overflow-y-auto">
 					{#each gurus as g (g.id)}
-						<li class="px-4 sm:px-5 py-3 {isEditing('guru', g.id) ? 'bg-brand-500/[0.04]' : ''}">
-							{#if isEditing("guru", g.id)}
-								<div class="flex flex-col sm:flex-row sm:items-center gap-2.5">
-									<input bind:value={editForm.nama} placeholder="Nama guru" class="{inputCls} flex-1" />
-									<select bind:value={editForm.jenis_kelamin} class="{inputCls} sm:w-32">
-										<option value="L">Laki-laki</option>
-										<option value="P">Perempuan</option>
-									</select>
-									{@render editActions(() => saveEdit("guru"))}
-								</div>
-							{:else}
-								<div class="flex items-center gap-3">
-									<span class="text-sm font-medium text-neutral-900 dark:text-white truncate">{g.nama}</span>
-									<GenderBadge gender={g.jenis_kelamin} />
-									{@render rowActions(() => startEdit("guru", g), () => del(`/app/master/guru/${g.id}`, `guru ${g.nama}`))}
-								</div>
-							{/if}
+						<li class="px-4 sm:px-5 py-3">
+							<div class="flex items-center gap-3">
+								<span class="text-sm font-medium text-neutral-900 dark:text-white truncate">{g.nama}</span>
+								<GenderBadge gender={g.jenis_kelamin} />
+								<span class="ml-auto text-xs text-neutral-500">Dikelola Koordinator Guru</span>
+							</div>
 						</li>
 					{:else}
 						<li class="px-5 py-8 text-center text-sm text-neutral-500">Belum ada guru</li>

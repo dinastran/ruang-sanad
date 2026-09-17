@@ -13,18 +13,27 @@ import (
 )
 
 type Handlers struct {
-	Public        *handlers.PublicHandler
-	Auth          *handlers.AuthHandler
-	App           *handlers.AppHandler
-	Upload        *handlers.UploadHandler
-	PasswordReset *handlers.PasswordResetHandler
-	Santri        *handlers.SantriHandler
-	Kelas         *handlers.KelasHandler
-	Master        *handlers.MasterHandler
-	Import        *handlers.ImportHandler
-	Laporan       *handlers.LaporanHandler
-	Admin         *handlers.AdminHandler
-	Dashboard     *handlers.DashboardHandler
+	Public                   *handlers.PublicHandler
+	Auth                     *handlers.AuthHandler
+	App                      *handlers.AppHandler
+	Upload                   *handlers.UploadHandler
+	PasswordReset            *handlers.PasswordResetHandler
+	Santri                   *handlers.SantriHandler
+	Kelas                    *handlers.KelasHandler
+	Master                   *handlers.MasterHandler
+	Import                   *handlers.ImportHandler
+	Laporan                  *handlers.LaporanHandler
+	Admin                    *handlers.AdminHandler
+	Dashboard                *handlers.DashboardHandler
+	Guru                     *handlers.GuruHandler
+	Pertemuan                *handlers.PertemuanHandler
+	JadwalPertemuan          *handlers.JadwalPertemuanHandler
+	Riayah                   *handlers.RiayahHandler
+	KoordinatorGuru          *handlers.KoordinatorGuruHandler
+	KoordinatorGuruDirectory *handlers.KoordinatorGuruDirectoryHandler
+	KoordinatorFeatures      *handlers.KoordinatorFeaturesHandler
+	TSI                      *handlers.TSIHandler
+	Tagihan                  *handlers.TagihanHandler
 }
 
 func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, mailerService *services.MailerService, csrfMiddleware *middlewares.CSRFMiddleware) {
@@ -109,6 +118,8 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	csRole := middlewares.RoleRequired(store, userService, "cs", "super_admin")
 	akRole := middlewares.RoleRequired(store, userService, "admin_kelas", "super_admin")
 	kuRole := middlewares.RoleRequired(store, userService, "keuangan", "super_admin")
+	kuReadRole := middlewares.RoleRequired(store, userService, "keuangan", "super_admin", "admin")
+	superAdminRole := middlewares.RoleRequired(store, userService, "super_admin")
 	// Data Santri is viewable (read-only) by admin_kelas as well; the mutating
 	// routes below stay CS-only so admin_kelas can look but not edit.
 	santriViewRole := middlewares.RoleRequired(store, userService, "cs", "admin_kelas", "super_admin")
@@ -119,6 +130,8 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Post("/santri", csRole, h.Santri.Store)
 	protected.Get("/santri/:id", santriViewRole, h.Santri.Show)
 	protected.Put("/santri/:id/cs", csRole, h.Santri.UpdateCS)
+	protected.Put("/santri/:id/registration-identity", superAdminRole, h.Santri.CorrectRegistrationIdentity)
+	protected.Delete("/santri/:id", superAdminRole, h.Santri.Delete)
 
 	// Admin Kelas routes (admin_kelas + super_admin)
 	protected.Get("/perlu-dilengkapi", akRole, h.Santri.PerluDilengkapi)
@@ -129,11 +142,18 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Get("/kelas", akRole, h.Kelas.Index)
 	protected.Get("/kelas/:id", akRole, h.Kelas.Show)
 	protected.Put("/kelas/:id/guru", akRole, h.Kelas.AssignGuru)
+	protected.Put("/kelas/:id/pertemuan-terakhir", akRole, h.Kelas.SetPertemuanTerakhir)
 	protected.Put("/kelas/:id/status", akRole, h.Kelas.SetAktif)
 	protected.Delete("/kelas/:id", akRole, h.Kelas.Delete)
 
 	// Keuangan routes (keuangan + super_admin)
-	protected.Get("/keuangan", kuRole, h.Santri.Keuangan)
+	protected.Get("/keuangan", kuReadRole, h.Tagihan.Dashboard)
+	protected.Get("/keuangan/tagihan", kuReadRole, h.Tagihan.List)
+	protected.Get("/keuangan/tagihan/:id", kuReadRole, h.Tagihan.Detail)
+	protected.Put("/keuangan/tagihan/:id/lunas", kuRole, h.Tagihan.MarkLunas)
+	protected.Put("/keuangan/tagihan/:id/batal", kuRole, h.Tagihan.Batal)
+	protected.Post("/keuangan/tagihan/:id/follow-up", kuReadRole, h.Tagihan.FollowUp)
+	protected.Post("/keuangan/tagihan/sync", kuRole, h.Tagihan.Sync)
 	protected.Put("/santri/:id/keuangan", kuRole, h.Santri.UpdateKeuangan)
 	protected.Get("/laporan/keuangan", kuRole, h.Laporan.Keuangan)
 
@@ -156,12 +176,103 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Post("/master/jadwal", akRole, h.Master.CreateJadwal)
 	protected.Put("/master/jadwal/:id", akRole, h.Master.UpdateJadwal)
 	protected.Delete("/master/jadwal/:id", akRole, h.Master.DeleteJadwal)
-	protected.Post("/master/guru", akRole, h.Master.CreateGuru)
-	protected.Put("/master/guru/:id", akRole, h.Master.UpdateGuru)
-	protected.Delete("/master/guru/:id", akRole, h.Master.DeleteGuru)
 	protected.Post("/master/kode-kelas", akRole, h.Master.CreateKodeKelas)
 	protected.Put("/master/kode-kelas/:id", akRole, h.Master.UpdateKodeKelas)
 	protected.Delete("/master/kode-kelas/:id", akRole, h.Master.DeleteKodeKelas)
+
+	// Guru & Koordinator Guru routes
+	guruWorkflowRole := middlewares.RoleRequired(store, userService, "guru", "admin_kelas", "super_admin")
+	guruPersonalReadRole := middlewares.RoleRequired(store, userService, "guru", "super_admin")
+	guruWriteRole := middlewares.RoleRequired(store, userService, "guru")
+	koordinatorRole := middlewares.RoleRequired(store, userService, "koordinator_guru", "super_admin")
+	protected.Get("/guru", guruWorkflowRole, h.Guru.Dashboard)
+	protected.Get("/guru/kelas", guruWorkflowRole, h.Guru.KelasSaya)
+	protected.Get("/guru/kelas/:id", guruWorkflowRole, h.Guru.DetailKelas)
+	protected.Get("/guru/kelas/:id/pertemuan/mulai", guruWorkflowRole, h.Pertemuan.FormMulai)
+	protected.Post("/guru/kelas/:id/pertemuan/mulai", guruWorkflowRole, h.Pertemuan.Mulai)
+	protected.Get("/guru/kelas/:id/pertemuan/:pid", guruWorkflowRole, h.Pertemuan.Detail)
+	protected.Get("/guru/kelas/:id/pertemuan/:pid/selesai", guruWorkflowRole, h.Pertemuan.FormSelesai)
+	protected.Post("/guru/kelas/:id/pertemuan/:pid/selesai", guruWorkflowRole, h.Pertemuan.Selesai)
+	protected.Get("/guru/jadwal-pertemuan", guruWorkflowRole, h.JadwalPertemuan.Index)
+	protected.Post("/guru/jadwal-pertemuan", guruWorkflowRole, h.JadwalPertemuan.Create)
+	protected.Post("/guru/kelas/:id/jadwal-pertemuan/:jid/reschedule", guruWorkflowRole, h.JadwalPertemuan.Reschedule)
+	protected.Post("/guru/kelas/:id/jadwal-pertemuan/:jid/badal", guruWorkflowRole, h.JadwalPertemuan.Badal)
+	protected.Post("/guru/kelas/:id/jadwal-pertemuan/:jid/batal", guruWorkflowRole, h.JadwalPertemuan.Cancel)
+	protected.Post("/guru/kelas/:id/jadwal-pertemuan/:jid/mulai", guruWorkflowRole, h.JadwalPertemuan.Start)
+	protected.Get("/guru/kelas/:id/rekap", guruWorkflowRole, h.Pertemuan.RekapAbsensi)
+	protected.Get("/guru/kelas/:id/riwayat-pertemuan", guruWorkflowRole, h.Pertemuan.Riwayat)
+	protected.Put("/guru/kelas/:id/absensi/:aid", guruWorkflowRole, h.Pertemuan.EditAbsensi)
+	protected.Get("/guru/kelas/:id/santri/:sid/riayah", guruWorkflowRole, h.Riayah.List)
+	protected.Post("/guru/kelas/:id/santri/:sid/riayah", guruWorkflowRole, h.Riayah.Create)
+	protected.Put("/guru/kelas/:id/santri/:sid/riayah/:rid", guruWorkflowRole, h.Riayah.Update)
+	protected.Delete("/guru/kelas/:id/santri/:sid/riayah/:rid", guruWorkflowRole, h.Riayah.Delete)
+	protected.Get("/guru/kelas/:id/santri/:sid/wa", guruWorkflowRole, h.Riayah.WALink)
+	protected.Get("/guru/kelas/:id/wa", guruWorkflowRole, h.Riayah.BroadcastWA)
+	protected.Post("/guru/tilawah", guruWriteRole, h.Guru.TilawahCheckin)
+	protected.Delete("/guru/tilawah", guruWriteRole, h.Guru.TilawahUncheck)
+	protected.Get("/guru/tsi", guruPersonalReadRole, h.TSI.Saya)
+
+	// Koordinator Guru — dashboard & direktori guru
+	protected.Get("/koordinator-guru", koordinatorRole, h.KoordinatorGuru.Dashboard)
+	protected.Get("/koordinator-guru/guru", koordinatorRole, h.KoordinatorGuruDirectory.List)
+	protected.Post("/koordinator-guru/guru", koordinatorRole, h.KoordinatorGuruDirectory.Create)
+	protected.Get("/koordinator-guru/guru/:id", koordinatorRole, h.KoordinatorGuruDirectory.Detail)
+	protected.Put("/koordinator-guru/guru/:id", koordinatorRole, h.KoordinatorGuruDirectory.Update)
+	protected.Put("/koordinator-guru/guru/:id/kompetensi", koordinatorRole, h.KoordinatorFeatures.KompetensiSave)
+	protected.Post("/koordinator-guru/guru/:id/riayah", koordinatorRole, h.KoordinatorFeatures.RiayahGuruCreate)
+	protected.Put("/koordinator-guru/guru/:id/link", superAdminRole, h.KoordinatorGuruDirectory.LinkUser)
+	protected.Delete("/koordinator-guru/guru/:id/link", superAdminRole, h.KoordinatorGuruDirectory.Unlink)
+
+	// Koordinator Guru — pembinaan
+	protected.Get("/koordinator-guru/pembinaan", koordinatorRole, h.KoordinatorFeatures.PembinaanList)
+	protected.Post("/koordinator-guru/pembinaan", koordinatorRole, h.KoordinatorFeatures.PembinaanCreate)
+	protected.Put("/koordinator-guru/pembinaan/:id", koordinatorRole, h.KoordinatorFeatures.PembinaanUpdate)
+	protected.Delete("/koordinator-guru/pembinaan/:id", koordinatorRole, h.KoordinatorFeatures.PembinaanDelete)
+	protected.Get("/koordinator-guru/pembinaan/:id/absen", koordinatorRole, h.KoordinatorFeatures.PembinaanAbsenPage)
+	protected.Post("/koordinator-guru/pembinaan/:id/absen", koordinatorRole, h.KoordinatorFeatures.PembinaanAbsenSave)
+
+	// Koordinator Guru — rapat
+	protected.Get("/koordinator-guru/rapat", koordinatorRole, h.KoordinatorFeatures.RapatList)
+	protected.Post("/koordinator-guru/rapat", koordinatorRole, h.KoordinatorFeatures.RapatCreate)
+	protected.Put("/koordinator-guru/rapat/:id", koordinatorRole, h.KoordinatorFeatures.RapatUpdate)
+	protected.Delete("/koordinator-guru/rapat/:id", koordinatorRole, h.KoordinatorFeatures.RapatDelete)
+	protected.Get("/koordinator-guru/rapat/:id/absen", koordinatorRole, h.KoordinatorFeatures.RapatAbsenPage)
+	protected.Post("/koordinator-guru/rapat/:id/absen", koordinatorRole, h.KoordinatorFeatures.RapatAbsenSave)
+	protected.Get("/koordinator-guru/riwayat-absensi", koordinatorRole, h.KoordinatorFeatures.RiwayatAbsensi)
+
+	// Koordinator Guru — kunjungan kelas
+	protected.Get("/koordinator-guru/kunjungan", koordinatorRole, h.KoordinatorFeatures.KunjunganList)
+	protected.Post("/koordinator-guru/kunjungan", koordinatorRole, h.KoordinatorFeatures.KunjunganCreate)
+	protected.Put("/koordinator-guru/kunjungan/:id", koordinatorRole, h.KoordinatorFeatures.KunjunganUpdate)
+	protected.Delete("/koordinator-guru/kunjungan/:id", koordinatorRole, h.KoordinatorFeatures.KunjunganDelete)
+
+	// Koordinator Guru — Kalam Bersanad
+	protected.Get("/koordinator-guru/kalam", koordinatorRole, h.KoordinatorFeatures.KalamList)
+	protected.Post("/koordinator-guru/kalam", koordinatorRole, h.KoordinatorFeatures.KalamCreate)
+	protected.Put("/koordinator-guru/kalam/:id", koordinatorRole, h.KoordinatorFeatures.KalamUpdate)
+	protected.Delete("/koordinator-guru/kalam/:id", koordinatorRole, h.KoordinatorFeatures.KalamDelete)
+	protected.Get("/koordinator-guru/kalam/:id/share", koordinatorRole, h.KoordinatorFeatures.KalamSharePage)
+	protected.Post("/koordinator-guru/kalam/:id/share", koordinatorRole, h.KoordinatorFeatures.KalamShareToggle)
+
+	// Koordinator Guru — template WA
+	protected.Get("/koordinator-guru/wa-template", koordinatorRole, h.KoordinatorFeatures.WaTemplateList)
+	protected.Post("/koordinator-guru/wa-template", koordinatorRole, h.KoordinatorFeatures.WaTemplateCreate)
+	protected.Put("/koordinator-guru/wa-template/:id", koordinatorRole, h.KoordinatorFeatures.WaTemplateUpdate)
+	protected.Delete("/koordinator-guru/wa-template/:id", koordinatorRole, h.KoordinatorFeatures.WaTemplateDelete)
+
+	// Koordinator Guru — todo
+	protected.Get("/koordinator-guru/todo", koordinatorRole, h.KoordinatorFeatures.TodoList)
+	protected.Post("/koordinator-guru/todo", koordinatorRole, h.KoordinatorFeatures.TodoCreate)
+	protected.Put("/koordinator-guru/todo/:id", koordinatorRole, h.KoordinatorFeatures.TodoUpdate)
+	protected.Put("/koordinator-guru/todo/:id/status", koordinatorRole, h.KoordinatorFeatures.TodoStatus)
+	protected.Delete("/koordinator-guru/todo/:id", koordinatorRole, h.KoordinatorFeatures.TodoDelete)
+
+	// Koordinator Guru — TSI (penilaian & rekap)
+	protected.Get("/koordinator-guru/tsi", koordinatorRole, h.TSI.Rekap)
+	protected.Get("/koordinator-guru/tsi/:id", koordinatorRole, h.TSI.Penilaian)
+	protected.Post("/koordinator-guru/tsi/:id", koordinatorRole, h.TSI.SaveNilai)
+	protected.Post("/koordinator-guru/tsi/:id/finalize", koordinatorRole, h.TSI.Finalize)
+	protected.Post("/koordinator-guru/tsi/:id/reopen", koordinatorRole, h.TSI.Reopen)
 }
 
 func setupAdminRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, csrfMiddleware *middlewares.CSRFMiddleware) {

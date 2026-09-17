@@ -1,0 +1,14 @@
+<script lang="ts">
+	import { inertia } from "@inertiajs/svelte";
+	import AppLayout from "@layouts/AppLayout.svelte";
+	import type { Tagihan, User } from "@lib/types";
+	import { ArrowLeft, MessageCircle } from "lucide-svelte";
+	interface Props { user?: User; tagihan: Tagihan; }
+	let props: Props = $props();
+	const rupiah = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
+</script>
+
+<AppLayout user={props.user}>
+	<div class="max-w-3xl mx-auto px-4 sm:px-6 pt-6 text-sm text-neutral-600 dark:text-neutral-400">Angkatan Pendaftaran: <strong>{props.tagihan.angkatan || "-"}</strong> · Angkatan Kelas: <strong>{props.tagihan.angkatan_kelas || "-"}</strong></div>
+	<main class="max-w-3xl mx-auto px-4 sm:px-6 py-8"><a href="/app/keuangan/tagihan" use:inertia class="inline-flex items-center gap-2 text-sm text-neutral-500 hover:text-brand-600"><ArrowLeft size="16" /> Kembali ke daftar</a><section class="mt-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-925 overflow-hidden"><header class="p-6 border-b border-neutral-200 dark:border-neutral-800"><p class="text-xs font-bold tracking-[0.15em] text-brand-600 uppercase">Tagihan SPP</p><h1 class="mt-2 text-2xl font-bold text-neutral-900 dark:text-white">{props.tagihan.santri_nama}</h1><p class="mt-1 text-sm text-neutral-500">{props.tagihan.id_mahasantri || "Tanpa ID"} · {props.tagihan.kelas_nama || "Tanpa kelas"}</p></header><dl class="grid sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-neutral-200 dark:divide-neutral-800"><div class="p-5 space-y-3"><div><dt class="text-xs text-neutral-500">Nominal</dt><dd class="font-mono font-bold text-lg text-neutral-900 dark:text-white">{rupiah(props.tagihan.nominal)}</dd></div><div><dt class="text-xs text-neutral-500">Periode</dt><dd>Bulan ke-{props.tagihan.bulan_ke} · Pertemuan ke-{props.tagihan.pertemuan_ke}</dd></div><div><dt class="text-xs text-neutral-500">Status</dt><dd class="capitalize">{props.tagihan.status.replace("_", " ")}</dd></div></div><div class="p-5 space-y-3"><div><dt class="text-xs text-neutral-500">Tanggal tagih / jatuh tempo</dt><dd>{props.tagihan.tanggal_tagih} / {props.tagihan.jatuh_tempo || "-"}</dd></div><div><dt class="text-xs text-neutral-500">Pembayaran</dt><dd>{props.tagihan.tanggal_bayar || "Belum dibayar"}{#if props.tagihan.metode} · {props.tagihan.metode}{/if}</dd></div><div><dt class="text-xs text-neutral-500">Follow-up WhatsApp</dt><dd class="flex items-center gap-1"><MessageCircle size="15" /> {props.tagihan.fu_count} kali{#if props.tagihan.fu_terakhir} · terakhir {props.tagihan.fu_terakhir}{/if}</dd></div></div></dl>{#if props.tagihan.catatan}<div class="border-t border-neutral-200 dark:border-neutral-800 p-5"><p class="text-xs text-neutral-500">Catatan</p><p class="mt-1 text-sm">{props.tagihan.catatan}</p></div>{/if}</section></main>
+</AppLayout>

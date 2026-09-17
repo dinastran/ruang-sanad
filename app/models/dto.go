@@ -39,5 +39,5 @@ func (u *User) ToResponse() UserResponse {
 }
 
 func ValidRoles() []UserRole {
-	return []UserRole{RoleUser, RoleAdmin, RoleCS, RoleAdminKelas, RoleKeuangan, RoleSuperAdmin}
+	return []UserRole{RoleUser, RoleAdmin, RoleCS, RoleAdminKelas, RoleKeuangan, RoleSuperAdmin, RoleGuru, RoleKoordinator}
 }

@@ -23,15 +23,17 @@ func NewLaporanService(querier *queries.Querier, santriService *SantriService, k
 
 func (s *LaporanService) GetDashboardStats() (*models.DashboardStats, error) {
 	totalSantri, err := s.querier.CountSantri(context.Background(), queries.CountSantriParams{
-		Angkatan: "",
-		Level:    "",
-		Tipe:     "",
-		Jadwal:   "",
-		Gender:   "",
-		Status:   "aktif",
-		KelasID:  nil,
-		Lengkap:  int64(-1),
-		Search:   "",
+		AngkatanPendaftaran: "",
+		AngkatanKelas:       "",
+		Level:               "",
+		Tipe:                "",
+		Jadwal:              "",
+		Gender:              "",
+		Status:              "aktif",
+		KelasID:             nil,
+		Lengkap:             int64(-1),
+		IDBermasalah:        int64(0),
+		Search:              "",
 	})
 	if err != nil {
 		return nil, err
@@ -41,16 +43,16 @@ func (s *LaporanService) GetDashboardStats() (*models.DashboardStats, error) {
 	// fields are interface{}, so an unset field is nil → SQL NULL, and the
 	// "@angkatan = '' OR ..." guards become NULL (false) and exclude every row.
 	santriLengkap, err := s.querier.CountSantri(context.Background(), queries.CountSantriParams{
-		Angkatan: "", Level: "", Tipe: "", Jadwal: "",
-		Gender: "", Status: "aktif", KelasID: nil, Lengkap: int64(1), Search: "",
+		AngkatanPendaftaran: "", AngkatanKelas: "", Level: "", Tipe: "", Jadwal: "",
+		Gender: "", Status: "aktif", KelasID: nil, Lengkap: int64(1), IDBermasalah: int64(0), Search: "",
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	santriPerluLengkap, err := s.querier.CountSantri(context.Background(), queries.CountSantriParams{
-		Angkatan: "", Level: "", Tipe: "", Jadwal: "",
-		Gender: "", Status: "aktif", KelasID: nil, Lengkap: int64(0), Search: "",
+		AngkatanPendaftaran: "", AngkatanKelas: "", Level: "", Tipe: "", Jadwal: "",
+		Gender: "", Status: "aktif", KelasID: nil, Lengkap: int64(0), IDBermasalah: int64(0), Search: "",
 	})
 	if err != nil {
 		return nil, err

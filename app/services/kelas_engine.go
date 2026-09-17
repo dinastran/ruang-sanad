@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,13 +11,17 @@ import (
 	"github.com/maulanashalihin/laju-go/app/queries"
 )
 
-const DefaultKapasitas = 10
+const DefaultKapasitas = 15
 
 type KelasEngineService struct {
 	querier *queries.Querier
 }
 
 func NewKelasEngineService(querier *queries.Querier) *KelasEngineService {
+	return &KelasEngineService{querier: querier}
+}
+
+func (s *KelasEngineService) WithQuerier(querier *queries.Querier) *KelasEngineService {
 	return &KelasEngineService{querier: querier}
 }
 
@@ -97,38 +102,68 @@ func (s *KelasEngineService) resolveLevelNama(ctx context.Context, levelKode str
 func (s *KelasEngineService) ProcessSantri(ctx context.Context, santri *queries.Santri) error {
 	tipe := s.HitungTipe(santri.KelasKode)
 	frekuensi := s.HitungFrekuensi(santri.KelasKode)
-	isLengkap := s.HitungIsLengkap(santri.Nama, santri.Angkatan, santri.Level, santri.Jadwal, santri.JenisKelamin)
+	isLengkap := s.HitungIsLengkap(santri.Nama, santri.AngkatanKelas, santri.Level, santri.Jadwal, santri.JenisKelamin)
 
 	var kelasID sql.NullInt64
+	oldClassExists := false
+	oldClassKey := ""
+	if santri.KelasID.Valid {
+		current, err := s.querier.GetKelasByID(ctx, santri.KelasID.Int64)
+		if err == nil {
+			oldClassExists = true
+			if current.IsAktif == 1 {
+				oldClassKey = current.KunciKelas
+			}
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("get kelas saat ini: %w", err)
+		}
+	}
 
 	if isLengkap {
 		levelNama := s.resolveLevelNama(ctx, santri.Level)
-		kunciKelas := s.BuatKunciKelas(santri.KelasKode, santri.JenisKelamin, santri.Level, frekuensi, santri.Jadwal, santri.Angkatan)
-		assignedID, err := s.assignKeKelas(ctx, kunciKelas, santri.KelasKode, tipe, santri.JenisKelamin, santri.Level, levelNama, frekuensi, santri.Jadwal, santri.Angkatan)
-		if err != nil {
-			return fmt.Errorf("assign ke kelas: %w", err)
+		kunciKelas := s.BuatKunciKelas(santri.KelasKode, santri.JenisKelamin, santri.Level, frekuensi, santri.Jadwal, santri.AngkatanKelas)
+		if oldClassExists && oldClassKey == kunciKelas {
+			kelasID = santri.KelasID
 		}
-		kelasID = sql.NullInt64{Int64: assignedID, Valid: true}
+		if !kelasID.Valid {
+			assignedID, err := s.assignKeKelas(ctx, kunciKelas, santri.KelasKode, tipe, santri.JenisKelamin, santri.Level, levelNama, frekuensi, santri.Jadwal, santri.AngkatanKelas)
+			if err != nil {
+				return fmt.Errorf("assign ke kelas: %w", err)
+			}
+			kelasID = sql.NullInt64{Int64: assignedID, Valid: true}
+		}
 	}
 
-	if santri.KelasID.Valid && (!kelasID.Valid || santri.KelasID.Int64 != kelasID.Int64) {
-		_ = s.querier.DecrementJumlahSantri(ctx, santri.KelasID.Int64)
-		// Remove the old class if it is now empty, so moving a santri (e.g. after a
-		// gender change) doesn't leave dangling empty classes in the list.
-		if old, err := s.querier.GetKelasByID(ctx, santri.KelasID.Int64); err == nil && old.JumlahSantri <= 0 {
-			_ = s.querier.DeleteKelas(ctx, santri.KelasID.Int64)
+	classChanged := santri.KelasID.Valid && (!kelasID.Valid || santri.KelasID.Int64 != kelasID.Int64)
+	if classChanged && oldClassExists {
+		if err := s.querier.DecrementJumlahSantri(ctx, santri.KelasID.Int64); err != nil {
+			return fmt.Errorf("decrement kelas lama: %w", err)
 		}
 	}
 
 	now := time.Now()
-	return s.querier.UpdateSantriEngine(ctx, queries.UpdateSantriEngineParams{
+	if err := s.querier.UpdateSantriEngine(ctx, queries.UpdateSantriEngineParams{
 		Tipe:      tipe,
 		Frekuensi: frekuensi,
 		IsLengkap: boolToInt64(isLengkap),
 		KelasID:   kelasID,
 		UpdatedAt: now,
 		ID:        santri.ID,
-	})
+	}); err != nil {
+		return err
+	}
+	if kelasID.Valid && (!santri.KelasID.Valid || santri.KelasID.Int64 != kelasID.Int64) {
+		anchor := int64(0)
+		next, err := s.querier.GetNextPertemuanKe(ctx, kelasID.Int64)
+		if err != nil {
+			return fmt.Errorf("get pertemuan kelas tujuan: %w", err)
+		}
+		if next > 1 {
+			anchor = next
+		}
+		return s.querier.UpdateSantriPertemuanAwal(ctx, queries.UpdateSantriPertemuanAwalParams{PertemuanAwal: anchor, UpdatedAt: now, ID: santri.ID})
+	}
+	return nil
 }
 
 func (s *KelasEngineService) assignKeKelas(ctx context.Context, kunciKelas, kelasKode, tipe, jenisKelamin, levelKode, levelNama, frekuensi, jadwal, angkatan string) (int64, error) {
@@ -138,7 +173,7 @@ func (s *KelasEngineService) assignKeKelas(ctx context.Context, kunciKelas, kela
 	}
 
 	for _, k := range kelasList {
-		if k.JumlahSantri < DefaultKapasitas {
+		if k.JumlahSantri < k.Kapasitas {
 			if err := s.querier.IncrementJumlahSantri(ctx, k.ID); err != nil {
 				return 0, err
 			}
@@ -146,9 +181,9 @@ func (s *KelasEngineService) assignKeKelas(ctx context.Context, kunciKelas, kela
 		}
 	}
 
-	var subIndex int64 = 1
-	if len(kelasList) > 0 {
-		subIndex = kelasList[len(kelasList)-1].SubIndex + 1
+	subIndex, err := s.querier.GetNextKelasSubIndexByKunci(ctx, kunciKelas)
+	if err != nil {
+		return 0, err
 	}
 
 	nama := namaKelas(jenisKelamin, kelasKode, levelNama, frekuensi, jadwal, angkatan)
@@ -183,13 +218,41 @@ func (s *KelasEngineService) PindahkanSantri(ctx context.Context, santriID, kela
 	if err != nil {
 		return err
 	}
-
 	kelasTujuan, err := s.querier.GetKelasByID(ctx, kelasTujuanID)
 	if err != nil {
 		return err
 	}
-	if kelasTujuan.JumlahSantri >= DefaultKapasitas {
-		return fmt.Errorf("kelas tujuan sudah penuh (kapasitas %d)", DefaultKapasitas)
+	if kelasTujuan.IsAktif != 1 {
+		return errors.New("kelas tujuan tidak aktif")
+	}
+	if santri.JenisKelamin != kelasTujuan.JenisKelamin {
+		return errors.New("jenis kelamin santri tidak sesuai dengan kelas tujuan")
+	}
+	if kelasTujuan.JumlahSantri >= kelasTujuan.Kapasitas && (!santri.KelasID.Valid || santri.KelasID.Int64 != kelasTujuanID) {
+		return fmt.Errorf("kelas tujuan sudah penuh (kapasitas %d)", kelasTujuan.Kapasitas)
+	}
+
+	kelasKode := santri.KelasKode
+	if parsed, _, found := strings.Cut(kelasTujuan.KunciKelas, " | "); found {
+		kelasKode = strings.TrimSpace(parsed)
+		if kelasKode == kelasTujuan.JenisKelamin {
+			kelasKode = ""
+		}
+	}
+	now := time.Now()
+	updateTarget := queries.UpdateSantriKelasParams{
+		KelasID:       sql.NullInt64{Int64: kelasTujuanID, Valid: true},
+		AngkatanKelas: kelasTujuan.Angkatan,
+		KelasKode:     kelasKode,
+		Level:         kelasTujuan.Level,
+		Jadwal:        kelasTujuan.Jadwal,
+		Tipe:          kelasTujuan.Tipe,
+		Frekuensi:     kelasTujuan.Frekuensi,
+		UpdatedAt:     now,
+		ID:            santriID,
+	}
+	if santri.KelasID.Valid && santri.KelasID.Int64 == kelasTujuanID {
+		return s.querier.UpdateSantriKelas(ctx, updateTarget)
 	}
 
 	if santri.KelasID.Valid {
@@ -198,12 +261,18 @@ func (s *KelasEngineService) PindahkanSantri(ctx context.Context, santriID, kela
 		}
 	}
 
-	now := time.Now()
-	if err := s.querier.UpdateSantriKelas(ctx, queries.UpdateSantriKelasParams{
-		KelasID:   sql.NullInt64{Int64: kelasTujuanID, Valid: true},
-		UpdatedAt: now,
-		ID:        santriID,
-	}); err != nil {
+	if err := s.querier.UpdateSantriKelas(ctx, updateTarget); err != nil {
+		return err
+	}
+	anchor := int64(0)
+	next, err := s.querier.GetNextPertemuanKe(ctx, kelasTujuanID)
+	if err != nil {
+		return fmt.Errorf("get pertemuan kelas tujuan: %w", err)
+	}
+	if next > 1 {
+		anchor = next
+	}
+	if err := s.querier.UpdateSantriPertemuanAwal(ctx, queries.UpdateSantriPertemuanAwalParams{PertemuanAwal: anchor, UpdatedAt: now, ID: santriID}); err != nil {
 		return err
 	}
 

@@ -14,6 +14,8 @@ const (
 	RoleAdminKelas UserRole = "admin_kelas"
 	RoleKeuangan   UserRole = "keuangan"
 	RoleSuperAdmin UserRole = "super_admin"
+	RoleGuru       UserRole = "guru"
+	RoleKoordinator UserRole = "koordinator_guru"
 )
 
 type User struct {

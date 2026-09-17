@@ -17,8 +17,10 @@ func (s Santri) ToResponse() models.SantriResponse {
 		JenisKelamin:          s.JenisKelamin,
 		Nominal:               s.Nominal,
 		Angkatan:              s.Angkatan,
+		AngkatanKelas:         s.AngkatanKelas,
 		Domisili:              s.Domisili,
 		NoWA:                  s.NoWa,
+		Email:                 s.Email,
 		Fu:                    s.Fu,
 		HasilVn:               s.HasilVn,
 		KeteranganVn:          s.KeteranganVn,
@@ -64,33 +66,38 @@ func (s Santri) ToResponse() models.SantriResponse {
 }
 
 func (k Kela) ToResponse() models.KelasResponse {
-	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.IsAktif, k.CreatedAt)
+	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.PertemuanTerakhir, k.IsAktif, k.CreatedAt)
 }
 
 func (k ListKelasByAngkatanRow) ToResponse() models.KelasResponse {
-	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.IsAktif, k.CreatedAt)
+	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.PertemuanTerakhir, k.IsAktif, k.CreatedAt)
+}
+
+func (k ListKelasAllRow) ToResponse() models.KelasResponse {
+	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.PertemuanTerakhir, k.IsAktif, k.CreatedAt)
 }
 
 func (k GetKelasByIDRow) ToResponse() models.KelasResponse {
-	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.IsAktif, k.CreatedAt)
+	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.PertemuanTerakhir, k.IsAktif, k.CreatedAt)
 }
 
-func kelasResponse(id int64, kunciKelas, angkatan, tipe, jenisKelamin, level, frekuensi, jadwal string, subIndex int64, namaKelas string, guruID sql.NullInt64, kapasitas, jumlahSantri, isAktif int64, createdAt time.Time) models.KelasResponse {
+func kelasResponse(id int64, kunciKelas, angkatan, tipe, jenisKelamin, level, frekuensi, jadwal string, subIndex int64, namaKelas string, guruID sql.NullInt64, kapasitas, jumlahSantri, pertemuanTerakhir, isAktif int64, createdAt time.Time) models.KelasResponse {
 	r := models.KelasResponse{
-		ID:           id,
-		KunciKelas:   kunciKelas,
-		Angkatan:     angkatan,
-		Tipe:         tipe,
-		JenisKelamin: jenisKelamin,
-		Level:        level,
-		Frekuensi:    frekuensi,
-		Jadwal:       jadwal,
-		SubIndex:     subIndex,
-		NamaKelas:    namaKelas,
-		Kapasitas:    kapasitas,
-		JumlahSantri: jumlahSantri,
-		IsAktif:      isAktif == 1,
-		CreatedAt:    createdAt.Format("2006-01-02 15:04:05"),
+		ID:                id,
+		KunciKelas:        kunciKelas,
+		Angkatan:          angkatan,
+		Tipe:              tipe,
+		JenisKelamin:      jenisKelamin,
+		Level:             level,
+		Frekuensi:         frekuensi,
+		Jadwal:            jadwal,
+		SubIndex:          subIndex,
+		NamaKelas:         namaKelas,
+		Kapasitas:         kapasitas,
+		JumlahSantri:      jumlahSantri,
+		PertemuanTerakhir: pertemuanTerakhir,
+		IsAktif:           isAktif == 1,
+		CreatedAt:         createdAt.Format("2006-01-02 15:04:05"),
 	}
 	if guruID.Valid {
 		r.GuruID = &guruID.Int64

@@ -29,6 +29,20 @@ func NewQuerier(db DBTX) *Querier {
 	}
 }
 
+// BeginTx exposes a transaction while keeping all SQL execution in generated
+// queries. Services use the returned Querier via WithTx.
+func (q *Querier) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	db, ok := q.Queries.db.(*sql.DB)
+	if !ok {
+		return nil, errors.New("database transactions are unavailable")
+	}
+	return db.BeginTx(ctx, nil)
+}
+
+func (q *Querier) WithTx(tx *sql.Tx) *Querier {
+	return &Querier{Queries: q.Queries.WithTx(tx)}
+}
+
 // --- User helpers that convert queries.User -> models.User ---
 
 func toModelUser(qUser User) *models.User {

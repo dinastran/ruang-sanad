@@ -113,7 +113,7 @@ func TestRegisterEndpoint(t *testing.T) {
 	}{
 		{
 			"success", `{"name":"T","email":"a@b.com","password":"pass123"}`,
-			http.StatusSeeOther, "/app", true,
+			http.StatusSeeOther, "/app/profile", true,
 		},
 		{
 			"empty fields", `{"name":"","email":"","password":""}`,
@@ -165,7 +165,7 @@ func TestLoginEndpoint(t *testing.T) {
 		wantStatus   int
 		wantLocation string
 	}{
-		{"success", `{"email":"user@example.com","password":"pass123"}`, http.StatusSeeOther, "/app"},
+		{"success", `{"email":"user@example.com","password":"pass123"}`, http.StatusSeeOther, "/app/profile"},
 		{"wrong password", `{"email":"user@example.com","password":"wrong"}`, http.StatusSeeOther, "/login"},
 		{"unknown user", `{"email":"nobody@example.com","password":"any"}`, http.StatusSeeOther, "/login"},
 	}
@@ -180,6 +180,38 @@ func TestLoginEndpoint(t *testing.T) {
 			assert.Equal(t, tt.wantLocation, resp.Header.Get("Location"))
 		})
 	}
+}
+
+func TestLoginEndpointReplacesStaleSessionCookie(t *testing.T) {
+	app, querier := setupTestApp(t)
+
+	ctx := context.Background()
+	err := querier.CreateUser(ctx, &models.User{
+		Email: "stale@example.com", Name: "Stale Session User",
+		Password: sql.NullString{String: hashPW(t, "pass123"), Valid: true},
+		Role:     models.RoleUser,
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"stale@example.com","password":"pass123"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: "deleted-session"})
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusSeeOther, resp.StatusCode)
+	assert.Equal(t, "/app/profile", resp.Header.Get("Location"))
+
+	var persistedSession bool
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name != "session_id" || cookie.Value == "" || cookie.Value == "deleted-session" {
+			continue
+		}
+		if _, err := querier.GetSessionByID(ctx, cookie.Value); err == nil {
+			persistedSession = true
+			break
+		}
+	}
+	assert.True(t, persistedSession, "response should replace the stale cookie with a persisted session")
 }
 
 func TestLogout(t *testing.T) {

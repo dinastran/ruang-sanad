@@ -15,12 +15,14 @@
 		created_at: string;
 	}
 
-	const ROLE_OPTIONS = ["cs", "admin_kelas", "keuangan", "super_admin"];
+	const ROLE_OPTIONS = ["cs", "admin_kelas", "keuangan", "guru", "koordinator_guru", "super_admin"];
 
 	const ROLE_LABELS: Record<string, string> = {
 		cs: "CS",
 		admin_kelas: "Admin Kelas",
 		keuangan: "Keuangan",
+		guru: "Guru",
+		koordinator_guru: "Koordinator Guru",
 		super_admin: "Super Admin",
 	};
 
@@ -28,6 +30,8 @@
 		cs: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
 		admin_kelas: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
 		keuangan: "bg-green-500/10 text-green-700 dark:text-green-400",
+		guru: "bg-teal-500/10 text-teal-700 dark:text-teal-400",
+		koordinator_guru: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
 		super_admin: "bg-red-500/10 text-red-700 dark:text-red-400",
 	};
 

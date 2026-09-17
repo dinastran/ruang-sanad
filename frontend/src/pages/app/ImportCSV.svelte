@@ -22,6 +22,7 @@
 	}
 
 	let { user, result = null, success, error, flash }: Props = $props();
+	let successMessage = $derived(flash?.success ?? success);
 
 	let isDragOver = $state(false);
 	let isUploading = $state(false);
@@ -118,9 +119,9 @@
 	</div>
 
 	<div class="relative max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-		{#if success}
+		{#if successMessage}
 			<div class="bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-400 rounded-2xl p-4 flex items-center gap-3" in:fly={{ y: 20, duration: 300 }}>
-				<p class="text-sm font-medium">{success}</p>
+				<p class="text-sm font-medium">{successMessage}</p>
 			</div>
 		{/if}
 
@@ -266,8 +267,9 @@
 							Upload file CSV dengan format kolom:
 						</p>
 						<code class="block text-xs font-mono text-brand-600 dark:text-brand-400 mt-2 bg-neutral-200/50 dark:bg-neutral-800 px-3 py-2 rounded-lg">
-							kelas_kode, nama, jenis_kelamin, nominal, tanggal_daftar, angkatan, usia, domisili
+							kelas_kode, nama, no_whatsapp, email, jenis_kelamin, nominal, tanggal_daftar, angkatan, usia, domisili
 						</code>
+						<p class="mt-3 text-xs font-medium text-warning">Nama, jenis_kelamin, tanggal_daftar, dan kode master Angkatan Pendaftaran wajib valid. Angkatan Kelas ditetapkan kemudian oleh Admin Kelas.</p>
 					</div>
 
 					<div class="space-y-2 text-xs text-neutral-600 dark:text-neutral-400">
@@ -280,6 +282,14 @@
 							<span>Nama lengkap santri</span>
 						</div>
 						<div class="flex items-start gap-2">
+							<span class="font-mono font-bold text-brand-600 dark:text-brand-400 shrink-0 w-24">no_whatsapp</span>
+							<span>Nomor WhatsApp aktif (opsional)</span>
+						</div>
+						<div class="flex items-start gap-2">
+							<span class="font-mono font-bold text-brand-600 dark:text-brand-400 shrink-0 w-24">email</span>
+							<span>Email santri (opsional)</span>
+						</div>
+						<div class="flex items-start gap-2">
 							<span class="font-mono font-bold text-brand-600 dark:text-brand-400 shrink-0 w-24">jenis_kelamin</span>
 							<span>L untuk Laki-laki, P untuk Perempuan</span>
 						</div>
@@ -289,11 +299,11 @@
 						</div>
 						<div class="flex items-start gap-2">
 							<span class="font-mono font-bold text-brand-600 dark:text-brand-400 shrink-0 w-24">tanggal_daftar</span>
-							<span>Format YYYY-MM-DD</span>
+							<span>Wajib, format YYYY-MM-DD</span>
 						</div>
 						<div class="flex items-start gap-2">
 							<span class="font-mono font-bold text-brand-600 dark:text-brand-400 shrink-0 w-24">angkatan</span>
-							<span>Tahun angkatan (contoh: 2025)</span>
+							<span>Angkatan Pendaftaran, wajib memakai kode persis dari master (contoh: AKA38)</span>
 						</div>
 						<div class="flex items-start gap-2">
 							<span class="font-mono font-bold text-brand-600 dark:text-brand-400 shrink-0 w-24">usia</span>

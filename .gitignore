@@ -44,8 +44,8 @@ tmp/
 dist
 
 # Binaries
-laju-go
-laju-go.exe
+/laju-go
+/laju-go.exe
 
 
 # LLM Wiki (track wiki/ + raw/; ignore auto-generated meta + outputs)

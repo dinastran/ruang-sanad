@@ -6,8 +6,8 @@
 	import GenderBadge from "@components/GenderBadge.svelte";
 	import DataTable from "@components/DataTable.svelte";
 	import FilterPanel from "@components/FilterPanel.svelte";
-	import type { User } from "@lib/types";
-	import { Search, Plus, ChevronLeft, ChevronRight } from "lucide-svelte";
+	import type { Flash, User } from "@lib/types";
+	import { Search, Plus, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-svelte";
 
 	interface MasterItem {
 		id: number;
@@ -19,12 +19,14 @@
 	interface SantriItem {
 		id: number;
 		id_mahasantri: string;
+		id_mahasantri_bermasalah: boolean;
 		kelas_kode: string;
 		nama: string;
 		jenis_kelamin: string;
 		nominal: number;
 		tanggal_daftar: string;
 		angkatan: string;
+		angkatan_kelas: string;
 		usia: number;
 		domisili: string;
 		no_wa: string;
@@ -44,8 +46,11 @@
 		angkatan?: MasterItem[];
 		levels?: MasterItem[];
 		jadwals?: MasterItem[];
+		flash?: Flash;
 		success?: string;
 		error?: string;
+		id_status?: string;
+		total_id_bermasalah?: number;
 	}
 
 	let props: Props = $props();
@@ -57,8 +62,10 @@
 	let angkatan = $derived(props.angkatan ?? []);
 	let levels = $derived(props.levels ?? []);
 	let jadwals = $derived(props.jadwals ?? []);
-	let success = $derived(props.success);
-	let error = $derived(props.error);
+	let success = $derived(props.flash?.success ?? props.success);
+	let error = $derived(props.flash?.error ?? props.error);
+	let idStatus = $derived(props.id_status ?? "");
+	let totalIDBermasalah = $derived(props.total_id_bermasalah ?? 0);
 
 	// admin_kelas can view Data Santri but not create/edit — only cs & super_admin can.
 	let canEdit = $derived(user?.role === "cs" || user?.role === "super_admin");
@@ -70,7 +77,11 @@
 
 	function doSearch(e: Event) {
 		e.preventDefault();
-		router.get(`/app/santri?search=${encodeURIComponent(searchQuery)}`);
+		const params = new URLSearchParams(window.location.search);
+		params.delete("page");
+		if (searchQuery) params.set("search", searchQuery);
+		else params.delete("search");
+		router.get(`/app/santri?${params.toString()}`);
 	}
 
 	function goToPage(p: number) {
@@ -81,9 +92,19 @@
 	}
 
 	let filters = $derived([
+		...(canEdit ? [{
+			key: "id_status",
+			label: "Status ID",
+			options: [{ value: "bermasalah", label: "Perlu Diperbaiki" }],
+		}] : []),
 		{
-			key: "angkatan",
-			label: "Angkatan",
+			key: "angkatan_pendaftaran",
+			label: "Angkatan Pendaftaran",
+			options: angkatan.map((a) => ({ value: a.kode || String(a.id), label: a.keterangan || a.kode || String(a.id) })),
+		},
+		{
+			key: "angkatan_kelas",
+			label: "Angkatan Kelas",
 			options: angkatan.map((a) => ({ value: a.kode || String(a.id), label: a.keterangan || a.kode || String(a.id) })),
 		},
 		{
@@ -102,6 +123,8 @@
 		{
 			key: "status",
 			label: "Status",
+			allValue: "all",
+			defaultValue: idStatus === "bermasalah" ? "all" : "aktif",
 			options: [
 				{ value: "aktif", label: "Aktif" },
 				{ value: "perlu_dilengkapi", label: "Perlu Dilengkapi" },
@@ -116,7 +139,8 @@
 		{ key: "nama", label: "Nama" },
 		{ key: "no_wa", label: "No. WhatsApp" },
 		{ key: "jenis_kelamin", label: "Jenis Kelamin" },
-		{ key: "angkatan", label: "Angkatan" },
+		{ key: "angkatan", label: "Angkatan Pendaftaran" },
+		{ key: "angkatan_kelas", label: "Angkatan Kelas" },
 		{ key: "level", label: "Level" },
 		{ key: "tipe", label: "Tipe" },
 		{ key: "status", label: "Status" },
@@ -131,6 +155,7 @@
 				no_wa: s.no_wa || "-",
 			jenis_kelamin: s.jenis_kelamin,
 			angkatan: s.angkatan,
+			angkatan_kelas: s.angkatan_kelas,
 			level: s.level || "-",
 			tipe: s.tipe || "-",
 			status: s.status,
@@ -180,6 +205,26 @@
 			</div>
 		{/if}
 
+		{#if canEdit}
+			<a
+				href="/app/santri?id_status=bermasalah"
+				use:inertia
+				aria-current={idStatus === "bermasalah" ? "page" : undefined}
+				class="flex flex-col gap-3 rounded-xl border p-4 transition-colors sm:flex-row sm:items-center sm:justify-between {idStatus === 'bermasalah' ? 'border-warning/40 bg-warning/10' : 'border-neutral-200/80 bg-white hover:border-warning/30 dark:border-white/[0.06] dark:bg-neutral-925/50'}"
+			>
+				<div class="flex items-start gap-3">
+					<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/10 text-warning">
+						<AlertTriangle class="h-4 w-4" aria-hidden="true" />
+					</div>
+					<div>
+						<p class="text-sm font-semibold text-neutral-900 dark:text-white">ID Perlu Diperbaiki</p>
+						<p class="mt-0.5 text-xs text-neutral-600 dark:text-neutral-400">Inventaris lintas status untuk ID kosong, salah format, atau terduplikasi.</p>
+					</div>
+				</div>
+				<span class="self-start rounded-lg bg-warning/10 px-3 py-1.5 font-mono text-sm font-semibold text-warning sm:self-auto">{totalIDBermasalah}</span>
+			</a>
+		{/if}
+
 		<form onsubmit={doSearch} class="relative" in:fly={{ y: 20, duration: 500 }}>
 			<div class="relative">
 				<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -205,7 +250,8 @@
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Nama</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">No. WhatsApp</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Jenis Kelamin</th>
-						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Angkatan</th>
+						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Angkatan Pendaftaran</th>
+						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Angkatan Kelas</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Level</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Tipe</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Status</th>
@@ -214,25 +260,31 @@
 				<tbody class="divide-y divide-neutral-200/80 dark:divide-white/[0.04]">
 					{#if santri.length === 0}
 						<tr>
-							<td colspan="9" class="px-4 py-12 text-center text-neutral-500 dark:text-neutral-400">
+							<td colspan="10" class="px-4 py-12 text-center text-neutral-500 dark:text-neutral-400">
 								Tidak ada data santri
 							</td>
 						</tr>
 					{:else}
 						{#each santri as s, i}
 							<tr
-								class="hover:bg-neutral-50/50 dark:hover:bg-white/[0.015] transition-colors cursor-pointer"
+								class="transition-colors cursor-pointer {s.id_mahasantri_bermasalah ? 'bg-warning/5 hover:bg-warning/10' : 'hover:bg-neutral-50/50 dark:hover:bg-white/[0.015]'}"
 								onclick={() => router.get(`/app/santri/${s.id}`)}
 								role="button"
 								tabindex="0"
 								onkeydown={(e) => e.key === 'Enter' && router.get(`/app/santri/${s.id}`)}
 							>
 								<td class="px-4 py-3 text-neutral-600 dark:text-neutral-400 text-center">{startRow + i}</td>
-								<td class="px-4 py-3 font-mono text-xs text-neutral-600 dark:text-neutral-400">{s.id_mahasantri || '-'}</td>
+								<td class="px-4 py-3 font-mono text-xs text-neutral-600 dark:text-neutral-400">
+									<span class="inline-flex items-center gap-1.5" title={s.id_mahasantri_bermasalah ? "ID perlu ditinjau" : undefined}>
+										{s.id_mahasantri || '-'}
+										{#if s.id_mahasantri_bermasalah}<AlertTriangle class="h-3.5 w-3.5 shrink-0 text-warning" aria-label="ID perlu ditinjau" />{/if}
+									</span>
+								</td>
 								<td class="px-4 py-3 font-medium text-neutral-900 dark:text-white">{s.nama}</td>
 								<td class="px-4 py-3 text-neutral-700 dark:text-neutral-300">{s.no_wa || '-'}</td>
 								<td class="px-4 py-3"><GenderBadge gender={s.jenis_kelamin} /></td>
 								<td class="px-4 py-3 text-neutral-700 dark:text-neutral-300">{s.angkatan}</td>
+								<td class="px-4 py-3 text-neutral-700 dark:text-neutral-300">{s.angkatan_kelas || '-'}</td>
 								<td class="px-4 py-3 text-neutral-700 dark:text-neutral-300">{s.level || '-'}</td>
 								<td class="px-4 py-3 text-neutral-700 dark:text-neutral-300">{s.tipe || '-'}</td>
 								<td class="px-4 py-3"><StatusBadge status={s.status} /></td>

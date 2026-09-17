@@ -32,20 +32,40 @@ func (h *SantriHandler) Index(c *fiber.Ctx) error {
 	user := sessionUser(sess)
 
 	page, _ := strconv.ParseInt(c.Query("page", "1"), 10, 64)
+	if page < 1 {
+		page = 1
+	}
 	limit := int64(25)
 	offset := (page - 1) * limit
+	idStatus := c.Query("id_status", "")
+	statusDefault := "aktif"
+	idBermasalah := int64(0)
+	if idStatus == "bermasalah" {
+		statusDefault = ""
+		idBermasalah = 1
+	}
 
+	status := c.Query("status", statusDefault)
+	lengkap := int64(-1)
+	if status == "all" {
+		status = ""
+	} else if status == "perlu_dilengkapi" {
+		status = "aktif"
+		lengkap = 0
+	}
 	params := models.SantriListParams{
-		Angkatan: c.Query("angkatan", ""),
-		Level:    c.Query("level", ""),
-		Tipe:     c.Query("tipe", ""),
-		Jadwal:   c.Query("jadwal", ""),
-		Gender:   c.Query("gender", ""),
-		Status:   c.Query("status", "aktif"),
-		Search:   c.Query("search", ""),
-		Lengkap:  -1,
-		Offset:   offset,
-		Limit:    limit,
+		AngkatanPendaftaran: c.Query("angkatan_pendaftaran", ""),
+		AngkatanKelas:       c.Query("angkatan_kelas", ""),
+		Level:               c.Query("level", ""),
+		Tipe:                c.Query("tipe", ""),
+		Jadwal:              c.Query("jadwal", ""),
+		Gender:              c.Query("gender", ""),
+		Status:              status,
+		Search:              c.Query("search", ""),
+		Lengkap:             lengkap,
+		IDBermasalah:        idBermasalah,
+		Offset:              offset,
+		Limit:               limit,
 	}
 
 	result, err := h.santriService.List(params)
@@ -59,17 +79,38 @@ func (h *SantriHandler) Index(c *fiber.Ctx) error {
 	angkatanList, _ := h.masterService.ListAngkatan()
 	levelList, _ := h.masterService.ListLevel()
 	jadwalList, _ := h.masterService.ListJadwal()
+	totalIDBermasalah, _ := h.santriService.CountIDMahasantriBermasalah()
 
 	return h.inertiaService.Render(c, "app/SantriList", fiber.Map{
-		"user":     user,
-		"santri":   result.Data,
-		"total":    result.Total,
-		"page":     page,
-		"limit":    limit,
-		"angkatan": angkatanList,
-		"levels":   levelList,
-		"jadwals":  jadwalList,
+		"user":                user,
+		"santri":              result.Data,
+		"total":               result.Total,
+		"page":                page,
+		"limit":               limit,
+		"angkatan":            angkatanList,
+		"levels":              levelList,
+		"jadwals":             jadwalList,
+		"id_status":           idStatus,
+		"total_id_bermasalah": totalIDBermasalah,
 	})
+}
+
+func (h *SantriHandler) CorrectRegistrationIdentity(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return h.inertiaService.Redirect(c, "/app/santri")
+	}
+	var req models.CorrectSantriRegistrationRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data koreksi identitas tidak valid")
+		return h.inertiaService.Redirect(c, "/app/santri/"+c.Params("id"))
+	}
+	if _, err := h.santriService.CorrectRegistrationIdentity(id, req); err != nil {
+		h.store.Flash(c, "error", "Gagal mengoreksi identitas: "+err.Error())
+		return h.inertiaService.Redirect(c, "/app/santri/"+c.Params("id"))
+	}
+	h.store.Flash(c, "success", "Identitas pendaftaran dan ID Mahasantri berhasil diterbitkan ulang")
+	return h.inertiaService.Redirect(c, "/app/santri/"+c.Params("id"))
 }
 
 func (h *SantriHandler) New(c *fiber.Ctx) error {
@@ -99,11 +140,6 @@ func (h *SantriHandler) Store(c *fiber.Ctx) error {
 	var req models.CreateSantriRequest
 	if err := c.BodyParser(&req); err != nil {
 		h.store.Flash(c, "error", "Data tidak valid")
-		return h.inertiaService.Redirect(c, "/app/santri/new")
-	}
-
-	if req.Nama == "" || req.JenisKelamin == "" {
-		h.store.Flash(c, "error", "Nama dan jenis kelamin wajib diisi")
 		return h.inertiaService.Redirect(c, "/app/santri/new")
 	}
 
@@ -170,6 +206,22 @@ func (h *SantriHandler) UpdateCS(c *fiber.Ctx) error {
 	return h.inertiaService.Redirect(c, "/app/santri")
 }
 
+func (h *SantriHandler) Delete(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		h.store.Flash(c, "error", "ID santri tidak valid")
+		return h.inertiaService.Redirect(c, "/app/santri")
+	}
+
+	if err := h.santriService.Delete(id); err != nil {
+		h.store.Flash(c, "error", "Gagal menghapus santri: "+err.Error())
+		return h.inertiaService.Redirect(c, "/app/santri")
+	}
+
+	h.store.Flash(c, "success", "Santri berhasil dihapus permanen")
+	return h.inertiaService.Redirect(c, "/app/santri")
+}
+
 func (h *SantriHandler) UpdateAdminKelas(c *fiber.Ctx) error {
 	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 	if err != nil {
@@ -205,13 +257,14 @@ func (h *SantriHandler) Keuangan(c *fiber.Ctx) error {
 	offset := (page - 1) * limit
 
 	params := models.SantriListParams{
-		Angkatan: c.Query("angkatan", ""),
-		Status:   c.Query("status", ""),
-		Gender:   c.Query("gender", ""),
-		Search:   c.Query("search", ""),
-		Lengkap:  -1,
-		Offset:   offset,
-		Limit:    limit,
+		AngkatanPendaftaran: c.Query("angkatan_pendaftaran", ""),
+		AngkatanKelas:       c.Query("angkatan_kelas", ""),
+		Status:              c.Query("status", ""),
+		Gender:              c.Query("gender", ""),
+		Search:              c.Query("search", ""),
+		Lengkap:             -1,
+		Offset:              offset,
+		Limit:               limit,
 	}
 
 	result, err := h.santriService.List(params)
@@ -270,13 +323,15 @@ func (h *SantriHandler) PerluDilengkapi(c *fiber.Ctx) error {
 	levelList, _ := h.masterService.ListLevel()
 	jadwalList, _ := h.masterService.ListJadwal()
 	guruList, _ := h.masterService.ListGuru()
+	angkatanList, _ := h.masterService.ListAngkatan()
 
 	return h.inertiaService.Render(c, "app/PerluDilengkapi", fiber.Map{
-		"user":    user,
-		"santri":  list,
-		"levels":  levelList,
-		"jadwals": jadwalList,
-		"gurus":   guruList,
+		"user":     user,
+		"santri":   list,
+		"levels":   levelList,
+		"jadwals":  jadwalList,
+		"gurus":    guruList,
+		"angkatan": angkatanList,
 	})
 }
 

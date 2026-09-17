@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { inertia, router } from "@inertiajs/svelte";
+	import { tick } from "svelte";
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import { Toast } from "@lib/notifications/toast";
 	import { getCSRFToken } from "@lib/utils/csrf";
 	import StatusBadge from "@components/StatusBadge.svelte";
 	import GenderBadge from "@components/GenderBadge.svelte";
-	import type { User } from "@lib/types";
-	import { Save, User as UserIcon, BookOpen, Calendar, MapPin, DollarSign, Hash, GraduationCap, Users, Phone, ClipboardList, Plus, Trash2, Upload } from "lucide-svelte";
+	import type { Flash, User } from "@lib/types";
+	import { Save, User as UserIcon, BookOpen, Calendar, MapPin, DollarSign, Hash, GraduationCap, Users, Phone, Mail, ClipboardList, Plus, Trash2, Upload, AlertTriangle } from "lucide-svelte";
 
 	interface MasterItem {
 		id: number;
@@ -27,15 +28,19 @@
 	interface SantriItem {
 		id: number;
 		id_mahasantri: string;
+		id_mahasantri_bermasalah: boolean;
+		id_mahasantri_terbit: boolean;
 		kelas_kode: string;
 		nama: string;
 		jenis_kelamin: string;
 		nominal: number;
 		tanggal_daftar: string;
 		angkatan: string;
+		angkatan_kelas: string;
 		usia: number;
 		domisili: string;
 		no_wa: string;
+		email: string;
 		fu: string;
 		tanggal_vn: string;
 		hasil_vn: string;
@@ -63,15 +68,19 @@
 		kode_kelas?: KodeKelasItem[];
 		success?: string;
 		error?: string;
+		flash?: Flash;
 	}
 
-	let { user, santri = null, angkatan = [], levels = [], jadwals = [], gurus = [], kode_kelas = [], success, error }: Props = $props();
+	let { user, santri = null, angkatan = [], levels = [], jadwals = [], gurus = [], kode_kelas = [], success, error, flash }: Props = $props();
+	let successMessage = $derived(flash?.success ?? success);
+	let errorMessage = $derived(flash?.error ?? error);
 
 	let isEdit = $derived(santri !== null);
 	let isAdminKelas = $derived(user?.role === "admin_kelas" || user?.role === "super_admin");
 	// A pure admin_kelas may view Data Santri detail but not edit it. cs &
 	// super_admin keep full edit access.
 	let readonly = $derived(user?.role === "admin_kelas");
+	let identityLocked = $derived(santri?.id_mahasantri_terbit === true);
 	// The Data Kelas section is admin_kelas's own domain. Only admin_kelas and
 	// super_admin can see it, and both are allowed to edit it (backend route
 	// /santri/:id/kelas-data is gated to those roles) — so it stays editable even
@@ -89,6 +98,7 @@
 		usia: santri?.usia ?? 0,
 		domisili: santri?.domisili ?? "",
 		no_wa: santri?.no_wa ?? "",
+		email: santri?.email ?? "",
 	});
 
 	let kelasForm = $state({
@@ -98,10 +108,16 @@
 		masuk_grup: santri?.masuk_grup ?? "",
 		mulai_belajar: santri?.mulai_belajar ?? "",
 		jumlah: santri?.jumlah ?? 0,
+		angkatan_kelas: santri?.angkatan_kelas ?? "",
 		level: santri?.level ?? "",
 		jadwal: santri?.jadwal ?? "",
 		guru: santri?.guru ?? "",
+		guru_id: gurus.find((g) => g.nama === santri?.guru)?.id ?? 0,
 	});
+	let hasLegacyAngkatanKelas = $derived(
+		kelasForm.angkatan_kelas !== "" &&
+		!angkatan.some((a) => (a.kode || String(a.id)) === kelasForm.angkatan_kelas),
+	);
 
 	// Multi-jadwal: a class can meet more than once per pekan (2x/pekan, private
 	// 4x/16x). The sessions are stored joined by " & " in the single jadwal field.
@@ -126,6 +142,14 @@
 	let voiceNoteDescription = $state(santri?.keterangan_vn ?? "");
 	let voiceNoteFile = $state<File | null>(null);
 	let isVoiceNoteLoading = $state(false);
+	let deleteDialog = $state<HTMLDialogElement>();
+	let deleteNameInput = $state<HTMLInputElement>();
+	let deleteName = $state("");
+	let isDeleteLoading = $state(false);
+	let correctionDialog = $state<HTMLDialogElement>();
+	let isCorrectionLoading = $state(false);
+	let correctionForm = $state({ angkatan: santri?.angkatan ?? "", tanggal_daftar: santri?.tanggal_daftar ?? "", konfirmasi: false });
+	let canDelete = $derived(santri !== null && deleteName === santri.nama && !isDeleteLoading);
 
 	function handleCsSubmit(e: Event) {
 		e.preventDefault();
@@ -147,6 +171,7 @@
 		e.preventDefault();
 		if (!santri?.id) return;
 		kelasForm.jadwal = jadwalRows.map((s) => s.trim()).filter(Boolean).join(" & ");
+		kelasForm.guru = gurus.find((g) => g.id === kelasForm.guru_id)?.nama ?? "";
 		isKelasLoading = true;
 		router.put(`/app/santri/${santri.id}/kelas-data`, kelasForm, {
 			onFinish: () => { isKelasLoading = false; },
@@ -184,6 +209,40 @@
 		}
 	}
 
+	async function openDeleteDialog() {
+		deleteName = "";
+		deleteDialog?.showModal();
+		await tick();
+		deleteNameInput?.focus();
+	}
+
+	function closeDeleteDialog() {
+		if (!isDeleteLoading) deleteDialog?.close();
+	}
+
+	function handleDeleteBackdrop(event: MouseEvent) {
+		if (event.target === deleteDialog) closeDeleteDialog();
+	}
+
+	function handleDeleteSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		if (!santri || !canDelete) return;
+		isDeleteLoading = true;
+		router.delete(`/app/santri/${santri.id}`, {
+			onFinish: () => { isDeleteLoading = false; },
+		});
+	}
+
+	function handleCorrectionSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		if (!santri || !correctionForm.konfirmasi) return;
+		isCorrectionLoading = true;
+		router.put(`/app/santri/${santri.id}/registration-identity`, correctionForm, {
+			onSuccess: () => correctionDialog?.close(),
+			onFinish: () => { isCorrectionLoading = false; },
+		});
+	}
+
 	function formatDate(d: string): string {
 		if (!d) return "";
 		return d.substring(0, 10);
@@ -214,15 +273,15 @@
 	</div>
 
 	<div class="relative max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-		{#if success}
+		{#if successMessage}
 			<div class="bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-400 rounded-2xl p-4 flex items-center gap-3" in:fly={{ y: 20, duration: 300 }}>
-				<p class="text-sm font-medium">{success}</p>
+				<p class="text-sm font-medium">{successMessage}</p>
 			</div>
 		{/if}
 
-		{#if error}
+		{#if errorMessage}
 			<div class="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-2xl p-4 flex items-center gap-3" in:fly={{ y: 20, duration: 300 }}>
-				<p class="text-sm font-medium">{error}</p>
+				<p class="text-sm font-medium">{errorMessage}</p>
 			</div>
 		{/if}
 
@@ -236,6 +295,19 @@
 					<p class="text-sm text-neutral-600 dark:text-neutral-500">Informasi dasar pendaftaran</p>
 				</div>
 			</div>
+
+			{#if isEdit}
+				<div class="mb-6 rounded-xl border border-neutral-200/80 bg-neutral-50 p-4 dark:border-white/[0.06] dark:bg-neutral-900/40">
+					<p class="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">ID Mahasantri</p>
+					<p class="mt-1 font-mono text-sm font-semibold text-neutral-900 dark:text-white">{santri?.id_mahasantri || "Belum diterbitkan"}</p>
+					{#if santri?.id_mahasantri_bermasalah}
+						<div class="mt-3 flex items-start gap-2 border-t border-warning/20 pt-3 text-sm text-neutral-700 dark:text-neutral-300" role="status">
+							<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+							<p>ID Mahasantri kosong, tidak sesuai format, atau terduplikasi. Tanggal pendaftaran lama yang tidak diketahui bukan masalah ID.</p>
+						</div>
+					{/if}
+				</div>
+			{/if}
 
 			<form onsubmit={handleCsSubmit}>
 				<fieldset disabled={readonly} class="space-y-5 border-0 p-0 m-0 min-w-0">
@@ -259,7 +331,7 @@
 						</div>
 					</div>
 					<div>
-						<label for="nama" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Nama Lengkap</label>
+						<label for="nama" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Nama Lengkap <span class="text-error">(wajib)</span></label>
 						<div class="relative">
 							<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
 								<UserIcon class="w-4 h-4 text-neutral-500" />
@@ -268,6 +340,7 @@
 								id="nama"
 								type="text"
 								bind:value={csForm.nama}
+								required
 								class="w-full pl-12 pr-4 py-3 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white placeholder-neutral-500 transition-all outline-none"
 								placeholder="Nama santri"
 							/>
@@ -275,32 +348,50 @@
 					</div>
 				</div>
 
-				<div>
-					<label for="no_wa" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">No. WhatsApp Aktif</label>
-					<div class="relative">
-						<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-							<Phone class="w-4 h-4 text-neutral-500" />
+				<div class="grid md:grid-cols-2 gap-5">
+					<div>
+						<label for="no_wa" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">No. WhatsApp Aktif</label>
+						<div class="relative">
+							<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+								<Phone class="w-4 h-4 text-neutral-500" />
+							</div>
+							<input
+								id="no_wa"
+								type="tel"
+								bind:value={csForm.no_wa}
+								class="w-full pl-12 pr-4 py-3 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white placeholder-neutral-500 transition-all outline-none"
+								placeholder="Contoh: 081234567890"
+							/>
 						</div>
-						<input
-							id="no_wa"
-							type="tel"
-							bind:value={csForm.no_wa}
-							class="w-full pl-12 pr-4 py-3 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white placeholder-neutral-500 transition-all outline-none"
-							placeholder="Contoh: 081234567890"
-						/>
+					</div>
+					<div>
+						<label for="email" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Email</label>
+						<div class="relative">
+							<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+								<Mail class="w-4 h-4 text-neutral-500" />
+							</div>
+							<input
+								id="email"
+								type="email"
+								bind:value={csForm.email}
+								class="w-full pl-12 pr-4 py-3 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white placeholder-neutral-500 transition-all outline-none"
+								placeholder="Contoh: santri@example.com"
+							/>
+						</div>
 					</div>
 				</div>
 
 				<div class="grid md:grid-cols-2 gap-5">
-					<div>
-						<label class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Jenis Kelamin</label>
+					<fieldset class="border-0 p-0 m-0 min-w-0">
+						<legend class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Jenis Kelamin <span class="text-error">(wajib)</span></legend>
 						<div class="flex gap-4 pt-1">
 							<label class="flex items-center gap-2 cursor-pointer">
 								<input
 									type="radio"
 									name="jenis_kelamin"
-									value="L"
-									bind:group={csForm.jenis_kelamin}
+								value="L"
+								bind:group={csForm.jenis_kelamin}
+								required
 									class="w-4 h-4 text-brand-600 focus:ring-brand-400"
 								/>
 								<span class="text-sm text-neutral-700 dark:text-neutral-300">Laki-laki</span>
@@ -316,9 +407,9 @@
 								<span class="text-sm text-neutral-700 dark:text-neutral-300">Perempuan</span>
 							</label>
 						</div>
-					</div>
+					</fieldset>
 					<div>
-						<label for="angkatan" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Angkatan</label>
+						<label for="angkatan" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Angkatan Pendaftaran <span class="text-error">(wajib)</span></label>
 						<div class="relative">
 							<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
 								<GraduationCap class="w-4 h-4 text-neutral-500" />
@@ -326,9 +417,11 @@
 							<select
 								id="angkatan"
 								bind:value={csForm.angkatan}
+								required
+								disabled={identityLocked}
 								class="w-full pl-12 pr-4 py-3 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white transition-all outline-none"
 							>
-								<option value="">Pilih Angkatan</option>
+								<option value="">Pilih Angkatan Pendaftaran</option>
 								{#each angkatan as a}
 									<option value={a.kode || String(a.id)}>{a.keterangan || a.kode || String(a.id)}</option>
 								{/each}
@@ -354,7 +447,7 @@
 						</div>
 					</div>
 					<div>
-						<label for="tanggal_daftar" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Tanggal Daftar</label>
+						<label for="tanggal_daftar" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Tanggal Daftar <span class="text-error">(wajib)</span></label>
 						<div class="relative">
 							<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
 								<Calendar class="w-4 h-4 text-neutral-500" />
@@ -363,6 +456,8 @@
 								id="tanggal_daftar"
 								type="date"
 								bind:value={csForm.tanggal_daftar}
+								required
+								disabled={identityLocked}
 								class="w-full pl-12 pr-4 py-3 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white transition-all outline-none"
 							/>
 						</div>
@@ -433,6 +528,19 @@
 				<form onsubmit={handleKelasSubmit}>
 					<fieldset disabled={kelasReadonly} class="space-y-5 border-0 p-0 m-0 min-w-0">
 					<div class="grid md:grid-cols-2 gap-5">
+						<div>
+							<label for="angkatan_kelas" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Angkatan Kelas <span class="text-error">(wajib)</span></label>
+							<select id="angkatan_kelas" bind:value={kelasForm.angkatan_kelas} required class="w-full px-4 py-3 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white transition-all outline-none">
+								<option value="">Pilih Angkatan Kelas</option>
+								{#if hasLegacyAngkatanKelas}
+									<option value={kelasForm.angkatan_kelas}>{kelasForm.angkatan_kelas} (data lama)</option>
+								{/if}
+								{#each angkatan as a}
+									<option value={a.kode || String(a.id)}>{a.keterangan || a.kode || String(a.id)}</option>
+								{/each}
+							</select>
+							<p class="mt-1 text-xs text-neutral-500">Terpisah dari Angkatan Pendaftaran ({santri?.angkatan || "-"}).</p>
+						</div>
 						<div>
 							<label for="fu" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">FU</label>
 							<div class="relative">
@@ -633,12 +741,12 @@
 							</div>
 							<select
 								id="guru"
-								bind:value={kelasForm.guru}
+								bind:value={kelasForm.guru_id}
 								class="w-full pl-12 pr-4 py-3 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white transition-all outline-none"
 							>
 								<option value="">Pilih Guru</option>
 								{#each gurus as g}
-									<option value={g.nama || String(g.id)}>{g.nama || String(g.id)}</option>
+									<option value={g.id}>{g.nama || String(g.id)}</option>
 								{/each}
 							</select>
 						</div>
@@ -660,5 +768,94 @@
 				</form>
 			</div>
 		{/if}
+
+		{#if isEdit && user?.role === "super_admin"}
+			<section class="rounded-2xl border border-warning/30 bg-warning/5 p-6" aria-labelledby="identity-correction-title">
+				<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<h2 id="identity-correction-title" class="text-base font-semibold text-neutral-900 dark:text-white">Koreksi Identitas Pendaftaran</h2>
+						<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Tindakan khusus ini mengubah metadata pendaftaran dan menerbitkan ulang ID Mahasantri.</p>
+					</div>
+					<button type="button" onclick={() => correctionDialog?.showModal()} class="shrink-0 rounded-xl border border-warning/40 px-4 py-2.5 text-sm font-semibold text-warning hover:bg-warning/10">Koreksi Identitas</button>
+				</div>
+			</section>
+			<section class="rounded-2xl border border-error/25 bg-error/5 p-6" aria-labelledby="danger-zone-title">
+				<div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+					<div class="max-w-2xl">
+						<h2 id="danger-zone-title" class="text-lg font-semibold text-neutral-900 dark:text-white">Zona Berbahaya</h2>
+						<p class="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
+							Hapus santri beserta absensi, tagihan, catatan riayah, dan file voice note secara permanen. Kelas tetap disimpan.
+						</p>
+					</div>
+					<button
+						type="button"
+						onclick={openDeleteDialog}
+						class="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-error/40 px-4 py-2.5 text-sm font-semibold text-error transition-colors hover:bg-error hover:text-white sm:w-auto"
+					>
+						<Trash2 class="h-4 w-4" />
+						Hapus Permanen
+					</button>
+				</div>
+			</section>
+		{/if}
 	</div>
+
+	{#if isEdit && user?.role === "super_admin"}
+		<dialog bind:this={correctionDialog} class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-neutral-200 bg-white p-0 shadow-xl backdrop:bg-neutral-950/70 dark:border-white/[0.06] dark:bg-neutral-925">
+			<form onsubmit={handleCorrectionSubmit} class="space-y-4 p-6">
+				<div><h2 class="text-lg font-semibold text-neutral-900 dark:text-white">Terbitkan Ulang ID</h2><p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">ID saat ini: <span class="font-mono">{santri?.id_mahasantri}</span>. Pastikan data koreksi sudah diverifikasi.</p></div>
+				<label class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Angkatan Pendaftaran<select bind:value={correctionForm.angkatan} required class="mt-2 w-full rounded-xl border border-neutral-300 bg-neutral-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900">{#each angkatan as a}<option value={a.kode || String(a.id)}>{a.keterangan || a.kode || String(a.id)}</option>{/each}</select></label>
+				<label class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Tanggal Pendaftaran<input type="date" bind:value={correctionForm.tanggal_daftar} required class="mt-2 w-full rounded-xl border border-neutral-300 bg-neutral-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900" /></label>
+				<label class="flex items-start gap-2 text-sm text-neutral-700 dark:text-neutral-300"><input type="checkbox" bind:checked={correctionForm.konfirmasi} class="mt-1" />Saya memahami ID Mahasantri akan diterbitkan ulang.</label>
+				<div class="flex justify-end gap-3"><button type="button" onclick={() => correctionDialog?.close()} class="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm font-semibold dark:border-neutral-700">Batal</button><button type="submit" disabled={!correctionForm.konfirmasi || isCorrectionLoading} class="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{isCorrectionLoading ? "Menyimpan..." : "Terbitkan Ulang"}</button></div>
+			</form>
+		</dialog>
+		<dialog
+			bind:this={deleteDialog}
+			aria-labelledby="delete-santri-title"
+			aria-describedby="delete-santri-description"
+			onclick={handleDeleteBackdrop}
+			onclose={() => { deleteName = ""; }}
+			oncancel={(event) => { if (isDeleteLoading) event.preventDefault(); }}
+			class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-neutral-200 bg-white p-0 text-left shadow-xl backdrop:bg-neutral-950/70 dark:border-white/[0.06] dark:bg-neutral-925"
+		>
+			<form onsubmit={handleDeleteSubmit} class="p-5 sm:p-6">
+				<div class="flex items-start gap-3">
+					<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-error/10 text-error">
+						<Trash2 class="h-5 w-5" />
+					</div>
+					<div>
+						<h2 id="delete-santri-title" class="text-lg font-semibold text-neutral-900 dark:text-white">Hapus {santri?.nama}?</h2>
+						<p id="delete-santri-description" class="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
+							Tindakan ini tidak dapat dibatalkan. Data santri, absensi, tagihan, catatan riayah, dan file voice note akan dihapus permanen.
+						</p>
+					</div>
+				</div>
+
+				<div class="mt-5">
+					<label for="delete-santri-name" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+						Ketik <span class="font-semibold text-neutral-900 dark:text-white">{santri?.nama}</span> untuk konfirmasi
+					</label>
+					<input
+						bind:this={deleteNameInput}
+						id="delete-santri-name"
+						type="text"
+						autocomplete="off"
+						bind:value={deleteName}
+						class="mt-2 w-full rounded-xl border border-neutral-300 bg-neutral-50 px-4 py-3 text-neutral-900 outline-none transition-colors focus:border-error focus:ring-2 focus:ring-error/15 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+					/>
+				</div>
+
+				<div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+					<button type="button" onclick={closeDeleteDialog} disabled={isDeleteLoading} class="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800">
+						Batal
+					</button>
+					<button type="submit" disabled={!canDelete} class="inline-flex items-center justify-center gap-2 rounded-xl bg-error px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-error/90 disabled:cursor-not-allowed disabled:opacity-50">
+						<Trash2 class="h-4 w-4" />
+						{isDeleteLoading ? "Menghapus..." : "Hapus Permanen"}
+					</button>
+				</div>
+			</form>
+		</dialog>
+	{/if}
 </AppLayout>

@@ -1,4 +1,11 @@
 import { createInertiaApp, router } from "@inertiajs/svelte";
+import GuruDashboard from "./pages/guru/Dashboard.svelte";
+import GuruKelasList from "./pages/guru/KelasList.svelte";
+import GuruKelasDetail from "./pages/guru/KelasDetail.svelte";
+import GuruPertemuanMulai from "./pages/guru/PertemuanMulai.svelte";
+import GuruPertemuanSelesai from "./pages/guru/PertemuanSelesai.svelte";
+import GuruRekapAbsensi from "./pages/guru/RekapAbsensi.svelte";
+import GuruTSI from "./pages/guru/TSISaya.svelte";
 
 const APP_NAME = "Ruang Sanad";
 const DEFAULT_DESC =
@@ -19,10 +26,35 @@ const PAGE_TITLES: Record<string, string> = {
 	"app/MasterData": "Data Master",
 	"app/Keuangan": "Keuangan",
 	"app/LaporanKeuangan": "Laporan Keuangan",
+	"keuangan/Dashboard": "Dashboard Tagihan",
+	"keuangan/Tagihan": "Daftar Tagihan",
+	"keuangan/DetailTagihan": "Detail Tagihan",
 	"app/ImportCSV": "Import CSV",
 	"app/Profile": "Profil",
 	"app/UploadTest": "Upload",
 	"admin/Users": "Kelola User",
+	"guru/Dashboard": "Dashboard Guru",
+	"guru/KelasList": "Kelas Saya",
+	"guru/KelasDetail": "Detail Kelas",
+	"guru/PertemuanMulai": "Mulai Pertemuan",
+	"guru/PertemuanSelesai": "Selesai Pertemuan",
+	"guru/RekapAbsensi": "Rekap Absensi",
+	"guru/TSISaya": "Nilai TSI",
+	"koordinator/Dashboard": "Dashboard Koordinator",
+	"koordinator/GuruList": "Data Guru",
+	"koordinator/GuruDetail": "Detail Guru",
+	"koordinator/Pembinaan": "Pembinaan",
+	"koordinator/PembinaanAbsen": "Absensi Pembinaan",
+	"koordinator/Rapat": "Rapat Guru",
+	"koordinator/RapatAbsen": "Absensi Rapat",
+	"koordinator/RiwayatAbsensi": "Riwayat Absensi Guru",
+	"koordinator/Kunjungan": "Kunjungan Kelas",
+	"koordinator/Kalam": "Kalam Bersanad",
+	"koordinator/KalamShare": "Share Kalam",
+	"koordinator/WaTemplate": "Template WA",
+	"koordinator/TSIRekap": "Rekap TSI",
+	"koordinator/TSIPenilaian": "Penilaian TSI",
+	"koordinator/Todo": "Todo Koordinator",
 };
 
 // Per-page meta description.
@@ -40,9 +72,21 @@ const PAGE_DESC: Record<string, string> = {
 	"app/MasterData": "Kelola angkatan, level, kode kelas, jadwal, dan guru.",
 	"app/Keuangan": "Catat infaq bulanan dan status pembayaran santri.",
 	"app/LaporanKeuangan": "Rekap pembayaran, infaq, dan santri tidak lanjut.",
+	"keuangan/Dashboard": "Ringkasan kolektibilitas dan tagihan SPP Ruang Sanad.",
+	"keuangan/Tagihan": "Daftar, pelunasan, dan tindak lanjut tagihan SPP.",
+	"keuangan/DetailTagihan": "Rincian tagihan dan riwayat tindak lanjut SPP.",
 	"app/ImportCSV": "Impor data santri massal dari berkas CSV.",
 	"app/Profile": "Kelola profil dan kata sandi akun Anda.",
 	"admin/Users": "Kelola pengguna dan peran akses aplikasi.",
+	"guru/Dashboard": "Ringkasan kelas dan aktivitas mengajar.",
+	"guru/KelasList": "Daftar kelas yang diajar.",
+	"guru/KelasDetail": "Detail kelas, santri, dan absensi.",
+	"guru/PertemuanMulai": "Mulai pertemuan baru.",
+	"guru/PertemuanSelesai": "Catat absensi dan selesaikan pertemuan.",
+	"guru/RekapAbsensi": "Rekap absensi santri per kelas.",
+	"guru/TSISaya": "Nilai TSI santri.",
+	"koordinator/Dashboard": "Pengelolaan guru, penilaian TSI, dan monitoring aktivitas.",
+	"koordinator/RiwayatAbsensi": "Rekap kehadiran guru pada pembinaan, rapat, dan kunjungan kelas.",
 };
 
 function applyMeta(component?: string) {

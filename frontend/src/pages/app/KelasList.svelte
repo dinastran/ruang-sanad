@@ -4,7 +4,7 @@
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import GenderBadge from "@components/GenderBadge.svelte";
 	import type { User } from "@lib/types";
-	import { BookOpen, Users, Calendar, Clock, UserCheck, ArrowRight, Filter, Search, School, Power, Trash2 } from "lucide-svelte";
+	import { BookOpen, Users, Calendar, Clock, UserCheck, ArrowRight, Filter, Search, School, Power, Trash2, RotateCcw } from "lucide-svelte";
 
 	interface KelasResponse {
 		id: number;
@@ -31,10 +31,20 @@
 		keterangan?: string;
 	}
 
+	interface KelasFilters {
+		q?: string;
+		guru_id?: string;
+		angkatan?: string;
+		status?: string;
+		gender?: string;
+		level?: string;
+	}
+
 	interface Props {
 		user?: User;
 		kelas?: KelasResponse[];
 		angkatan?: AngkatanItem[];
+		filters?: KelasFilters;
 		success?: string;
 		error?: string;
 	}
@@ -46,8 +56,50 @@
 	let success = $derived(p.success);
 	let error = $derived(p.error);
 
-	let filterAngkatan = $state("");
-	let searchQuery = $state("");
+	let filterAngkatan = $state(p.filters?.angkatan ?? "");
+	let filterGuru = $state(p.filters?.guru_id ?? "");
+	let filterStatus = $state(p.filters?.status ?? "");
+	let filterGender = $state(p.filters?.gender ?? "");
+	let filterLevel = $state(p.filters?.level ?? "");
+	let searchQuery = $state(p.filters?.q ?? "");
+
+	let guruOptions = $derived(
+		Array.from(new Map(kelas.filter((k) => k.guru_id && k.guru_nama).map((k) => [String(k.guru_id), k.guru_nama!])).entries())
+			.map(([id, nama]) => ({ id, nama }))
+			.sort((a, b) => a.nama.localeCompare(b.nama)),
+	);
+	let levelOptions = $derived(Array.from(new Set(kelas.map((k) => k.level).filter(Boolean))).sort((a, b) => a.localeCompare(b)));
+	let hasActiveFilters = $derived(Boolean(searchQuery || filterAngkatan || filterGuru || filterStatus || filterGender || filterLevel));
+
+	function listURL(): string {
+		const params = new URLSearchParams();
+		if (searchQuery.trim()) params.set("q", searchQuery.trim());
+		if (filterGuru) params.set("guru_id", filterGuru);
+		if (filterAngkatan) params.set("angkatan", filterAngkatan);
+		if (filterStatus) params.set("status", filterStatus);
+		if (filterGender) params.set("gender", filterGender);
+		if (filterLevel) params.set("level", filterLevel);
+		const query = params.toString();
+		return query ? `/app/kelas?${query}` : "/app/kelas";
+	}
+
+	function syncFilterURL() {
+		window.history.replaceState({}, "", listURL());
+	}
+
+	function resetFilters() {
+		searchQuery = "";
+		filterGuru = "";
+		filterAngkatan = "";
+		filterStatus = "";
+		filterGender = "";
+		filterLevel = "";
+		syncFilterURL();
+	}
+
+	function kelasDetailURL(id: number): string {
+		return `/app/kelas/${id}?return_to=${encodeURIComponent(listURL())}`;
+	}
 
 	function groupByAngkatan(items: KelasResponse[]): Record<string, KelasResponse[]> {
 		const groups: Record<string, KelasResponse[]> = {};
@@ -61,7 +113,17 @@
 	let filteredKelas = $derived(
 		kelas.filter((k) => {
 			if (filterAngkatan && k.angkatan !== filterAngkatan) return false;
-			if (searchQuery && !k.nama_kelas.toLowerCase().includes(searchQuery.toLowerCase()) && !k.level?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+			if (filterGuru === "unassigned" && k.guru_id !== null) return false;
+			if (filterGuru && filterGuru !== "unassigned" && String(k.guru_id ?? "") !== filterGuru) return false;
+			if (filterStatus === "aktif" && !k.is_aktif) return false;
+			if (filterStatus === "nonaktif" && k.is_aktif) return false;
+			if (filterGender && k.jenis_kelamin !== filterGender) return false;
+			if (filterLevel && k.level !== filterLevel) return false;
+			const query = searchQuery.trim().toLowerCase();
+			if (query) {
+				const searchable = [k.nama_kelas, k.tipe, k.level, k.jadwal, k.guru_nama ?? ""].join(" ").toLowerCase();
+				if (!searchable.includes(query)) return false;
+			}
 			return true;
 		})
 	);
@@ -91,7 +153,7 @@
 
 	function toggleAktif(k: KelasResponse) {
 		busyId = k.id;
-		router.put(`/app/kelas/${k.id}/status`, { is_aktif: !k.is_aktif }, {
+		router.put(`/app/kelas/${k.id}/status?return_to=${encodeURIComponent(listURL())}`, { is_aktif: !k.is_aktif }, {
 			preserveScroll: true,
 			onFinish: () => { busyId = null; },
 		});
@@ -100,7 +162,7 @@
 	function hapusKelas(k: KelasResponse) {
 		if (!confirm(`Hapus kelas "${k.nama_kelas}"?\nSantri di kelas ini akan dilepas (kelasnya dikosongkan).`)) return;
 		busyId = k.id;
-		router.delete(`/app/kelas/${k.id}`, {
+		router.delete(`/app/kelas/${k.id}?return_to=${encodeURIComponent(listURL())}`, {
 			preserveScroll: true,
 			onFinish: () => { busyId = null; },
 		});
@@ -192,27 +254,56 @@
 			</div>
 		</div>
 
-		<div class="flex flex-col sm:flex-row sm:items-center gap-3" in:fly={{ y: 20, duration: 600, delay: 100 }}>
+		<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-4 space-y-3" in:fly={{ y: 20, duration: 600, delay: 100 }}>
+			<div class="flex flex-col sm:flex-row sm:items-center gap-3">
 			<div class="relative flex-1 sm:max-w-sm">
+				<label for="kelas-search" class="sr-only">Cari kelas</label>
 				<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
 					<Search class="w-4 h-4 text-neutral-500" />
 				</div>
 				<input
+					id="kelas-search"
 					type="text"
 					bind:value={searchQuery}
-					placeholder="Cari kelas..."
+					oninput={syncFilterURL}
+					placeholder="Cari kelas, guru, jadwal..."
 					class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-neutral-925/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white placeholder-neutral-500 transition-all outline-none text-sm"
 				/>
 			</div>
 			<select
+				aria-label="Angkatan kelas"
 				bind:value={filterAngkatan}
+				onchange={syncFilterURL}
 				class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white dark:bg-neutral-925/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-sm appearance-none"
 			>
-				<option value="">Semua Angkatan</option>
+				<option value="">Semua Angkatan Kelas</option>
 				{#each angkatan as ang}
 					<option value={ang.kode}>{ang.keterangan || ang.kode}</option>
 				{/each}
 			</select>
+			</div>
+			<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+				<select aria-label="Guru" bind:value={filterGuru} onchange={syncFilterURL} class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-neutral-925/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-sm">
+					<option value="">Semua Guru</option>
+					<option value="unassigned">Belum Ada Guru</option>
+					{#each guruOptions as guru}<option value={guru.id}>{guru.nama}</option>{/each}
+				</select>
+				<select aria-label="Status kelas" bind:value={filterStatus} onchange={syncFilterURL} class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-neutral-925/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-sm">
+					<option value="">Semua Status</option><option value="aktif">Aktif</option><option value="nonaktif">Nonaktif</option>
+				</select>
+				<select aria-label="Jenis kelamin kelas" bind:value={filterGender} onchange={syncFilterURL} class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-neutral-925/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-sm">
+					<option value="">Semua Gender</option><option value="L">Laki-laki</option><option value="P">Perempuan</option>
+				</select>
+				<select aria-label="Level kelas" bind:value={filterLevel} onchange={syncFilterURL} class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-neutral-925/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-sm">
+					<option value="">Semua Level</option>{#each levelOptions as level}<option value={level}>{level}</option>{/each}
+				</select>
+				{#if hasActiveFilters}
+					<button onclick={resetFilters} class="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-300 dark:border-neutral-700/80 px-3 py-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+						<RotateCcw class="w-4 h-4" /> Reset
+					</button>
+				{/if}
+			</div>
+			<p class="text-xs text-neutral-500 dark:text-neutral-400">Menampilkan {filteredKelas.length} dari {totalKelas} kelas{hasActiveFilters ? " sesuai filter" : ""}.</p>
 		</div>
 
 		{#each angkatanKeys as angkatanKey}
@@ -221,12 +312,12 @@
 					<div class="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-400/15 text-brand-600 dark:text-brand-400 text-sm font-bold">
 						{angkatanKey}
 					</div>
-					<h2 class="text-xl font-bold text-neutral-900 dark:text-white">Angkatan {angkatanKey}</h2>
+					<h2 class="text-xl font-bold text-neutral-900 dark:text-white">Angkatan Kelas {angkatanKey}</h2>
 					<span class="text-sm text-neutral-500 dark:text-neutral-400 font-mono">({grouped[angkatanKey].length} kelas)</span>
 				</div>
 
 				<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-					{#each grouped[angkatanKey] as k}
+					{#each grouped[angkatanKey] as k (k.id)}
 						<div
 							class="group relative rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-4 sm:p-5 transition-all hover:border-brand-400/30 hover:shadow-lg hover:shadow-brand-400/5 {k.is_aktif ? '' : 'opacity-60'}"
 						>
@@ -237,7 +328,7 @@
 									</div>
 									<div class="min-w-0">
 										<h3 class="font-semibold text-neutral-900 dark:text-white leading-snug break-words">
-											<a href={"/app/kelas/" + k.id} use:inertia class="hover:text-brand-600 dark:hover:text-brand-400 transition-colors after:absolute after:inset-0 after:content-['']">{k.nama_kelas}</a>
+											<a href={kelasDetailURL(k.id)} use:inertia aria-label={`Buka detail ${k.nama_kelas}`} class="hover:text-brand-600 dark:hover:text-brand-400 transition-colors after:absolute after:inset-0 after:content-['']">{k.nama_kelas}</a>
 										</h3>
 										<p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
 											{k.tipe}{k.sub_index ? ` - ${k.sub_index}` : ""}
@@ -317,8 +408,9 @@
 				</div>
 				<h3 class="text-lg font-semibold text-neutral-900 dark:text-white mb-2">Tidak ada kelas</h3>
 				<p class="text-neutral-500 dark:text-neutral-400 max-w-md mx-auto text-sm">
-					{filterAngkatan ? "Tidak ada kelas untuk angkatan yang dipilih" : "Belum ada kelas yang terdaftar"}
+					{hasActiveFilters ? "Tidak ada kelas yang sesuai dengan filter yang dipilih" : "Belum ada kelas yang terdaftar"}
 				</p>
+				{#if hasActiveFilters}<button onclick={resetFilters} class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400"><RotateCcw class="w-4 h-4" /> Reset filter</button>{/if}
 			</div>
 		{/if}
 	</div>

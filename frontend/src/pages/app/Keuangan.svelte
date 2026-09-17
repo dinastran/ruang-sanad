@@ -14,6 +14,7 @@
 		id_mahasantri: string;
 		nama: string;
 		angkatan: string;
+		angkatan_kelas: string;
 		nominal: number;
 		infaq_terakhir: string;
 		keterangan_tidak_lanjut: string;
@@ -93,8 +94,13 @@
 
 	let filters = $derived([
 		{
-			key: "angkatan",
-			label: "Angkatan",
+			key: "angkatan_pendaftaran",
+			label: "Angkatan Pendaftaran",
+			options: angkatan.map((a) => ({ value: a.kode || String(a.id), label: a.keterangan || a.kode || String(a.id) })),
+		},
+		{
+			key: "angkatan_kelas",
+			label: "Angkatan Kelas",
 			options: angkatan.map((a) => ({ value: a.kode || String(a.id), label: a.keterangan || a.kode || String(a.id) })),
 		},
 		{
@@ -179,7 +185,7 @@
 								<tr class="hover:bg-neutral-50/50 dark:hover:bg-white/[0.015] transition-colors align-top">
 									<td class="px-4 py-3">
 										<a href={`/app/santri/${s.id}`} use:inertia class="font-medium text-neutral-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors">{s.nama}</a>
-										<p class="text-xs text-neutral-500 dark:text-neutral-400 font-mono">{s.id_mahasantri || '-'} · {s.angkatan}</p>
+						<p class="text-xs text-neutral-500 dark:text-neutral-400 font-mono">{s.id_mahasantri || '-'} · Daftar {s.angkatan || '-'} · Kelas {s.angkatan_kelas || '-'}</p>
 									</td>
 									<td class="px-4 py-3 text-right font-mono text-neutral-700 dark:text-neutral-300 whitespace-nowrap">{rupiah(s.nominal)}</td>
 									<td class="px-4 py-3">

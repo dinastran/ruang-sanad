@@ -74,8 +74,7 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		sess.Regenerate()
 	}
 
-	slog.Info("session created", "handler", "Auth.Register", "user_id", user.ID, "redirect", "/app")
-	return h.inertiaService.Redirect(c, "/app")
+	return h.inertiaService.Redirect(c, roleHome(user.Role))
 }
 
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
@@ -114,8 +113,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		sess.Regenerate()
 	}
 
-	slog.Info("session created", "handler", "Auth.Login", "user_id", user.ID, "redirect", "/app")
-	return h.inertiaService.Redirect(c, "/app")
+	return h.inertiaService.Redirect(c, roleHome(user.Role))
 }
 
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
@@ -179,9 +177,20 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 		sess.Regenerate()
 	}
 
-	slog.Info("session created", "handler", "Auth.GoogleCallback", "user_id", user.ID, "redirect", "/app")
+	return h.inertiaService.Redirect(c, roleHome(user.Role))
+}
 
-	return h.inertiaService.Redirect(c, "/app")
+func roleHome(role models.UserRole) string {
+	switch role {
+	case models.RoleGuru:
+		return "/app/guru"
+	case models.RoleKoordinator:
+		return "/app/koordinator-guru"
+	case models.RoleUser:
+		return "/app/profile"
+	default:
+		return "/app"
+	}
 }
 
 // generateState generates a random state string for OAuth

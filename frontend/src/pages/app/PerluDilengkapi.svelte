@@ -13,6 +13,7 @@
 		nama: string;
 		jenis_kelamin: string;
 		angkatan: string;
+		angkatan_kelas: string;
 		kelas_kode: string;
 		frekuensi: string;
 		fu: string;
@@ -43,11 +44,12 @@
 		levels?: MasterItem[];
 		jadwals?: MasterItem[];
 		gurus?: MasterItem[];
+		angkatan?: MasterItem[];
 		success?: string;
 		error?: string;
 	}
 
-	let { user, santri = [], levels = [], jadwals = [], gurus = [], success, error }: Props = $props();
+	let { user, santri = [], levels = [], jadwals = [], gurus = [], angkatan = [], success, error }: Props = $props();
 
 	let expandedId = $state<number | null>(null);
 	let savingId = $state<number | null>(null);
@@ -71,7 +73,7 @@
 		}),
 	);
 
-	let forms = $state<Record<number, { fu: string; tanggal_vn: string; hasil_vn: string; masuk_grup: string; mulai_belajar: string; jumlah: number; level: string; jadwal: string; guru: string }>>({});
+	let forms = $state<Record<number, { fu: string; tanggal_vn: string; hasil_vn: string; masuk_grup: string; mulai_belajar: string; jumlah: number; angkatan_kelas: string; level: string; jadwal: string; guru: string; guru_id: number }>>({});
 
 	// Multi-jadwal per santri: a class can meet more than once (2x/pekan, private
 	// 4x/16x). Sessions are stored joined by " & " in the single jadwal field.
@@ -92,13 +94,19 @@
 				masuk_grup: s.masuk_grup || "",
 				mulai_belajar: s.mulai_belajar || "",
 				jumlah: s.jumlah || 0,
+				angkatan_kelas: s.angkatan_kelas || "",
 				level: s.level || "",
 				jadwal: s.jadwal || "",
 				guru: s.guru || "",
+				guru_id: gurus.find((g) => g.nama === s.guru)?.id ?? 0,
 			};
 			jadwalRowsMap[s.id] = s.jadwal ? s.jadwal.split(" & ").map((x) => x.trim()) : [""];
 			voiceNoteDescriptions[s.id] = s.keterangan_vn || "";
 		}
+	}
+
+	function isLegacyAngkatanKelas(value: string) {
+		return value !== "" && !angkatan.some((a) => (a.kode || String(a.id)) === value);
 	}
 
 	function addJadwalRow(id: number) {
@@ -113,6 +121,7 @@
 		savingId = santriId;
 		if (forms[santriId]) {
 			forms[santriId].jadwal = (jadwalRowsMap[santriId] || []).map((x) => x.trim()).filter(Boolean).join(" & ");
+			forms[santriId].guru = gurus.find((g) => g.id === forms[santriId].guru_id)?.nama ?? "";
 		}
 		router.put(`/app/santri/${santriId}/kelas-data`, forms[santriId] || {}, {
 			onFinish: () => { savingId = null; },
@@ -263,7 +272,7 @@
 					<div class="flex-1 min-w-0">
 						<p class="text-sm font-semibold text-neutral-900 dark:text-white truncate">{s.nama}</p>
 						<p class="text-xs text-neutral-500 dark:text-neutral-400">
-							{s.id_mahasantri || '-'} · {s.angkatan}
+							{s.id_mahasantri || '-'} · Pendaftaran {s.angkatan || '-'} · Kelas {s.angkatan_kelas || 'belum dipilih'}
 						</p>
 					</div>
 					<div class="flex items-center gap-3">
@@ -323,6 +332,16 @@
 							</div>
 
 							<div class="grid md:grid-cols-2 gap-5">
+								<div>
+									<label for="angkatan-kelas-{s.id}" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Angkatan Kelas <span class="text-error">(wajib)</span></label>
+									<select id="angkatan-kelas-{s.id}" bind:value={form.angkatan_kelas} required class="w-full px-4 py-2.5 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white transition-all outline-none">
+										<option value="">Pilih Angkatan Kelas</option>
+										{#if isLegacyAngkatanKelas(form.angkatan_kelas)}
+											<option value={form.angkatan_kelas}>{form.angkatan_kelas} (data lama)</option>
+										{/if}
+										{#each angkatan as a}<option value={a.kode || String(a.id)}>{a.nama || a.kode || String(a.id)}</option>{/each}
+									</select>
+								</div>
 								<div>
 									<label for="hasil_vn-{s.id}" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Hasil VN</label>
 									<input
@@ -455,12 +474,12 @@
 								<label for="guru-{s.id}" class="block text-sm font-medium text-neutral-700 dark:text-neutral-400 mb-2">Guru</label>
 								<select
 									id="guru-{s.id}"
-									bind:value={form.guru}
+									bind:value={form.guru_id}
 									class="w-full px-4 py-2.5 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white transition-all outline-none"
 								>
 									<option value="">Pilih Guru</option>
 									{#each gurus as g}
-										<option value={g.nama || String(g.id)}>{g.nama || String(g.id)}</option>
+										<option value={g.id}>{g.nama || String(g.id)}</option>
 									{/each}
 								</select>
 							</div>
