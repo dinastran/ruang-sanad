@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/url"
 	"strconv"
 
@@ -11,18 +12,22 @@ import (
 )
 
 type KelasHandler struct {
-	kelasService   *services.KelasService
-	masterService  *services.MasterService
-	store          *session.Store
-	inertiaService *services.InertiaService
+	kelasService          *services.KelasService
+	kelasPerubahanService *services.KelasPerubahanService
+	santriStatusService   *services.SantriStatusService
+	masterService         *services.MasterService
+	store                 *session.Store
+	inertiaService        *services.InertiaService
 }
 
-func NewKelasHandler(kelasService *services.KelasService, masterService *services.MasterService, store *session.Store, inertiaService *services.InertiaService) *KelasHandler {
+func NewKelasHandler(kelasService *services.KelasService, kelasPerubahanService *services.KelasPerubahanService, santriStatusService *services.SantriStatusService, masterService *services.MasterService, store *session.Store, inertiaService *services.InertiaService) *KelasHandler {
 	return &KelasHandler{
-		kelasService:   kelasService,
-		masterService:  masterService,
-		store:          store,
-		inertiaService: inertiaService,
+		kelasService:          kelasService,
+		kelasPerubahanService: kelasPerubahanService,
+		santriStatusService:   santriStatusService,
+		masterService:         masterService,
+		store:                 store,
+		inertiaService:        inertiaService,
 	}
 }
 
@@ -53,6 +58,7 @@ func (h *KelasHandler) Index(c *fiber.Ctx) error {
 			"status":   c.Query("status", ""),
 			"gender":   c.Query("gender", ""),
 			"level":    c.Query("level", ""),
+			"jadwal":   c.Query("jadwal", ""),
 		},
 	})
 }
@@ -82,6 +88,8 @@ func (h *KelasHandler) Show(c *fiber.Ctx) error {
 		}
 	}
 
+	h.fillGuruNama(kelasLain)
+
 	if kelas.GuruID != nil {
 		for _, g := range guruList {
 			if g.ID == *kelas.GuruID {
@@ -91,14 +99,30 @@ func (h *KelasHandler) Show(c *fiber.Ctx) error {
 		}
 	}
 
+	levelList, _ := h.masterService.ListLevel()
+	jadwalList, _ := h.masterService.ListJadwal()
+	// Never send null: KelasDetail reads these lists' .length directly.
+	riwayatPerubahan, err := h.kelasPerubahanService.ListRiwayat(id)
+	if err != nil {
+		riwayatPerubahan = []models.KelasPerubahanResponse{}
+	}
+	riwayatStatus, err := h.santriStatusService.ListRiwayatKelas(id)
+	if err != nil {
+		riwayatStatus = []models.SantriStatusLogResponse{}
+	}
+
 	return h.inertiaService.Render(c, "app/KelasDetail", fiber.Map{
-		"user":          user,
-		"kelas":         kelas,
-		"santri":        santriList,
-		"gurus":         guruList,
-		"kelas_lain":    kelasLain,
-		"has_pertemuan": hasPertemuan,
-		"return_to":     kelasListReturnURL(c),
+		"user":              user,
+		"kelas":             kelas,
+		"santri":            santriList,
+		"gurus":             guruList,
+		"kelas_lain":        kelasLain,
+		"has_pertemuan":     hasPertemuan,
+		"levels":            levelList,
+		"jadwals":           jadwalList,
+		"riwayat_perubahan": riwayatPerubahan,
+		"riwayat_status":    riwayatStatus,
+		"return_to":         kelasListReturnURL(c),
 	})
 }
 
@@ -167,6 +191,33 @@ func (h *KelasHandler) AssignGuru(c *fiber.Ctx) error {
 	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 }
 
+// UbahStatusSantri lets Admin Kelas set a class member to aktif, cuti, or
+// nonaktif from the class detail page.
+func (h *KelasHandler) UbahStatusSantri(c *fiber.Ctx) error {
+	kelasID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return h.inertiaService.Redirect(c, "/app/kelas")
+	}
+	returnURL := kelasDetailReturnURL(c, c.Params("id"))
+	santriID, err := strconv.ParseInt(c.Params("santriId"), 10, 64)
+	if err != nil {
+		h.store.Flash(c, "error", "Santri tidak valid")
+		return h.inertiaService.Redirect(c, returnURL)
+	}
+	var req models.UpdateSantriStatusRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data status tidak valid")
+		return h.inertiaService.Redirect(c, returnURL)
+	}
+	sess, _ := h.store.Get(c)
+	if err := h.santriStatusService.UbahStatus(kelasID, santriID, sessionUser(sess).ID, req); err != nil {
+		h.store.Flash(c, "error", err.Error())
+		return h.inertiaService.Redirect(c, returnURL)
+	}
+	h.store.Flash(c, "success", "Status santri berhasil diubah")
+	return h.inertiaService.Redirect(c, returnURL)
+}
+
 func (h *KelasHandler) SetPertemuanTerakhir(c *fiber.Ctx) error {
 	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 	if err != nil {
@@ -210,6 +261,81 @@ func (h *KelasHandler) SetAktif(c *fiber.Ctx) error {
 		h.store.Flash(c, "success", "Kelas dinonaktifkan")
 	}
 	return h.inertiaService.Redirect(c, kelasStatusReturnURL(c, c.Params("id")))
+}
+
+func (h *KelasHandler) SetMateriIndividual(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return h.inertiaService.Redirect(c, "/app/kelas")
+	}
+	var req models.SetKelasMateriIndividualRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data pengaturan progres materi tidak valid")
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	if err := h.kelasService.SetMateriIndividual(id, req.MateriIndividual); err != nil {
+		h.store.Flash(c, "error", "Gagal mengubah pengaturan progres materi")
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	h.store.Flash(c, "success", "Pengaturan progres materi tersimpan")
+	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+}
+
+func (h *KelasHandler) GantiLevel(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return h.inertiaService.Redirect(c, "/app/kelas")
+	}
+	var req models.GantiLevelKelasRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data level tidak valid")
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	sess, _ := h.store.Get(c)
+	if err := h.kelasPerubahanService.GantiLevelKelas(id, req.Level, sessionUser(sess).ID); err != nil {
+		h.store.Flash(c, "error", err.Error())
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	h.store.Flash(c, "success", "Level kelas berhasil diganti. Pertemuan berikutnya dimulai dari ke-1.")
+	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+}
+
+func (h *KelasHandler) GantiJadwal(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return h.inertiaService.Redirect(c, "/app/kelas")
+	}
+	var req models.GantiJadwalKelasRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data jadwal tidak valid")
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	sess, _ := h.store.Get(c)
+	if err := h.kelasPerubahanService.GantiJadwalKelas(id, req.Jadwal, sessionUser(sess).ID); err != nil {
+		h.store.Flash(c, "error", err.Error())
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	h.store.Flash(c, "success", "Jadwal kelas berhasil diganti")
+	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+}
+
+func (h *KelasHandler) GantiLevelSantri(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return h.inertiaService.Redirect(c, "/app/kelas")
+	}
+	var req models.GantiLevelSantriRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data ganti level santri tidak valid")
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	sess, _ := h.store.Get(c)
+	if _, err := h.kelasPerubahanService.GantiLevelSantri(id, req, sessionUser(sess).ID); err != nil {
+		h.store.Flash(c, "error", err.Error())
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	h.store.Flash(c, "success", fmt.Sprintf("%d santri berhasil dipindahkan ke level baru", len(req.SantriIDs)))
+	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 }
 
 func (h *KelasHandler) Delete(c *fiber.Ctx) error {

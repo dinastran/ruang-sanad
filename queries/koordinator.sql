@@ -81,6 +81,13 @@ LEFT JOIN pembinaan_absen pa ON pa.guru_id = g.id AND pa.pembinaan_id = ?
 WHERE g.is_aktif = 1
 ORDER BY g.nama ASC;
 
+-- name: ListPembinaanAbsenTersimpan :many
+SELECT g.id AS guru_id, g.nama, g.status, pa.hadir, pa.jam_masuk, pa.keterangan, pa.alasan
+FROM pembinaan_absen pa
+JOIN guru g ON g.id = pa.guru_id
+WHERE pa.pembinaan_id = ?
+ORDER BY g.nama ASC;
+
 -- name: CountPembinaanTerlaksana :one
 SELECT COUNT(*) FROM pembinaan WHERE status = 'terlaksana' AND tanggal >= ? AND tanggal <= ?;
 
@@ -118,6 +125,13 @@ SELECT g.id AS guru_id, g.nama, g.status,
 FROM guru g
 LEFT JOIN rapat_absen ra ON ra.guru_id = g.id AND ra.rapat_id = ?
 WHERE g.is_aktif = 1
+ORDER BY g.nama ASC;
+
+-- name: ListRapatAbsenTersimpan :many
+SELECT g.id AS guru_id, g.nama, g.status, ra.hadir, ra.jam_masuk, ra.keterangan, ra.alasan
+FROM rapat_absen ra
+JOIN guru g ON g.id = ra.guru_id
+WHERE ra.rapat_id = ?
 ORDER BY g.nama ASC;
 
 -- name: CountRapatHadirByGuru :one

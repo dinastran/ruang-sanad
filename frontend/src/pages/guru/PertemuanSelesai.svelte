@@ -3,6 +3,7 @@
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import type { Flash, User, GuruKelas, PertemuanGuru, SantriGuru } from "@lib/types";
+	import { nomorPertemuan } from "@lib/pertemuan";
 	import { BookOpen, Clock, Calendar, CheckSquare } from "lucide-svelte";
 
 	interface Props {
@@ -11,12 +12,13 @@
 		pertemuan: PertemuanGuru;
 		santri: SantriGuru[];
 		can_manage_class?: boolean;
+		batas_materi_terakhir?: Record<number, string>;
 		success?: string;
 		error?: string;
 		flash?: Flash;
 	}
 
-	let { user, kelas, pertemuan, santri = [], can_manage_class = true, success, error, flash }: Props = $props();
+	let { user, kelas, pertemuan, santri = [], can_manage_class = true, batas_materi_terakhir = {}, success, error, flash }: Props = $props();
 	let canEdit = $derived(user?.role === "guru" || user?.role === "admin_kelas" || user?.role === "super_admin");
 	let backHref = $derived(can_manage_class ? "/app/guru/kelas/" + (kelas?.id || pertemuan.kelas_id) : "/app/guru/jadwal-pertemuan");
 	let backLabel = $derived(can_manage_class ? (kelas?.nama_kelas || "Kelas") : "Jadwal Pertemuan");
@@ -28,9 +30,9 @@
 
 	type Kehadiran = "hadir" | "izin" | "sakit" | "alpa" | "telat";
 	function initialAttendance() {
-		return Object.fromEntries(santri.map((item) => [item.id, { status: "hadir" as Kehadiran, catatan: "" }]));
+		return Object.fromEntries(santri.map((item) => [item.id, { status: "hadir" as Kehadiran, catatan: "", batas_materi: batas_materi_terakhir[item.id] || "" }]));
 	}
-	let absensi = $state<Record<number, { status: Kehadiran; catatan: string }>>(initialAttendance());
+	let absensi = $state<Record<number, { status: Kehadiran; catatan: string; batas_materi: string }>>(initialAttendance());
 
 	const statusOptions: { value: Kehadiran; label: string; color: string }[] = [
 		{ value: "hadir", label: "Hadir", color: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20" },
@@ -43,8 +45,8 @@
 	let semuaHadir = $derived(santri.every((s) => absensi[s.id]?.status === "hadir"));
 
 	function handleSelesai() {
-		if (!materi.trim()) {
-			errorMsg = "Materi wajib diisi";
+		if (!kelas?.materi_individual && !materi.trim()) {
+			errorMsg = "Materi umum wajib diisi";
 			return;
 		}
 		isSubmitting = true;
@@ -57,6 +59,7 @@
 				santri_id: s.id,
 				status: absensi[s.id]?.status || "hadir",
 				catatan: absensi[s.id]?.catatan || "",
+				batas_materi: absensi[s.id]?.batas_materi || "",
 			})),
 		};
 
@@ -77,7 +80,7 @@
 
 	function setSemuaHadir() {
 		for (const s of santri) {
-			absensi[s.id] = { status: "hadir", catatan: absensi[s.id]?.catatan || "" };
+			absensi[s.id] = { status: "hadir", catatan: absensi[s.id]?.catatan || "", batas_materi: absensi[s.id]?.batas_materi || "" };
 		}
 		absensi = absensi;
 	}
@@ -95,7 +98,7 @@
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 				</svg>
-				<span class="text-neutral-700 dark:text-neutral-300">Pertemuan {pertemuan.pertemuan_ke}</span>
+				<span class="text-neutral-700 dark:text-neutral-300">Pertemuan {nomorPertemuan(pertemuan)}</span>
 			</div>
 			<h1 class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white mb-2 tracking-tight">
 				Selesai Pertemuan
@@ -124,7 +127,7 @@
 				<div>
 					<h2 class="text-lg font-semibold text-neutral-900 dark:text-white">{kelas?.nama_kelas || "Kelas"}</h2>
 					<p class="text-sm text-neutral-500 dark:text-neutral-400">
-						Pertemuan {pertemuan.pertemuan_ke} &middot; {pertemuan.tanggal} &middot; {pertemuan.jam_mulai}
+						Pertemuan {nomorPertemuan(pertemuan)}{pertemuan.level_nama ? ` (${pertemuan.level_nama})` : ""} &middot; {pertemuan.tanggal} &middot; {pertemuan.jam_mulai}
 					</p>
 				</div>
 			</div>
@@ -132,14 +135,14 @@
 			<div class="space-y-4 mb-6">
 				<div>
 					<label for="materi" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
-						Materi / Batas Materi <span class="text-red-500">*</span>
+						{kelas?.materi_individual ? "Materi Umum / Ringkasan (opsional)" : "Materi / Batas Materi"} {#if !kelas?.materi_individual}<span class="text-red-500">*</span>{/if}
 					</label>
 					<input
 						id="materi"
 						type="text"
 						bind:value={materi}
 						readonly={!canEdit}
-						placeholder="Contoh: Bab 3 - Fi'il Madhi"
+						placeholder={kelas?.materi_individual ? "Contoh: Talaqqi pekan ini" : "Contoh: Bab 3 - Fi'il Madhi"}
 						class="w-full px-4 py-3 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-sm"
 					/>
 				</div>
@@ -181,10 +184,10 @@
 							</div>
 						</div>
 
-						<div class="flex-1 grid sm:grid-cols-2 gap-2">
+						<div class="flex-1 grid gap-2 {kelas?.materi_individual ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}">
 							<select
 								value={absensi[s.id]?.status || "hadir"}
-								onchange={(event) => (absensi[s.id] = { status: event.currentTarget.value as Kehadiran, catatan: absensi[s.id]?.catatan || "" })}
+								onchange={(event) => (absensi[s.id] = { status: event.currentTarget.value as Kehadiran, catatan: absensi[s.id]?.catatan || "", batas_materi: absensi[s.id]?.batas_materi || "" })}
 								disabled={!canEdit}
 								class="w-full px-3 py-2 rounded-lg text-sm font-medium border focus:outline-none focus:ring-2 focus:ring-brand-400/40 appearance-none cursor-pointer {statusOptions.find((o) => o.value === absensi[s.id]?.status)?.color || 'bg-neutral-100/80 dark:bg-neutral-800/50 border-neutral-300 dark:border-neutral-700/80 text-neutral-700 dark:text-neutral-300'}"
 							>
@@ -195,11 +198,21 @@
 							<input
 								type="text"
 								value={absensi[s.id]?.catatan || ""}
-								oninput={(event) => (absensi[s.id] = { status: absensi[s.id]?.status || "hadir", catatan: event.currentTarget.value })}
+								oninput={(event) => (absensi[s.id] = { status: absensi[s.id]?.status || "hadir", catatan: event.currentTarget.value, batas_materi: absensi[s.id]?.batas_materi || "" })}
 								readonly={!canEdit}
 								placeholder="Catatan (opsional)"
 								class="w-full px-3 py-2 rounded-lg bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-xs"
 							/>
+							{#if kelas?.materi_individual}
+								<input
+									type="text"
+									value={absensi[s.id]?.batas_materi || ""}
+									oninput={(event) => (absensi[s.id] = { status: absensi[s.id]?.status || "hadir", catatan: absensi[s.id]?.catatan || "", batas_materi: event.currentTarget.value })}
+									readonly={!canEdit || (absensi[s.id]?.status !== "hadir" && absensi[s.id]?.status !== "telat")}
+									placeholder={absensi[s.id]?.status === "hadir" || absensi[s.id]?.status === "telat" ? "Batas materi *" : `Batas terakhir: ${batas_materi_terakhir[s.id] || "belum ada"}`}
+									class="w-full px-3 py-2 rounded-lg bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-xs read-only:opacity-60"
+								/>
+							{/if}
 						</div>
 					</div>
 				</div>
@@ -209,7 +222,7 @@
 		<div class="pt-2" in:fly={{ y: 20, duration: 600, delay: 200 }}>
 			<button
 				onclick={handleSelesai}
-				disabled={!canEdit || isSubmitting || !materi.trim()}
+				disabled={!canEdit || isSubmitting || (!kelas?.materi_individual && !materi.trim())}
 				class="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold transition-all dark:bg-brand-500 dark:hover:bg-brand-400 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-600/25 text-base"
 			>
 				{#if isSubmitting}

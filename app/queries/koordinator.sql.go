@@ -899,6 +899,55 @@ func (q *Queries) ListPembinaan(ctx context.Context) ([]Pembinaan, error) {
 	return items, nil
 }
 
+const listPembinaanAbsenTersimpan = `-- name: ListPembinaanAbsenTersimpan :many
+SELECT g.id AS guru_id, g.nama, g.status, pa.hadir, pa.jam_masuk, pa.keterangan, pa.alasan
+FROM pembinaan_absen pa
+JOIN guru g ON g.id = pa.guru_id
+WHERE pa.pembinaan_id = ?
+ORDER BY g.nama ASC
+`
+
+type ListPembinaanAbsenTersimpanRow struct {
+	GuruID     int64
+	Nama       string
+	Status     string
+	Hadir      int64
+	JamMasuk   string
+	Keterangan string
+	Alasan     string
+}
+
+func (q *Queries) ListPembinaanAbsenTersimpan(ctx context.Context, pembinaanID int64) ([]ListPembinaanAbsenTersimpanRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPembinaanAbsenTersimpan, pembinaanID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPembinaanAbsenTersimpanRow
+	for rows.Next() {
+		var i ListPembinaanAbsenTersimpanRow
+		if err := rows.Scan(
+			&i.GuruID,
+			&i.Nama,
+			&i.Status,
+			&i.Hadir,
+			&i.JamMasuk,
+			&i.Keterangan,
+			&i.Alasan,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRapat = `-- name: ListRapat :many
 SELECT id, tanggal, judul, catatan, status, created_at, updated_at FROM rapat_guru ORDER BY tanggal DESC
 `
@@ -920,6 +969,55 @@ func (q *Queries) ListRapat(ctx context.Context) ([]RapatGuru, error) {
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRapatAbsenTersimpan = `-- name: ListRapatAbsenTersimpan :many
+SELECT g.id AS guru_id, g.nama, g.status, ra.hadir, ra.jam_masuk, ra.keterangan, ra.alasan
+FROM rapat_absen ra
+JOIN guru g ON g.id = ra.guru_id
+WHERE ra.rapat_id = ?
+ORDER BY g.nama ASC
+`
+
+type ListRapatAbsenTersimpanRow struct {
+	GuruID     int64
+	Nama       string
+	Status     string
+	Hadir      int64
+	JamMasuk   string
+	Keterangan string
+	Alasan     string
+}
+
+func (q *Queries) ListRapatAbsenTersimpan(ctx context.Context, rapatID int64) ([]ListRapatAbsenTersimpanRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRapatAbsenTersimpan, rapatID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRapatAbsenTersimpanRow
+	for rows.Next() {
+		var i ListRapatAbsenTersimpanRow
+		if err := rows.Scan(
+			&i.GuruID,
+			&i.Nama,
+			&i.Status,
+			&i.Hadir,
+			&i.JamMasuk,
+			&i.Keterangan,
+			&i.Alasan,
 		); err != nil {
 			return nil, err
 		}

@@ -19,22 +19,22 @@ SELECT * FROM absensi WHERE pertemuan_id = ? AND santri_id = ?;
 SELECT * FROM absensi WHERE id = ?;
 
 -- name: CreateAbsensi :exec
-INSERT INTO absensi (pertemuan_id, santri_id, status, catatan, dibuat_oleh)
-VALUES (?, ?, ?, ?, ?);
+INSERT INTO absensi (pertemuan_id, santri_id, status, catatan, batas_materi, dibuat_oleh)
+VALUES (?, ?, ?, ?, ?, ?);
 
 -- name: UpdateAbsensi :exec
-UPDATE absensi SET status = ?, catatan = ?, updated_at = CURRENT_TIMESTAMP
+UPDATE absensi SET status = ?, catatan = ?, batas_materi = ?, updated_at = CURRENT_TIMESTAMP
 WHERE id = ?;
 
 -- name: UpdateAbsensiByPertemuanAndSantri :exec
-UPDATE absensi SET status = ?, catatan = ?, updated_at = CURRENT_TIMESTAMP
+UPDATE absensi SET status = ?, catatan = ?, batas_materi = ?, updated_at = CURRENT_TIMESTAMP
 WHERE pertemuan_id = ? AND santri_id = ?;
 
 -- name: CreateOrUpdateAbsensi :exec
-INSERT INTO absensi (pertemuan_id, santri_id, status, catatan, dibuat_oleh)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO absensi (pertemuan_id, santri_id, status, catatan, batas_materi, dibuat_oleh)
+VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT(pertemuan_id, santri_id)
-DO UPDATE SET status = excluded.status, catatan = excluded.catatan, updated_at = CURRENT_TIMESTAMP;
+DO UPDATE SET status = excluded.status, catatan = excluded.catatan, batas_materi = excluded.batas_materi, updated_at = CURRENT_TIMESTAMP;
 
 -- name: CountAbsensiByStatus :many
 SELECT a.status, COUNT(*) AS total
@@ -68,7 +68,7 @@ WHERE s.kelas_id = ? AND s.status = 'aktif'
 ORDER BY s.nama;
 
 -- name: GetPertemuanByKelasForRekap :many
-SELECT id, pertemuan_ke, tanggal
+SELECT id, pertemuan_ke, pertemuan_level_ke, level_nama, tanggal
 FROM pertemuan
 WHERE kelas_id = ?
 ORDER BY pertemuan_ke;

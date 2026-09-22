@@ -299,7 +299,8 @@ func (h *SantriHandler) UpdateKeuangan(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, "/app/keuangan")
 	}
 
-	if err := h.santriService.UpdateByKeuangan(id, req); err != nil {
+	sess, _ := h.store.Get(c)
+	if err := h.santriService.UpdateByKeuangan(id, sessionUser(sess).ID, req); err != nil {
 		h.store.Flash(c, "error", "Gagal update: "+err.Error())
 		return h.inertiaService.Redirect(c, "/app/keuangan")
 	}

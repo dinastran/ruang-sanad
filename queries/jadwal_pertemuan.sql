@@ -39,7 +39,7 @@ ORDER BY jp.tanggal, jp.jam_mulai, jp.id;
 -- name: UpdateJadwalPertemuanReschedule :execrows
 UPDATE jadwal_pertemuan
 SET tanggal = ?, jam_mulai = ?, is_reschedule = 1, jadwal_semula = ?,
-    alasan_reschedule = ?, updated_at = CURRENT_TIMESTAMP
+    alasan_reschedule = ?, jadwal_kelas_berubah = 0, updated_at = CURRENT_TIMESTAMP
 WHERE id = ? AND kelas_id = ? AND status = 'dijadwalkan';
 
 -- name: UpdateJadwalPertemuanBadal :execrows
@@ -66,3 +66,8 @@ WHERE id = ? AND kelas_id = ? AND status = 'diproses';
 UPDATE jadwal_pertemuan
 SET status = 'selesai', updated_at = CURRENT_TIMESTAMP
 WHERE pertemuan_id = ? AND status = 'dimulai';
+
+-- name: MarkJadwalPertemuanKelasBerubah :exec
+UPDATE jadwal_pertemuan
+SET jadwal_kelas_berubah = 1, updated_at = CURRENT_TIMESTAMP
+WHERE kelas_id = ? AND status = 'dijadwalkan';

@@ -88,7 +88,8 @@ func (h *KoordinatorFeaturesHandler) PembinaanAbsenPage(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, "/app/koordinator-guru/pembinaan")
 	}
 	absen, _ := h.svc.GetPembinaanAbsen(id)
-	return h.inertiaService.Render(c, "koordinator/PembinaanAbsen", fiber.Map{"user": sessionUser(sess), "pembinaan": pembinaan, "absen": absen})
+	laporan, _ := h.svc.GetLaporanPembinaanAbsensi(id)
+	return h.inertiaService.Render(c, "koordinator/PembinaanAbsen", fiber.Map{"user": sessionUser(sess), "pembinaan": pembinaan, "absen": absen, "laporan": laporan})
 }
 
 func (h *KoordinatorFeaturesHandler) PembinaanAbsenSave(c *fiber.Ctx) error {
@@ -167,7 +168,8 @@ func (h *KoordinatorFeaturesHandler) RapatAbsenPage(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, "/app/koordinator-guru/rapat")
 	}
 	absen, _ := h.svc.GetRapatAbsen(id)
-	return h.inertiaService.Render(c, "koordinator/RapatAbsen", fiber.Map{"user": sessionUser(sess), "rapat": rapat, "absen": absen})
+	laporan, _ := h.svc.GetLaporanRapatAbsensi(id)
+	return h.inertiaService.Render(c, "koordinator/RapatAbsen", fiber.Map{"user": sessionUser(sess), "rapat": rapat, "absen": absen, "laporan": laporan})
 }
 
 func (h *KoordinatorFeaturesHandler) RapatAbsenSave(c *fiber.Ctx) error {

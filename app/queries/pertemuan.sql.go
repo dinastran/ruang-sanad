@@ -105,11 +105,19 @@ const createPertemuan = `-- name: CreatePertemuan :execresult
 INSERT INTO pertemuan (
     kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai,
     materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule,
-    is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh
+    is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh,
+    level_nama, pertemuan_level_ke
 ) VALUES (
-    ?, ?, ?, ?, ?,
-    ?, ?, ?, ?, ?,
-    ?, ?, ?, ?, ?
+    ?1, ?2, ?3, ?4, ?5,
+    ?6, ?7, ?8, ?9, ?10,
+    ?11, ?12, ?13, ?14, ?15,
+    COALESCE((
+        SELECT COALESCE(NULLIF(l.nama, ''), k.level)
+        FROM kelas k
+        LEFT JOIN level l ON l.kode = k.level
+        WHERE k.id = ?1
+    ), ''),
+    MAX(1, ?2 - COALESCE((SELECT k.level_pertemuan_awal FROM kelas k WHERE k.id = ?1), 0))
 )
 `
 
@@ -131,6 +139,8 @@ type CreatePertemuanParams struct {
 	DibuatOleh       sql.NullInt64
 }
 
+// level_nama & pertemuan_level_ke are snapshotted from the class so meeting
+// history stays labelled with the level it was taught at.
 func (q *Queries) CreatePertemuan(ctx context.Context, arg CreatePertemuanParams) (sql.Result, error) {
 	return q.db.ExecContext(ctx, createPertemuan,
 		arg.KelasID,
@@ -152,7 +162,7 @@ func (q *Queries) CreatePertemuan(ctx context.Context, arg CreatePertemuanParams
 }
 
 const getActivePertemuanByKelas = `-- name: GetActivePertemuanByKelas :one
-SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at FROM pertemuan
+SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke FROM pertemuan
 WHERE kelas_id = ? AND status = 'berlangsung'
 ORDER BY id DESC
 LIMIT 1
@@ -180,12 +190,14 @@ func (q *Queries) GetActivePertemuanByKelas(ctx context.Context, kelasID int64) 
 		&i.DibuatOleh,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LevelNama,
+		&i.PertemuanLevelKe,
 	)
 	return i, err
 }
 
 const getLastPertemuanByKelas = `-- name: GetLastPertemuanByKelas :one
-SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at FROM pertemuan
+SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke FROM pertemuan
 WHERE kelas_id = ? AND status = 'selesai'
 ORDER BY pertemuan_ke DESC
 LIMIT 1
@@ -213,6 +225,8 @@ func (q *Queries) GetLastPertemuanByKelas(ctx context.Context, kelasID int64) (P
 		&i.DibuatOleh,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LevelNama,
+		&i.PertemuanLevelKe,
 	)
 	return i, err
 }
@@ -230,8 +244,22 @@ func (q *Queries) GetNextPertemuanKe(ctx context.Context, id int64) (int64, erro
 	return next_ke, err
 }
 
+const getNextPertemuanLevelKe = `-- name: GetNextPertemuanLevelKe :one
+SELECT CAST(MAX(1, MAX(COALESCE((SELECT MAX(p.pertemuan_ke) FROM pertemuan p WHERE p.kelas_id = kelas.id), 0), kelas.pertemuan_terakhir) + 1 - kelas.level_pertemuan_awal) AS INTEGER) AS next_level_ke
+FROM kelas
+WHERE kelas.id = ?
+`
+
+// Nomor pertemuan berikutnya dihitung dari awal level kelas saat ini.
+func (q *Queries) GetNextPertemuanLevelKe(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getNextPertemuanLevelKe, id)
+	var next_level_ke int64
+	err := row.Scan(&next_level_ke)
+	return next_level_ke, err
+}
+
 const getPertemuanByID = `-- name: GetPertemuanByID :one
-SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at FROM pertemuan WHERE id = ?
+SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke FROM pertemuan WHERE id = ?
 `
 
 func (q *Queries) GetPertemuanByID(ctx context.Context, id int64) (Pertemuan, error) {
@@ -256,12 +284,14 @@ func (q *Queries) GetPertemuanByID(ctx context.Context, id int64) (Pertemuan, er
 		&i.DibuatOleh,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LevelNama,
+		&i.PertemuanLevelKe,
 	)
 	return i, err
 }
 
 const listRiwayatPertemuanByKelas = `-- name: ListRiwayatPertemuanByKelas :many
-SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at FROM pertemuan
+SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke FROM pertemuan
 WHERE kelas_id = ? AND status = 'selesai'
 ORDER BY pertemuan_ke DESC
 `
@@ -294,6 +324,8 @@ func (q *Queries) ListRiwayatPertemuanByKelas(ctx context.Context, kelasID int64
 			&i.DibuatOleh,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LevelNama,
+			&i.PertemuanLevelKe,
 		); err != nil {
 			return nil, err
 		}

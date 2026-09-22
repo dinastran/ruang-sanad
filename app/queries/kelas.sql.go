@@ -136,8 +136,8 @@ func (q *Queries) DeleteKelas(ctx context.Context, id int64) error {
 
 const findKelasByKunci = `-- name: FindKelasByKunci :many
 
-SELECT id, kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, guru_id, kapasitas, pertemuan_terakhir,
-    (SELECT COUNT(*) FROM santri s WHERE s.kelas_id = kelas.id AND s.status != 'tidak_lanjut') AS jumlah_santri,
+SELECT id, kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, guru_id, kapasitas, pertemuan_terakhir, materi_individual,
+    (SELECT COUNT(*) FROM santri s WHERE s.kelas_id = kelas.id AND s.status IN ('aktif', 'cuti')) AS jumlah_santri,
     created_at, is_aktif
 FROM kelas
 WHERE kunci_kelas = ? AND is_aktif = 1
@@ -158,13 +158,14 @@ type FindKelasByKunciRow struct {
 	GuruID            sql.NullInt64
 	Kapasitas         int64
 	PertemuanTerakhir int64
+	MateriIndividual  int64
 	JumlahSantri      int64
 	CreatedAt         time.Time
 	IsAktif           int64
 }
 
-// jumlah_santri is computed live as the count of ACTIVE santri (excluding
-// tidak_lanjut) so class occupancy reflects only continuing mahasantri.
+// jumlah_santri is computed live as the count of santri holding a seat
+// (aktif + cuti); nonaktif and tidak_lanjut release their seat.
 func (q *Queries) FindKelasByKunci(ctx context.Context, kunciKelas string) ([]FindKelasByKunciRow, error) {
 	rows, err := q.db.QueryContext(ctx, findKelasByKunci, kunciKelas)
 	if err != nil {
@@ -188,6 +189,7 @@ func (q *Queries) FindKelasByKunci(ctx context.Context, kunciKelas string) ([]Fi
 			&i.GuruID,
 			&i.Kapasitas,
 			&i.PertemuanTerakhir,
+			&i.MateriIndividual,
 			&i.JumlahSantri,
 			&i.CreatedAt,
 			&i.IsAktif,
@@ -206,8 +208,8 @@ func (q *Queries) FindKelasByKunci(ctx context.Context, kunciKelas string) ([]Fi
 }
 
 const getKelasByID = `-- name: GetKelasByID :one
-SELECT id, kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, guru_id, kapasitas, pertemuan_terakhir,
-    (SELECT COUNT(*) FROM santri s WHERE s.kelas_id = kelas.id AND s.status != 'tidak_lanjut') AS jumlah_santri,
+SELECT id, kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, guru_id, kapasitas, pertemuan_terakhir, materi_individual,
+    (SELECT COUNT(*) FROM santri s WHERE s.kelas_id = kelas.id AND s.status IN ('aktif', 'cuti')) AS jumlah_santri,
     created_at, is_aktif
 FROM kelas WHERE kelas.id = ?
 `
@@ -226,6 +228,7 @@ type GetKelasByIDRow struct {
 	GuruID            sql.NullInt64
 	Kapasitas         int64
 	PertemuanTerakhir int64
+	MateriIndividual  int64
 	JumlahSantri      int64
 	CreatedAt         time.Time
 	IsAktif           int64
@@ -248,6 +251,7 @@ func (q *Queries) GetKelasByID(ctx context.Context, id int64) (GetKelasByIDRow, 
 		&i.GuruID,
 		&i.Kapasitas,
 		&i.PertemuanTerakhir,
+		&i.MateriIndividual,
 		&i.JumlahSantri,
 		&i.CreatedAt,
 		&i.IsAktif,
@@ -276,8 +280,8 @@ func (q *Queries) IncrementJumlahSantri(ctx context.Context, id int64) error {
 }
 
 const listKelasAll = `-- name: ListKelasAll :many
-SELECT id, kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, guru_id, kapasitas, pertemuan_terakhir,
-    (SELECT COUNT(*) FROM santri s WHERE s.kelas_id = kelas.id AND s.status != 'tidak_lanjut') AS jumlah_santri,
+SELECT id, kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, guru_id, kapasitas, pertemuan_terakhir, materi_individual,
+    (SELECT COUNT(*) FROM santri s WHERE s.kelas_id = kelas.id AND s.status IN ('aktif', 'cuti')) AS jumlah_santri,
     created_at, is_aktif
 FROM kelas
 ORDER BY angkatan, tipe, jenis_kelamin, level, sub_index
@@ -297,6 +301,7 @@ type ListKelasAllRow struct {
 	GuruID            sql.NullInt64
 	Kapasitas         int64
 	PertemuanTerakhir int64
+	MateriIndividual  int64
 	JumlahSantri      int64
 	CreatedAt         time.Time
 	IsAktif           int64
@@ -325,6 +330,7 @@ func (q *Queries) ListKelasAll(ctx context.Context) ([]ListKelasAllRow, error) {
 			&i.GuruID,
 			&i.Kapasitas,
 			&i.PertemuanTerakhir,
+			&i.MateriIndividual,
 			&i.JumlahSantri,
 			&i.CreatedAt,
 			&i.IsAktif,
@@ -343,8 +349,8 @@ func (q *Queries) ListKelasAll(ctx context.Context) ([]ListKelasAllRow, error) {
 }
 
 const listKelasByAngkatan = `-- name: ListKelasByAngkatan :many
-SELECT id, kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, guru_id, kapasitas, pertemuan_terakhir,
-    (SELECT COUNT(*) FROM santri s WHERE s.kelas_id = kelas.id AND s.status != 'tidak_lanjut') AS jumlah_santri,
+SELECT id, kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, guru_id, kapasitas, pertemuan_terakhir, materi_individual,
+    (SELECT COUNT(*) FROM santri s WHERE s.kelas_id = kelas.id AND s.status IN ('aktif', 'cuti')) AS jumlah_santri,
     created_at, is_aktif
 FROM kelas
 WHERE (?1 = '' OR angkatan = ?1)
@@ -365,6 +371,7 @@ type ListKelasByAngkatanRow struct {
 	GuruID            sql.NullInt64
 	Kapasitas         int64
 	PertemuanTerakhir int64
+	MateriIndividual  int64
 	JumlahSantri      int64
 	CreatedAt         time.Time
 	IsAktif           int64
@@ -393,6 +400,7 @@ func (q *Queries) ListKelasByAngkatan(ctx context.Context, angkatan interface{})
 			&i.GuruID,
 			&i.Kapasitas,
 			&i.PertemuanTerakhir,
+			&i.MateriIndividual,
 			&i.JumlahSantri,
 			&i.CreatedAt,
 			&i.IsAktif,
@@ -424,9 +432,29 @@ func (q *Queries) SetKelasAktif(ctx context.Context, arg SetKelasAktifParams) er
 	return err
 }
 
+const setKelasMateriIndividual = `-- name: SetKelasMateriIndividual :exec
+UPDATE kelas SET materi_individual = ? WHERE id = ?
+`
+
+type SetKelasMateriIndividualParams struct {
+	MateriIndividual int64
+	ID               int64
+}
+
+func (q *Queries) SetKelasMateriIndividual(ctx context.Context, arg SetKelasMateriIndividualParams) error {
+	_, err := q.db.ExecContext(ctx, setKelasMateriIndividual, arg.MateriIndividual, arg.ID)
+	return err
+}
+
 const updateKelasPertemuanTerakhir = `-- name: UpdateKelasPertemuanTerakhir :execresult
 UPDATE kelas
-SET pertemuan_terakhir = ?1
+SET pertemuan_terakhir = ?1,
+    level_pertemuan_awal = CASE
+        WHEN level_pertemuan_awal > 0
+          OR EXISTS (SELECT 1 FROM kelas_perubahan kp WHERE kp.kelas_id = kelas.id AND kp.jenis = 'level_kelas')
+        THEN ?1
+        ELSE level_pertemuan_awal
+    END
 WHERE kelas.id = ?2
   AND NOT EXISTS (SELECT 1 FROM pertemuan WHERE kelas_id = ?2)
 `
@@ -436,6 +464,8 @@ type UpdateKelasPertemuanTerakhirParams struct {
 	ID                int64
 }
 
+// If the class already started a new level before any meeting was recorded,
+// that level begins right after the anchor, so level_pertemuan_awal follows it.
 func (q *Queries) UpdateKelasPertemuanTerakhir(ctx context.Context, arg UpdateKelasPertemuanTerakhirParams) (sql.Result, error) {
 	return q.db.ExecContext(ctx, updateKelasPertemuanTerakhir, arg.PertemuanTerakhir, arg.ID)
 }

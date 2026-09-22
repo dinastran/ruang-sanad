@@ -38,6 +38,7 @@
 		status?: string;
 		gender?: string;
 		level?: string;
+		jadwal?: string;
 	}
 
 	interface Props {
@@ -61,6 +62,7 @@
 	let filterStatus = $state(p.filters?.status ?? "");
 	let filterGender = $state(p.filters?.gender ?? "");
 	let filterLevel = $state(p.filters?.level ?? "");
+	let filterJadwal = $state(p.filters?.jadwal ?? "");
 	let searchQuery = $state(p.filters?.q ?? "");
 
 	let guruOptions = $derived(
@@ -69,7 +71,16 @@
 			.sort((a, b) => a.nama.localeCompare(b.nama)),
 	);
 	let levelOptions = $derived(Array.from(new Set(kelas.map((k) => k.level).filter(Boolean))).sort((a, b) => a.localeCompare(b)));
-	let hasActiveFilters = $derived(Boolean(searchQuery || filterAngkatan || filterGuru || filterStatus || filterGender || filterLevel));
+	const hariUrutan = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Ahad"];
+	function urutkanJadwal(a: string, b: string): number {
+		const hariA = hariUrutan.indexOf(a.split(",")[0].trim());
+		const hariB = hariUrutan.indexOf(b.split(",")[0].trim());
+		return (hariA === -1 ? hariUrutan.length : hariA) - (hariB === -1 ? hariUrutan.length : hariB) || a.localeCompare(b);
+	}
+	let jadwalOptions = $derived(
+		Array.from(new Set(kelas.flatMap((k) => k.jadwal.split(" & ").map((jadwal) => jadwal.trim()).filter(Boolean)))).sort(urutkanJadwal),
+	);
+	let hasActiveFilters = $derived(Boolean(searchQuery || filterAngkatan || filterGuru || filterStatus || filterGender || filterLevel || filterJadwal));
 
 	function listURL(): string {
 		const params = new URLSearchParams();
@@ -79,6 +90,7 @@
 		if (filterStatus) params.set("status", filterStatus);
 		if (filterGender) params.set("gender", filterGender);
 		if (filterLevel) params.set("level", filterLevel);
+		if (filterJadwal) params.set("jadwal", filterJadwal);
 		const query = params.toString();
 		return query ? `/app/kelas?${query}` : "/app/kelas";
 	}
@@ -94,6 +106,7 @@
 		filterStatus = "";
 		filterGender = "";
 		filterLevel = "";
+		filterJadwal = "";
 		syncFilterURL();
 	}
 
@@ -119,6 +132,7 @@
 			if (filterStatus === "nonaktif" && k.is_aktif) return false;
 			if (filterGender && k.jenis_kelamin !== filterGender) return false;
 			if (filterLevel && k.level !== filterLevel) return false;
+			if (filterJadwal && !k.jadwal.split(" & ").some((jadwal) => jadwal.trim() === filterJadwal)) return false;
 			const query = searchQuery.trim().toLowerCase();
 			if (query) {
 				const searchable = [k.nama_kelas, k.tipe, k.level, k.jadwal, k.guru_nama ?? ""].join(" ").toLowerCase();
@@ -282,7 +296,7 @@
 				{/each}
 			</select>
 			</div>
-			<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+			<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
 				<select aria-label="Guru" bind:value={filterGuru} onchange={syncFilterURL} class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-neutral-925/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-sm">
 					<option value="">Semua Guru</option>
 					<option value="unassigned">Belum Ada Guru</option>
@@ -296,6 +310,9 @@
 				</select>
 				<select aria-label="Level kelas" bind:value={filterLevel} onchange={syncFilterURL} class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-neutral-925/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-sm">
 					<option value="">Semua Level</option>{#each levelOptions as level}<option value={level}>{level}</option>{/each}
+				</select>
+				<select aria-label="Jadwal kelas" bind:value={filterJadwal} onchange={syncFilterURL} class="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-neutral-925/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-sm">
+					<option value="">Semua Jadwal</option>{#each jadwalOptions as jadwal}<option value={jadwal}>{jadwal}</option>{/each}
 				</select>
 				{#if hasActiveFilters}
 					<button onclick={resetFilters} class="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-300 dark:border-neutral-700/80 px-3 py-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">

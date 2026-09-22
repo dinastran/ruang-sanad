@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -80,6 +81,13 @@ func (s *TagihanService) generateForPertemuan(pertemuanID int64, requireSelesai 
 		if bulanKe < periodeMulai {
 			continue
 		}
+		bulanKe, ok, err := s.bulanTagihanSantri(ctx, st.ID, p.ID, bulanKe)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
 		if _, err := s.querier.CreateTagihan(ctx, queries.CreateTagihanParams{
 			SantriID: st.ID, KelasID: sql.NullInt64{Int64: p.KelasID, Valid: true},
 			PertemuanID: sql.NullInt64{Int64: p.ID, Valid: true}, BulanKe: bulanKe,
@@ -91,6 +99,46 @@ func (s *TagihanService) generateForPertemuan(pertemuanID int64, requireSelesai 
 		}
 	}
 	return nil
+}
+
+// bulanTagihanSantri returns the bulan_ke to bill a santri for a meeting, or
+// ok=false when that meeting is already billed. bulan_ke follows the class's
+// meeting count, but a santri moved from a class further ahead already holds
+// those numbers; the bill then continues after their last bulan instead of
+// being dropped by the (santri_id, bulan_ke) conflict — provided the santri was
+// on that meeting's roster.
+func (s *TagihanService) bulanTagihanSantri(ctx context.Context, santriID, pertemuanID, bulanKelas int64) (int64, bool, error) {
+	billed, err := s.querier.CountTagihanSantriPertemuan(ctx, queries.CountTagihanSantriPertemuanParams{
+		SantriID:    santriID,
+		PertemuanID: sql.NullInt64{Int64: pertemuanID, Valid: true},
+	})
+	if err != nil || billed > 0 {
+		return 0, false, err
+	}
+	taken, err := s.querier.CountTagihanSantriBulan(ctx, queries.CountTagihanSantriBulanParams{SantriID: santriID, BulanKe: bulanKelas})
+	if err != nil {
+		return 0, false, err
+	}
+	if taken == 0 {
+		return bulanKelas, true, nil
+	}
+	// Continue numbering only for a meeting the santri actually attended the
+	// roster of (an absensi row exists). Otherwise Sync would bill past meetings
+	// they missed on cuti/nonaktif once they are aktif again.
+	if _, err := s.querier.GetAbsensiByPertemuanAndSantri(ctx, queries.GetAbsensiByPertemuanAndSantriParams{
+		PertemuanID: pertemuanID,
+		SantriID:    santriID,
+	}); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	maxBulan, err := s.querier.GetMaxBulanKeSantri(ctx, santriID)
+	if err != nil {
+		return 0, false, err
+	}
+	return maxBulan + 1, true, nil
 }
 
 func (s *TagihanService) Sync() error {

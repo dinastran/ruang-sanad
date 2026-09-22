@@ -56,6 +56,10 @@ func (s *PertemuanService) MulaiPertemuan(kelasID, userID int64, req models.Mula
 	if err != nil {
 		return nil, err
 	}
+	nextLevelKe, err := querier.GetNextPertemuanLevelKe(ctx, kelasID)
+	if err != nil {
+		return nil, err
+	}
 
 	now := time.Now()
 	jamMulai := req.JamMulai
@@ -91,12 +95,13 @@ func (s *PertemuanService) MulaiPertemuan(kelasID, userID int64, req models.Mula
 	}
 
 	return &models.PertemuanResponse{
-		ID:          id,
-		KelasID:     kelasID,
-		PertemuanKe: nextKe,
-		Tanggal:     now.Format("2006-01-02"),
-		JamMulai:    jamMulai,
-		Status:      "berlangsung",
+		ID:               id,
+		KelasID:          kelasID,
+		PertemuanKe:      nextKe,
+		PertemuanLevelKe: nextLevelKe,
+		Tanggal:          now.Format("2006-01-02"),
+		JamMulai:         jamMulai,
+		Status:           "berlangsung",
 	}, nil
 }
 
@@ -111,11 +116,48 @@ func (s *PertemuanService) GetActivePertemuan(kelasID int64) (*models.PertemuanR
 	return mapPertemuanToResponse(pertemuan), nil
 }
 
-func (s *PertemuanService) SelesaiPertemuan(pertemuanID, kelasID int64, req models.SelesaiPertemuanRequest, userID int64) error {
-	if strings.TrimSpace(req.Materi) == "" {
-		return fmt.Errorf("materi wajib diisi")
+func (s *PertemuanService) GetLastCompletedAbsensi(kelasID int64) (*models.PertemuanResponse, []models.AbsensiResponse, error) {
+	pertemuan, err := s.querier.GetLastPertemuanByKelas(context.Background(), kelasID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, []models.AbsensiResponse{}, nil
+	}
+	if err != nil {
+		return nil, nil, err
 	}
 
+	rows, err := s.querier.GetAbsensiByPertemuan(context.Background(), pertemuan.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	absensi := make([]models.AbsensiResponse, 0, len(rows))
+	for _, row := range rows {
+		absensi = append(absensi, models.AbsensiResponse{
+			ID:          row.ID,
+			PertemuanID: row.PertemuanID,
+			SantriID:    row.SantriID,
+			SantriNama:  row.SantriNama,
+			Status:      row.Status,
+			Catatan:     row.Catatan,
+			BatasMateri: row.BatasMateri,
+		})
+	}
+
+	return mapPertemuanToResponse(pertemuan), absensi, nil
+}
+
+func (s *PertemuanService) GetBatasMateriTerakhir(kelasID int64) (map[int64]string, error) {
+	rows, err := s.querier.GetBatasMateriTerakhirByKelas(context.Background(), kelasID)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[int64]string, len(rows))
+	for _, row := range rows {
+		result[row.SantriID] = row.BatasMateri
+	}
+	return result, nil
+}
+
+func (s *PertemuanService) SelesaiPertemuan(pertemuanID, kelasID int64, req models.SelesaiPertemuanRequest, userID int64) error {
 	ctx := context.Background()
 	tx, err := s.querier.BeginTx(ctx)
 	if err != nil {
@@ -134,6 +176,13 @@ func (s *PertemuanService) SelesaiPertemuan(pertemuanID, kelasID int64, req mode
 	pertemuan, err := querier.GetPertemuanByID(ctx, pertemuanID)
 	if err != nil {
 		return err
+	}
+	kelas, err := querier.GetKelasByID(ctx, kelasID)
+	if err != nil {
+		return err
+	}
+	if kelas.MateriIndividual != 1 && strings.TrimSpace(req.Materi) == "" {
+		return fmt.Errorf("materi umum wajib diisi")
 	}
 	santri, err := querier.GetSantriByKelasID(ctx, sql.NullInt64{Int64: kelasID, Valid: true})
 	if err != nil {
@@ -159,12 +208,20 @@ func (s *PertemuanService) SelesaiPertemuan(pertemuanID, kelasID int64, req mode
 		if _, ok := allowedStatus[item.Status]; !ok {
 			return fmt.Errorf("status absensi %q tidak valid", item.Status)
 		}
+		batasMateri := strings.TrimSpace(item.BatasMateri)
+		if kelas.MateriIndividual == 1 && (item.Status == "hadir" || item.Status == "telat") && batasMateri == "" {
+			return fmt.Errorf("batas materi wajib diisi untuk santri yang %s", item.Status)
+		}
+		if item.Status != "hadir" && item.Status != "telat" {
+			batasMateri = ""
+		}
 		seen[item.SantriID] = struct{}{}
 		if err := querier.CreateOrUpdateAbsensi(ctx, queries.CreateOrUpdateAbsensiParams{
 			PertemuanID: pertemuanID,
 			SantriID:    item.SantriID,
 			Status:      item.Status,
 			Catatan:     item.Catatan,
+			BatasMateri: batasMateri,
 			DibuatOleh:  sql.NullInt64{Int64: userID, Valid: true},
 		}); err != nil {
 			return fmt.Errorf("gagal menyimpan absensi santri %d: %w", item.SantriID, err)
@@ -218,6 +275,7 @@ func (s *PertemuanService) GetPertemuanByID(pertemuanID, kelasID int64) (*models
 			SantriNama:  a.SantriNama,
 			Status:      a.Status,
 			Catatan:     a.Catatan,
+			BatasMateri: a.BatasMateri,
 		})
 	}
 
@@ -284,9 +342,11 @@ func (s *PertemuanService) GetRekapAbsensi(kelasID int64) ([]models.SantriGuruRe
 	pertemuan := make([]models.PertemuanResponse, 0, len(pertemuanRows))
 	for _, pr := range pertemuanRows {
 		pertemuan = append(pertemuan, models.PertemuanResponse{
-			ID:          pr.ID,
-			PertemuanKe: pr.PertemuanKe,
-			Tanggal:     pr.Tanggal.Format("2006-01-02"),
+			ID:               pr.ID,
+			PertemuanKe:      pr.PertemuanKe,
+			PertemuanLevelKe: pr.PertemuanLevelKe,
+			LevelNama:        pr.LevelNama,
+			Tanggal:          pr.Tanggal.Format("2006-01-02"),
 		})
 	}
 
@@ -297,7 +357,7 @@ func (s *PertemuanService) GetRekapAbsensi(kelasID int64) ([]models.SantriGuruRe
 			return nil, nil, nil, err
 		}
 		for _, a := range rows {
-			absensi[fmt.Sprintf("%d:%d", a.SantriID, p.ID)] = models.AbsensiResponse{ID: a.ID, PertemuanID: p.ID, SantriID: a.SantriID, Status: a.Status, Catatan: a.Catatan}
+			absensi[fmt.Sprintf("%d:%d", a.SantriID, p.ID)] = models.AbsensiResponse{ID: a.ID, PertemuanID: p.ID, SantriID: a.SantriID, Status: a.Status, Catatan: a.Catatan, BatasMateri: a.BatasMateri}
 		}
 	}
 
@@ -334,7 +394,13 @@ func (s *PertemuanService) GetNextPertemuanKe(kelasID int64) (int64, error) {
 	return s.querier.GetNextPertemuanKe(context.Background(), kelasID)
 }
 
-func (s *PertemuanService) EditAbsensi(kelasID, absensiID int64, status, catatan string) error {
+// GetNextPertemuanLevelKe returns the next meeting number within the class's
+// current level, which is what guru see after a level change.
+func (s *PertemuanService) GetNextPertemuanLevelKe(kelasID int64) (int64, error) {
+	return s.querier.GetNextPertemuanLevelKe(context.Background(), kelasID)
+}
+
+func (s *PertemuanService) EditAbsensi(kelasID, absensiID int64, status, catatan, batasMateri string) error {
 	absensi, err := s.querier.GetAbsensiByID(context.Background(), absensiID)
 	if err != nil {
 		return err
@@ -346,10 +412,22 @@ func (s *PertemuanService) EditAbsensi(kelasID, absensiID int64, status, catatan
 	if pertemuan.KelasID != kelasID {
 		return fmt.Errorf("absensi tidak ditemukan di kelas ini")
 	}
+	kelas, err := s.querier.GetKelasByID(context.Background(), kelasID)
+	if err != nil {
+		return err
+	}
+	batasMateri = strings.TrimSpace(batasMateri)
+	if kelas.MateriIndividual == 1 && (status == "hadir" || status == "telat") && batasMateri == "" {
+		return fmt.Errorf("batas materi wajib diisi untuk santri yang %s", status)
+	}
+	if status != "hadir" && status != "telat" {
+		batasMateri = ""
+	}
 	return s.querier.UpdateAbsensi(context.Background(), queries.UpdateAbsensiParams{
-		Status:  status,
-		Catatan: catatan,
-		ID:      absensiID,
+		Status:      status,
+		Catatan:     catatan,
+		BatasMateri: batasMateri,
+		ID:          absensiID,
 	})
 }
 
@@ -358,6 +436,8 @@ func mapPertemuanToResponse(p queries.Pertemuan) *models.PertemuanResponse {
 		ID:               p.ID,
 		KelasID:          p.KelasID,
 		PertemuanKe:      p.PertemuanKe,
+		PertemuanLevelKe: p.PertemuanLevelKe,
+		LevelNama:        p.LevelNama,
 		Tanggal:          p.Tanggal.Format("2006-01-02"),
 		JamMulai:         p.JamMulai,
 		JamSelesai:       p.JamSelesai,

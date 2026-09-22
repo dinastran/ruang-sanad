@@ -13,27 +13,30 @@ import (
 )
 
 type Handlers struct {
-	Public                   *handlers.PublicHandler
-	Auth                     *handlers.AuthHandler
-	App                      *handlers.AppHandler
-	Upload                   *handlers.UploadHandler
-	PasswordReset            *handlers.PasswordResetHandler
-	Santri                   *handlers.SantriHandler
-	Kelas                    *handlers.KelasHandler
-	Master                   *handlers.MasterHandler
-	Import                   *handlers.ImportHandler
-	Laporan                  *handlers.LaporanHandler
-	Admin                    *handlers.AdminHandler
-	Dashboard                *handlers.DashboardHandler
-	Guru                     *handlers.GuruHandler
-	Pertemuan                *handlers.PertemuanHandler
-	JadwalPertemuan          *handlers.JadwalPertemuanHandler
-	Riayah                   *handlers.RiayahHandler
-	KoordinatorGuru          *handlers.KoordinatorGuruHandler
-	KoordinatorGuruDirectory *handlers.KoordinatorGuruDirectoryHandler
-	KoordinatorFeatures      *handlers.KoordinatorFeaturesHandler
-	TSI                      *handlers.TSIHandler
-	Tagihan                  *handlers.TagihanHandler
+	Public                      *handlers.PublicHandler
+	Auth                        *handlers.AuthHandler
+	App                         *handlers.AppHandler
+	Upload                      *handlers.UploadHandler
+	PasswordReset               *handlers.PasswordResetHandler
+	Santri                      *handlers.SantriHandler
+	Kelas                       *handlers.KelasHandler
+	Master                      *handlers.MasterHandler
+	Import                      *handlers.ImportHandler
+	Laporan                     *handlers.LaporanHandler
+	Admin                       *handlers.AdminHandler
+	Dashboard                   *handlers.DashboardHandler
+	Guru                        *handlers.GuruHandler
+	Pertemuan                   *handlers.PertemuanHandler
+	JadwalPertemuan             *handlers.JadwalPertemuanHandler
+	Riayah                      *handlers.RiayahHandler
+	KoordinatorGuru             *handlers.KoordinatorGuruHandler
+	KoordinatorGuruDirectory    *handlers.KoordinatorGuruDirectoryHandler
+	KoordinatorMonitoring       *handlers.KoordinatorMonitoringHandler
+	KoordinatorFeatures         *handlers.KoordinatorFeaturesHandler
+	KoordinatorAttendanceExport *handlers.KoordinatorAttendanceExportHandler
+	Notifications               *handlers.NotificationHandler
+	TSI                         *handlers.TSIHandler
+	Tagihan                     *handlers.TagihanHandler
 }
 
 func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, mailerService *services.MailerService, csrfMiddleware *middlewares.CSRFMiddleware) {
@@ -101,6 +104,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Get("/profile", h.App.Profile)
 	protected.Put("/profile", h.App.UpdateProfile)
 	protected.Put("/profile/password", h.App.UpdatePassword)
+	protected.Put("/notifications/:id/read", h.Notifications.MarkRead)
 
 	// Upload
 	protected.Get("/upload", h.App.UploadTest)
@@ -143,7 +147,12 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Get("/kelas/:id", akRole, h.Kelas.Show)
 	protected.Put("/kelas/:id/guru", akRole, h.Kelas.AssignGuru)
 	protected.Put("/kelas/:id/pertemuan-terakhir", akRole, h.Kelas.SetPertemuanTerakhir)
+	protected.Put("/kelas/:id/santri/:santriId/status", akRole, h.Kelas.UbahStatusSantri)
 	protected.Put("/kelas/:id/status", akRole, h.Kelas.SetAktif)
+	protected.Put("/kelas/:id/materi-individual", akRole, h.Kelas.SetMateriIndividual)
+	protected.Put("/kelas/:id/level", akRole, h.Kelas.GantiLevel)
+	protected.Put("/kelas/:id/jadwal", akRole, h.Kelas.GantiJadwal)
+	protected.Post("/kelas/:id/ganti-level-santri", akRole, h.Kelas.GantiLevelSantri)
 	protected.Delete("/kelas/:id", akRole, h.Kelas.Delete)
 
 	// Keuangan routes (keuangan + super_admin)
@@ -223,6 +232,14 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/koordinator-guru/guru/:id/link", superAdminRole, h.KoordinatorGuruDirectory.LinkUser)
 	protected.Delete("/koordinator-guru/guru/:id/link", superAdminRole, h.KoordinatorGuruDirectory.Unlink)
 
+	// Koordinator Guru — monitoring operasional kelas
+	protected.Get("/koordinator-guru/monitoring-kelas", koordinatorRole, h.KoordinatorMonitoring.Index)
+	protected.Post("/koordinator-guru/monitoring-kelas/:kelasID/schedules/:scheduleID/reminder", koordinatorRole, h.KoordinatorMonitoring.SendReminder)
+	protected.Post("/koordinator-guru/monitoring-kelas/:kelasID/schedules/:scheduleID/notes", koordinatorRole, h.KoordinatorMonitoring.AddNote)
+	protected.Post("/koordinator-guru/monitoring-kelas/:kelasID/schedules/:scheduleID/reschedule", koordinatorRole, h.KoordinatorMonitoring.Reschedule)
+	protected.Post("/koordinator-guru/monitoring-kelas/:kelasID/schedules/:scheduleID/substitute", koordinatorRole, h.KoordinatorMonitoring.AssignSubstitute)
+	protected.Post("/koordinator-guru/monitoring-kelas/:kelasID/schedules/:scheduleID/cancel", koordinatorRole, h.KoordinatorMonitoring.Cancel)
+
 	// Koordinator Guru — pembinaan
 	protected.Get("/koordinator-guru/pembinaan", koordinatorRole, h.KoordinatorFeatures.PembinaanList)
 	protected.Post("/koordinator-guru/pembinaan", koordinatorRole, h.KoordinatorFeatures.PembinaanCreate)
@@ -230,6 +247,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Delete("/koordinator-guru/pembinaan/:id", koordinatorRole, h.KoordinatorFeatures.PembinaanDelete)
 	protected.Get("/koordinator-guru/pembinaan/:id/absen", koordinatorRole, h.KoordinatorFeatures.PembinaanAbsenPage)
 	protected.Post("/koordinator-guru/pembinaan/:id/absen", koordinatorRole, h.KoordinatorFeatures.PembinaanAbsenSave)
+	protected.Get("/koordinator-guru/pembinaan/:id/absen/export", koordinatorRole, h.KoordinatorAttendanceExport.PembinaanExcel)
 
 	// Koordinator Guru — rapat
 	protected.Get("/koordinator-guru/rapat", koordinatorRole, h.KoordinatorFeatures.RapatList)
@@ -238,6 +256,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Delete("/koordinator-guru/rapat/:id", koordinatorRole, h.KoordinatorFeatures.RapatDelete)
 	protected.Get("/koordinator-guru/rapat/:id/absen", koordinatorRole, h.KoordinatorFeatures.RapatAbsenPage)
 	protected.Post("/koordinator-guru/rapat/:id/absen", koordinatorRole, h.KoordinatorFeatures.RapatAbsenSave)
+	protected.Get("/koordinator-guru/rapat/:id/absen/export", koordinatorRole, h.KoordinatorAttendanceExport.RapatExcel)
 	protected.Get("/koordinator-guru/riwayat-absensi", koordinatorRole, h.KoordinatorFeatures.RiwayatAbsensi)
 
 	// Koordinator Guru — kunjungan kelas

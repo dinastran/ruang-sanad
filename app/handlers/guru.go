@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -10,21 +11,26 @@ import (
 )
 
 type GuruHandler struct {
-	guruService      *services.GuruService
-	pertemuanService *services.PertemuanService
-	riayahService    *services.RiayahService
-	store            *session.Store
-	inertiaService   *services.InertiaService
+	guruService         *services.GuruService
+	pertemuanService    *services.PertemuanService
+	riayahService       *services.RiayahService
+	notificationService *services.NotificationService
+	store               *session.Store
+	inertiaService      *services.InertiaService
 }
 
-func NewGuruHandler(guruService *services.GuruService, pertemuanService *services.PertemuanService, riayahService *services.RiayahService, store *session.Store, inertiaService *services.InertiaService) *GuruHandler {
-	return &GuruHandler{
+func NewGuruHandler(guruService *services.GuruService, pertemuanService *services.PertemuanService, riayahService *services.RiayahService, store *session.Store, inertiaService *services.InertiaService, notificationServices ...*services.NotificationService) *GuruHandler {
+	h := &GuruHandler{
 		guruService:      guruService,
 		pertemuanService: pertemuanService,
 		riayahService:    riayahService,
 		store:            store,
 		inertiaService:   inertiaService,
 	}
+	if len(notificationServices) > 0 {
+		h.notificationService = notificationServices[0]
+	}
+	return h
 }
 
 func (h *GuruHandler) Dashboard(c *fiber.Ctx) error {
@@ -34,14 +40,17 @@ func (h *GuruHandler) Dashboard(c *fiber.Ctx) error {
 
 	guruID, err := viewerGuruIDForRequest(c, h.guruService, userID, user)
 	if err != nil {
+		slog.Error("guru dashboard viewer lookup failed", "user_id", userID, "error", err)
 		h.store.Flash(c, "error", "Data guru tidak ditemukan")
-		return h.inertiaService.Redirect(c, "/app")
+		// /app routes teachers back here; use a destination independent of guru data.
+		return h.inertiaService.Redirect(c, "/app/profile")
 	}
 
 	dashboard, err := h.guruService.GetDashboardForViewer(guruID)
 	if err != nil {
+		slog.Error("guru dashboard load failed", "user_id", userID, "error", err)
 		h.store.Flash(c, "error", "Gagal memuat dashboard")
-		return h.inertiaService.Redirect(c, "/app")
+		return h.inertiaService.Redirect(c, "/app/profile")
 	}
 
 	var tilawah interface{}
@@ -49,10 +58,19 @@ func (h *GuruHandler) Dashboard(c *fiber.Ctx) error {
 		tilawah, _ = h.guruService.GetTilawahStatus(*guruID)
 	}
 
+	// Never send null: the dashboard reads notifications.length directly.
+	notifications := []models.NotificationResponse{}
+	if h.notificationService != nil {
+		if list, err := h.notificationService.ListForUser(userID); err == nil {
+			notifications = list
+		}
+	}
+
 	return h.inertiaService.Render(c, "guru/Dashboard", fiber.Map{
-		"user":      user,
-		"dashboard": dashboard,
-		"tilawah":   tilawah,
+		"user":          user,
+		"dashboard":     dashboard,
+		"tilawah":       tilawah,
+		"notifications": notifications,
 	})
 }
 
@@ -135,12 +153,19 @@ func (h *GuruHandler) DetailKelas(c *fiber.Ctx) error {
 		h.store.Flash(c, "error", "Gagal memuat pertemuan aktif")
 		return h.inertiaService.Redirect(c, "/app/guru/kelas")
 	}
+	lastPertemuan, lastAbsensi, err := h.pertemuanService.GetLastCompletedAbsensi(kelasID)
+	if err != nil {
+		h.store.Flash(c, "error", "Gagal memuat absensi pertemuan terakhir")
+		return h.inertiaService.Redirect(c, "/app/guru/kelas")
+	}
 
 	return h.inertiaService.Render(c, "guru/KelasDetail", fiber.Map{
 		"user":             user,
 		"kelas":            kelas,
 		"santri":           santri,
 		"active_pertemuan": activePertemuan,
+		"last_pertemuan":   lastPertemuan,
+		"last_absensi":     lastAbsensi,
 	})
 }
 

@@ -128,6 +128,8 @@
 			options: [
 				{ value: "aktif", label: "Aktif" },
 				{ value: "perlu_dilengkapi", label: "Perlu Dilengkapi" },
+				{ value: "cuti", label: "Cuti" },
+				{ value: "nonaktif", label: "Nonaktif" },
 				{ value: "tidak_lanjut", label: "Tidak Lanjut" },
 			],
 		},

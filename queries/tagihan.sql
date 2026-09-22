@@ -3,7 +3,16 @@ INSERT INTO tagihan (
     santri_id, kelas_id, pertemuan_id, bulan_ke, pertemuan_ke, nominal,
     tanggal_tagih, jatuh_tempo, angkatan_kelas
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(santri_id, bulan_ke) DO NOTHING;
+ON CONFLICT DO NOTHING;
+
+-- name: CountTagihanSantriPertemuan :one
+SELECT COUNT(*) FROM tagihan WHERE santri_id = ? AND pertemuan_id = ?;
+
+-- name: CountTagihanSantriBulan :one
+SELECT COUNT(*) FROM tagihan WHERE santri_id = ? AND bulan_ke = ?;
+
+-- name: GetMaxBulanKeSantri :one
+SELECT CAST(COALESCE(MAX(bulan_ke), 0) AS INTEGER) FROM tagihan WHERE santri_id = ?;
 
 -- name: GetTagihanByID :one
 SELECT t.*, s.nama AS santri_nama, s.id_mahasantri, s.no_wa, s.angkatan,

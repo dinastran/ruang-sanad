@@ -41,6 +41,7 @@ const PAGE_TITLES: Record<string, string> = {
 	"guru/RekapAbsensi": "Rekap Absensi",
 	"guru/TSISaya": "Nilai TSI",
 	"koordinator/Dashboard": "Dashboard Koordinator",
+	"koordinator/MonitoringKelas": "Monitoring Kelas",
 	"koordinator/GuruList": "Data Guru",
 	"koordinator/GuruDetail": "Detail Guru",
 	"koordinator/Pembinaan": "Pembinaan",
@@ -86,6 +87,7 @@ const PAGE_DESC: Record<string, string> = {
 	"guru/RekapAbsensi": "Rekap absensi santri per kelas.",
 	"guru/TSISaya": "Nilai TSI santri.",
 	"koordinator/Dashboard": "Pengelolaan guru, penilaian TSI, dan monitoring aktivitas.",
+	"koordinator/MonitoringKelas": "Pantau pelaksanaan kelas, kehadiran, dan tindak lanjut sesi belajar.",
 	"koordinator/RiwayatAbsensi": "Rekap kehadiran guru pada pembinaan, rapat, dan kunjungan kelas.",
 };
 

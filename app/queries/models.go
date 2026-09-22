@@ -18,6 +18,7 @@ type Absensi struct {
 	DibuatOleh  sql.NullInt64
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	BatasMateri string
 }
 
 type Angkatan struct {
@@ -37,6 +38,14 @@ type CatatanRiayah struct {
 	Catatan      string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+}
+
+type ClassMonitoringNote struct {
+	ID                int64
+	JadwalPertemuanID int64
+	Note              string
+	CreatedBy         sql.NullInt64
+	CreatedAt         time.Time
 }
 
 type Guru struct {
@@ -83,21 +92,22 @@ type Jadwal struct {
 }
 
 type JadwalPertemuan struct {
-	ID               int64
-	KelasID          int64
-	Tanggal          time.Time
-	JamMulai         string
-	Catatan          string
-	IsReschedule     int64
-	JadwalSemula     string
-	AlasanReschedule string
-	GuruPenggantiID  sql.NullInt64
-	AlasanBadal      string
-	Status           string
-	PertemuanID      sql.NullInt64
-	DibuatOleh       sql.NullInt64
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID                 int64
+	KelasID            int64
+	Tanggal            time.Time
+	JamMulai           string
+	Catatan            string
+	IsReschedule       int64
+	JadwalSemula       string
+	AlasanReschedule   string
+	GuruPenggantiID    sql.NullInt64
+	AlasanBadal        string
+	Status             string
+	PertemuanID        sql.NullInt64
+	DibuatOleh         sql.NullInt64
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	JadwalKelasBerubah int64
 }
 
 type KalamBersanad struct {
@@ -118,22 +128,37 @@ type KalamShareLog struct {
 }
 
 type Kela struct {
-	ID                int64
-	KunciKelas        string
-	Angkatan          string
-	Tipe              string
-	JenisKelamin      string
-	Level             string
-	Frekuensi         string
-	Jadwal            string
-	SubIndex          int64
-	NamaKelas         string
-	GuruID            sql.NullInt64
-	Kapasitas         int64
-	JumlahSantri      int64
-	CreatedAt         time.Time
-	IsAktif           int64
-	PertemuanTerakhir int64
+	ID                 int64
+	KunciKelas         string
+	Angkatan           string
+	Tipe               string
+	JenisKelamin       string
+	Level              string
+	Frekuensi          string
+	Jadwal             string
+	SubIndex           int64
+	NamaKelas          string
+	GuruID             sql.NullInt64
+	Kapasitas          int64
+	JumlahSantri       int64
+	CreatedAt          time.Time
+	IsAktif            int64
+	PertemuanTerakhir  int64
+	MateriIndividual   int64
+	LevelPertemuanAwal int64
+}
+
+type KelasPerubahan struct {
+	ID            int64
+	KelasID       sql.NullInt64
+	SantriID      sql.NullInt64
+	KelasTujuanID sql.NullInt64
+	Jenis         string
+	NilaiLama     string
+	NilaiBaru     string
+	PertemuanKe   int64
+	DibuatOleh    sql.NullInt64
+	CreatedAt     time.Time
 }
 
 type KodeKela struct {
@@ -163,6 +188,20 @@ type Level struct {
 	Kode   string
 	Nama   string
 	Urutan int64
+}
+
+type Notification struct {
+	ID            int64
+	UserID        int64
+	Type          string
+	Title         string
+	Message       string
+	ActionUrl     string
+	ReferenceType string
+	ReferenceID   sql.NullInt64
+	ReadAt        sql.NullTime
+	CreatedBy     sql.NullInt64
+	CreatedAt     time.Time
 }
 
 type PasswordReset struct {
@@ -217,6 +256,8 @@ type Pertemuan struct {
 	DibuatOleh       sql.NullInt64
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+	LevelNama        string
+	PertemuanLevelKe int64
 }
 
 type RapatAbsen struct {
@@ -278,6 +319,31 @@ type Santri struct {
 	Email                 string
 	PertemuanAwal         int64
 	AngkatanKelas         string
+	StatusAlasan          string
+	CutiMulai             string
+	CutiSelesai           string
+}
+
+type SantriStatusLog struct {
+	ID          int64
+	SantriID    int64
+	KelasID     sql.NullInt64
+	StatusLama  string
+	StatusBaru  string
+	Alasan      string
+	CutiMulai   string
+	CutiSelesai string
+	DibuatOleh  sql.NullInt64
+	CreatedAt   time.Time
+}
+
+type ScheduleActivityLog struct {
+	ID                int64
+	JadwalPertemuanID int64
+	Action            string
+	Details           string
+	CreatedBy         sql.NullInt64
+	CreatedAt         time.Time
 }
 
 type Session struct {

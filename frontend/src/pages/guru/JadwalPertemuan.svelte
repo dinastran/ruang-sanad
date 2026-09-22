@@ -165,8 +165,9 @@
 						</div>
 
 						{#if item.catatan}<p class="mt-4 text-sm text-neutral-600 dark:text-neutral-400">{item.catatan}</p>{/if}
-						{#if item.is_reschedule || item.guru_pengganti_id}
+						{#if item.is_reschedule || item.guru_pengganti_id || item.jadwal_kelas_berubah}
 							<div class="mt-3 flex flex-wrap gap-2 text-xs">
+								{#if item.jadwal_kelas_berubah}<span class="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-amber-700 dark:text-amber-400" title="Jadwal rutin kelas sudah diganti Admin Kelas setelah sesi ini dibuat. Jadwalkan ulang bila perlu."><CalendarClock class="h-3.5 w-3.5" /> Jadwal kelas berubah</span>{/if}
 								{#if item.is_reschedule}<span class="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-blue-700 dark:text-blue-400"><RotateCcw class="h-3.5 w-3.5" /> Dari {item.jadwal_semula}</span>{/if}
 								{#if item.guru_pengganti_id}<span class="inline-flex items-center gap-1 rounded-full bg-secondary-500/10 px-2.5 py-1 text-secondary-700 dark:text-secondary-400"><UserRoundCheck class="h-3.5 w-3.5" /> Badal: {item.guru_pengganti_nama}</span>{/if}
 							</div>

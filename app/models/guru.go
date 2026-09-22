@@ -86,6 +86,7 @@ type KelasGuruResponse struct {
 	PertemuanTerakhir string `json:"pertemuan_terakhir"`
 	TanggalTerakhir   string `json:"tanggal_terakhir"`
 	MateriTerakhir    string `json:"materi_terakhir"`
+	MateriIndividual  bool   `json:"materi_individual"`
 }
 
 type SantriGuruResponse struct {
@@ -103,12 +104,15 @@ type SantriGuruResponse struct {
 	TotalAlpa            int64   `json:"total_alpa"`
 	TotalTelat           int64   `json:"total_telat"`
 	TanggalHadirTerakhir string  `json:"tanggal_hadir_terakhir"`
+	BatasMateriTerakhir  string  `json:"batas_materi_terakhir"`
 }
 
 type PertemuanResponse struct {
 	ID               int64  `json:"id"`
 	KelasID          int64  `json:"kelas_id"`
 	PertemuanKe      int64  `json:"pertemuan_ke"`
+	PertemuanLevelKe int64  `json:"pertemuan_level_ke"`
+	LevelNama        string `json:"level_nama"`
 	Tanggal          string `json:"tanggal"`
 	JamMulai         string `json:"jam_mulai"`
 	JamSelesai       string `json:"jam_selesai"`
@@ -124,24 +128,25 @@ type PertemuanResponse struct {
 }
 
 type JadwalPertemuanResponse struct {
-	ID                int64  `json:"id"`
-	KelasID           int64  `json:"kelas_id"`
-	KelasNama         string `json:"kelas_nama"`
-	GuruUtamaID       *int64 `json:"guru_utama_id,omitempty"`
-	GuruUtamaNama     string `json:"guru_utama_nama"`
-	Tanggal           string `json:"tanggal"`
-	JamMulai          string `json:"jam_mulai"`
-	Catatan           string `json:"catatan"`
-	IsReschedule      bool   `json:"is_reschedule"`
-	JadwalSemula      string `json:"jadwal_semula"`
-	AlasanReschedule  string `json:"alasan_reschedule"`
-	GuruPenggantiID   *int64 `json:"guru_pengganti_id,omitempty"`
-	GuruPenggantiNama string `json:"guru_pengganti_nama"`
-	AlasanBadal       string `json:"alasan_badal"`
-	Status            string `json:"status"`
-	PertemuanID       *int64 `json:"pertemuan_id,omitempty"`
-	CanManage         bool   `json:"can_manage"`
-	CanStart          bool   `json:"can_start"`
+	ID                 int64  `json:"id"`
+	KelasID            int64  `json:"kelas_id"`
+	KelasNama          string `json:"kelas_nama"`
+	GuruUtamaID        *int64 `json:"guru_utama_id,omitempty"`
+	GuruUtamaNama      string `json:"guru_utama_nama"`
+	Tanggal            string `json:"tanggal"`
+	JamMulai           string `json:"jam_mulai"`
+	Catatan            string `json:"catatan"`
+	IsReschedule       bool   `json:"is_reschedule"`
+	JadwalSemula       string `json:"jadwal_semula"`
+	AlasanReschedule   string `json:"alasan_reschedule"`
+	GuruPenggantiID    *int64 `json:"guru_pengganti_id,omitempty"`
+	GuruPenggantiNama  string `json:"guru_pengganti_nama"`
+	AlasanBadal        string `json:"alasan_badal"`
+	JadwalKelasBerubah bool   `json:"jadwal_kelas_berubah"`
+	Status             string `json:"status"`
+	PertemuanID        *int64 `json:"pertemuan_id,omitempty"`
+	CanManage          bool   `json:"can_manage"`
+	CanStart           bool   `json:"can_start"`
 }
 
 type AbsensiResponse struct {
@@ -151,6 +156,7 @@ type AbsensiResponse struct {
 	SantriNama  string `json:"santri_nama"`
 	Status      string `json:"status"`
 	Catatan     string `json:"catatan"`
+	BatasMateri string `json:"batas_materi"`
 }
 
 type RiayahResponse struct {
@@ -173,9 +179,10 @@ type GuruDashboardResponse struct {
 }
 
 type MulaiPertemuanRequest struct {
-	JadwalID int64  `json:"jadwal_id"`
-	JamMulai string `json:"jam_mulai"`
-	Catatan  string `json:"catatan"`
+	JadwalID    int64  `json:"jadwal_id"`
+	JamMulai    string `json:"jam_mulai"`
+	Catatan     string `json:"catatan"`
+	BatasMateri string `json:"batas_materi"`
 }
 
 type BuatJadwalPertemuanRequest struct {
@@ -192,9 +199,10 @@ type SelesaiPertemuanRequest struct {
 }
 
 type AbsensiInput struct {
-	SantriID int64  `json:"santri_id"`
-	Status   string `json:"status"`
-	Catatan  string `json:"catatan"`
+	SantriID    int64  `json:"santri_id"`
+	Status      string `json:"status"`
+	Catatan     string `json:"catatan"`
+	BatasMateri string `json:"batas_materi"`
 }
 
 type RescheduleRequest struct {

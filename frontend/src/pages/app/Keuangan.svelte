@@ -4,7 +4,8 @@
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import StatusBadge from "@components/StatusBadge.svelte";
 	import FilterPanel from "@components/FilterPanel.svelte";
-	import type { User } from "@lib/types";
+	import { Toast } from "@lib/notifications/toast";
+	import type { Flash, User } from "@lib/types";
 	import { Wallet, Search, Save, ChevronLeft, ChevronRight } from "lucide-svelte";
 
 	interface MasterItem { id: number; kode?: string; nama?: string; keterangan?: string; }
@@ -28,6 +29,7 @@
 		page?: number;
 		limit?: number;
 		angkatan?: MasterItem[];
+		flash?: Flash;
 		success?: string;
 		error?: string;
 	}
@@ -39,8 +41,8 @@
 	let page = $derived(props.page ?? 1);
 	let limit = $derived(props.limit ?? 25);
 	let angkatan = $derived(props.angkatan ?? []);
-	let success = $derived(props.success);
-	let error = $derived(props.error);
+	let success = $derived(props.flash?.success ?? props.success);
+	let error = $derived(props.flash?.error ?? props.error);
 
 	let searchQuery = $state("");
 	let totalPages = $derived(Math.max(1, Math.ceil(total / limit)));
@@ -71,6 +73,10 @@
 		savingId = s.id;
 		router.put(`/app/santri/${s.id}/keuangan`, forms[s.id] ?? { infaq_terakhir: s.infaq_terakhir || "", keterangan_tidak_lanjut: s.keterangan_tidak_lanjut || "" }, {
 			preserveScroll: true,
+			onSuccess: (p) => {
+				const err = (p.props.flash as Flash | undefined)?.error;
+				if (err) Toast(err, "error");
+			},
 			onFinish: () => { savingId = null; },
 			onError: () => { savingId = null; },
 		});
@@ -108,6 +114,8 @@
 			label: "Status",
 			options: [
 				{ value: "aktif", label: "Aktif" },
+				{ value: "cuti", label: "Cuti" },
+				{ value: "nonaktif", label: "Nonaktif" },
 				{ value: "tidak_lanjut", label: "Tidak Lanjut" },
 			],
 		},

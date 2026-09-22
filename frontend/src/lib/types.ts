@@ -33,6 +33,7 @@ export interface GuruKelas {
 	pertemuan_terakhir?: string;
 	tanggal_terakhir?: string;
 	materi_terakhir?: string;
+	materi_individual?: boolean;
 }
 
 export interface SantriGuru {
@@ -50,17 +51,21 @@ export interface SantriGuru {
 	total_alpa: number;
 	total_telat: number;
 	tanggal_hadir_terakhir: string;
+	batas_materi_terakhir: string;
 }
 
 export interface PertemuanGuru {
 	id: number;
 	kelas_id: number;
 	pertemuan_ke: number;
+	pertemuan_level_ke?: number;
+	level_nama?: string;
 	tanggal: string;
 	jam_mulai: string;
 	jam_selesai: string;
 	materi: string;
 	catatan: string;
+	batas_materi: string;
 	is_reschedule: boolean;
 	jadwal_semula: string;
 	alasan_reschedule: string;
@@ -68,6 +73,15 @@ export interface PertemuanGuru {
 	guru_pengganti_id?: number;
 	alasan_badal: string;
 	status: string;
+}
+
+export interface AbsensiGuru {
+	id: number;
+	pertemuan_id: number;
+	santri_id: number;
+	santri_nama: string;
+	status: string;
+	catatan: string;
 }
 
 export interface JadwalPertemuanGuru {
@@ -85,6 +99,7 @@ export interface JadwalPertemuanGuru {
 	guru_pengganti_id?: number;
 	guru_pengganti_nama: string;
 	alasan_badal: string;
+	jadwal_kelas_berubah?: boolean;
 	status: string;
 	pertemuan_id?: number;
 	can_manage: boolean;
@@ -233,6 +248,102 @@ export interface TilawahStatus {
 export interface KelasSimple {
 	id: number;
 	nama_kelas: string;
+}
+
+export interface MonitoringKelasSummary {
+	total: number;
+	belum_mulai: number;
+	berlangsung: number;
+	selesai: number;
+	dibatalkan: number;
+	perlu_tindakan: number;
+}
+
+export interface MonitoringKelasAttendance {
+	santri_id: number;
+	santri_nama: string;
+	id_mahasantri: string;
+	attendance_status: string;
+	attendance_note: string;
+	batas_materi: string;
+}
+
+export interface MonitoringKelasNote {
+	id: number;
+	note: string;
+	author_name: string;
+	created_at: string;
+}
+
+export interface MonitoringKelasActivity {
+	id: number;
+	action: string;
+	details: string;
+	actor_name: string;
+	created_at: string;
+}
+
+export interface MonitoringKelasItem {
+	schedule_id: number;
+	tanpa_jadwal: boolean;
+	kelas_id: number;
+	nama_kelas: string;
+	angkatan: string;
+	level: string;
+	frekuensi: string;
+	jadwal_kelas: string;
+	materi_individual: boolean;
+	tanggal: string;
+	jam_mulai: string;
+	schedule_note: string;
+	status: "belum_mulai" | "berlangsung" | "selesai" | "dibatalkan" | "terlambat";
+	schedule_status: string;
+	is_reschedule: boolean;
+	jadwal_semula: string;
+	alasan_reschedule: string;
+	guru_utama_id?: number;
+	guru_utama_nama: string;
+	guru_pengganti_id?: number;
+	guru_pengganti_nama: string;
+	alasan_badal: string;
+	assigned_user_id?: number;
+	pertemuan_id?: number;
+	actual_start_time: string;
+	actual_end_time: string;
+	teacher_checked_in_at: string;
+	teacher_attendance: "belum_hadir" | "hadir" | "terlambat" | "tidak_berlaku";
+	student_attendance: "belum_tersedia" | "belum_lengkap" | "lengkap" | "tidak_berlaku";
+	active_student_count: number;
+	attendance_count: number;
+	materi: string;
+	meeting_note: string;
+	needs_action: boolean;
+	attendance: MonitoringKelasAttendance[];
+	notes: MonitoringKelasNote[];
+	activities: MonitoringKelasActivity[];
+}
+
+export interface MonitoringKelasData {
+	summary: MonitoringKelasSummary;
+	items: MonitoringKelasItem[];
+}
+
+export interface MonitoringKelasFilters {
+	StartDate: string;
+	EndDate: string;
+	GuruID: number;
+	KelasID: number;
+	Status: string;
+}
+
+export interface AppNotification {
+	id: number;
+	type: string;
+	title: string;
+	message: string;
+	action_url: string;
+	read: boolean;
+	created_at: string;
 }
 
 export interface TsiKriteriaNilai {

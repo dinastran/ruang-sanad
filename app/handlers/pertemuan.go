@@ -124,7 +124,7 @@ func (h *PertemuanHandler) FormMulai(c *fiber.Ctx) error {
 	if active != nil {
 		return h.inertiaService.Redirect(c, "/app/guru/kelas/"+c.Params("id")+"/pertemuan/"+strconv.FormatInt(active.ID, 10)+"/selesai")
 	}
-	nextPertemuanKe, err := h.pertemuanService.GetNextPertemuanKe(kelasID)
+	nextPertemuanKe, err := h.pertemuanService.GetNextPertemuanLevelKe(kelasID)
 	if err != nil {
 		h.store.Flash(c, "error", "Gagal memuat nomor pertemuan")
 		return h.inertiaService.Redirect(c, "/app/guru/kelas/"+c.Params("id"))
@@ -199,13 +199,19 @@ func (h *PertemuanHandler) FormSelesai(c *fiber.Ctx) error {
 		h.store.Flash(c, "error", "Pertemuan ini sudah selesai")
 		return h.inertiaService.Redirect(c, "/app/guru/kelas/"+c.Params("id"))
 	}
+	batasMateriTerakhir, err := h.pertemuanService.GetBatasMateriTerakhir(kelasID)
+	if err != nil {
+		h.store.Flash(c, "error", "Gagal memuat batas materi terakhir")
+		return h.inertiaService.Redirect(c, "/app/guru/kelas/"+c.Params("id"))
+	}
 
 	return h.inertiaService.Render(c, "guru/PertemuanSelesai", fiber.Map{
-		"user":             user,
-		"kelas":            kelas,
-		"santri":           santri,
-		"pertemuan":        pertemuan,
-		"can_manage_class": h.canManageClass(c, kelasID),
+		"user":                  user,
+		"kelas":                 kelas,
+		"santri":                santri,
+		"pertemuan":             pertemuan,
+		"can_manage_class":      h.canManageClass(c, kelasID),
+		"batas_materi_terakhir": batasMateriTerakhir,
 	})
 }
 
@@ -230,6 +236,11 @@ func (h *PertemuanHandler) Detail(c *fiber.Ctx) error {
 		h.store.Flash(c, "error", "Pertemuan ini sudah selesai")
 		return h.inertiaService.Redirect(c, "/app/guru/kelas/"+c.Params("id"))
 	}
+	batasMateriTerakhir, err := h.pertemuanService.GetBatasMateriTerakhir(kelasID)
+	if err != nil {
+		h.store.Flash(c, "error", "Gagal memuat batas materi terakhir")
+		return h.inertiaService.Redirect(c, "/app/guru/kelas/"+c.Params("id"))
+	}
 
 	kelas, santri, err := h.guruService.GetDetailKelasForViewer(nil, kelasID)
 	if err != nil {
@@ -238,11 +249,12 @@ func (h *PertemuanHandler) Detail(c *fiber.Ctx) error {
 	}
 
 	return h.inertiaService.Render(c, "guru/PertemuanSelesai", fiber.Map{
-		"user":             user,
-		"kelas":            kelas,
-		"santri":           santri,
-		"pertemuan":        pertemuan,
-		"can_manage_class": h.canManageClass(c, kelasID),
+		"user":                  user,
+		"kelas":                 kelas,
+		"santri":                santri,
+		"pertemuan":             pertemuan,
+		"can_manage_class":      h.canManageClass(c, kelasID),
+		"batas_materi_terakhir": batasMateriTerakhir,
 	})
 }
 
@@ -320,14 +332,15 @@ func (h *PertemuanHandler) EditAbsensi(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Status  string `json:"status"`
-		Catatan string `json:"catatan"`
+		Status      string `json:"status"`
+		Catatan     string `json:"catatan"`
+		BatasMateri string `json:"batas_materi"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Data tidak valid"})
 	}
 
-	if err := h.pertemuanService.EditAbsensi(kelasID, absensiID, req.Status, req.Catatan); err != nil {
+	if err := h.pertemuanService.EditAbsensi(kelasID, absensiID, req.Status, req.Catatan, req.BatasMateri); err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 

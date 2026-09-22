@@ -33,21 +33,22 @@ func (s *JadwalPertemuanService) List(guruID *int64) ([]models.JadwalPertemuanRe
 	for _, row := range rows {
 		canManage := row.Status == "dijadwalkan" && (guruID == nil || (row.GuruUtamaID.Valid && row.GuruUtamaID.Int64 == *guruID))
 		item := models.JadwalPertemuanResponse{
-			ID:                row.ID,
-			KelasID:           row.KelasID,
-			KelasNama:         row.NamaKelas,
-			GuruUtamaNama:     row.GuruUtamaNama,
-			Tanggal:           row.Tanggal.Format("2006-01-02"),
-			JamMulai:          row.JamMulai,
-			Catatan:           row.Catatan,
-			IsReschedule:      row.IsReschedule == 1,
-			JadwalSemula:      row.JadwalSemula,
-			AlasanReschedule:  row.AlasanReschedule,
-			GuruPenggantiNama: row.GuruPenggantiNama,
-			AlasanBadal:       row.AlasanBadal,
-			Status:            row.Status,
-			CanManage:         canManage,
-			CanStart:          row.Status == "dijadwalkan",
+			ID:                 row.ID,
+			KelasID:            row.KelasID,
+			KelasNama:          row.NamaKelas,
+			GuruUtamaNama:      row.GuruUtamaNama,
+			Tanggal:            row.Tanggal.Format("2006-01-02"),
+			JamMulai:           row.JamMulai,
+			Catatan:            row.Catatan,
+			IsReschedule:       row.IsReschedule == 1,
+			JadwalSemula:       row.JadwalSemula,
+			AlasanReschedule:   row.AlasanReschedule,
+			JadwalKelasBerubah: row.JadwalKelasBerubah == 1,
+			GuruPenggantiNama:  row.GuruPenggantiNama,
+			AlasanBadal:        row.AlasanBadal,
+			Status:             row.Status,
+			CanManage:          canManage,
+			CanStart:           row.Status == "dijadwalkan",
 		}
 		if row.GuruPenggantiID.Valid {
 			item.GuruPenggantiID = &row.GuruPenggantiID.Int64
@@ -75,19 +76,20 @@ func (s *JadwalPertemuanService) ListDue(kelasID int64) ([]models.JadwalPertemua
 	out := make([]models.JadwalPertemuanResponse, 0, len(rows))
 	for _, row := range rows {
 		item := models.JadwalPertemuanResponse{
-			ID:                row.ID,
-			KelasID:           row.KelasID,
-			Tanggal:           row.Tanggal.Format("2006-01-02"),
-			JamMulai:          row.JamMulai,
-			Catatan:           row.Catatan,
-			IsReschedule:      row.IsReschedule == 1,
-			JadwalSemula:      row.JadwalSemula,
-			AlasanReschedule:  row.AlasanReschedule,
-			GuruPenggantiNama: row.GuruPenggantiNama,
-			AlasanBadal:       row.AlasanBadal,
-			Status:            row.Status,
-			CanManage:         true,
-			CanStart:          true,
+			ID:                 row.ID,
+			KelasID:            row.KelasID,
+			Tanggal:            row.Tanggal.Format("2006-01-02"),
+			JamMulai:           row.JamMulai,
+			Catatan:            row.Catatan,
+			IsReschedule:       row.IsReschedule == 1,
+			JadwalSemula:       row.JadwalSemula,
+			AlasanReschedule:   row.AlasanReschedule,
+			JadwalKelasBerubah: row.JadwalKelasBerubah == 1,
+			GuruPenggantiNama:  row.GuruPenggantiNama,
+			AlasanBadal:        row.AlasanBadal,
+			Status:             row.Status,
+			CanManage:          true,
+			CanStart:           true,
 		}
 		if row.GuruPenggantiID.Valid {
 			item.GuruPenggantiID = &row.GuruPenggantiID.Int64
@@ -118,6 +120,10 @@ func (s *JadwalPertemuanService) Create(userID int64, req models.BuatJadwalPerte
 }
 
 func (s *JadwalPertemuanService) Reschedule(id, kelasID int64, req models.RescheduleRequest) error {
+	return s.reschedule(context.Background(), s.querier, id, kelasID, req)
+}
+
+func (s *JadwalPertemuanService) reschedule(ctx context.Context, querier *queries.Querier, id, kelasID int64, req models.RescheduleRequest) error {
 	tanggal, err := parseScheduleDate(req.TanggalBaru)
 	if err != nil {
 		return err
@@ -129,8 +135,7 @@ func (s *JadwalPertemuanService) Reschedule(id, kelasID int64, req models.Resche
 		return fmt.Errorf("tanggal jadwal tidak boleh di masa lalu")
 	}
 
-	ctx := context.Background()
-	jadwal, err := s.querier.GetJadwalPertemuanByID(ctx, queries.GetJadwalPertemuanByIDParams{ID: id, KelasID: kelasID})
+	jadwal, err := querier.GetJadwalPertemuanByID(ctx, queries.GetJadwalPertemuanByIDParams{ID: id, KelasID: kelasID})
 	if err != nil {
 		return fmt.Errorf("jadwal tidak ditemukan: %w", err)
 	}
@@ -142,7 +147,7 @@ func (s *JadwalPertemuanService) Reschedule(id, kelasID int64, req models.Resche
 	if jadwalSemula == "" {
 		jadwalSemula = jadwal.Tanggal.Format("2006-01-02") + " " + jadwal.JamMulai
 	}
-	rows, err := s.querier.UpdateJadwalPertemuanReschedule(ctx, queries.UpdateJadwalPertemuanRescheduleParams{
+	rows, err := querier.UpdateJadwalPertemuanReschedule(ctx, queries.UpdateJadwalPertemuanRescheduleParams{
 		Tanggal:          tanggal,
 		JamMulai:         req.JamBaru,
 		JadwalSemula:     jadwalSemula,
@@ -160,8 +165,11 @@ func (s *JadwalPertemuanService) Reschedule(id, kelasID int64, req models.Resche
 }
 
 func (s *JadwalPertemuanService) Badal(id, kelasID int64, req models.BadalRequest) error {
-	ctx := context.Background()
-	jadwal, err := s.querier.GetJadwalPertemuanByID(ctx, queries.GetJadwalPertemuanByIDParams{ID: id, KelasID: kelasID})
+	return s.badal(context.Background(), s.querier, id, kelasID, req)
+}
+
+func (s *JadwalPertemuanService) badal(ctx context.Context, querier *queries.Querier, id, kelasID int64, req models.BadalRequest) error {
+	jadwal, err := querier.GetJadwalPertemuanByID(ctx, queries.GetJadwalPertemuanByIDParams{ID: id, KelasID: kelasID})
 	if err != nil {
 		return fmt.Errorf("jadwal tidak ditemukan: %w", err)
 	}
@@ -169,11 +177,11 @@ func (s *JadwalPertemuanService) Badal(id, kelasID int64, req models.BadalReques
 		return fmt.Errorf("jadwal yang sudah dimulai atau dibatalkan tidak dapat diubah")
 	}
 
-	guru, err := s.querier.GuruGetByID(ctx, req.GuruPenggantiID)
+	guru, err := querier.GuruGetByID(ctx, req.GuruPenggantiID)
 	if err != nil || guru.IsAktif != 1 || !guru.UserID.Valid {
 		return fmt.Errorf("guru badal harus aktif dan terhubung ke akun pengguna")
 	}
-	kelas, err := s.querier.GetKelasByID(ctx, kelasID)
+	kelas, err := querier.GetKelasByID(ctx, kelasID)
 	if err != nil {
 		return fmt.Errorf("kelas tidak ditemukan: %w", err)
 	}
@@ -181,7 +189,7 @@ func (s *JadwalPertemuanService) Badal(id, kelasID int64, req models.BadalReques
 		return fmt.Errorf("guru utama tidak dapat ditetapkan sebagai guru badal")
 	}
 
-	rows, err := s.querier.UpdateJadwalPertemuanBadal(ctx, queries.UpdateJadwalPertemuanBadalParams{
+	rows, err := querier.UpdateJadwalPertemuanBadal(ctx, queries.UpdateJadwalPertemuanBadalParams{
 		GuruPenggantiID: sql.NullInt64{Int64: guru.ID, Valid: true},
 		AlasanBadal:     req.Alasan,
 		ID:              id,
@@ -197,7 +205,11 @@ func (s *JadwalPertemuanService) Badal(id, kelasID int64, req models.BadalReques
 }
 
 func (s *JadwalPertemuanService) Cancel(id, kelasID int64) error {
-	rows, err := s.querier.CancelJadwalPertemuan(context.Background(), queries.CancelJadwalPertemuanParams{ID: id, KelasID: kelasID})
+	return s.cancel(context.Background(), s.querier, id, kelasID)
+}
+
+func (s *JadwalPertemuanService) cancel(ctx context.Context, querier *queries.Querier, id, kelasID int64) error {
+	rows, err := querier.CancelJadwalPertemuan(ctx, queries.CancelJadwalPertemuanParams{ID: id, KelasID: kelasID})
 	if err != nil {
 		return err
 	}
@@ -249,6 +261,10 @@ func (s *JadwalPertemuanService) Start(id, kelasID, userID int64, privileged boo
 	if err != nil {
 		return nil, err
 	}
+	nextLevelKe, err := querier.GetNextPertemuanLevelKe(ctx, kelasID)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	result, err := querier.CreatePertemuan(ctx, queries.CreatePertemuanParams{
 		KelasID:          kelasID,
@@ -288,6 +304,7 @@ func (s *JadwalPertemuanService) Start(id, kelasID, userID int64, privileged boo
 		ID:               pertemuanID,
 		KelasID:          kelasID,
 		PertemuanKe:      nextKe,
+		PertemuanLevelKe: nextLevelKe,
 		Tanggal:          now.Format("2006-01-02"),
 		JamMulai:         now.Format("15:04"),
 		IsReschedule:     jadwal.IsReschedule == 1,

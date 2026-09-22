@@ -61,6 +61,17 @@ type AbsenInput struct {
 	Alasan     string `json:"alasan"`
 }
 
+type LaporanAbsensi struct {
+	JenisKegiatan string     `json:"jenis_kegiatan"`
+	Judul         string     `json:"judul"`
+	Tanggal       string     `json:"tanggal"`
+	Keterangan    string     `json:"keterangan"`
+	Total         int        `json:"total"`
+	Hadir         int        `json:"hadir"`
+	TidakHadir    int        `json:"tidak_hadir"`
+	Absen         []AbsenRow `json:"absen"`
+}
+
 type RiwayatAbsensiGuru struct {
 	GuruID     int64  `json:"guru_id"`
 	GuruNama   string `json:"guru_nama"`

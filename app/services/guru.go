@@ -303,9 +303,8 @@ func (s *GuruService) getDashboard(guruID sql.NullInt64) (*models.GuruDashboardR
 	belum := make([]models.KelasGuruResponse, 0, len(belumRows))
 	for _, b := range belumRows {
 		pertemuanTerakhir := ""
-		switch v := b.PertemuanTerakhir.(type) {
-		case int64:
-			pertemuanTerakhir = fmt.Sprintf("%d", v)
+		if b.PertemuanTerakhir > 0 {
+			pertemuanTerakhir = fmt.Sprintf("%d", b.PertemuanTerakhir)
 		}
 		tanggalTerakhir := ""
 		switch v := b.TanggalTerakhir.(type) {
@@ -388,21 +387,30 @@ func (s *GuruService) GetDetailKelasForViewer(guruID *int64, kelasID int64) (*mo
 	}
 
 	kelas := &models.KelasGuruResponse{
-		ID:           k.ID,
-		NamaKelas:    k.NamaKelas,
-		Level:        k.Level,
-		Tipe:         k.Tipe,
-		Frekuensi:    k.Frekuensi,
-		Jadwal:       k.Jadwal,
-		JenisKelamin: k.JenisKelamin,
-		Kapasitas:    k.Kapasitas,
-		JumlahSantri: k.JumlahSantri,
+		ID:               k.ID,
+		NamaKelas:        k.NamaKelas,
+		Level:            k.Level,
+		Tipe:             k.Tipe,
+		Frekuensi:        k.Frekuensi,
+		Jadwal:           k.Jadwal,
+		JenisKelamin:     k.JenisKelamin,
+		Kapasitas:        k.Kapasitas,
+		JumlahSantri:     k.JumlahSantri,
+		MateriIndividual: k.MateriIndividual == 1,
 	}
 	if k.PertemuanTerakhir > 0 {
-		kelas.PertemuanTerakhir = fmt.Sprintf("%d", k.PertemuanTerakhir)
+		// Before any recorded meeting the anchor is shown relative to the
+		// current level, which restarts at 1 after a level change.
+		levelAwal := int64(0)
+		if state, err := s.querier.GetKelasPerubahanState(context.Background(), kelasID); err == nil {
+			levelAwal = state.LevelPertemuanAwal
+		}
+		if n := k.PertemuanTerakhir - levelAwal; n > 0 {
+			kelas.PertemuanTerakhir = fmt.Sprintf("%d", n)
+		}
 	}
 	if pertemuanTerakhir, err := s.querier.GetLastPertemuanByKelas(context.Background(), kelasID); err == nil {
-		kelas.PertemuanTerakhir = fmt.Sprintf("%d", pertemuanTerakhir.PertemuanKe)
+		kelas.PertemuanTerakhir = fmt.Sprintf("%d", pertemuanTerakhir.PertemuanLevelKe)
 		kelas.TanggalTerakhir = pertemuanTerakhir.Tanggal.Format("2006-01-02")
 		kelas.MateriTerakhir = pertemuanTerakhir.Materi
 	}
@@ -413,6 +421,14 @@ func (s *GuruService) GetDetailKelasForViewer(guruID *int64, kelasID int64) (*mo
 	}
 
 	absensiStats, _ := s.querier.CountAbsensiSantriByKelas(context.Background(), kelasID)
+	batasMateriRows, err := s.querier.GetBatasMateriTerakhirByKelas(context.Background(), kelasID)
+	if err != nil {
+		return nil, nil, err
+	}
+	batasMateriBySantri := make(map[int64]string, len(batasMateriRows))
+	for _, row := range batasMateriRows {
+		batasMateriBySantri[row.SantriID] = row.BatasMateri
+	}
 	statsMap := make(map[int64]struct {
 		totalHadir, totalIzin, totalSakit, totalAlpa, totalTelat int64
 	})
@@ -482,6 +498,7 @@ func (s *GuruService) GetDetailKelasForViewer(guruID *int64, kelasID int64) (*mo
 			TotalAlpa:            stats.totalAlpa,
 			TotalTelat:           stats.totalTelat,
 			TanggalHadirTerakhir: tanggalHadirTerakhir,
+			BatasMateriTerakhir:  batasMateriBySantri[sant.ID],
 		})
 	}
 
@@ -502,6 +519,7 @@ func (s *GuruService) GetRiwayatSantri(guruID, santriID int64) ([]models.Absensi
 			SantriNama:  "",
 			Status:      a.Status,
 			Catatan:     a.Catatan,
+			BatasMateri: a.BatasMateri,
 		})
 	}
 	return out, nil

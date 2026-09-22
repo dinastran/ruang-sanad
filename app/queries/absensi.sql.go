@@ -150,8 +150,8 @@ func (q *Queries) CountSantriAlpaBerturutByKelas(ctx context.Context, kelasID in
 }
 
 const createAbsensi = `-- name: CreateAbsensi :exec
-INSERT INTO absensi (pertemuan_id, santri_id, status, catatan, dibuat_oleh)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO absensi (pertemuan_id, santri_id, status, catatan, batas_materi, dibuat_oleh)
+VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type CreateAbsensiParams struct {
@@ -159,6 +159,7 @@ type CreateAbsensiParams struct {
 	SantriID    int64
 	Status      string
 	Catatan     string
+	BatasMateri string
 	DibuatOleh  sql.NullInt64
 }
 
@@ -168,16 +169,17 @@ func (q *Queries) CreateAbsensi(ctx context.Context, arg CreateAbsensiParams) er
 		arg.SantriID,
 		arg.Status,
 		arg.Catatan,
+		arg.BatasMateri,
 		arg.DibuatOleh,
 	)
 	return err
 }
 
 const createOrUpdateAbsensi = `-- name: CreateOrUpdateAbsensi :exec
-INSERT INTO absensi (pertemuan_id, santri_id, status, catatan, dibuat_oleh)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO absensi (pertemuan_id, santri_id, status, catatan, batas_materi, dibuat_oleh)
+VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT(pertemuan_id, santri_id)
-DO UPDATE SET status = excluded.status, catatan = excluded.catatan, updated_at = CURRENT_TIMESTAMP
+DO UPDATE SET status = excluded.status, catatan = excluded.catatan, batas_materi = excluded.batas_materi, updated_at = CURRENT_TIMESTAMP
 `
 
 type CreateOrUpdateAbsensiParams struct {
@@ -185,6 +187,7 @@ type CreateOrUpdateAbsensiParams struct {
 	SantriID    int64
 	Status      string
 	Catatan     string
+	BatasMateri string
 	DibuatOleh  sql.NullInt64
 }
 
@@ -194,13 +197,14 @@ func (q *Queries) CreateOrUpdateAbsensi(ctx context.Context, arg CreateOrUpdateA
 		arg.SantriID,
 		arg.Status,
 		arg.Catatan,
+		arg.BatasMateri,
 		arg.DibuatOleh,
 	)
 	return err
 }
 
 const getAbsensiByID = `-- name: GetAbsensiByID :one
-SELECT id, pertemuan_id, santri_id, status, catatan, dibuat_oleh, created_at, updated_at FROM absensi WHERE id = ?
+SELECT id, pertemuan_id, santri_id, status, catatan, dibuat_oleh, created_at, updated_at, batas_materi FROM absensi WHERE id = ?
 `
 
 func (q *Queries) GetAbsensiByID(ctx context.Context, id int64) (Absensi, error) {
@@ -215,12 +219,13 @@ func (q *Queries) GetAbsensiByID(ctx context.Context, id int64) (Absensi, error)
 		&i.DibuatOleh,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BatasMateri,
 	)
 	return i, err
 }
 
 const getAbsensiByPertemuan = `-- name: GetAbsensiByPertemuan :many
-SELECT a.id, a.pertemuan_id, a.santri_id, a.status, a.catatan, a.dibuat_oleh, a.created_at, a.updated_at, s.nama AS santri_nama, s.id_mahasantri
+SELECT a.id, a.pertemuan_id, a.santri_id, a.status, a.catatan, a.dibuat_oleh, a.created_at, a.updated_at, a.batas_materi, s.nama AS santri_nama, s.id_mahasantri
 FROM absensi a
 JOIN santri s ON a.santri_id = s.id
 WHERE a.pertemuan_id = ?
@@ -236,6 +241,7 @@ type GetAbsensiByPertemuanRow struct {
 	DibuatOleh   sql.NullInt64
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+	BatasMateri  string
 	SantriNama   string
 	IDMahasantri string
 }
@@ -258,6 +264,7 @@ func (q *Queries) GetAbsensiByPertemuan(ctx context.Context, pertemuanID int64) 
 			&i.DibuatOleh,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.BatasMateri,
 			&i.SantriNama,
 			&i.IDMahasantri,
 		); err != nil {
@@ -275,7 +282,7 @@ func (q *Queries) GetAbsensiByPertemuan(ctx context.Context, pertemuanID int64) 
 }
 
 const getAbsensiByPertemuanAndSantri = `-- name: GetAbsensiByPertemuanAndSantri :one
-SELECT id, pertemuan_id, santri_id, status, catatan, dibuat_oleh, created_at, updated_at FROM absensi WHERE pertemuan_id = ? AND santri_id = ?
+SELECT id, pertemuan_id, santri_id, status, catatan, dibuat_oleh, created_at, updated_at, batas_materi FROM absensi WHERE pertemuan_id = ? AND santri_id = ?
 `
 
 type GetAbsensiByPertemuanAndSantriParams struct {
@@ -295,6 +302,7 @@ func (q *Queries) GetAbsensiByPertemuanAndSantri(ctx context.Context, arg GetAbs
 		&i.DibuatOleh,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BatasMateri,
 	)
 	return i, err
 }
@@ -353,7 +361,7 @@ func (q *Queries) GetAbsensiByPertemuanIDs(ctx context.Context, pertemuanIds []i
 }
 
 const getAbsensiBySantri = `-- name: GetAbsensiBySantri :many
-SELECT a.id, a.pertemuan_id, a.santri_id, a.status, a.catatan, a.dibuat_oleh, a.created_at, a.updated_at, p.pertemuan_ke, p.tanggal, p.materi
+SELECT a.id, a.pertemuan_id, a.santri_id, a.status, a.catatan, a.dibuat_oleh, a.created_at, a.updated_at, a.batas_materi, p.pertemuan_ke, p.tanggal, p.materi
 FROM absensi a
 JOIN pertemuan p ON a.pertemuan_id = p.id
 WHERE a.santri_id = ?
@@ -369,6 +377,7 @@ type GetAbsensiBySantriRow struct {
 	DibuatOleh  sql.NullInt64
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	BatasMateri string
 	PertemuanKe int64
 	Tanggal     time.Time
 	Materi      string
@@ -392,6 +401,7 @@ func (q *Queries) GetAbsensiBySantri(ctx context.Context, santriID int64) ([]Get
 			&i.DibuatOleh,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.BatasMateri,
 			&i.PertemuanKe,
 			&i.Tanggal,
 			&i.Materi,
@@ -410,7 +420,7 @@ func (q *Queries) GetAbsensiBySantri(ctx context.Context, santriID int64) ([]Get
 }
 
 const getAbsensiTerakhirBySantri = `-- name: GetAbsensiTerakhirBySantri :one
-SELECT a.id, a.pertemuan_id, a.santri_id, a.status, a.catatan, a.dibuat_oleh, a.created_at, a.updated_at, p.pertemuan_ke, p.tanggal, p.materi
+SELECT a.id, a.pertemuan_id, a.santri_id, a.status, a.catatan, a.dibuat_oleh, a.created_at, a.updated_at, a.batas_materi, p.pertemuan_ke, p.tanggal, p.materi
 FROM absensi a
 JOIN pertemuan p ON a.pertemuan_id = p.id
 WHERE a.santri_id = ?
@@ -427,6 +437,7 @@ type GetAbsensiTerakhirBySantriRow struct {
 	DibuatOleh  sql.NullInt64
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	BatasMateri string
 	PertemuanKe int64
 	Tanggal     time.Time
 	Materi      string
@@ -444,6 +455,7 @@ func (q *Queries) GetAbsensiTerakhirBySantri(ctx context.Context, santriID int64
 		&i.DibuatOleh,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BatasMateri,
 		&i.PertemuanKe,
 		&i.Tanggal,
 		&i.Materi,
@@ -452,16 +464,18 @@ func (q *Queries) GetAbsensiTerakhirBySantri(ctx context.Context, santriID int64
 }
 
 const getPertemuanByKelasForRekap = `-- name: GetPertemuanByKelasForRekap :many
-SELECT id, pertemuan_ke, tanggal
+SELECT id, pertemuan_ke, pertemuan_level_ke, level_nama, tanggal
 FROM pertemuan
 WHERE kelas_id = ?
 ORDER BY pertemuan_ke
 `
 
 type GetPertemuanByKelasForRekapRow struct {
-	ID          int64
-	PertemuanKe int64
-	Tanggal     time.Time
+	ID               int64
+	PertemuanKe      int64
+	PertemuanLevelKe int64
+	LevelNama        string
+	Tanggal          time.Time
 }
 
 func (q *Queries) GetPertemuanByKelasForRekap(ctx context.Context, kelasID int64) ([]GetPertemuanByKelasForRekapRow, error) {
@@ -473,7 +487,13 @@ func (q *Queries) GetPertemuanByKelasForRekap(ctx context.Context, kelasID int64
 	var items []GetPertemuanByKelasForRekapRow
 	for rows.Next() {
 		var i GetPertemuanByKelasForRekapRow
-		if err := rows.Scan(&i.ID, &i.PertemuanKe, &i.Tanggal); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.PertemuanKe,
+			&i.PertemuanLevelKe,
+			&i.LevelNama,
+			&i.Tanggal,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -527,29 +547,36 @@ func (q *Queries) GetRekapAbsensiKelas(ctx context.Context, kelasID sql.NullInt6
 }
 
 const updateAbsensi = `-- name: UpdateAbsensi :exec
-UPDATE absensi SET status = ?, catatan = ?, updated_at = CURRENT_TIMESTAMP
+UPDATE absensi SET status = ?, catatan = ?, batas_materi = ?, updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
 `
 
 type UpdateAbsensiParams struct {
-	Status  string
-	Catatan string
-	ID      int64
+	Status      string
+	Catatan     string
+	BatasMateri string
+	ID          int64
 }
 
 func (q *Queries) UpdateAbsensi(ctx context.Context, arg UpdateAbsensiParams) error {
-	_, err := q.db.ExecContext(ctx, updateAbsensi, arg.Status, arg.Catatan, arg.ID)
+	_, err := q.db.ExecContext(ctx, updateAbsensi,
+		arg.Status,
+		arg.Catatan,
+		arg.BatasMateri,
+		arg.ID,
+	)
 	return err
 }
 
 const updateAbsensiByPertemuanAndSantri = `-- name: UpdateAbsensiByPertemuanAndSantri :exec
-UPDATE absensi SET status = ?, catatan = ?, updated_at = CURRENT_TIMESTAMP
+UPDATE absensi SET status = ?, catatan = ?, batas_materi = ?, updated_at = CURRENT_TIMESTAMP
 WHERE pertemuan_id = ? AND santri_id = ?
 `
 
 type UpdateAbsensiByPertemuanAndSantriParams struct {
 	Status      string
 	Catatan     string
+	BatasMateri string
 	PertemuanID int64
 	SantriID    int64
 }
@@ -558,6 +585,7 @@ func (q *Queries) UpdateAbsensiByPertemuanAndSantri(ctx context.Context, arg Upd
 	_, err := q.db.ExecContext(ctx, updateAbsensiByPertemuanAndSantri,
 		arg.Status,
 		arg.Catatan,
+		arg.BatasMateri,
 		arg.PertemuanID,
 		arg.SantriID,
 	)

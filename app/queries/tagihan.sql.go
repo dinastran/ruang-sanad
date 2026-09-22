@@ -27,12 +27,44 @@ func (q *Queries) BatalkanTagihan(ctx context.Context, arg BatalkanTagihanParams
 	return err
 }
 
+const countTagihanSantriBulan = `-- name: CountTagihanSantriBulan :one
+SELECT COUNT(*) FROM tagihan WHERE santri_id = ? AND bulan_ke = ?
+`
+
+type CountTagihanSantriBulanParams struct {
+	SantriID int64
+	BulanKe  int64
+}
+
+func (q *Queries) CountTagihanSantriBulan(ctx context.Context, arg CountTagihanSantriBulanParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTagihanSantriBulan, arg.SantriID, arg.BulanKe)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTagihanSantriPertemuan = `-- name: CountTagihanSantriPertemuan :one
+SELECT COUNT(*) FROM tagihan WHERE santri_id = ? AND pertemuan_id = ?
+`
+
+type CountTagihanSantriPertemuanParams struct {
+	SantriID    int64
+	PertemuanID sql.NullInt64
+}
+
+func (q *Queries) CountTagihanSantriPertemuan(ctx context.Context, arg CountTagihanSantriPertemuanParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTagihanSantriPertemuan, arg.SantriID, arg.PertemuanID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createTagihan = `-- name: CreateTagihan :execresult
 INSERT INTO tagihan (
     santri_id, kelas_id, pertemuan_id, bulan_ke, pertemuan_ke, nominal,
     tanggal_tagih, jatuh_tempo, angkatan_kelas
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(santri_id, bulan_ke) DO NOTHING
+ON CONFLICT DO NOTHING
 `
 
 type CreateTagihanParams struct {
@@ -59,6 +91,17 @@ func (q *Queries) CreateTagihan(ctx context.Context, arg CreateTagihanParams) (s
 		arg.JatuhTempo,
 		arg.AngkatanKelas,
 	)
+}
+
+const getMaxBulanKeSantri = `-- name: GetMaxBulanKeSantri :one
+SELECT CAST(COALESCE(MAX(bulan_ke), 0) AS INTEGER) FROM tagihan WHERE santri_id = ?
+`
+
+func (q *Queries) GetMaxBulanKeSantri(ctx context.Context, santriID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getMaxBulanKeSantri, santriID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const getTagihanByID = `-- name: GetTagihanByID :one
@@ -135,7 +178,7 @@ func (q *Queries) GetTagihanByID(ctx context.Context, id int64) (GetTagihanByIDR
 }
 
 const listPertemuanSelesai = `-- name: ListPertemuanSelesai :many
-SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at FROM pertemuan WHERE status = 'selesai' ORDER BY tanggal, id
+SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke FROM pertemuan WHERE status = 'selesai' ORDER BY tanggal, id
 `
 
 func (q *Queries) ListPertemuanSelesai(ctx context.Context) ([]Pertemuan, error) {
@@ -166,6 +209,8 @@ func (q *Queries) ListPertemuanSelesai(ctx context.Context) ([]Pertemuan, error)
 			&i.DibuatOleh,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LevelNama,
+			&i.PertemuanLevelKe,
 		); err != nil {
 			return nil, err
 		}

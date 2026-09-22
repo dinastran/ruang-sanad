@@ -349,7 +349,7 @@ func (q *Queries) DeleteSantri(ctx context.Context, id int64) error {
 }
 
 const getPerluDilengkapi = `-- name: GetPerluDilengkapi :many
-SELECT id, id_mahasantri, kelas_kode, nama, jenis_kelamin, nominal, tanggal_daftar, angkatan, usia, domisili, fu, tanggal_vn, hasil_vn, masuk_grup, mulai_belajar, jumlah, level, jadwal, guru, jadwal_catatan, infaq_terakhir, keterangan_tidak_lanjut, tipe, frekuensi, is_lengkap, kelas_id, status, created_by, created_at, updated_at, no_wa, voice_note_url, keterangan_vn, email, pertemuan_awal, angkatan_kelas FROM santri
+SELECT id, id_mahasantri, kelas_kode, nama, jenis_kelamin, nominal, tanggal_daftar, angkatan, usia, domisili, fu, tanggal_vn, hasil_vn, masuk_grup, mulai_belajar, jumlah, level, jadwal, guru, jadwal_catatan, infaq_terakhir, keterangan_tidak_lanjut, tipe, frekuensi, is_lengkap, kelas_id, status, created_by, created_at, updated_at, no_wa, voice_note_url, keterangan_vn, email, pertemuan_awal, angkatan_kelas, status_alasan, cuti_mulai, cuti_selesai FROM santri
 WHERE is_lengkap = 0 AND status = 'aktif'
 ORDER BY id DESC
 `
@@ -400,6 +400,9 @@ func (q *Queries) GetPerluDilengkapi(ctx context.Context) ([]Santri, error) {
 			&i.Email,
 			&i.PertemuanAwal,
 			&i.AngkatanKelas,
+			&i.StatusAlasan,
+			&i.CutiMulai,
+			&i.CutiSelesai,
 		); err != nil {
 			return nil, err
 		}
@@ -415,7 +418,7 @@ func (q *Queries) GetPerluDilengkapi(ctx context.Context) ([]Santri, error) {
 }
 
 const getSantriByID = `-- name: GetSantriByID :one
-SELECT id, id_mahasantri, kelas_kode, nama, jenis_kelamin, nominal, tanggal_daftar, angkatan, usia, domisili, fu, tanggal_vn, hasil_vn, masuk_grup, mulai_belajar, jumlah, level, jadwal, guru, jadwal_catatan, infaq_terakhir, keterangan_tidak_lanjut, tipe, frekuensi, is_lengkap, kelas_id, status, created_by, created_at, updated_at, no_wa, voice_note_url, keterangan_vn, email, pertemuan_awal, angkatan_kelas FROM santri WHERE id = ?
+SELECT id, id_mahasantri, kelas_kode, nama, jenis_kelamin, nominal, tanggal_daftar, angkatan, usia, domisili, fu, tanggal_vn, hasil_vn, masuk_grup, mulai_belajar, jumlah, level, jadwal, guru, jadwal_catatan, infaq_terakhir, keterangan_tidak_lanjut, tipe, frekuensi, is_lengkap, kelas_id, status, created_by, created_at, updated_at, no_wa, voice_note_url, keterangan_vn, email, pertemuan_awal, angkatan_kelas, status_alasan, cuti_mulai, cuti_selesai FROM santri WHERE id = ?
 `
 
 func (q *Queries) GetSantriByID(ctx context.Context, id int64) (Santri, error) {
@@ -458,12 +461,15 @@ func (q *Queries) GetSantriByID(ctx context.Context, id int64) (Santri, error) {
 		&i.Email,
 		&i.PertemuanAwal,
 		&i.AngkatanKelas,
+		&i.StatusAlasan,
+		&i.CutiMulai,
+		&i.CutiSelesai,
 	)
 	return i, err
 }
 
 const getSantriByKelasID = `-- name: GetSantriByKelasID :many
-SELECT id, id_mahasantri, kelas_kode, nama, jenis_kelamin, nominal, tanggal_daftar, angkatan, usia, domisili, fu, tanggal_vn, hasil_vn, masuk_grup, mulai_belajar, jumlah, level, jadwal, guru, jadwal_catatan, infaq_terakhir, keterangan_tidak_lanjut, tipe, frekuensi, is_lengkap, kelas_id, status, created_by, created_at, updated_at, no_wa, voice_note_url, keterangan_vn, email, pertemuan_awal, angkatan_kelas FROM santri
+SELECT id, id_mahasantri, kelas_kode, nama, jenis_kelamin, nominal, tanggal_daftar, angkatan, usia, domisili, fu, tanggal_vn, hasil_vn, masuk_grup, mulai_belajar, jumlah, level, jadwal, guru, jadwal_catatan, infaq_terakhir, keterangan_tidak_lanjut, tipe, frekuensi, is_lengkap, kelas_id, status, created_by, created_at, updated_at, no_wa, voice_note_url, keterangan_vn, email, pertemuan_awal, angkatan_kelas, status_alasan, cuti_mulai, cuti_selesai FROM santri
 WHERE kelas_id = ? AND status = 'aktif'
 ORDER BY nama
 `
@@ -514,6 +520,9 @@ func (q *Queries) GetSantriByKelasID(ctx context.Context, kelasID sql.NullInt64)
 			&i.Email,
 			&i.PertemuanAwal,
 			&i.AngkatanKelas,
+			&i.StatusAlasan,
+			&i.CutiMulai,
+			&i.CutiSelesai,
 		); err != nil {
 			return nil, err
 		}
@@ -584,7 +593,7 @@ func (q *Queries) ListDuplicateIDMahasantri(ctx context.Context) ([]string, erro
 }
 
 const listSantri = `-- name: ListSantri :many
-SELECT id, id_mahasantri, kelas_kode, nama, jenis_kelamin, nominal, tanggal_daftar, angkatan, usia, domisili, fu, tanggal_vn, hasil_vn, masuk_grup, mulai_belajar, jumlah, level, jadwal, guru, jadwal_catatan, infaq_terakhir, keterangan_tidak_lanjut, tipe, frekuensi, is_lengkap, kelas_id, status, created_by, created_at, updated_at, no_wa, voice_note_url, keterangan_vn, email, pertemuan_awal, angkatan_kelas FROM santri
+SELECT id, id_mahasantri, kelas_kode, nama, jenis_kelamin, nominal, tanggal_daftar, angkatan, usia, domisili, fu, tanggal_vn, hasil_vn, masuk_grup, mulai_belajar, jumlah, level, jadwal, guru, jadwal_catatan, infaq_terakhir, keterangan_tidak_lanjut, tipe, frekuensi, is_lengkap, kelas_id, status, created_by, created_at, updated_at, no_wa, voice_note_url, keterangan_vn, email, pertemuan_awal, angkatan_kelas, status_alasan, cuti_mulai, cuti_selesai FROM santri
 WHERE (?1 = '' OR angkatan = ?1)
   AND (?2 = '' OR angkatan_kelas = ?2)
   AND (?3 = '' OR level = ?3)
@@ -686,6 +695,9 @@ func (q *Queries) ListSantri(ctx context.Context, arg ListSantriParams) ([]Santr
 			&i.Email,
 			&i.PertemuanAwal,
 			&i.AngkatanKelas,
+			&i.StatusAlasan,
+			&i.CutiMulai,
+			&i.CutiSelesai,
 		); err != nil {
 			return nil, err
 		}

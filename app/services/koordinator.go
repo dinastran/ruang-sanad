@@ -257,6 +257,25 @@ func (s *KoordinatorService) SavePembinaanAbsen(pembinaanID int64, inputs []mode
 	return tx.Commit()
 }
 
+func (s *KoordinatorService) GetLaporanPembinaanAbsensi(pembinaanID int64) (*models.LaporanAbsensi, error) {
+	pembinaan, err := s.GetPembinaan(pembinaanID)
+	if err != nil {
+		return nil, fmt.Errorf("sesi pembinaan tidak ditemukan")
+	}
+	if pembinaan.Status != "terlaksana" {
+		return nil, fmt.Errorf("export hanya tersedia untuk pembinaan terlaksana")
+	}
+	rows, err := s.querier.ListPembinaanAbsenTersimpan(context.Background(), pembinaanID)
+	if err != nil {
+		return nil, err
+	}
+	absen := make([]models.AbsenRow, 0, len(rows))
+	for _, row := range rows {
+		absen = append(absen, models.AbsenRow{GuruID: row.GuruID, Nama: row.Nama, Status: row.Status, Hadir: row.Hadir == 1, JamMasuk: row.JamMasuk, Keterangan: row.Keterangan, Alasan: row.Alasan})
+	}
+	return buildLaporanAbsensi("Pembinaan Guru", pembinaan.Topik, pembinaan.Tanggal, pembinaan.Keterangan, absen)
+}
+
 func mapPembinaan(p queries.Pembinaan) models.PembinaanResponse {
 	return models.PembinaanResponse{
 		ID:         p.ID,
@@ -385,12 +404,42 @@ func (s *KoordinatorService) SaveRapatAbsen(rapatID int64, inputs []models.Absen
 	return tx.Commit()
 }
 
+func (s *KoordinatorService) GetLaporanRapatAbsensi(rapatID int64) (*models.LaporanAbsensi, error) {
+	rapat, err := s.GetRapat(rapatID)
+	if err != nil {
+		return nil, fmt.Errorf("rapat tidak ditemukan")
+	}
+	if rapat.Status != "terlaksana" {
+		return nil, fmt.Errorf("export hanya tersedia untuk rapat terlaksana")
+	}
+	rows, err := s.querier.ListRapatAbsenTersimpan(context.Background(), rapatID)
+	if err != nil {
+		return nil, err
+	}
+	absen := make([]models.AbsenRow, 0, len(rows))
+	for _, row := range rows {
+		absen = append(absen, models.AbsenRow{GuruID: row.GuruID, Nama: row.Nama, Status: row.Status, Hadir: row.Hadir == 1, JamMasuk: row.JamMasuk, Keterangan: row.Keterangan, Alasan: row.Alasan})
+	}
+	return buildLaporanAbsensi("Rapat Guru", rapat.Judul, rapat.Tanggal, rapat.Catatan, absen)
+}
+
+func buildLaporanAbsensi(jenis, judul, tanggal, keterangan string, absen []models.AbsenRow) (*models.LaporanAbsensi, error) {
+	if len(absen) == 0 {
+		return nil, fmt.Errorf("absensi belum tersimpan")
+	}
+	laporan := &models.LaporanAbsensi{JenisKegiatan: jenis, Judul: judul, Tanggal: tanggal, Keterangan: keterangan, Total: len(absen), Absen: absen}
+	for _, row := range absen {
+		if row.Hadir {
+			laporan.Hadir++
+		}
+	}
+	laporan.TidakHadir = laporan.Total - laporan.Hadir
+	return laporan, nil
+}
+
 func validateAbsenInput(in models.AbsenInput) error {
 	if in.GuruID <= 0 {
 		return fmt.Errorf("guru tidak valid")
-	}
-	if strings.TrimSpace(in.Keterangan) == "" {
-		return fmt.Errorf("keterangan kehadiran wajib diisi")
 	}
 	if in.Hadir && strings.TrimSpace(in.JamMasuk) == "" {
 		return fmt.Errorf("jam masuk Zoom wajib diisi untuk guru hadir")

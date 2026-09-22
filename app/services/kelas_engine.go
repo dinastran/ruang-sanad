@@ -135,6 +135,20 @@ func (s *KelasEngineService) ProcessSantri(ctx context.Context, santri *queries.
 	}
 
 	classChanged := santri.KelasID.Valid && (!kelasID.Valid || santri.KelasID.Int64 != kelasID.Int64)
+	enteringClass := kelasID.Valid && (!santri.KelasID.Valid || santri.KelasID.Int64 != kelasID.Int64)
+	// Same rule as PindahkanSantri: don't change a roster mid-meeting.
+	if santri.Status == StatusSantriAktif {
+		if classChanged && oldClassExists {
+			if err := ensureTanpaPertemuanBerlangsung(ctx, s.querier, santri.KelasID); err != nil {
+				return fmt.Errorf("kelas asal: %w", err)
+			}
+		}
+		if enteringClass {
+			if err := ensureTanpaPertemuanBerlangsung(ctx, s.querier, kelasID); err != nil {
+				return fmt.Errorf("kelas tujuan: %w", err)
+			}
+		}
+	}
 	if classChanged && oldClassExists {
 		if err := s.querier.DecrementJumlahSantri(ctx, santri.KelasID.Int64); err != nil {
 			return fmt.Errorf("decrement kelas lama: %w", err)
@@ -233,11 +247,8 @@ func (s *KelasEngineService) PindahkanSantri(ctx context.Context, santriID, kela
 	}
 
 	kelasKode := santri.KelasKode
-	if parsed, _, found := strings.Cut(kelasTujuan.KunciKelas, " | "); found {
-		kelasKode = strings.TrimSpace(parsed)
-		if kelasKode == kelasTujuan.JenisKelamin {
-			kelasKode = ""
-		}
+	if strings.Contains(kelasTujuan.KunciKelas, " | ") {
+		kelasKode = kelasKodeDariKunci(kelasTujuan.KunciKelas, kelasTujuan.JenisKelamin)
 	}
 	now := time.Now()
 	updateTarget := queries.UpdateSantriKelasParams{
@@ -253,6 +264,16 @@ func (s *KelasEngineService) PindahkanSantri(ctx context.Context, santriID, kela
 	}
 	if santri.KelasID.Valid && santri.KelasID.Int64 == kelasTujuanID {
 		return s.querier.UpdateSantriKelas(ctx, updateTarget)
+	}
+	// Moving an aktif santri changes both rosters; a meeting in progress in
+	// either class could then not be finished.
+	if santri.Status == StatusSantriAktif {
+		if err := ensureTanpaPertemuanBerlangsung(ctx, s.querier, santri.KelasID); err != nil {
+			return fmt.Errorf("kelas asal: %w", err)
+		}
+		if err := ensureTanpaPertemuanBerlangsung(ctx, s.querier, sql.NullInt64{Int64: kelasTujuanID, Valid: true}); err != nil {
+			return fmt.Errorf("kelas tujuan: %w", err)
+		}
 	}
 
 	if santri.KelasID.Valid {

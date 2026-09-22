@@ -35,6 +35,9 @@ func (s Santri) ToResponse() models.SantriResponse {
 		Frekuensi:             s.Frekuensi,
 		IsLengkap:             s.IsLengkap == 1,
 		Status:                s.Status,
+		StatusAlasan:          s.StatusAlasan,
+		CutiMulai:             s.CutiMulai,
+		CutiSelesai:           s.CutiSelesai,
 		CreatedAt:             s.CreatedAt.Format("2006-01-02 15:04:05"),
 		UpdatedAt:             s.UpdatedAt.Format("2006-01-02 15:04:05"),
 	}
@@ -66,22 +69,22 @@ func (s Santri) ToResponse() models.SantriResponse {
 }
 
 func (k Kela) ToResponse() models.KelasResponse {
-	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.PertemuanTerakhir, k.IsAktif, k.CreatedAt)
+	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.PertemuanTerakhir, k.MateriIndividual, k.IsAktif, k.CreatedAt)
 }
 
 func (k ListKelasByAngkatanRow) ToResponse() models.KelasResponse {
-	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.PertemuanTerakhir, k.IsAktif, k.CreatedAt)
+	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.PertemuanTerakhir, k.MateriIndividual, k.IsAktif, k.CreatedAt)
 }
 
 func (k ListKelasAllRow) ToResponse() models.KelasResponse {
-	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.PertemuanTerakhir, k.IsAktif, k.CreatedAt)
+	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.PertemuanTerakhir, k.MateriIndividual, k.IsAktif, k.CreatedAt)
 }
 
 func (k GetKelasByIDRow) ToResponse() models.KelasResponse {
-	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.PertemuanTerakhir, k.IsAktif, k.CreatedAt)
+	return kelasResponse(k.ID, k.KunciKelas, k.Angkatan, k.Tipe, k.JenisKelamin, k.Level, k.Frekuensi, k.Jadwal, k.SubIndex, k.NamaKelas, k.GuruID, k.Kapasitas, k.JumlahSantri, k.PertemuanTerakhir, k.MateriIndividual, k.IsAktif, k.CreatedAt)
 }
 
-func kelasResponse(id int64, kunciKelas, angkatan, tipe, jenisKelamin, level, frekuensi, jadwal string, subIndex int64, namaKelas string, guruID sql.NullInt64, kapasitas, jumlahSantri, pertemuanTerakhir, isAktif int64, createdAt time.Time) models.KelasResponse {
+func kelasResponse(id int64, kunciKelas, angkatan, tipe, jenisKelamin, level, frekuensi, jadwal string, subIndex int64, namaKelas string, guruID sql.NullInt64, kapasitas, jumlahSantri, pertemuanTerakhir, materiIndividual, isAktif int64, createdAt time.Time) models.KelasResponse {
 	r := models.KelasResponse{
 		ID:                id,
 		KunciKelas:        kunciKelas,
@@ -96,6 +99,7 @@ func kelasResponse(id int64, kunciKelas, angkatan, tipe, jenisKelamin, level, fr
 		Kapasitas:         kapasitas,
 		JumlahSantri:      jumlahSantri,
 		PertemuanTerakhir: pertemuanTerakhir,
+		MateriIndividual:  materiIndividual == 1,
 		IsAktif:           isAktif == 1,
 		CreatedAt:         createdAt.Format("2006-01-02 15:04:05"),
 	}

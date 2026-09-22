@@ -641,22 +641,79 @@ func (s *SantriService) UpdateByAdminKelas(id int64, req models.UpdateSantriAdmi
 	return tx.Commit()
 }
 
-func (s *SantriService) UpdateByKeuangan(id int64, req models.UpdateSantriKeuanganRequest) error {
-	status := "aktif"
+// UpdateByKeuangan saves the finance fields. Filling keterangan_tidak_lanjut
+// marks the santri tidak_lanjut; clearing it reactivates only a tidak_lanjut
+// santri, so cuti/nonaktif set by Admin Kelas are never overwritten.
+func (s *SantriService) UpdateByKeuangan(id, actorID int64, req models.UpdateSantriKeuanganRequest) error {
+	ctx := context.Background()
+	tx, err := s.querier.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.querier.WithTx(tx)
+
+	santri, err := q.GetSantriByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	status := santri.Status
 	if req.KeteranganTidakLanjut != "" {
-		status = "tidak_lanjut"
+		status = StatusSantriTidakLanjut
+	} else if santri.Status == StatusSantriTidakLanjut {
+		status = StatusSantriAktif
+		// Tidak lanjut released the seat; taking it back needs room in the class.
+		if santri.KelasID.Valid {
+			kelas, err := q.GetKelasByID(ctx, santri.KelasID.Int64)
+			if err != nil {
+				return err
+			}
+			if kelas.JumlahSantri >= kelas.Kapasitas {
+				return fmt.Errorf("kelas %s sudah penuh (kapasitas %d), pindahkan santri ke kelas lain terlebih dahulu", kelas.NamaKelas, kelas.Kapasitas)
+			}
+		}
+	}
+
+	if (santri.Status == StatusSantriAktif) != (status == StatusSantriAktif) {
+		if err := ensureTanpaPertemuanBerlangsung(ctx, q, santri.KelasID); err != nil {
+			return err
+		}
 	}
 
 	// The santri stays linked to their class (still listed under "Tidak Lanjut"
 	// in the class detail); the class occupancy count excludes them because the
-	// kelas queries count only active santri.
-	return s.querier.UpdateSantriKeuangan(context.Background(), queries.UpdateSantriKeuanganParams{
+	// kelas queries count only santri holding a seat (aktif + cuti).
+	now := time.Now()
+	if err := q.UpdateSantriKeuangan(ctx, queries.UpdateSantriKeuanganParams{
 		InfaqTerakhir:         req.InfaqTerakhir,
 		KeteranganTidakLanjut: req.KeteranganTidakLanjut,
 		Status:                status,
-		UpdatedAt:             time.Now(),
+		UpdatedAt:             now,
 		ID:                    id,
-	})
+	}); err != nil {
+		return err
+	}
+	if status != santri.Status {
+		if err := q.UpdateSantriStatusDetail(ctx, queries.UpdateSantriStatusDetailParams{
+			Status:       status,
+			StatusAlasan: req.KeteranganTidakLanjut,
+			UpdatedAt:    now,
+			ID:           id,
+		}); err != nil {
+			return err
+		}
+		if err := q.CreateSantriStatusLog(ctx, queries.CreateSantriStatusLogParams{
+			SantriID:   santri.ID,
+			KelasID:    santri.KelasID,
+			StatusLama: santri.Status,
+			StatusBaru: status,
+			Alasan:     req.KeteranganTidakLanjut,
+			DibuatOleh: sql.NullInt64{Int64: actorID, Valid: actorID > 0},
+		}); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *SantriService) ListPerluDilengkapi() ([]models.SantriResponse, error) {

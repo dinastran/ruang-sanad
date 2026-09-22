@@ -115,9 +115,19 @@ func main() {
 	tagihanService := services.NewTagihanService(querier)
 	pertemuanService := services.NewPertemuanService(querier, tagihanService)
 	jadwalPertemuanService := services.NewJadwalPertemuanService(querier)
+	notificationService := services.NewNotificationService(querier)
 	riayahService := services.NewRiayahService(querier)
 	koordinatorService := services.NewKoordinatorService(querier)
+	koordinatorMonitoringService := services.NewKoordinatorMonitoringService(querier, jadwalPertemuanService)
 	tsiService := services.NewTSIService(querier)
+	santriStatusService := services.NewSantriStatusService(querier)
+	santriStatusService.StartAutoAktifCuti(time.Hour, func(job string, total int, err error) {
+		if err != nil {
+			slog.Error(job+" gagal", "error", err, "diproses", total)
+		} else if total > 0 {
+			slog.Info(job, "diproses", total)
+		}
+	})
 
 	// Create storage directories
 	if err := os.MkdirAll("storage/uploads", 0755); err != nil {
@@ -136,43 +146,49 @@ func main() {
 	// Initialize handlers
 	uploadHandler := handlers.NewUploadHandler(sessionStore, userService, "storage/uploads")
 	santriHandler := handlers.NewSantriHandler(santriService, masterService, kelasService, sessionStore, inertiaService)
-	kelasHandler := handlers.NewKelasHandler(kelasService, masterService, sessionStore, inertiaService)
+	kelasHandler := handlers.NewKelasHandler(kelasService, services.NewKelasPerubahanService(querier, kelasEngine), santriStatusService, masterService, sessionStore, inertiaService)
 	masterHandler := handlers.NewMasterHandler(masterService, sessionStore, inertiaService)
 	importHandler := handlers.NewImportHandler(importService, sessionStore, inertiaService)
 	laporanHandler := handlers.NewLaporanHandler(laporanService, sessionStore, inertiaService)
 	adminHandler := handlers.NewAdminHandler(userService, sessionStore, inertiaService)
 	dashboardHandler := handlers.NewDashboardHandler(santriService, laporanService, kelasService, sessionStore, inertiaService)
-	guruHandler := handlers.NewGuruHandler(guruService, pertemuanService, riayahService, sessionStore, inertiaService)
+	guruHandler := handlers.NewGuruHandler(guruService, pertemuanService, riayahService, sessionStore, inertiaService, notificationService)
 	pertemuanHandler := handlers.NewPertemuanHandler(guruService, pertemuanService, jadwalPertemuanService, sessionStore, inertiaService)
 	jadwalPertemuanHandler := handlers.NewJadwalPertemuanHandler(guruService, jadwalPertemuanService, sessionStore, inertiaService)
 	riayahHandler := handlers.NewRiayahHandler(guruService, riayahService, sessionStore, inertiaService)
 	koordinatorGuruHandler := handlers.NewKoordinatorGuruHandler(koordinatorService, sessionStore, inertiaService)
 	koordinatorGuruDirectoryHandler := handlers.NewKoordinatorGuruDirectoryHandler(guruService, koordinatorService, riayahService, sessionStore, inertiaService)
+	koordinatorMonitoringHandler := handlers.NewKoordinatorMonitoringHandler(koordinatorMonitoringService, koordinatorService, sessionStore, inertiaService)
 	koordinatorFeaturesHandler := handlers.NewKoordinatorFeaturesHandler(koordinatorService, guruService, riayahService, sessionStore, inertiaService)
+	koordinatorAttendanceExportHandler := handlers.NewKoordinatorAttendanceExportHandler(koordinatorService)
+	notificationHandler := handlers.NewNotificationHandler(notificationService, sessionStore, inertiaService)
 	tsiHandler := handlers.NewTSIHandler(tsiService, guruService, koordinatorService, sessionStore, inertiaService)
 	tagihanHandler := handlers.NewTagihanHandler(tagihanService, sessionStore, inertiaService)
 
 	routeHandlers := routes.Handlers{
-		Public:                   handlers.NewPublicHandler(authService, userService, inertiaService, assetService),
-		Auth:                     handlers.NewAuthHandler(authService, sessionStore, inertiaService),
-		App:                      handlers.NewAppHandler(userService, sessionStore, inertiaService),
-		Upload:                   uploadHandler,
-		Santri:                   santriHandler,
-		Kelas:                    kelasHandler,
-		Master:                   masterHandler,
-		Import:                   importHandler,
-		Laporan:                  laporanHandler,
-		Admin:                    adminHandler,
-		Dashboard:                dashboardHandler,
-		Guru:                     guruHandler,
-		Pertemuan:                pertemuanHandler,
-		JadwalPertemuan:          jadwalPertemuanHandler,
-		Riayah:                   riayahHandler,
-		KoordinatorGuru:          koordinatorGuruHandler,
-		KoordinatorGuruDirectory: koordinatorGuruDirectoryHandler,
-		KoordinatorFeatures:      koordinatorFeaturesHandler,
-		TSI:                      tsiHandler,
-		Tagihan:                  tagihanHandler,
+		Public:                      handlers.NewPublicHandler(authService, userService, inertiaService, assetService),
+		Auth:                        handlers.NewAuthHandler(authService, sessionStore, inertiaService),
+		App:                         handlers.NewAppHandler(userService, sessionStore, inertiaService),
+		Upload:                      uploadHandler,
+		Santri:                      santriHandler,
+		Kelas:                       kelasHandler,
+		Master:                      masterHandler,
+		Import:                      importHandler,
+		Laporan:                     laporanHandler,
+		Admin:                       adminHandler,
+		Dashboard:                   dashboardHandler,
+		Guru:                        guruHandler,
+		Pertemuan:                   pertemuanHandler,
+		JadwalPertemuan:             jadwalPertemuanHandler,
+		Riayah:                      riayahHandler,
+		KoordinatorGuru:             koordinatorGuruHandler,
+		KoordinatorGuruDirectory:    koordinatorGuruDirectoryHandler,
+		KoordinatorMonitoring:       koordinatorMonitoringHandler,
+		KoordinatorFeatures:         koordinatorFeaturesHandler,
+		KoordinatorAttendanceExport: koordinatorAttendanceExportHandler,
+		Notifications:               notificationHandler,
+		TSI:                         tsiHandler,
+		Tagihan:                     tagihanHandler,
 	}
 
 	// Setup CSRF middleware (Secure cookies only in production with HTTPS)

@@ -256,8 +256,87 @@ func TestSelesaiPertemuanMemvalidasiDanRollbackAbsensi(t *testing.T) {
 	require.Equal(t, "berlangsung", stored.Status)
 
 	require.NoError(t, f.pertemuan.SelesaiPertemuan(pertemuan.ID, f.kelasID, models.SelesaiPertemuanRequest{
-		Materi: "Materi", Absensi: []models.AbsensiInput{{SantriID: santriID, Status: "hadir"}},
+		Materi: "Materi", Absensi: []models.AbsensiInput{{SantriID: santriID, Status: "hadir", Catatan: "Menyimak dengan baik"}},
 	}, f.guruUtamaUser))
+	_, absensi, err := f.pertemuan.GetPertemuanByID(pertemuan.ID, f.kelasID)
+	require.NoError(t, err)
+	require.Len(t, absensi, 1)
+	require.Equal(t, "Menyimak dengan baik", absensi[0].Catatan)
+}
+
+func TestSelesaiPertemuanMateriIndividualMewajibkanDanMeneruskanBatasMateri(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	_, err := f.db.Exec(`UPDATE kelas SET materi_individual = 1 WHERE id = ?`, f.kelasID)
+	require.NoError(t, err)
+	_, err = f.db.Exec(`INSERT INTO santri (nama, kelas_id, status) VALUES ('Santri Uji', ?, 'aktif')`, f.kelasID)
+	require.NoError(t, err)
+	santriID, err := lastID(f.db)
+	require.NoError(t, err)
+
+	pertama, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "08:00"})
+	require.NoError(t, err)
+	err = f.pertemuan.SelesaiPertemuan(pertama.ID, f.kelasID, models.SelesaiPertemuanRequest{
+		Absensi: []models.AbsensiInput{{SantriID: santriID, Status: "hadir"}},
+	}, f.guruUtamaUser)
+	require.ErrorContains(t, err, "batas materi wajib")
+
+	require.NoError(t, f.pertemuan.SelesaiPertemuan(pertama.ID, f.kelasID, models.SelesaiPertemuanRequest{
+		Absensi: []models.AbsensiInput{{SantriID: santriID, Status: "hadir", BatasMateri: "Jilid 2 halaman 7"}},
+	}, f.guruUtamaUser))
+
+	kedua, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "09:00"})
+	require.NoError(t, err)
+	require.NoError(t, f.pertemuan.SelesaiPertemuan(kedua.ID, f.kelasID, models.SelesaiPertemuanRequest{
+		Absensi: []models.AbsensiInput{{SantriID: santriID, Status: "izin", BatasMateri: "Harus diabaikan"}},
+	}, f.guruUtamaUser))
+
+	_, absensi, err := f.pertemuan.GetPertemuanByID(kedua.ID, f.kelasID)
+	require.NoError(t, err)
+	require.Len(t, absensi, 1)
+	require.Empty(t, absensi[0].BatasMateri)
+
+	last, err := f.pertemuan.GetBatasMateriTerakhir(f.kelasID)
+	require.NoError(t, err)
+	require.Equal(t, "Jilid 2 halaman 7", last[santriID])
+	require.ErrorContains(t, f.pertemuan.EditAbsensi(f.kelasID, absensi[0].ID, "hadir", "", ""), "batas materi wajib")
+}
+
+func TestGetLastCompletedAbsensiHanyaMengambilPertemuanTerakhir(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	_, err := f.db.Exec(`INSERT INTO santri (nama, kelas_id, status) VALUES ('Santri Uji', ?, 'aktif')`, f.kelasID)
+	require.NoError(t, err)
+	santriID, err := lastID(f.db)
+	require.NoError(t, err)
+
+	pertama, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "08:00"})
+	require.NoError(t, err)
+	require.NoError(t, f.pertemuan.SelesaiPertemuan(pertama.ID, f.kelasID, models.SelesaiPertemuanRequest{
+		Materi: "Materi pertama", Absensi: []models.AbsensiInput{{SantriID: santriID, Status: "izin", Catatan: "Catatan lama"}},
+	}, f.guruUtamaUser))
+
+	kedua, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "09:00"})
+	require.NoError(t, err)
+	require.NoError(t, f.pertemuan.SelesaiPertemuan(kedua.ID, f.kelasID, models.SelesaiPertemuanRequest{
+		Materi: "Materi terbaru", Absensi: []models.AbsensiInput{{SantriID: santriID, Status: "hadir", Catatan: "Catatan terbaru"}},
+	}, f.guruUtamaUser))
+
+	pertemuan, absensi, err := f.pertemuan.GetLastCompletedAbsensi(f.kelasID)
+	require.NoError(t, err)
+	require.NotNil(t, pertemuan)
+	require.Equal(t, kedua.ID, pertemuan.ID)
+	require.Equal(t, "Materi terbaru", pertemuan.Materi)
+	require.Len(t, absensi, 1)
+	require.Equal(t, "hadir", absensi[0].Status)
+	require.Equal(t, "Catatan terbaru", absensi[0].Catatan)
+}
+
+func TestGetLastCompletedAbsensiTanpaPertemuanSelesai(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+
+	pertemuan, absensi, err := f.pertemuan.GetLastCompletedAbsensi(f.kelasID)
+	require.NoError(t, err)
+	require.Nil(t, pertemuan)
+	require.Empty(t, absensi)
 }
 
 func TestSelesaiPertemuanHanyaDapatDiprosesSekali(t *testing.T) {

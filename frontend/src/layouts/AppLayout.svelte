@@ -75,6 +75,7 @@
 		{ href: "/app/guru/kelas", label: "Kelas Guru", group: "guru-kelas", category: "Guru", show: isGuruWorkflow, icon: ClipboardList },
 		{ href: "/app/guru/tsi", label: "Nilai TSI Saya", group: "guru-tsi", category: "Guru", show: isGuru, icon: Award },
 		{ href: "/app/koordinator-guru", label: "Dashboard Koordinator", group: "koordinator", category: "Koordinator Guru", show: isKoordinator, icon: UserCheck },
+		{ href: "/app/koordinator-guru/monitoring-kelas", label: "Monitoring Kelas", group: "koordinator-monitoring", category: "Koordinator Guru", show: isKoordinator, icon: CalendarClock },
 		{ href: "/app/koordinator-guru/guru", label: "Data Guru", group: "koordinator-guru", category: "Koordinator Guru", show: isKoordinator, icon: Users },
 		{ href: "/app/koordinator-guru/pembinaan", label: "Pembinaan", group: "koordinator-pembinaan", category: "Koordinator Guru", show: isKoordinator, icon: GraduationCap },
 		{ href: "/app/koordinator-guru/rapat", label: "Rapat Guru", group: "koordinator-rapat", category: "Koordinator Guru", show: isKoordinator, icon: ClipboardList },
@@ -111,6 +112,7 @@
 		if (path.startsWith("/app/guru/kelas")) return "guru-kelas";
 		if (path.startsWith("/app/guru/tsi")) return "guru-tsi";
 		if (path === "/app/guru" || path === "/app/guru/") return "guru-dashboard";
+		if (path.startsWith("/app/koordinator-guru/monitoring-kelas")) return "koordinator-monitoring";
 		if (path.startsWith("/app/koordinator-guru/tsi")) return "koordinator-tsi";
 		if (path.startsWith("/app/koordinator-guru/todo")) return "koordinator-todo";
 		if (path.startsWith("/app/koordinator-guru/guru")) return "koordinator-guru";

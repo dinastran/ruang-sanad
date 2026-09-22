@@ -111,7 +111,7 @@ func (q *Queries) CreateJadwalPertemuan(ctx context.Context, arg CreateJadwalPer
 }
 
 const getJadwalPertemuanByID = `-- name: GetJadwalPertemuanByID :one
-SELECT id, kelas_id, tanggal, jam_mulai, catatan, is_reschedule, jadwal_semula, alasan_reschedule, guru_pengganti_id, alasan_badal, status, pertemuan_id, dibuat_oleh, created_at, updated_at FROM jadwal_pertemuan WHERE id = ? AND kelas_id = ?
+SELECT id, kelas_id, tanggal, jam_mulai, catatan, is_reschedule, jadwal_semula, alasan_reschedule, guru_pengganti_id, alasan_badal, status, pertemuan_id, dibuat_oleh, created_at, updated_at, jadwal_kelas_berubah FROM jadwal_pertemuan WHERE id = ? AND kelas_id = ?
 `
 
 type GetJadwalPertemuanByIDParams struct {
@@ -138,12 +138,13 @@ func (q *Queries) GetJadwalPertemuanByID(ctx context.Context, arg GetJadwalPerte
 		&i.DibuatOleh,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.JadwalKelasBerubah,
 	)
 	return i, err
 }
 
 const listDueJadwalPertemuanByKelas = `-- name: ListDueJadwalPertemuanByKelas :many
-SELECT jp.id, jp.kelas_id, jp.tanggal, jp.jam_mulai, jp.catatan, jp.is_reschedule, jp.jadwal_semula, jp.alasan_reschedule, jp.guru_pengganti_id, jp.alasan_badal, jp.status, jp.pertemuan_id, jp.dibuat_oleh, jp.created_at, jp.updated_at, COALESCE(gb.nama, '') AS guru_pengganti_nama
+SELECT jp.id, jp.kelas_id, jp.tanggal, jp.jam_mulai, jp.catatan, jp.is_reschedule, jp.jadwal_semula, jp.alasan_reschedule, jp.guru_pengganti_id, jp.alasan_badal, jp.status, jp.pertemuan_id, jp.dibuat_oleh, jp.created_at, jp.updated_at, jp.jadwal_kelas_berubah, COALESCE(gb.nama, '') AS guru_pengganti_nama
 FROM jadwal_pertemuan jp
 LEFT JOIN guru gb ON gb.id = jp.guru_pengganti_id
 WHERE jp.kelas_id = ? AND jp.status = 'dijadwalkan' AND jp.tanggal <= ?
@@ -156,22 +157,23 @@ type ListDueJadwalPertemuanByKelasParams struct {
 }
 
 type ListDueJadwalPertemuanByKelasRow struct {
-	ID                int64
-	KelasID           int64
-	Tanggal           time.Time
-	JamMulai          string
-	Catatan           string
-	IsReschedule      int64
-	JadwalSemula      string
-	AlasanReschedule  string
-	GuruPenggantiID   sql.NullInt64
-	AlasanBadal       string
-	Status            string
-	PertemuanID       sql.NullInt64
-	DibuatOleh        sql.NullInt64
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	GuruPenggantiNama string
+	ID                 int64
+	KelasID            int64
+	Tanggal            time.Time
+	JamMulai           string
+	Catatan            string
+	IsReschedule       int64
+	JadwalSemula       string
+	AlasanReschedule   string
+	GuruPenggantiID    sql.NullInt64
+	AlasanBadal        string
+	Status             string
+	PertemuanID        sql.NullInt64
+	DibuatOleh         sql.NullInt64
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	JadwalKelasBerubah int64
+	GuruPenggantiNama  string
 }
 
 func (q *Queries) ListDueJadwalPertemuanByKelas(ctx context.Context, arg ListDueJadwalPertemuanByKelasParams) ([]ListDueJadwalPertemuanByKelasRow, error) {
@@ -199,6 +201,7 @@ func (q *Queries) ListDueJadwalPertemuanByKelas(ctx context.Context, arg ListDue
 			&i.DibuatOleh,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.JadwalKelasBerubah,
 			&i.GuruPenggantiNama,
 		); err != nil {
 			return nil, err
@@ -216,7 +219,7 @@ func (q *Queries) ListDueJadwalPertemuanByKelas(ctx context.Context, arg ListDue
 
 const listJadwalPertemuanForGuru = `-- name: ListJadwalPertemuanForGuru :many
 SELECT
-    jp.id, jp.kelas_id, jp.tanggal, jp.jam_mulai, jp.catatan, jp.is_reschedule, jp.jadwal_semula, jp.alasan_reschedule, jp.guru_pengganti_id, jp.alasan_badal, jp.status, jp.pertemuan_id, jp.dibuat_oleh, jp.created_at, jp.updated_at,
+    jp.id, jp.kelas_id, jp.tanggal, jp.jam_mulai, jp.catatan, jp.is_reschedule, jp.jadwal_semula, jp.alasan_reschedule, jp.guru_pengganti_id, jp.alasan_badal, jp.status, jp.pertemuan_id, jp.dibuat_oleh, jp.created_at, jp.updated_at, jp.jadwal_kelas_berubah,
     k.nama_kelas,
     k.guru_id AS guru_utama_id,
     COALESCE(gu.nama, '') AS guru_utama_nama,
@@ -235,25 +238,26 @@ ORDER BY jp.tanggal, jp.jam_mulai, jp.id
 `
 
 type ListJadwalPertemuanForGuruRow struct {
-	ID                int64
-	KelasID           int64
-	Tanggal           time.Time
-	JamMulai          string
-	Catatan           string
-	IsReschedule      int64
-	JadwalSemula      string
-	AlasanReschedule  string
-	GuruPenggantiID   sql.NullInt64
-	AlasanBadal       string
-	Status            string
-	PertemuanID       sql.NullInt64
-	DibuatOleh        sql.NullInt64
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	NamaKelas         string
-	GuruUtamaID       sql.NullInt64
-	GuruUtamaNama     string
-	GuruPenggantiNama string
+	ID                 int64
+	KelasID            int64
+	Tanggal            time.Time
+	JamMulai           string
+	Catatan            string
+	IsReschedule       int64
+	JadwalSemula       string
+	AlasanReschedule   string
+	GuruPenggantiID    sql.NullInt64
+	AlasanBadal        string
+	Status             string
+	PertemuanID        sql.NullInt64
+	DibuatOleh         sql.NullInt64
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	JadwalKelasBerubah int64
+	NamaKelas          string
+	GuruUtamaID        sql.NullInt64
+	GuruUtamaNama      string
+	GuruPenggantiNama  string
 }
 
 func (q *Queries) ListJadwalPertemuanForGuru(ctx context.Context, guruID interface{}) ([]ListJadwalPertemuanForGuruRow, error) {
@@ -281,6 +285,7 @@ func (q *Queries) ListJadwalPertemuanForGuru(ctx context.Context, guruID interfa
 			&i.DibuatOleh,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.JadwalKelasBerubah,
 			&i.NamaKelas,
 			&i.GuruUtamaID,
 			&i.GuruUtamaNama,
@@ -297,6 +302,17 @@ func (q *Queries) ListJadwalPertemuanForGuru(ctx context.Context, guruID interfa
 		return nil, err
 	}
 	return items, nil
+}
+
+const markJadwalPertemuanKelasBerubah = `-- name: MarkJadwalPertemuanKelasBerubah :exec
+UPDATE jadwal_pertemuan
+SET jadwal_kelas_berubah = 1, updated_at = CURRENT_TIMESTAMP
+WHERE kelas_id = ? AND status = 'dijadwalkan'
+`
+
+func (q *Queries) MarkJadwalPertemuanKelasBerubah(ctx context.Context, kelasID int64) error {
+	_, err := q.db.ExecContext(ctx, markJadwalPertemuanKelasBerubah, kelasID)
+	return err
 }
 
 const markJadwalPertemuanSelesai = `-- name: MarkJadwalPertemuanSelesai :exec
@@ -339,7 +355,7 @@ func (q *Queries) UpdateJadwalPertemuanBadal(ctx context.Context, arg UpdateJadw
 const updateJadwalPertemuanReschedule = `-- name: UpdateJadwalPertemuanReschedule :execrows
 UPDATE jadwal_pertemuan
 SET tanggal = ?, jam_mulai = ?, is_reschedule = 1, jadwal_semula = ?,
-    alasan_reschedule = ?, updated_at = CURRENT_TIMESTAMP
+    alasan_reschedule = ?, jadwal_kelas_berubah = 0, updated_at = CURRENT_TIMESTAMP
 WHERE id = ? AND kelas_id = ? AND status = 'dijadwalkan'
 `
 

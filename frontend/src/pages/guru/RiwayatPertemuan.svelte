@@ -2,6 +2,7 @@
 	import { inertia } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import type { User, GuruKelas, PertemuanGuru } from "@lib/types";
+	import { nomorPertemuan } from "@lib/pertemuan";
 	import { ArrowLeft, Calendar, Clock, BookOpen, RotateCcw, UserRoundCheck } from "lucide-svelte";
 
 	interface Props {
@@ -33,7 +34,10 @@
 							<div class="flex gap-3 min-w-0">
 								<div class="w-10 h-10 shrink-0 rounded-xl bg-brand-400/10 flex items-center justify-center text-brand-600 dark:text-brand-400"><BookOpen class="w-5 h-5" /></div>
 								<div>
-									<h2 class="font-semibold text-neutral-900 dark:text-white">Pertemuan ke-{item.pertemuan_ke}</h2>
+									<h2 class="font-semibold text-neutral-900 dark:text-white">
+										Pertemuan ke-{nomorPertemuan(item)}
+										{#if item.level_nama}<span class="ml-1.5 rounded-md bg-brand-400/10 px-1.5 py-0.5 align-middle text-xs font-semibold text-brand-700 dark:text-brand-400">{item.level_nama}</span>{/if}
+									</h2>
 									<div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-neutral-500">
 										<span class="inline-flex items-center gap-1"><Calendar class="w-3.5 h-3.5" />{item.tanggal}</span>
 										<span class="inline-flex items-center gap-1"><Clock class="w-3.5 h-3.5" />{item.jam_mulai}{item.jam_selesai ? " - " + item.jam_selesai : ""}</span>

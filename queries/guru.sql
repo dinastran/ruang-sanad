@@ -30,7 +30,7 @@ SELECT COUNT(*) FROM guru WHERE user_id = ?;
 
 -- name: ListKelasByGuruID :many
 SELECT kelas.id, kelas.kunci_kelas, kelas.angkatan, kelas.tipe, kelas.jenis_kelamin, kelas.level, kelas.frekuensi, kelas.jadwal, kelas.sub_index, kelas.nama_kelas, kelas.guru_id, guru.nama AS guru_nama, kelas.kapasitas,
-    (SELECT COUNT(*) FROM santri s WHERE s.kelas_id = kelas.id AND s.status != 'tidak_lanjut') AS jumlah_santri,
+    (SELECT COUNT(*) FROM santri s WHERE s.kelas_id = kelas.id AND s.status IN ('aktif', 'cuti')) AS jumlah_santri,
     kelas.created_at, kelas.is_aktif
 FROM kelas
 LEFT JOIN guru ON guru.id = kelas.guru_id
@@ -69,7 +69,9 @@ SELECT k.id, k.nama_kelas, k.jadwal, k.level, k.tipe,
     COALESCE(lp.tanggal_terakhir, '') AS tanggal_terakhir
 FROM kelas k
 LEFT JOIN (
-    SELECT kelas_id, MAX(pertemuan_ke) AS pertemuan_terakhir, MAX(tanggal) AS tanggal_terakhir
+    SELECT kelas_id,
+        (SELECT p2.pertemuan_level_ke FROM pertemuan p2 WHERE p2.kelas_id = pertemuan.kelas_id ORDER BY p2.pertemuan_ke DESC LIMIT 1) AS pertemuan_terakhir,
+        MAX(tanggal) AS tanggal_terakhir
     FROM pertemuan
     GROUP BY kelas_id
 ) lp ON lp.kelas_id = k.id

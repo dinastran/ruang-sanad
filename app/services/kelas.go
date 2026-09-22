@@ -71,16 +71,22 @@ func (s *KelasService) GetDetail(kelasID int64) (*models.KelasResponse, []models
 	}
 
 	if pertemuan, err := s.querier.GetLastPertemuanByKelas(context.Background(), kelasID); err == nil {
-		kelas.PertemuanTerakhir = pertemuan.PertemuanKe
+		kelas.PertemuanTerakhir = pertemuan.PertemuanLevelKe
 		kelas.TanggalPertemuanTerakhir = pertemuan.Tanggal.Format("2006-01-02")
 		kelas.MateriTerakhir = pertemuan.Materi
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, err
 	}
 
-	santri, err := s.GetSantriByKelasID(kelasID)
+	// Detail Kelas lists every status (aktif, cuti, nonaktif, tidak_lanjut);
+	// the page groups them into roster and history sections.
+	rows, err := s.querier.GetSantriRosterByKelasID(context.Background(), sql.NullInt64{Int64: kelasID, Valid: true})
 	if err != nil {
 		return nil, nil, err
+	}
+	santri := make([]models.SantriResponse, len(rows))
+	for i, row := range rows {
+		santri[i] = row.ToResponse()
 	}
 
 	stats, err := s.querier.CountAbsensiSantriByKelas(context.Background(), kelasID)
@@ -152,6 +158,17 @@ func (s *KelasService) SetAktif(kelasID int64, aktif bool) error {
 	return s.querier.SetKelasAktif(context.Background(), queries.SetKelasAktifParams{
 		IsAktif: v,
 		ID:      kelasID,
+	})
+}
+
+func (s *KelasService) SetMateriIndividual(kelasID int64, enabled bool) error {
+	var value int64
+	if enabled {
+		value = 1
+	}
+	return s.querier.SetKelasMateriIndividual(context.Background(), queries.SetKelasMateriIndividualParams{
+		MateriIndividual: value,
+		ID:               kelasID,
 	})
 }
 

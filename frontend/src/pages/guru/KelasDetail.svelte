@@ -3,7 +3,8 @@
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import GenderBadge from "@components/GenderBadge.svelte";
-	import type { Flash, User, GuruKelas, PertemuanGuru, SantriGuru, Riayah } from "@lib/types";
+	import type { AbsensiGuru, Flash, User, GuruKelas, PertemuanGuru, SantriGuru, Riayah } from "@lib/types";
+	import { nomorPertemuan } from "@lib/pertemuan";
 	import { getCSRFToken } from "@lib/utils/csrf";
 	import { Toast } from "@lib/notifications/toast";
 	import {
@@ -16,16 +17,20 @@
 		kelas: GuruKelas;
 		santri: SantriGuru[];
 		active_pertemuan?: PertemuanGuru;
+		last_pertemuan?: PertemuanGuru;
+		last_absensi?: AbsensiGuru[];
 		success?: string;
 		error?: string;
 		flash?: Flash;
 	}
 
-	let { user, kelas, santri = [], active_pertemuan, success, error, flash }: Props = $props();
+	let { user, kelas, santri = [], active_pertemuan, last_pertemuan, last_absensi = [], success, error, flash }: Props = $props();
 	let canEdit = $derived(user?.role === "guru" || user?.role === "admin_kelas" || user?.role === "super_admin");
 	let isBroadcastOpen = $state(false);
 	let isBroadcastCopied = $state(false);
-	let broadcastMessage = $derived(`Assalamu'alaikum warahmatullahi wabarakatuh.\n\n*Laporan Kelas ${kelas.nama_kelas}* 📚\n\n*Pertemuan terakhir:* ${kelas.pertemuan_terakhir ? `Ke-${kelas.pertemuan_terakhir}${kelas.tanggal_terakhir ? ` (${kelas.tanggal_terakhir})` : ""}` : "Belum ada pertemuan tercatat"}\n*Materi:* ${kelas.materi_terakhir || "Belum diisi"}\n\n*Rekap Kehadiran Santri* 📝\n${santri.length > 0 ? santri.map((s, index) => `${index + 1}. *${s.nama}*\n   ✅ Hadir: ${s.total_hadir} | 🟡 Izin: ${s.total_izin} | 🤒 Sakit: ${s.total_sakit}\n   ❌ Alpa: ${s.total_alpa} | ⏰ Telat: ${s.total_telat}`).join("\n\n") : "Belum ada santri di kelas ini."}\n\nJazakumullahu khairan.`);
+	const attendanceLabels: Record<string, string> = { hadir: "Hadir", izin: "Izin", sakit: "Sakit", alpa: "Alpa", telat: "Telat" };
+	let batasMateriBySantri = $derived(Object.fromEntries(santri.map((item) => [item.id, item.batas_materi_terakhir])));
+	let broadcastMessage = $derived(`Assalamu'alaikum warahmatullahi wabarakatuh.\n\n*Laporan Kelas ${kelas.nama_kelas}* 📚\n\n*Pertemuan terakhir:* ${last_pertemuan ? `Ke-${nomorPertemuan(last_pertemuan)}${last_pertemuan.level_nama ? ` level ${last_pertemuan.level_nama}` : ""} (${last_pertemuan.tanggal})` : "Belum ada pertemuan tercatat"}\n*Materi:* ${last_pertemuan?.materi || "Belum diisi"}\n\n*Absensi Pertemuan Terakhir* 📝\n${last_absensi.length > 0 ? last_absensi.map((item, index) => `${index + 1}. *${item.santri_nama}* — ${attendanceLabels[item.status] || item.status}${kelas.materi_individual ? `\n   Batas materi: ${item.batas_materi || batasMateriBySantri[item.santri_id] || "Belum tercatat"}` : ""}${item.catatan.trim() ? `\n   Catatan: ${item.catatan.trim()}` : ""}`).join("\n\n") : "Belum ada absensi pertemuan tercatat."}\n\nJazakumullahu khairan.`);
 
 	function openBroadcast() {
 		isBroadcastCopied = false;
@@ -156,7 +161,7 @@
 						<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400"><Play class="h-5 w-5" /></div>
 						<div>
 							<div class="flex flex-wrap items-center gap-2">
-								<h2 class="font-semibold text-neutral-900 dark:text-white">Pertemuan ke-{active_pertemuan.pertemuan_ke}</h2>
+								<h2 class="font-semibold text-neutral-900 dark:text-white">Pertemuan ke-{nomorPertemuan(active_pertemuan)}</h2>
 								<span class="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400">Sedang berlangsung</span>
 							</div>
 							<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Dimulai {active_pertemuan.tanggal} pukul {active_pertemuan.jam_mulai}</p>
@@ -224,6 +229,7 @@
 								<th class="text-center px-4 py-3">I/S/A/T</th>
 								<th class="text-center px-4 py-3">%</th>
 								<th class="text-left px-4 py-3">Terakhir</th>
+								{#if kelas.materi_individual}<th class="text-left px-4 py-3">Batas Materi</th>{/if}
 								<th class="text-right px-4 py-3">Aksi</th>
 							</tr>
 						</thead>
@@ -244,6 +250,7 @@
 										{s.persen_hadir}%
 									</td>
 									<td class="px-4 py-3 text-xs text-neutral-500 font-mono">{s.tanggal_hadir_terakhir || "-"}</td>
+									{#if kelas.materi_individual}<td class="px-4 py-3 text-xs text-neutral-600 dark:text-neutral-300">{s.batas_materi_terakhir || "-"}</td>{/if}
 									<td class="px-4 py-3 text-right">
 										<div class="flex items-center justify-end gap-1">
 											<button onclick={() => openRiayahModal(s)}
@@ -273,7 +280,7 @@
 								</tr>
 								{#if expandedRiwayat[s.id]}
 									<tr class="bg-neutral-50/50 dark:bg-white/[0.015]">
-										<td colspan="9" class="px-4 py-3">
+										<td colspan={kelas.materi_individual ? 10 : 9} class="px-4 py-3">
 											<div class="text-xs text-neutral-500">
 												<p class="mb-1">Mulai: {s.tanggal_mulai} &middot; Hadir: {s.total_hadir} &middot; Izin: {s.total_izin} &middot; Sakit: {s.total_sakit} &middot; Alpa: {s.total_alpa} &middot; Telat: {s.total_telat}</p>
 												<a href={"https://wa.me/" + s.no_wa.replace(/[^0-9]/g, "")} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-brand-600 dark:text-brand-400 hover:underline mt-1">
@@ -335,7 +342,8 @@
 								<div class="text-xs text-neutral-500 bg-neutral-50 dark:bg-neutral-900/50 rounded-xl p-3 space-y-1">
 									<p>Mulai: {s.tanggal_mulai}</p>
 									<p>Hadir: {s.total_hadir} | Izin: {s.total_izin} | Sakit: {s.total_sakit} | Alpa: {s.total_alpa} | Telat: {s.total_telat}</p>
-									<p>Terakhir hadir: {s.tanggal_hadir_terakhir || "-"}</p>
+								<p>Terakhir hadir: {s.tanggal_hadir_terakhir || "-"}</p>
+								{#if kelas.materi_individual}<p>Batas materi: {s.batas_materi_terakhir || "-"}</p>{/if}
 									<a href={"https://wa.me/" + s.no_wa.replace(/[^0-9]/g, "")} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-brand-600 dark:text-brand-400 hover:underline mt-1">
 										<ExternalLink class="w-3 h-3" /> Hubungi via WhatsApp
 									</a>

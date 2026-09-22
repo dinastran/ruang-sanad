@@ -198,3 +198,48 @@ func TestTagihanWhatsAppHelpers(t *testing.T) {
 	_, err = frekuensiKePertemuan("4x pertemuan")
 	require.Error(t, err)
 }
+
+func TestTagihanSantriPindahKeKelasTertinggalMelanjutkanBulan(t *testing.T) {
+	db, service, asalID := setupTagihanService(t, "1x/pekan", 0)
+	require.NoError(t, service.GenerateForPertemuan(createSelesaiPertemuan(t, db, asalID, 8)))
+	require.NoError(t, service.GenerateForPertemuan(createSelesaiPertemuan(t, db, asalID, 12)))
+	require.EqualValues(t, 2, tagihanCount(t, db))
+
+	// Pindah ke kelas yang baru di pertemuan 1 (anchor = pertemuan berikutnya).
+	_, err := db.Exec(`INSERT INTO kelas (kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, kapasitas) VALUES ('B', '2026', 'Reguler', 'L', 'Dasar', '1x/pekan', 'Selasa', 1, 'Kelas Tujuan', 20)`)
+	require.NoError(t, err)
+	tujuanID, err := lastID(db)
+	require.NoError(t, err)
+	_, err = db.Exec(`UPDATE santri SET kelas_id = ?, pertemuan_awal = 2`, tujuanID)
+	require.NoError(t, err)
+
+	var santriID int64
+	require.NoError(t, db.QueryRow(`SELECT id FROM santri`).Scan(&santriID))
+	hadir := func(pertemuanID int64) {
+		_, err := db.Exec(`INSERT INTO absensi (pertemuan_id, santri_id, status) VALUES (?, ?, 'hadir')`, pertemuanID, santriID)
+		require.NoError(t, err)
+	}
+
+	p8 := createSelesaiPertemuan(t, db, tujuanID, 8)
+	hadir(p8)
+	require.NoError(t, service.GenerateForPertemuan(p8))
+	require.NoError(t, service.GenerateForPertemuan(p8), "idempoten per pertemuan")
+	p12 := createSelesaiPertemuan(t, db, tujuanID, 12)
+	hadir(p12)
+	require.NoError(t, service.GenerateForPertemuan(p12))
+	// Pertemuan 16 tanpa absensi santri (mis. sedang cuti): Sync tidak boleh
+	// menagihnya sebagai bulan lanjutan.
+	createSelesaiPertemuan(t, db, tujuanID, 16)
+	require.NoError(t, service.Sync())
+
+	rows, err := db.Query(`SELECT bulan_ke FROM tagihan WHERE kelas_id = ? ORDER BY bulan_ke`, tujuanID)
+	require.NoError(t, err)
+	defer rows.Close()
+	var bulan []int64
+	for rows.Next() {
+		var b int64
+		require.NoError(t, rows.Scan(&b))
+		bulan = append(bulan, b)
+	}
+	require.Equal(t, []int64{4, 5}, bulan, "tagihan di kelas tujuan melanjutkan bulan, tidak hilang")
+}

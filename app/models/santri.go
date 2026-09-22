@@ -102,6 +102,9 @@ type SantriResponse struct {
 	IsLengkap              bool    `json:"is_lengkap"`
 	KelasID                *int64  `json:"kelas_id"`
 	Status                 string  `json:"status"`
+	StatusAlasan           string  `json:"status_alasan"`
+	CutiMulai              string  `json:"cuti_mulai"`
+	CutiSelesai            string  `json:"cuti_selesai"`
 	TotalHadir             int64   `json:"total_hadir"`
 	TotalIzin              int64   `json:"total_izin"`
 	TotalSakit             int64   `json:"total_sakit"`
@@ -116,4 +119,26 @@ type SantriResponse struct {
 type SantriListResponse struct {
 	Data  []SantriResponse `json:"data"`
 	Total int64            `json:"total"`
+}
+
+// UpdateSantriStatusRequest is submitted by Admin Kelas from the class detail
+// page. CutiMulai/CutiSelesai (YYYY-MM-DD) are required only for status cuti.
+type UpdateSantriStatusRequest struct {
+	Status      string `json:"status"`
+	Alasan      string `json:"alasan"`
+	CutiMulai   string `json:"cuti_mulai"`
+	CutiSelesai string `json:"cuti_selesai"`
+}
+
+type SantriStatusLogResponse struct {
+	ID             int64  `json:"id"`
+	SantriID       int64  `json:"santri_id"`
+	SantriNama     string `json:"santri_nama"`
+	StatusLama     string `json:"status_lama"`
+	StatusBaru     string `json:"status_baru"`
+	Alasan         string `json:"alasan"`
+	CutiMulai      string `json:"cuti_mulai"`
+	CutiSelesai    string `json:"cuti_selesai"`
+	DibuatOlehNama string `json:"dibuat_oleh_nama"`
+	CreatedAt      string `json:"created_at"`
 }
