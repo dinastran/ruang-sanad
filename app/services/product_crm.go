@@ -97,8 +97,14 @@ func (s *ProductCRMService) UpdateProduct(id int64, req models.UpdateProductRequ
 	if req.Kategori == "program" {
 		req.TrackStok = false
 	}
-	if current.TrackStok && !req.TrackStok && current.Stok != 0 {
-		return errors.New("pelacakan stok tidak dapat dimatikan selama stok belum nol")
+	if current.Kategori != req.Kategori || current.TrackStok != req.TrackStok {
+		hasHistory, err := s.querier.ProdukHasHistory(ctx, id)
+		if err != nil {
+			return err
+		}
+		if hasHistory {
+			return errors.New("kategori dan mode stok tidak dapat diubah setelah produk memiliki histori transaksi")
+		}
 	}
 	return s.querier.UpdateProduk(ctx, id, req.Nama, req.Kategori, req.TrackStok, req.IsAktif)
 }
