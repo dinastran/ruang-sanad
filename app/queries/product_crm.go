@@ -3,7 +3,6 @@ package queries
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 
 	"github.com/maulanashalihin/laju-go/app/models"
@@ -422,7 +421,3 @@ func (q *Queries) ListStockMutations(ctx context.Context, limit int64) ([]models
 	return out, rows.Err()
 }
 
-func (q *Queries) DebugProductCRM(ctx context.Context) error {
-	var n int
-	return q.db.QueryRowContext(ctx, fmt.Sprintf("SELECT %d", 1)).Scan(&n)
-}
