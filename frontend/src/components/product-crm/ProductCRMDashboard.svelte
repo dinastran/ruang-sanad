@@ -118,11 +118,13 @@
 		drilldownError,
 	}: Props = $props();
 
+	let draftCategory = $state("");
 	let draftProductID = $state(0);
 	let draftBatchID = $state(0);
 	let selectedOffer = $state<Record<number, string>>({});
 
 	$effect(() => {
+		draftCategory = filters?.category || "";
 		draftProductID = Number(filters?.product_id || 0);
 		draftBatchID = Number(filters?.batch_id || 0);
 	});
@@ -162,9 +164,15 @@
 	function params() {
 		return new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
 	}
-	function navigate(p: URLSearchParams, preserveScroll = true) {
+	function navigate(p: URLSearchParams, preserveScroll = true, focusDrilldown = true) {
 		p.set("tab", "dashboard");
-		router.get(`/app/produk-crm?${p.toString()}`, {}, { preserveScroll });
+		router.get(`/app/produk-crm?${p.toString()}`, {}, {
+			preserveScroll,
+			onSuccess: () => {
+				if (!focusDrilldown || !p.has("drilldown")) return;
+				setTimeout(() => document.getElementById("crm-drilldown")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+			},
+		});
 	}
 	function clearDrillParams(p: URLSearchParams) {
 		p.delete("drill_page");
@@ -242,7 +250,7 @@
 		p.delete("drilldown");
 		p.delete("drill_page");
 		p.delete("drill_period");
-		navigate(p);
+		navigate(p, true, false);
 	}
 	function goDrillPage(page: number) {
 		if (!drilldown || page < 1 || page > drillTotalPages) return;
@@ -399,7 +407,7 @@
 				<input name="date_to" type="date" value={filters?.date_to || ""} class="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm font-normal text-neutral-900 outline-none focus:border-brand-400 dark:border-white/[0.08] dark:bg-neutral-900 dark:text-white" />
 			</label>
 			<label class="space-y-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-400">Kategori
-				<select name="category" value={filters?.category || ""} class="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm font-normal text-neutral-900 outline-none focus:border-brand-400 dark:border-white/[0.08] dark:bg-neutral-900 dark:text-white"><option value="">Semua kategori</option><option value="buku">Buku</option><option value="program">Program</option></select>
+				<select name="category" bind:value={draftCategory} onchange={() => { const current = products.find((p) => p.id === Number(draftProductID)); if (current && draftCategory && current.kategori !== draftCategory) { draftProductID = 0; draftBatchID = 0; } }} class="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm font-normal text-neutral-900 outline-none focus:border-brand-400 dark:border-white/[0.08] dark:bg-neutral-900 dark:text-white"><option value="">Semua kategori</option><option value="buku">Buku</option><option value="program">Program</option></select>
 			</label>
 			<label class="space-y-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-400">Status Mahasantri
 				<select name="status" value={filters?.status || ""} class="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm font-normal text-neutral-900 outline-none focus:border-brand-400 dark:border-white/[0.08] dark:bg-neutral-900 dark:text-white"><option value="">Semua status</option><option value="aktif">Aktif</option><option value="cuti">Cuti</option><option value="nonaktif">Nonaktif</option><option value="tidak_lanjut">Tidak lanjut</option></select>
@@ -407,7 +415,7 @@
 		</div>
 		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
 			<label class="space-y-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-400">Produk / program
-				<select name="product_id" bind:value={draftProductID} onchange={() => (draftBatchID = 0)} class="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm font-normal text-neutral-900 outline-none focus:border-brand-400 dark:border-white/[0.08] dark:bg-neutral-900 dark:text-white"><option value={0}>Semua produk</option>{#each products.filter((p) => p.is_aktif) as p}<option value={p.id}>{p.nama}</option>{/each}</select>
+				<select name="product_id" bind:value={draftProductID} onchange={() => (draftBatchID = 0)} class="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm font-normal text-neutral-900 outline-none focus:border-brand-400 dark:border-white/[0.08] dark:bg-neutral-900 dark:text-white"><option value={0}>Semua produk</option>{#each products.filter((p) => p.is_aktif && (!draftCategory || p.kategori === draftCategory)) as p}<option value={p.id}>{p.nama}</option>{/each}</select>
 			</label>
 			<label class="space-y-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-400">Batch / edisi
 				<select name="dashboard_batch_id" bind:value={draftBatchID} disabled={!draftProduct?.batches?.length} class="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm font-normal text-neutral-900 outline-none focus:border-brand-400 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[0.08] dark:bg-neutral-900 dark:text-white"><option value={0}>Semua batch / edisi</option>{#each draftProduct?.batches || [] as b}<option value={b.id}>{b.nama}</option>{/each}</select>
