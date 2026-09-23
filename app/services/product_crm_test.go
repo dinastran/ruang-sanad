@@ -208,3 +208,38 @@ func TestProductDashboardSummarizesCRMAndInventory(t *testing.T) {
 	require.Equal(t, int64(2), dashboard.InventoryHealth[0].Stock)
 	require.Equal(t, "critical", dashboard.InventoryHealth[0].Status)
 }
+
+
+func TestProductDashboardDrilldownIncludesContactAndOwnership(t *testing.T) {
+	f := setupProductCRM(t)
+	_, err := f.db.Exec(`UPDATE santri SET no_wa = '081234567890' WHERE id = ?`, f.santriID)
+	require.NoError(t, err)
+
+	productID := f.createBook(t, "Buku Follow Up")
+	require.NoError(t, f.service.AddStock(models.StockEntryRequest{
+		ProdukID: productID, Tipe: "stok_awal", Qty: 2,
+	}, f.adminID))
+	require.NoError(t, f.service.AssignProduct(f.santriID, models.AssignProductRequest{
+		ProdukID: productID, Tanggal: "2026-09-23",
+	}, f.adminID))
+
+	drilldown, _, err := f.service.DashboardDrilldown(models.ProductCRMDashboardFilters{
+		DateFrom: "2026-09-01",
+		DateTo: "2026-09-30",
+		ProductID: productID,
+	}, "period", "", 1, 20)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), drilldown.Total)
+	require.Len(t, drilldown.Data, 1)
+	require.Equal(t, "081234567890", drilldown.Data[0].NoWA)
+	require.Len(t, drilldown.Data[0].Owned, 1)
+	require.Equal(t, productID, drilldown.Data[0].Owned[0].ProductID)
+
+	missing, _, err := f.service.DashboardDrilldown(models.ProductCRMDashboardFilters{
+		DateFrom: "2026-09-01",
+		DateTo: "2026-09-30",
+		ProductID: productID,
+	}, "missing", "", 1, 20)
+	require.NoError(t, err)
+	require.Zero(t, missing.Total)
+}
