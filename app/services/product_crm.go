@@ -430,6 +430,53 @@ func (s *ProductCRMService) Dashboard(filters models.ProductCRMDashboardFilters)
 	}, filters, nil
 }
 
+func (s *ProductCRMService) DashboardDrilldown(filters models.ProductCRMDashboardFilters, mode, period string, page, limit int64) (*models.ProductCRMDrilldown, models.ProductCRMDashboardFilters, error) {
+	filters, _, _, err := normalizeProductDashboardFilters(filters)
+	if err != nil {
+		return nil, filters, err
+	}
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	switch mode {
+	case "all", "has", "period":
+	case "missing":
+		if filters.ProductID <= 0 {
+			return nil, filters, errors.New("pilih produk sebelum melihat Mahasantri yang belum memiliki produk")
+		}
+	default:
+		return nil, filters, errors.New("mode drill-down tidak valid")
+	}
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	ctx := context.Background()
+	total, err := s.querier.CountProductDashboardDrilldown(ctx, filters, mode, period)
+	if err != nil {
+		return nil, filters, err
+	}
+	rows, err := s.querier.ListProductDashboardDrilldown(ctx, filters, mode, period, page, limit)
+	if err != nil {
+		return nil, filters, err
+	}
+	for i := range rows {
+		owned, err := s.querier.ListMahasantriOwnedPairs(ctx, rows[i].ID)
+		if err != nil {
+			return nil, filters, err
+		}
+		rows[i].Owned = owned
+	}
+	return &models.ProductCRMDrilldown{
+		Data: rows,
+		Total: total,
+		Page: page,
+		Limit: limit,
+		Mode: mode,
+		Period: strings.TrimSpace(period),
+	}, filters, nil
+}
+
 func (s *ProductCRMService) ListCRM(filters models.ProductCRMFilters) (*models.ProductCRMList, error) {
 	ctx := context.Background()
 	total, err := s.querier.CountProductCRM(ctx, filters)
