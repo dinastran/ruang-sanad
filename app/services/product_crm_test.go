@@ -12,7 +12,13 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func productCRMLastID(db *sql.DB) (int64, error) {\n\tvar id int64\n\terr := db.QueryRow(`SELECT last_insert_rowid()`).Scan(&id)\n\treturn id, err\n}\n\ntype productCRMFixture struct {
+func productCRMLastID(db *sql.DB) (int64, error) {
+	var id int64
+	err := db.QueryRow(`SELECT last_insert_rowid()`).Scan(&id)
+	return id, err
+}
+
+type productCRMFixture struct {
 	db      *sql.DB
 	querier *queries.Querier
 	service *ProductCRMService
