@@ -553,7 +553,7 @@ func (q *Queries) ProductDashboardSummary(ctx context.Context, filters models.Pr
 		return out, err
 	}
 
-	health, err := q.ProductDashboardInventoryHealth(ctx, filters, 100)
+	health, err := q.ProductDashboardInventoryHealth(ctx, filters, 100000)
 	if err != nil {
 		return out, err
 	}
