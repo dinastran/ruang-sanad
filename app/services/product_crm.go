@@ -76,10 +76,14 @@ func (s *ProductCRMService) CreateProduct(req models.CreateProductRequest) error
 	if !validProductCategory(req.Kategori) {
 		return errors.New("kategori produk tidak valid")
 	}
-	if req.Kategori == "program" {
-		req.TrackStok = false
+	if req.MinimumStock < 0 {
+		return errors.New("minimum stok tidak boleh negatif")
 	}
-	_, err := s.querier.CreateProduk(context.Background(), req.Nama, req.Kategori, req.TrackStok)
+	if req.Kategori == "program" || !req.TrackStok {
+		req.TrackStok = false
+		req.MinimumStock = 0
+	}
+	_, err := s.querier.CreateProduk(context.Background(), req.Nama, req.Kategori, req.TrackStok, req.MinimumStock)
 	return err
 }
 
@@ -94,8 +98,12 @@ func (s *ProductCRMService) UpdateProduct(id int64, req models.UpdateProductRequ
 	if err != nil {
 		return err
 	}
-	if req.Kategori == "program" {
+	if req.MinimumStock < 0 {
+		return errors.New("minimum stok tidak boleh negatif")
+	}
+	if req.Kategori == "program" || !req.TrackStok {
 		req.TrackStok = false
+		req.MinimumStock = 0
 	}
 	if current.Kategori != req.Kategori || current.TrackStok != req.TrackStok {
 		hasHistory, err := s.querier.ProdukHasHistory(ctx, id)
@@ -106,7 +114,7 @@ func (s *ProductCRMService) UpdateProduct(id int64, req models.UpdateProductRequ
 			return errors.New("kategori dan mode stok tidak dapat diubah setelah produk memiliki histori transaksi")
 		}
 	}
-	return s.querier.UpdateProduk(ctx, id, req.Nama, req.Kategori, req.TrackStok, req.IsAktif)
+	return s.querier.UpdateProduk(ctx, id, req.Nama, req.Kategori, req.TrackStok, req.IsAktif, req.MinimumStock)
 }
 
 func (s *ProductCRMService) CreateBatch(productID int64, req models.CreateProductBatchRequest) error {
@@ -323,6 +331,103 @@ func (s *ProductCRMService) CancelAssignment(id, userID int64) error {
 		}
 	}
 	return tx.Commit()
+}
+
+func normalizeProductDashboardFilters(filters models.ProductCRMDashboardFilters) (models.ProductCRMDashboardFilters, time.Time, time.Time, error) {
+	now := time.Now()
+	if strings.TrimSpace(filters.DateTo) == "" {
+		filters.DateTo = now.Format(time.DateOnly)
+	}
+	if strings.TrimSpace(filters.DateFrom) == "" {
+		filters.DateFrom = now.AddDate(0, 0, -29).Format(time.DateOnly)
+	}
+	from, err := time.Parse(time.DateOnly, filters.DateFrom)
+	if err != nil {
+		return filters, time.Time{}, time.Time{}, errors.New("tanggal awal dashboard tidak valid")
+	}
+	to, err := time.Parse(time.DateOnly, filters.DateTo)
+	if err != nil {
+		return filters, time.Time{}, time.Time{}, errors.New("tanggal akhir dashboard tidak valid")
+	}
+	if to.Before(from) {
+		return filters, time.Time{}, time.Time{}, errors.New("tanggal akhir tidak boleh sebelum tanggal awal")
+	}
+	filters.Category = strings.ToLower(strings.TrimSpace(filters.Category))
+	if filters.Category != "" && !validProductCategory(filters.Category) {
+		return filters, time.Time{}, time.Time{}, errors.New("kategori dashboard tidak valid")
+	}
+	filters.Angkatan = strings.TrimSpace(filters.Angkatan)
+	filters.Status = strings.TrimSpace(filters.Status)
+	return filters, from, to, nil
+}
+
+func productDashboardBucket(from, to time.Time) string {
+	days := int(to.Sub(from).Hours()/24) + 1
+	switch {
+	case days <= 45:
+		return "day"
+	case days <= 180:
+		return "week"
+	default:
+		return "month"
+	}
+}
+
+func (s *ProductCRMService) Dashboard(filters models.ProductCRMDashboardFilters) (*models.ProductCRMDashboard, models.ProductCRMDashboardFilters, error) {
+	filters, from, to, err := normalizeProductDashboardFilters(filters)
+	if err != nil {
+		return nil, filters, err
+	}
+	ctx := context.Background()
+	bucket := productDashboardBucket(from, to)
+
+	summary, err := s.querier.ProductDashboardSummary(ctx, filters)
+	if err != nil {
+		return nil, filters, err
+	}
+	summary.PeriodAssignments, err = s.querier.ProductDashboardPeriodAssignments(ctx, filters)
+	if err != nil {
+		return nil, filters, err
+	}
+
+	periodDays := int(to.Sub(from).Hours()/24) + 1
+	previous := filters
+	previousTo := from.AddDate(0, 0, -1)
+	previousFrom := previousTo.AddDate(0, 0, -(periodDays - 1))
+	previous.DateFrom = previousFrom.Format(time.DateOnly)
+	previous.DateTo = previousTo.Format(time.DateOnly)
+	summary.PreviousAssignments, err = s.querier.ProductDashboardPeriodAssignments(ctx, previous)
+	if err != nil {
+		return nil, filters, err
+	}
+	if summary.PreviousAssignments > 0 {
+		summary.AssignmentChangeRate = float64(summary.PeriodAssignments-summary.PreviousAssignments) * 100 / float64(summary.PreviousAssignments)
+	} else if summary.PeriodAssignments > 0 {
+		summary.AssignmentChangeRate = 100
+	}
+
+	trend, err := s.querier.ProductDashboardDistributionTrend(ctx, filters, bucket)
+	if err != nil { return nil, filters, err }
+	topProducts, err := s.querier.ProductDashboardTopProducts(ctx, filters, 8)
+	if err != nil { return nil, filters, err }
+	composition, err := s.querier.ProductDashboardCategoryComposition(ctx, filters)
+	if err != nil { return nil, filters, err }
+	coverage, err := s.querier.ProductDashboardCoverageByAngkatan(ctx, filters, 10)
+	if err != nil { return nil, filters, err }
+	movement, err := s.querier.ProductDashboardStockMovement(ctx, filters, bucket)
+	if err != nil { return nil, filters, err }
+	health, err := s.querier.ProductDashboardInventoryHealth(ctx, filters, 10)
+	if err != nil { return nil, filters, err }
+
+	return &models.ProductCRMDashboard{
+		Summary: summary,
+		DistributionTrend: trend,
+		TopProducts: topProducts,
+		CategoryComposition: composition,
+		CoverageByAngkatan: coverage,
+		StockMovement: movement,
+		InventoryHealth: health,
+	}, filters, nil
 }
 
 func (s *ProductCRMService) ListCRM(filters models.ProductCRMFilters) (*models.ProductCRMList, error) {
