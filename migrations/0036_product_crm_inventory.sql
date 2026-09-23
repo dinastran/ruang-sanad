@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS produk_batch (
 );
 
 CREATE INDEX idx_produk_batch_produk ON produk_batch(produk_id, is_aktif);
+CREATE UNIQUE INDEX idx_produk_batch_nama_unique ON produk_batch(produk_id, LOWER(TRIM(nama)));
 
 CREATE TABLE IF NOT EXISTS mahasantri_produk (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,6 +99,7 @@ DROP INDEX IF EXISTS idx_mahasantri_produk_santri;
 DROP INDEX IF EXISTS idx_mahasantri_produk_active_with_batch;
 DROP INDEX IF EXISTS idx_mahasantri_produk_active_no_batch;
 DROP TABLE IF EXISTS mahasantri_produk;
+DROP INDEX IF EXISTS idx_produk_batch_nama_unique;
 DROP INDEX IF EXISTS idx_produk_batch_produk;
 DROP TABLE IF EXISTS produk_batch;
 DROP INDEX IF EXISTS idx_produk_aktif;
