@@ -53,6 +53,35 @@ func (h *ProductCRMHandler) Index(c *fiber.Ctx) error {
 	if err != nil {
 		return h.inertiaService.Render(c, "app/ProductCRM", fiber.Map{"user": user, "error": "Gagal memuat produk"})
 	}
+
+	dashboardFilters := models.ProductCRMDashboardFilters{
+		DateFrom:  c.Query("date_from"),
+		DateTo:    c.Query("date_to"),
+		ProductID: productCRMIntQuery(c, "product_id"),
+		BatchID:   productCRMIntQuery(c, "dashboard_batch_id"),
+		Category:  c.Query("category"),
+		Angkatan:  c.Query("angkatan"),
+		Status:    c.Query("status"),
+	}
+	dashboard, normalizedDashboardFilters, dashboardErr := h.service.Dashboard(dashboardFilters)
+
+	var drilldown *models.ProductCRMDrilldown
+	var drilldownErr error
+	drilldownMode := strings.TrimSpace(c.Query("drilldown"))
+	if drilldownMode != "" {
+		drillPage := productCRMIntQuery(c, "drill_page")
+		if drillPage <= 0 {
+			drillPage = 1
+		}
+		drilldown, _, drilldownErr = h.service.DashboardDrilldown(
+			normalizedDashboardFilters,
+			drilldownMode,
+			c.Query("drill_period"),
+			drillPage,
+			20,
+		)
+	}
+
 	crm, err := h.service.ListCRM(filters)
 	if err != nil {
 		return h.inertiaService.Render(c, "app/ProductCRM", fiber.Map{"user": user, "products": products, "error": "Gagal memuat CRM Mahasantri"})
@@ -60,7 +89,7 @@ func (h *ProductCRMHandler) Index(c *fiber.Ctx) error {
 	mutations, _ := h.service.Mutations(100)
 	angkatan, _ := h.masterService.ListAngkatan()
 
-	return h.inertiaService.Render(c, "app/ProductCRM", fiber.Map{
+	props := fiber.Map{
 		"user":      user,
 		"products":  products,
 		"crm":       crm.Data,
@@ -69,7 +98,7 @@ func (h *ProductCRMHandler) Index(c *fiber.Ctx) error {
 		"limit":     int64(25),
 		"mutations": mutations,
 		"angkatan":  angkatan,
-		"tab":       c.Query("tab", "produk"),
+		"tab":       c.Query("tab", "dashboard"),
 		"filters": fiber.Map{
 			"search":             filters.Search,
 			"angkatan":           filters.Angkatan,
@@ -78,7 +107,19 @@ func (h *ProductCRMHandler) Index(c *fiber.Ctx) error {
 			"missing_product_id": filters.MissingProductID,
 			"batch_id":           filters.BatchID,
 		},
-	})
+		"dashboard": dashboard,
+		"dashboard_filters": normalizedDashboardFilters,
+		"drilldown": drilldown,
+		"drilldown_mode": drilldownMode,
+		"drilldown_period": c.Query("drill_period"),
+	}
+	if drilldownErr != nil {
+		props["drilldown_error"] = "Gagal memuat data Mahasantri: " + drilldownErr.Error()
+	}
+	if dashboardErr != nil {
+		props["dashboard_error"] = "Gagal memuat dashboard intelligence: " + dashboardErr.Error()
+	}
+	return h.inertiaService.Render(c, "app/ProductCRM", props)
 }
 
 func (h *ProductCRMHandler) CreateProduct(c *fiber.Ctx) error {

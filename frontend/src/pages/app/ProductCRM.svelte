@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
+	import ProductCRMDashboard from "@components/product-crm/ProductCRMDashboard.svelte";
 	import type { User } from "@lib/types";
 	import {
 		Archive,
+		BarChart3,
 		Boxes,
 		CalendarDays,
 		CheckCircle2,
@@ -32,6 +34,7 @@
 		track_stok: boolean;
 		is_aktif: boolean;
 		stok: number;
+		minimum_stock: number;
 		batches: Batch[];
 	}
 	interface OwnedProduct {
@@ -86,6 +89,13 @@
 		filters?: Filters;
 		success?: string;
 		error?: string;
+		dashboard?: any;
+		dashboard_filters?: any;
+		dashboard_error?: string;
+		drilldown?: any;
+		drilldown_mode?: string;
+		drilldown_period?: string;
+		drilldown_error?: string;
 	}
 
 	let props: Props = $props();
@@ -99,8 +109,15 @@
 	let angkatan = $derived(props.angkatan ?? []);
 	let success = $derived(props.success);
 	let error = $derived(props.error);
+	let dashboard = $derived(props.dashboard);
+	let dashboardFilters = $derived(props.dashboard_filters);
+	let dashboardError = $derived(props.dashboard_error);
+	let drilldown = $derived(props.drilldown);
+	let drilldownMode = $derived(props.drilldown_mode ?? "");
+	let drilldownPeriod = $derived(props.drilldown_period ?? "");
+	let drilldownError = $derived(props.drilldown_error);
 
-	let activeTab = $state(props.tab ?? "produk");
+	let activeTab = $state(props.tab ?? "dashboard");
 	let loading = $state<string | null>(null);
 
 	function todayLocal() {
@@ -109,7 +126,7 @@
 		return new Date(d.getTime() - offset * 60000).toISOString().slice(0, 10);
 	}
 
-	let productForm = $state({ nama: "", kategori: "buku", track_stok: true, is_aktif: true });
+	let productForm = $state({ nama: "", kategori: "buku", track_stok: true, is_aktif: true, minimum_stock: 5 });
 	let editingProductID = $state<number | null>(null);
 	let batchForm = $state({ produk_id: 0, nama: "", tanggal_mulai: "", tanggal_selesai: "", is_aktif: true });
 	let editingBatchID = $state<number | null>(null);
@@ -143,12 +160,12 @@
 	}
 
 	function resetProductForm() {
-		productForm = { nama: "", kategori: "buku", track_stok: true, is_aktif: true };
+		productForm = { nama: "", kategori: "buku", track_stok: true, is_aktif: true, minimum_stock: 5 };
 		editingProductID = null;
 	}
 
 	function editProduct(p: Product) {
-		productForm = { nama: p.nama, kategori: p.kategori, track_stok: p.track_stok, is_aktif: p.is_aktif };
+		productForm = { nama: p.nama, kategori: p.kategori, track_stok: p.track_stok, is_aktif: p.is_aktif, minimum_stock: p.minimum_stock ?? 5 };
 		editingProductID = p.id;
 		setTab("produk");
 	}
@@ -255,6 +272,7 @@
 
 		<div class="flex gap-2 overflow-x-auto rounded-2xl border border-neutral-200 bg-white p-2 dark:border-white/[0.06] dark:bg-neutral-925/50">
 			{#each [
+				{ id: "dashboard", label: "Dashboard", icon: BarChart3 },
 				{ id: "produk", label: "Master Produk", icon: ShoppingBag },
 				{ id: "stok", label: "Stok & Opname", icon: Boxes },
 				{ id: "crm", label: "CRM Mahasantri", icon: ClipboardCheck },
@@ -267,7 +285,9 @@
 			{/each}
 		</div>
 
-		{#if activeTab === "produk"}
+		{#if activeTab === "dashboard"}
+			<ProductCRMDashboard {dashboard} filters={dashboardFilters} {products} {angkatan} {drilldown} {drilldownMode} {drilldownPeriod} error={dashboardError} drilldownError={drilldownError} />
+		{:else if activeTab === "produk"}
 			<div class="grid gap-5 lg:grid-cols-[360px_1fr]">
 				<div class="space-y-5">
 					<form onsubmit={submitProduct} class="space-y-4 rounded-2xl border border-neutral-200 bg-white p-5 dark:border-white/[0.06] dark:bg-neutral-925/50">
@@ -277,6 +297,9 @@
 							<option value="buku">Buku</option><option value="program">Program</option>
 						</select>
 						<label class="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300"><input type="checkbox" bind:checked={productForm.track_stok} disabled={productForm.kategori === "program"} /> Kelola stok fisik</label>
+						{#if productForm.track_stok && productForm.kategori === "buku"}
+							<label class="block space-y-1.5 text-xs text-neutral-600 dark:text-neutral-400">Minimum stok untuk alert<input type="number" min="0" bind:value={productForm.minimum_stock} class={inputCls} placeholder="Mis. 5" /></label>
+						{/if}
 						{#if editingProductID}<label class="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300"><input type="checkbox" bind:checked={productForm.is_aktif} /> Produk aktif</label>{/if}
 						<button disabled={loading === "product"} class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"><Plus size="16" /> {editingProductID ? "Simpan Perubahan" : "Tambah Produk"}</button>
 					</form>
@@ -301,7 +324,7 @@
 										<span class="rounded-full px-2 py-0.5 text-xs font-semibold {p.kategori === 'buku' ? 'bg-amber-500/10 text-amber-600' : 'bg-blue-500/10 text-blue-600'}">{p.kategori === "buku" ? "Buku" : "Program"}</span>
 										<span class="rounded-full px-2 py-0.5 text-xs {p.is_aktif ? 'bg-green-500/10 text-green-600' : 'bg-neutral-500/10 text-neutral-500'}">{p.is_aktif ? "Aktif" : "Nonaktif"}</span>
 									</div>
-									<p class="mt-1 text-sm text-neutral-500">{p.track_stok ? `Stok total: ${p.stok}` : "Tanpa stok fisik"}</p>
+									<p class="mt-1 text-sm text-neutral-500">{p.track_stok ? `Stok total: ${p.stok} · minimum ${p.minimum_stock ?? 0}` : "Tanpa stok fisik"}</p>
 								</div>
 								<button onclick={() => editProduct(p)} class="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-2 text-xs font-semibold text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"><Pencil size="14" /> Edit</button>
 							</div>
