@@ -92,6 +92,10 @@
 		dashboard?: any;
 		dashboard_filters?: any;
 		dashboard_error?: string;
+		drilldown?: any;
+		drilldown_mode?: string;
+		drilldown_period?: string;
+		drilldown_error?: string;
 	}
 
 	let props: Props = $props();
@@ -108,6 +112,10 @@
 	let dashboard = $derived(props.dashboard);
 	let dashboardFilters = $derived(props.dashboard_filters);
 	let dashboardError = $derived(props.dashboard_error);
+	let drilldown = $derived(props.drilldown);
+	let drilldownMode = $derived(props.drilldown_mode ?? "");
+	let drilldownPeriod = $derived(props.drilldown_period ?? "");
+	let drilldownError = $derived(props.drilldown_error);
 
 	let activeTab = $state(props.tab ?? "dashboard");
 	let loading = $state<string | null>(null);
@@ -278,7 +286,7 @@
 		</div>
 
 		{#if activeTab === "dashboard"}
-			<ProductCRMDashboard {dashboard} filters={dashboardFilters} {products} {angkatan} error={dashboardError} />
+			<ProductCRMDashboard {dashboard} filters={dashboardFilters} {products} {angkatan} {drilldown} {drilldownMode} {drilldownPeriod} error={dashboardError} drilldownError={drilldownError} />
 		{:else if activeTab === "produk"}
 			<div class="grid gap-5 lg:grid-cols-[360px_1fr]">
 				<div class="space-y-5">
