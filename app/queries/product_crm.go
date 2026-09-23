@@ -771,3 +771,130 @@ func (q *Queries) ProductDashboardStockMovement(ctx context.Context, filters mod
 	}
 	return out, rows.Err()
 }
+
+
+func dashboardDrilldownSubquery(filters models.ProductCRMDashboardFilters, includeDate bool, period string) (string, []interface{}) {
+	clauses := []string{"mp2.santri_id = s.id", "mp2.status = 'aktif'"}
+	args := make([]interface{}, 0, 12)
+	if filters.ProductID > 0 {
+		clauses = append(clauses, "mp2.produk_id = ?")
+		args = append(args, filters.ProductID)
+	}
+	if filters.BatchID > 0 {
+		clauses = append(clauses, "mp2.produk_batch_id = ?")
+		args = append(args, filters.BatchID)
+	}
+	if strings.TrimSpace(filters.Category) != "" {
+		clauses = append(clauses, "p2.kategori = ?")
+		args = append(args, strings.TrimSpace(filters.Category))
+	}
+	if includeDate {
+		if filters.DateFrom != "" {
+			clauses = append(clauses, "date(mp2.tanggal) >= date(?)")
+			args = append(args, filters.DateFrom)
+		}
+		if filters.DateTo != "" {
+			clauses = append(clauses, "date(mp2.tanggal) <= date(?)")
+			args = append(args, filters.DateTo)
+		}
+	}
+	period = strings.TrimSpace(period)
+	if period != "" {
+		switch {
+		case len(period) == 10:
+			clauses = append(clauses, "strftime('%Y-%m-%d', mp2.tanggal) = ?")
+			args = append(args, period)
+		case strings.Contains(period, "-W"):
+			clauses = append(clauses, "strftime('%Y-W%W', mp2.tanggal) = ?")
+			args = append(args, period)
+		case len(period) == 7:
+			clauses = append(clauses, "strftime('%Y-%m', mp2.tanggal) = ?")
+			args = append(args, period)
+		}
+	}
+	return "SELECT 1 FROM mahasantri_produk mp2 JOIN produk p2 ON p2.id = mp2.produk_id WHERE " + strings.Join(clauses, " AND "), args
+}
+
+func dashboardDrilldownWhere(filters models.ProductCRMDashboardFilters, mode, period string) (string, []interface{}) {
+	where, args := dashboardPopulationWhere(filters)
+	clauses := []string{strings.TrimPrefix(where, " WHERE ")}
+	allArgs := append([]interface{}{}, args...)
+	switch mode {
+	case "period":
+		subquery, subArgs := dashboardDrilldownSubquery(filters, true, period)
+		clauses = append(clauses, "EXISTS ("+subquery+")")
+		allArgs = append(allArgs, subArgs...)
+	case "has":
+		subquery, subArgs := dashboardDrilldownSubquery(filters, false, "")
+		clauses = append(clauses, "EXISTS ("+subquery+")")
+		allArgs = append(allArgs, subArgs...)
+	case "missing":
+		subquery, subArgs := dashboardDrilldownSubquery(filters, false, "")
+		clauses = append(clauses, "NOT EXISTS ("+subquery+")")
+		allArgs = append(allArgs, subArgs...)
+	}
+	return " WHERE " + strings.Join(clauses, " AND "), allArgs
+}
+
+func (q *Queries) CountProductDashboardDrilldown(ctx context.Context, filters models.ProductCRMDashboardFilters, mode, period string) (int64, error) {
+	where, args := dashboardDrilldownWhere(filters, mode, period)
+	var total int64
+	err := q.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM santri s"+where, args...).Scan(&total)
+	return total, err
+}
+
+func (q *Queries) ListProductDashboardDrilldown(ctx context.Context, filters models.ProductCRMDashboardFilters, mode, period string, page, limit int64) ([]models.ProductCRMDrilldownRow, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if page <= 0 {
+		page = 1
+	}
+	where, args := dashboardDrilldownWhere(filters, mode, period)
+	args = append(args, limit, (page-1)*limit)
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT s.id, COALESCE(s.id_mahasantri, ''), s.nama, COALESCE(s.no_wa, ''),
+		       COALESCE(s.angkatan, ''), COALESCE(s.angkatan_kelas, ''), COALESCE(s.level, ''), COALESCE(s.status, '')
+		FROM santri s`+where+`
+		ORDER BY s.nama ASC, s.id ASC
+		LIMIT ? OFFSET ?`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]models.ProductCRMDrilldownRow, 0, limit)
+	for rows.Next() {
+		var item models.ProductCRMDrilldownRow
+		if err := rows.Scan(
+			&item.ID, &item.IDMahasantri, &item.Nama, &item.NoWA,
+			&item.Angkatan, &item.AngkatanKelas, &item.Level, &item.Status,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (q *Queries) ListMahasantriOwnedPairs(ctx context.Context, santriID int64) ([]models.ProductCRMDrilldownOwned, error) {
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT produk_id, COALESCE(produk_batch_id, 0)
+		FROM mahasantri_produk
+		WHERE santri_id = ? AND status = 'aktif'
+		ORDER BY produk_id, COALESCE(produk_batch_id, 0)`, santriID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]models.ProductCRMDrilldownOwned, 0)
+	for rows.Next() {
+		var item models.ProductCRMDrilldownOwned
+		if err := rows.Scan(&item.ProductID, &item.BatchID); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
