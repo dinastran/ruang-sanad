@@ -135,6 +135,18 @@ func TestProgramWithBatchRequiresBatchAndDoesNotChangeStock(t *testing.T) {
 	require.Zero(t, stock)
 }
 
+func TestProductHistoryLocksCategoryAndStockMode(t *testing.T) {
+	f := setupProductCRM(t)
+	productID := f.createBook(t, "Buku Terkunci")
+	require.NoError(t, f.service.AddStock(models.StockEntryRequest{ProdukID: productID, Tipe: "stok_awal", Qty: 1}, f.adminID))
+	require.NoError(t, f.service.AssignProduct(f.santriID, models.AssignProductRequest{ProdukID: productID, Tanggal: "2026-09-23"}, f.adminID))
+
+	err := f.service.UpdateProduct(productID, models.UpdateProductRequest{
+		Nama: "Buku Terkunci", Kategori: "program", IsAktif: true,
+	})
+	require.ErrorContains(t, err, "histori transaksi")
+}
+
 func TestProductOpnameCreatesAdjustment(t *testing.T) {
 	f := setupProductCRM(t)
 	productID := f.createBook(t, "Buku Opname")
