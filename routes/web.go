@@ -19,6 +19,7 @@ type Handlers struct {
 	Upload                      *handlers.UploadHandler
 	PasswordReset               *handlers.PasswordResetHandler
 	Santri                      *handlers.SantriHandler
+	SantriAnalytics             *handlers.SantriAnalyticsHandler
 	Kelas                       *handlers.KelasHandler
 	Master                      *handlers.MasterHandler
 	Import                      *handlers.ImportHandler
@@ -127,6 +128,9 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	// Data Santri is viewable (read-only) by admin_kelas as well; the mutating
 	// routes below stay CS-only so admin_kelas can look but not edit.
 	santriViewRole := middlewares.RoleRequired(store, userService, "cs", "admin_kelas", "super_admin")
+
+	// Santri analytics is management-only and read-only.
+	protected.Get("/analitik-santri", superAdminRole, h.SantriAnalytics.Index)
 
 	// CS routes (cs + super_admin); list & detail also viewable by admin_kelas
 	protected.Get("/santri", santriViewRole, h.Santri.Index)
