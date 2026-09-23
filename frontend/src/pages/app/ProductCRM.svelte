@@ -15,7 +15,6 @@
 		Search,
 		ShoppingBag,
 		X,
-		XCircle,
 	} from "lucide-svelte";
 
 	interface Batch {
