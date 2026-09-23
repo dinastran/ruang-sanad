@@ -135,6 +135,32 @@ type ProductCRMDashboard struct {
 	InventoryHealth     []ProductCRMInventoryHealth `json:"inventory_health"`
 }
 
+type ProductCRMDrilldownOwned struct {
+	ProductID int64 `json:"product_id"`
+	BatchID   int64 `json:"batch_id"`
+}
+
+type ProductCRMDrilldownRow struct {
+	ID            int64                      `json:"id"`
+	IDMahasantri  string                     `json:"id_mahasantri"`
+	Nama          string                     `json:"nama"`
+	NoWA          string                     `json:"no_wa"`
+	Angkatan      string                     `json:"angkatan"`
+	AngkatanKelas string                     `json:"angkatan_kelas"`
+	Level         string                     `json:"level"`
+	Status        string                     `json:"status"`
+	Owned         []ProductCRMDrilldownOwned `json:"owned"`
+}
+
+type ProductCRMDrilldown struct {
+	Data   []ProductCRMDrilldownRow `json:"data"`
+	Total  int64                    `json:"total"`
+	Page   int64                    `json:"page"`
+	Limit  int64                    `json:"limit"`
+	Mode   string                   `json:"mode"`
+	Period string                   `json:"period"`
+}
+
 type CreateProductRequest struct {
 	Nama         string `json:"nama"`
 	Kategori     string `json:"kategori"`
