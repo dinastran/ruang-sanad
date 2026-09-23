@@ -13,15 +13,17 @@ type SantriHandler struct {
 	santriService  *services.SantriService
 	masterService  *services.MasterService
 	kelasService   *services.KelasService
+	productCRMService *services.ProductCRMService
 	store          *session.Store
 	inertiaService *services.InertiaService
 }
 
-func NewSantriHandler(santriService *services.SantriService, masterService *services.MasterService, kelasService *services.KelasService, store *session.Store, inertiaService *services.InertiaService) *SantriHandler {
+func NewSantriHandler(santriService *services.SantriService, masterService *services.MasterService, kelasService *services.KelasService, productCRMService *services.ProductCRMService, store *session.Store, inertiaService *services.InertiaService) *SantriHandler {
 	return &SantriHandler{
 		santriService:  santriService,
 		masterService:  masterService,
 		kelasService:   kelasService,
+		productCRMService: productCRMService,
 		store:          store,
 		inertiaService: inertiaService,
 	}
@@ -173,10 +175,12 @@ func (h *SantriHandler) Show(c *fiber.Ctx) error {
 	jadwalList, _ := h.masterService.ListJadwal()
 	guruList, _ := h.masterService.ListGuru()
 	kodeKelasList, _ := h.masterService.ListKodeKelas()
+	produkMahasantri, _ := h.productCRMService.ListMahasantriProducts(id)
 
 	return h.inertiaService.Render(c, "app/SantriForm", fiber.Map{
 		"user":       user,
 		"santri":     santri,
+		"mahasantri_produk": produkMahasantri,
 		"angkatan":   angkatanList,
 		"levels":     levelList,
 		"jadwals":    jadwalList,

@@ -38,6 +38,7 @@ type Handlers struct {
 	Notifications               *handlers.NotificationHandler
 	TSI                         *handlers.TSIHandler
 	Tagihan                     *handlers.TagihanHandler
+	ProductCRM                  *handlers.ProductCRMHandler
 }
 
 func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, mailerService *services.MailerService, csrfMiddleware *middlewares.CSRFMiddleware) {
@@ -158,6 +159,17 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/kelas/:id/jadwal", akRole, h.Kelas.GantiJadwal)
 	protected.Post("/kelas/:id/ganti-level-santri", akRole, h.Kelas.GantiLevelSantri)
 	protected.Delete("/kelas/:id", akRole, h.Kelas.Delete)
+
+	// Produk, stok opname, dan CRM Mahasantri (admin_kelas + super_admin)
+	protected.Get("/produk-crm", akRole, h.ProductCRM.Index)
+	protected.Post("/produk-crm/produk", akRole, h.ProductCRM.CreateProduct)
+	protected.Put("/produk-crm/produk/:id", akRole, h.ProductCRM.UpdateProduct)
+	protected.Post("/produk-crm/produk/:id/batch", akRole, h.ProductCRM.CreateBatch)
+	protected.Put("/produk-crm/batch/:id", akRole, h.ProductCRM.UpdateBatch)
+	protected.Post("/produk-crm/stok", akRole, h.ProductCRM.AddStock)
+	protected.Post("/produk-crm/opname", akRole, h.ProductCRM.Opname)
+	protected.Post("/produk-crm/mahasantri/:santriID/produk", akRole, h.ProductCRM.AssignProduct)
+	protected.Post("/produk-crm/mahasantri-produk/:id/batal", akRole, h.ProductCRM.CancelAssignment)
 
 	// Keuangan routes (keuangan + super_admin)
 	protected.Get("/keuangan", kuReadRole, h.Tagihan.Dashboard)

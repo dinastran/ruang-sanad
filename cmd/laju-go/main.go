@@ -114,6 +114,7 @@ func main() {
 	importService := services.NewImportService(querier, santriService)
 	guruService := services.NewGuruService(querier)
 	tagihanService := services.NewTagihanService(querier)
+	productCRMService := services.NewProductCRMService(querier)
 	pertemuanService := services.NewPertemuanService(querier, tagihanService)
 	jadwalPertemuanService := services.NewJadwalPertemuanService(querier)
 	notificationService := services.NewNotificationService(querier)
@@ -146,7 +147,7 @@ func main() {
 
 	// Initialize handlers
 	uploadHandler := handlers.NewUploadHandler(sessionStore, userService, "storage/uploads")
-	santriHandler := handlers.NewSantriHandler(santriService, masterService, kelasService, sessionStore, inertiaService)
+	santriHandler := handlers.NewSantriHandler(santriService, masterService, kelasService, productCRMService, sessionStore, inertiaService)
 	santriAnalyticsHandler := handlers.NewSantriAnalyticsHandler(santriAnalyticsService, masterService, sessionStore, inertiaService)
 	kelasHandler := handlers.NewKelasHandler(kelasService, services.NewKelasPerubahanService(querier, kelasEngine), santriStatusService, masterService, sessionStore, inertiaService)
 	masterHandler := handlers.NewMasterHandler(masterService, sessionStore, inertiaService)
@@ -166,6 +167,7 @@ func main() {
 	notificationHandler := handlers.NewNotificationHandler(notificationService, sessionStore, inertiaService)
 	tsiHandler := handlers.NewTSIHandler(tsiService, guruService, koordinatorService, sessionStore, inertiaService)
 	tagihanHandler := handlers.NewTagihanHandler(tagihanService, sessionStore, inertiaService)
+	productCRMHandler := handlers.NewProductCRMHandler(productCRMService, masterService, sessionStore, inertiaService)
 
 	routeHandlers := routes.Handlers{
 		Public:                      handlers.NewPublicHandler(authService, userService, inertiaService, assetService),
@@ -192,6 +194,7 @@ func main() {
 		Notifications:               notificationHandler,
 		TSI:                         tsiHandler,
 		Tagihan:                     tagihanHandler,
+		ProductCRM:                  productCRMHandler,
 	}
 
 	// Setup CSRF middleware (Secure cookies only in production with HTTPS)

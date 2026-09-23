@@ -26,6 +26,7 @@
 		UserCheck,
 		ChevronDown,
 		Award,
+		Boxes,
 	} from "lucide-svelte";
 	import DarkModeToggle from "@components/DarkModeToggle.svelte";
 	import Logo from "@components/Logo.svelte";
@@ -69,6 +70,7 @@
 		{ href: "/app/keuangan/tagihan", label: "Daftar Tagihan", group: "tagihan", category: "Keuangan", show: canViewKeuangan, icon: Receipt },
 		{ href: "/app/laporan/keuangan", label: "Laporan Keuangan", group: "laporan-keuangan", category: "Keuangan", show: isKeuangan, icon: Receipt },
 		{ href: "/app/master", label: "Data Master", group: "master", category: "Administrasi", show: isAdminKelas, icon: Database },
+		{ href: "/app/produk-crm", label: "Produk & CRM", group: "produk-crm", category: "Administrasi", show: isAdminKelas, icon: Boxes },
 		{ href: "/admin/import", label: "Import CSV", group: "import", category: "Administrasi", show: isSuperAdmin, icon: FileSpreadsheet },
 		{ href: "/admin/users", label: "Kelola User", group: "users", category: "Administrasi", show: isSuperAdmin, icon: Shield },
 		{ href: "/app/guru", label: "Dashboard Guru", group: "guru-dashboard", category: "Guru", show: isGuruWorkflow, icon: GraduationCap },
@@ -106,6 +108,7 @@
 		if (path.startsWith("/app/laporan/keuangan")) return "laporan-keuangan";
 		if (path.startsWith("/app/keuangan/tagihan")) return "tagihan";
 		if (path.startsWith("/app/keuangan")) return "keuangan";
+		if (path.startsWith("/app/produk-crm")) return "produk-crm";
 		if (path.startsWith("/app/master")) return "master";
 		if (path.startsWith("/admin/import")) return "import";
 		if (path.startsWith("/admin/users")) return "users";

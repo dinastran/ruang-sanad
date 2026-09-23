@@ -8,7 +8,7 @@
 	import StatusBadge from "@components/StatusBadge.svelte";
 	import GenderBadge from "@components/GenderBadge.svelte";
 	import type { Flash, User } from "@lib/types";
-	import { Save, User as UserIcon, BookOpen, Calendar, MapPin, DollarSign, Hash, GraduationCap, Users, Phone, Mail, ClipboardList, Plus, Trash2, Upload, AlertTriangle } from "lucide-svelte";
+	import { Save, User as UserIcon, BookOpen, Calendar, MapPin, DollarSign, Hash, GraduationCap, Users, Phone, Mail, ClipboardList, Plus, Trash2, Upload, AlertTriangle, Boxes, ExternalLink } from "lucide-svelte";
 
 	interface MasterItem {
 		id: number;
@@ -58,6 +58,15 @@
 		status: string;
 	}
 
+	interface MahasantriProductItem {
+		id: number;
+		produk_nama: string;
+		batch_nama: string;
+		tanggal: string;
+		kategori: string;
+		catatan: string;
+	}
+
 	interface Props {
 		user?: User;
 		santri?: SantriItem | null;
@@ -66,12 +75,13 @@
 		jadwals?: MasterItem[];
 		gurus?: MasterItem[];
 		kode_kelas?: KodeKelasItem[];
+		mahasantri_produk?: MahasantriProductItem[];
 		success?: string;
 		error?: string;
 		flash?: Flash;
 	}
 
-	let { user, santri = null, angkatan = [], levels = [], jadwals = [], gurus = [], kode_kelas = [], success, error, flash }: Props = $props();
+	let { user, santri = null, angkatan = [], levels = [], jadwals = [], gurus = [], kode_kelas = [], mahasantri_produk = [], success, error, flash }: Props = $props();
 	let successMessage = $derived(flash?.success ?? success);
 	let errorMessage = $derived(flash?.error ?? error);
 
@@ -767,6 +777,29 @@
 					</fieldset>
 				</form>
 			</div>
+		{/if}
+
+		{#if isEdit && isAdminKelas}
+			<section class="rounded-2xl border border-neutral-200 bg-white p-6 dark:border-white/[0.06] dark:bg-neutral-925/50">
+				<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+					<div class="flex items-start gap-3">
+						<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><Boxes class="h-5 w-5" /></div>
+						<div><h2 class="text-base font-semibold text-neutral-900 dark:text-white">Produk & Program Mahasantri</h2><p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Riwayat produk aktif yang sudah dibeli atau diikuti.</p></div>
+					</div>
+					<a href={`/app/produk-crm?tab=crm&search=${encodeURIComponent(santri?.id_mahasantri || santri?.nama || "")}`} use:inertia class="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-500/30 px-4 py-2.5 text-sm font-semibold text-brand-600 dark:text-brand-400"><ExternalLink class="h-4 w-4" /> Kelola Produk</a>
+				</div>
+				<div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+					{#each mahasantri_produk as item}
+						<div class="rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+							<div class="flex items-center justify-between gap-2"><span class="font-semibold text-neutral-900 dark:text-white">{item.produk_nama}</span><span class="rounded-full bg-brand-500/10 px-2 py-0.5 text-[11px] font-semibold text-brand-600">{item.kategori}</span></div>
+							{#if item.batch_nama}<p class="mt-1 text-xs text-neutral-500">{item.batch_nama}</p>{/if}
+							<p class="mt-2 text-xs text-neutral-500">{item.tanggal}</p>
+						</div>
+					{:else}
+						<div class="sm:col-span-2 lg:col-span-3 rounded-xl border border-dashed border-neutral-300 p-5 text-center text-sm text-neutral-500 dark:border-neutral-700">Belum ada produk atau program yang tercatat.</div>
+					{/each}
+				</div>
+			</section>
 		{/if}
 
 		{#if isEdit && user?.role === "super_admin"}
