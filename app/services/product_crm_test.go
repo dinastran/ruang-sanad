@@ -12,7 +12,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-type productCRMFixture struct {
+func productCRMLastID(db *sql.DB) (int64, error) {\n\tvar id int64\n\terr := db.QueryRow(`SELECT last_insert_rowid()`).Scan(&id)\n\treturn id, err\n}\n\ntype productCRMFixture struct {
 	db      *sql.DB
 	querier *queries.Querier
 	service *ProductCRMService
@@ -33,11 +33,11 @@ func setupProductCRM(t *testing.T) productCRMFixture {
 
 	_, err = db.Exec(`INSERT INTO users (email, name, role) VALUES ('produk@example.com', 'Admin Kelas', 'admin_kelas')`)
 	require.NoError(t, err)
-	adminID, err := lastID(db)
+	adminID, err := productCRMLastID(db)
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO santri (id_mahasantri, nama, jenis_kelamin, status) VALUES ('MHS.TEST.0001.092026', 'Ahmad', 'L', 'aktif')`)
 	require.NoError(t, err)
-	santriID, err := lastID(db)
+	santriID, err := productCRMLastID(db)
 	require.NoError(t, err)
 
 	q := queries.NewQuerier(db)
