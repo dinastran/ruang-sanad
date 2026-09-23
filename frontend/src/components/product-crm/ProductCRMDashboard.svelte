@@ -293,16 +293,18 @@
 		return (row.owned || []).some((item) => item.product_id === productID && Number(item.batch_id || 0) === Number(batchID || 0));
 	}
 	function offersFor(row: DrillRow): Offer[] {
+		const targetMissingProduct = drilldownMode === "missing" ? Number(filters?.product_id || 0) : 0;
+		const targetMissingBatch = drilldownMode === "missing" ? Number(filters?.batch_id || 0) : 0;
 		const base = products.filter((p) => {
 			if (!p.is_aktif) return false;
-			if (filters?.product_id && p.id !== Number(filters.product_id)) return false;
+			if (targetMissingProduct && p.id !== targetMissingProduct) return false;
 			if (filters?.category && p.kategori !== filters.category) return false;
 			return true;
 		});
 		const out: Offer[] = [];
 		for (const product of base) {
-			const activeBatches = (product.batches || []).filter((b) => b.is_aktif);
-			if (activeBatches.length) {
+			const activeBatches = (product.batches || []).filter((b) => b.is_aktif && (!targetMissingBatch || b.id === targetMissingBatch));
+			if ((product.batches || []).some((b) => b.is_aktif)) {
 				for (const batch of activeBatches) {
 					if (!isOwned(row, product.id, batch.id)) {
 						out.push({
@@ -432,7 +434,7 @@
 	<button type="button" onclick={() => showDrilldown("has")} class="group rounded-2xl border border-neutral-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-sm dark:border-white/[0.06] dark:bg-neutral-925/50 sm:p-5"><div class="flex items-center justify-between gap-2"><p class="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Mahasantri punya produk</p><Users size="17" class="text-brand-500" /></div><div class="mt-3 flex items-end gap-2"><p class="text-2xl font-bold text-neutral-900 dark:text-white">{fmt(summary.santri_with_product)}</p><span class="pb-0.5 text-xs font-semibold text-brand-600">{pct(summary.coverage_rate)}</span></div><p class="mt-1 text-xs text-neutral-500">dari {fmt(summary.santri_total)} Mahasantri</p></button>
 	<button type="button" onclick={() => showDrilldown("has")} class="group rounded-2xl border border-neutral-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-sm dark:border-white/[0.06] dark:bg-neutral-925/50 sm:p-5"><div class="flex items-center justify-between gap-2"><p class="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Kepemilikan aktif</p><CheckCircle2 size="17" class="text-brand-500" /></div><p class="mt-3 text-2xl font-bold text-neutral-900 dark:text-white">{fmt(summary.active_ownerships)}</p><p class="mt-1 text-xs text-neutral-500">Produk / program aktif tercatat</p></button>
 	<button type="button" onclick={() => showDrilldown("has")} class="group rounded-2xl border border-neutral-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-sm dark:border-white/[0.06] dark:bg-neutral-925/50 sm:p-5"><div class="flex items-center justify-between gap-2"><p class="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Total stok buku</p><Boxes size="17" class="text-brand-500" /></div><p class="mt-3 text-2xl font-bold text-neutral-900 dark:text-white">{fmt(summary.total_stock)}</p><p class="mt-1 text-xs text-neutral-500">Snapshot stok saat ini</p></button>
-	<button type="button" onclick={() => selectedProduct ? showDrilldown("missing") : showDrilldown("has")} class="group rounded-2xl border border-neutral-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-sm dark:border-white/[0.06] dark:bg-neutral-925/50 sm:p-5"><div class="flex items-center justify-between gap-2"><p class="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Perlu restock</p><AlertCircle size="17" class={summary.low_stock_products > 0 ? "text-amber-500" : "text-green-500"} /></div><p class="mt-3 text-2xl font-bold text-neutral-900 dark:text-white">{fmt(summary.low_stock_products)}</p><p class="mt-1 text-xs text-neutral-500">Stok ≤ minimum atau habis</p></button>
+	<button type="button" onclick={() => showDrilldown("has")} class="group rounded-2xl border border-neutral-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-sm dark:border-white/[0.06] dark:bg-neutral-925/50 sm:p-5"><div class="flex items-center justify-between gap-2"><p class="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Perlu restock</p><AlertCircle size="17" class={summary.low_stock_products > 0 ? "text-amber-500" : "text-green-500"} /></div><p class="mt-3 text-2xl font-bold text-neutral-900 dark:text-white">{fmt(summary.low_stock_products)}</p><p class="mt-1 text-xs text-neutral-500">Stok ≤ minimum atau habis</p></button>
 	<button type="button" onclick={() => showDrilldown("period")} class="group rounded-2xl border border-neutral-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-sm dark:border-white/[0.06] dark:bg-neutral-925/50 sm:p-5"><div class="flex items-center justify-between gap-2"><p class="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Distribusi periode</p><CalendarDays size="17" class="text-brand-500" /></div><div class="mt-3 flex items-end gap-2"><p class="text-2xl font-bold text-neutral-900 dark:text-white">{fmt(summary.period_assignments)}</p><span class="pb-0.5 text-xs font-semibold {summary.assignment_change_rate >= 0 ? 'text-green-600' : 'text-red-500'}">{summary.assignment_change_rate >= 0 ? "+" : ""}{pct(summary.assignment_change_rate)}</span></div><p class="mt-1 text-xs text-neutral-500">Periode sebelumnya {fmt(summary.previous_assignments)}</p></button>
 </section>
 
