@@ -71,6 +71,17 @@ func (q *Queries) UpdateProduk(ctx context.Context, id int64, nama, kategori str
 	return err
 }
 
+func (q *Queries) ProdukHasHistory(ctx context.Context, productID int64) (bool, error) {
+	var total int64
+	err := q.db.QueryRowContext(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM mahasantri_produk WHERE produk_id = ?) +
+			(SELECT COUNT(*) FROM stok_mutasi WHERE produk_id = ?)`,
+		productID, productID,
+	).Scan(&total)
+	return total > 0, err
+}
+
 func (q *Queries) ListProdukBatch(ctx context.Context, productID int64) ([]models.ProductBatch, error) {
 	rows, err := q.db.QueryContext(ctx, `
 		SELECT id, produk_id, nama,
