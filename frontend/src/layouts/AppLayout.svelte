@@ -61,6 +61,7 @@
 
 	let menuLinks = $derived([
 		{ href: "/app", label: "Dashboard", group: "dashboard", category: "Utama", show: role !== "guru" && role !== "koordinator_guru" && role !== "user" && role !== "cs" && role !== "admin_kelas", icon: LayoutDashboard },
+		{ href: "/app/analitik-santri", label: "Analisis Santri", group: "analitik-santri", category: "Utama", show: isSuperAdmin, icon: Users },
 		{ href: "/app/santri", label: "Data Santri", group: "santri", category: "Akademik", show: isCS || isAdminKelas, icon: Users },
 		{ href: "/app/perlu-dilengkapi", label: "Perlu Dilengkapi", group: "perlu-dilengkapi", category: "Akademik", show: isAdminKelas, icon: AlertCircle },
 		{ href: "/app/kelas", label: "Kelas", group: "kelas", category: "Akademik", show: isAdminKelas, icon: BookOpen },
@@ -98,6 +99,7 @@
 		if (typeof window === "undefined") return "";
 		const path = window.location.pathname;
 		if (path === "/app" || path === "/app/") return "dashboard";
+		if (path.startsWith("/app/analitik-santri")) return "analitik-santri";
 		if (path.startsWith("/app/santri")) return "santri";
 		if (path.startsWith("/app/perlu-dilengkapi")) return "perlu-dilengkapi";
 		if (path.startsWith("/app/kelas")) return "kelas";
