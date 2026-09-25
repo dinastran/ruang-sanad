@@ -243,6 +243,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	riayahWriteRole := middlewares.RoleRequired(store, userService, "guru", "admin_kelas", "super_admin")
 	protected.Get("/guru/riayah", riayahReadRole, h.RiayahSantri.Index)
 	protected.Get("/guru/santri/:sid", riayahReadRole, h.RiayahSantri.Profil)
+	protected.Get("/guru/santri/:sid/rapor", riayahReadRole, h.RiayahSantri.Rapor)
 	protected.Post("/guru/santri/:sid/catatan", riayahWriteRole, h.RiayahSantri.CatatanCreate)
 	protected.Delete("/guru/santri/:sid/catatan/:rid", riayahWriteRole, h.RiayahSantri.CatatanDelete)
 	protected.Post("/guru/santri/:sid/kontak", riayahWriteRole, h.RiayahSantri.KontakCreate)

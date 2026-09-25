@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/maulanashalihin/laju-go/app/models"
 	"github.com/maulanashalihin/laju-go/app/queries"
@@ -21,6 +22,8 @@ const (
 	riayahAlpaBerturut       = 2
 	riayahProgresMacetJumlah = 4
 	riayahBelumDisapaHari    = 14
+	riayahPesanRaporMinimal  = 20 // karakter; pesan pribadi guru wajib di rapor
+	riayahPeriodeRaporOpsi   = 6
 )
 
 // Media kontak yang diterima.
@@ -76,6 +79,15 @@ func (s *RiayahSantriService) ListPerhatian(viewer models.RiayahViewer, today ti
 	for _, row := range kontakRows {
 		kontakBySantri[row.SantriID] = row.KontakTerakhir
 	}
+	raporPeriode := periodeBulanLalu(today)
+	raporRows, err := s.querier.ListSantriRaporTerkirimPeriode(ctx, queries.ListSantriRaporTerkirimPeriodeParams{Periode: raporPeriode, GuruID: scope})
+	if err != nil {
+		return nil, models.RiayahRingkasan{}, err
+	}
+	raporTerkirim := make(map[int64]bool, len(raporRows))
+	for _, id := range raporRows {
+		raporTerkirim[id] = true
+	}
 
 	absensiBySantri := make(map[int64][]queries.ListAbsensiTerakhirRiayahRow, len(santriRows))
 	for _, row := range absensiRows {
@@ -92,7 +104,7 @@ func (s *RiayahSantriService) ListPerhatian(viewer models.RiayahViewer, today ti
 	}
 
 	items := make([]models.RiayahSantriItem, 0, len(santriRows))
-	ringkasan := models.RiayahRingkasan{TotalSantri: len(santriRows)}
+	ringkasan := models.RiayahRingkasan{TotalSantri: len(santriRows), RaporPeriode: raporPeriode}
 	for _, row := range santriRows {
 		absen := absensiBySantri[row.ID]
 		r := rekapBySantri[row.ID]
@@ -119,6 +131,10 @@ func (s *RiayahSantriService) ListPerhatian(viewer models.RiayahViewer, today ti
 			}
 		}
 		item.KontakTerakhir = kontakBySantri[row.ID]
+		item.RaporTerkirim = raporTerkirim[row.ID]
+		if item.RaporTerkirim {
+			ringkasan.RaporTerkirim++
+		}
 		item.Penanda = hitungPenandaRiayah(absen, r.total, r.hadir)
 		mulai := ""
 		if row.MulaiBelajar.Valid {
@@ -515,8 +531,11 @@ func (s *RiayahSantriService) CatatKontak(viewer models.RiayahViewer, santriID i
 		if _, err := time.Parse("2006-01", input.Periode); err != nil {
 			return fmt.Errorf("periode rapor tidak valid")
 		}
-		if strings.TrimSpace(input.Catatan) == "" {
-			return fmt.Errorf("pesan pribadi guru wajib diisi")
+		if utf8.RuneCountInString(strings.TrimSpace(input.Catatan)) < riayahPesanRaporMinimal {
+			return fmt.Errorf("pesan pribadi guru wajib diisi (minimal %d karakter)", riayahPesanRaporMinimal)
+		}
+		if input.Periode > today.Format("2006-01") {
+			return fmt.Errorf("periode rapor tidak boleh di masa depan")
 		}
 	} else {
 		input.Periode = ""
@@ -567,4 +586,115 @@ func (s *RiayahSantriService) HapusKontak(viewer models.RiayahViewer, santriID, 
 		return ErrRiayahAksesDitolak
 	}
 	return s.querier.DeleteRiayahKontakByID(ctx, kontakID)
+}
+
+func periodeBulanLalu(today time.Time) string {
+	awalBulan := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
+	return awalBulan.AddDate(0, -1, 0).Format("2006-01")
+}
+
+// Template bawaan dipakai bersama template santri dari koordinator.
+var riayahTemplateBawaan = []models.RiayahWATemplate{
+	{Nama: "Menanyakan kabar", Body: "Assalamu'alaikum {nama},\n\nApa kabar? Semoga ananda sehat dan dimudahkan urusannya. Kalau ada kendala dalam belajar, jangan sungkan cerita ya."},
+	{Nama: "Apresiasi", Body: "Assalamu'alaikum {nama},\n\nBarakallahu fiik atas semangat belajarnya di kelas {nama_kelas}. Terus istiqamah ya."},
+	{Nama: "Mengingatkan kehadiran", Body: "Assalamu'alaikum {nama},\n\nBeberapa pertemuan terakhir ananda belum hadir di kelas {nama_kelas} ({jadwal}). Semoga tidak ada halangan. Kami tunggu di pertemuan berikutnya."},
+}
+
+// ListTemplateWA mengembalikan template aktif untuk santri dari koordinator,
+// diikuti template bawaan.
+func (s *RiayahSantriService) ListTemplateWA() []models.RiayahWATemplate {
+	out := []models.RiayahWATemplate{}
+	if rows, err := s.querier.ListWaTemplate(context.Background()); err == nil {
+		for _, r := range rows {
+			if r.IsAktif == 1 && r.TargetType == "santri" && strings.TrimSpace(r.Body) != "" {
+				out = append(out, models.RiayahWATemplate{Nama: r.Nama, Body: r.Body})
+			}
+		}
+	}
+	return append(out, riayahTemplateBawaan...)
+}
+
+// GetRapor menyiapkan bahan rapor bulanan. Periode kosong = bulan lalu.
+func (s *RiayahSantriService) GetRapor(viewer models.RiayahViewer, santriID int64, periode string, today time.Time) (*models.RiayahRapor, error) {
+	if periode == "" {
+		periode = periodeBulanLalu(today)
+	}
+	awal, err := time.Parse("2006-01", periode)
+	if err != nil {
+		return nil, fmt.Errorf("periode rapor tidak valid")
+	}
+	if periode > today.Format("2006-01") {
+		return nil, fmt.Errorf("periode rapor tidak boleh di masa depan")
+	}
+	profil, err := s.GetProfil(viewer, santriID, today)
+	if err != nil {
+		return nil, err
+	}
+	ctx := context.Background()
+
+	rapor := &models.RiayahRapor{
+		Periode:      periode,
+		Santri:       profil.Santri,
+		Pertemuan:    []models.RiayahTimelineItem{},
+		TerkirimPada: []string{},
+		PesanMinimal: riayahPesanRaporMinimal,
+	}
+	bulanIni := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < riayahPeriodeRaporOpsi; i++ {
+		rapor.PeriodeOpsi = append(rapor.PeriodeOpsi, bulanIni.AddDate(0, -i, 0).Format("2006-01"))
+	}
+
+	rows, err := s.querier.ListAbsensiSantriPeriode(ctx, queries.ListAbsensiSantriPeriodeParams{
+		SantriID: santriID,
+		Mulai:    awal.Format("2006-01-02"),
+		Selesai:  awal.AddDate(0, 1, 0).Format("2006-01-02"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range rows {
+		rapor.Rekap.Total++
+		switch a.Status {
+		case "hadir":
+			rapor.Rekap.Hadir++
+		case "telat":
+			rapor.Rekap.Telat++
+		case "izin":
+			rapor.Rekap.Izin++
+		case "sakit":
+			rapor.Rekap.Sakit++
+		case "alpa":
+			rapor.Rekap.Alpa++
+		}
+		if a.BatasMateri != "" {
+			if rapor.BatasAwal == "" {
+				rapor.BatasAwal = a.BatasMateri
+			}
+			rapor.BatasAkhir = a.BatasMateri
+		}
+		judul := a.NamaKelas
+		if a.PertemuanLevelKe > 0 {
+			judul = fmt.Sprintf("Pertemuan %d", a.PertemuanLevelKe)
+		}
+		rapor.Pertemuan = append(rapor.Pertemuan, models.RiayahTimelineItem{
+			Jenis:   "pertemuan",
+			Tanggal: a.Tanggal.Format("2006-01-02"),
+			Judul:   judul,
+			Status:  a.Status,
+			Isi:     a.Catatan,
+			Materi:  a.Materi,
+			Batas:   a.BatasMateri,
+		})
+	}
+
+	terkirim, err := s.querier.ListRaporTerkirimSantri(ctx, santriID)
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range terkirim {
+		if t.Periode == periode {
+			rapor.TerkirimPada = append(rapor.TerkirimPada, t.Tanggal)
+		}
+	}
+	return rapor, nil
 }

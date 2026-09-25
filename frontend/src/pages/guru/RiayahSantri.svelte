@@ -4,9 +4,10 @@
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import PenandaBadge from "@components/riayah/PenandaBadge.svelte";
 	import CatatKontakDialog from "@components/riayah/CatatKontakDialog.svelte";
-	import { hariLalu } from "@lib/riayah";
-	import type { Flash, User, RiayahSantriItem, RiayahRingkasan, RiayahPenandaKode } from "@lib/types";
-	import { HeartHandshake, Search, ChevronRight, Users, Eye, NotebookPen } from "lucide-svelte";
+	import SapaWADialog from "@components/riayah/SapaWADialog.svelte";
+	import { hariLalu, labelPeriode } from "@lib/riayah";
+	import type { Flash, User, RiayahSantriItem, RiayahRingkasan, RiayahPenandaKode, RiayahWATemplate } from "@lib/types";
+	import { HeartHandshake, Search, ChevronRight, Users, Eye, NotebookPen, MessageCircle, FileText } from "lucide-svelte";
 
 	interface Props {
 		user?: User;
@@ -14,14 +15,15 @@
 		ringkasan?: RiayahRingkasan;
 		can_write?: boolean;
 		is_semua?: boolean;
+		wa_templates?: RiayahWATemplate[];
 		flash?: Flash;
 		success?: string;
 		error?: string;
 	}
 
-	let { user, santri = [], ringkasan, can_write = false, is_semua = false, flash, success, error }: Props = $props();
+	let { user, santri = [], ringkasan, can_write = false, is_semua = false, wa_templates = [], flash, success, error }: Props = $props();
 
-	type Filter = "semua" | "perhatian" | RiayahPenandaKode;
+	type Filter = "semua" | "perhatian" | "rapor" | RiayahPenandaKode;
 	let filter = $state<Filter>("perhatian");
 	let search = $state("");
 	let kelasID = $state("");
@@ -34,7 +36,8 @@
 		const q = search.trim().toLowerCase();
 		return santri.filter((s) => {
 			if (filter === "perhatian" && s.penanda.length === 0) return false;
-			if (filter !== "semua" && filter !== "perhatian" && !s.penanda.some((p) => p.kode === filter)) return false;
+			if (filter === "rapor" && s.rapor_terkirim) return false;
+			if (filter !== "semua" && filter !== "perhatian" && filter !== "rapor" && !s.penanda.some((p) => p.kode === filter)) return false;
 			if (kelasID && String(s.kelas_id) !== kelasID) return false;
 			if (q && !s.nama.toLowerCase().includes(q) && !s.id_mahasantri.toLowerCase().includes(q) && !s.nama_kelas.toLowerCase().includes(q)) return false;
 			return true;
@@ -46,10 +49,12 @@
 		{ key: "kehadiran" as Filter, label: "Kehadiran", count: ringkasan?.kehadiran ?? 0, dot: "bg-red-500" },
 		{ key: "kontak" as Filter, label: "Belum disapa", count: ringkasan?.kontak ?? 0, dot: "bg-orange-500" },
 		{ key: "progres" as Filter, label: "Progres macet", count: ringkasan?.progres ?? 0, dot: "bg-amber-500" },
+		{ key: "rapor" as Filter, label: `Rapor ${ringkasan?.rapor_periode ? labelPeriode(ringkasan.rapor_periode).split(" ")[0] : ""} belum dikirim`, count: (ringkasan?.total_santri ?? santri.length) - (ringkasan?.rapor_terkirim ?? 0), dot: "bg-sky-500" },
 		{ key: "semua" as Filter, label: "Semua santri", count: ringkasan?.total_santri ?? santri.length, dot: "bg-neutral-400" },
 	]);
 
 	let kontakSantri = $state<RiayahSantriItem | null>(null);
+	let waSantri = $state<RiayahSantriItem | null>(null);
 
 	function persen(v: number | null): string {
 		return v === null ? "–" : `${Math.round(v)}%`;
@@ -148,12 +153,18 @@
 										<div class="flex gap-1"><dt>Hadir 30 hari:</dt><dd class="font-mono text-neutral-700 dark:text-neutral-300">{persen(s.persen_hadir_30)}{s.total_pertemuan_30 ? ` (${s.total_pertemuan_30}x)` : ""}</dd></div>
 										<div class="flex gap-1 min-w-0"><dt>Batas materi:</dt><dd class="truncate text-neutral-700 dark:text-neutral-300">{s.batas_materi_terakhir || "–"}</dd></div>
 										<div class="flex gap-1"><dt>Disapa:</dt><dd class="text-neutral-700 dark:text-neutral-300">{s.kontak_terakhir ? hariLalu(s.kontak_terakhir) : "belum pernah"}</dd></div>
+										{#if s.rapor_terkirim}<div class="flex items-center gap-1 text-sky-700 dark:text-sky-400"><FileText class="w-3 h-3" /><dt class="sr-only">Rapor</dt><dd>Rapor {labelPeriode(ringkasan?.rapor_periode ?? "").split(" ")[0]} terkirim</dd></div>{/if}
 									</dl>
 								</div>
 								<ChevronRight class="mt-1 w-4 h-4 shrink-0 text-neutral-400" />
 							</a>
 							{#if can_write}
-								<div class="flex shrink-0 items-center pr-4">
+								<div class="flex shrink-0 items-center gap-2 pr-4">
+									{#if s.no_wa}
+										<button type="button" onclick={() => (waSantri = s)} class="inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-xl bg-brand-600 px-3 text-xs font-semibold text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60" aria-label={`Sapa ${s.nama} via WhatsApp`}>
+											<MessageCircle class="w-3.5 h-3.5" /><span class="hidden sm:inline">WA</span>
+										</button>
+									{/if}
 									<button type="button" onclick={() => (kontakSantri = s)} class="inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-xl border border-neutral-200 px-3 text-xs font-semibold text-neutral-700 hover:border-brand-400/40 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:text-brand-300" aria-label={`Catat sapaan untuk ${s.nama}`}>
 										<NotebookPen class="w-3.5 h-3.5" /><span class="hidden sm:inline">Catat sapaan</span>
 									</button>
@@ -174,5 +185,8 @@
 
 	{#if kontakSantri}
 		<CatatKontakDialog santri={kontakSantri} kembali="/app/guru/riayah" onclose={() => (kontakSantri = null)} />
+	{/if}
+	{#if waSantri}
+		<SapaWADialog santri={waSantri} templates={wa_templates} pengirim={user?.name ?? ""} kembali="/app/guru/riayah" onclose={() => (waSantri = null)} />
 	{/if}
 </AppLayout>

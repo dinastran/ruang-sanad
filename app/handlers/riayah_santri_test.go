@@ -76,6 +76,7 @@ func setupRiayahHandler(t *testing.T) *riayahHandlerFixture {
 	writeRole := middlewares.RoleRequired(store, userService, "guru", "admin_kelas", "super_admin")
 	protected.Get("/guru/riayah", readRole, h.Index)
 	protected.Get("/guru/santri/:sid", readRole, h.Profil)
+	protected.Get("/guru/santri/:sid/rapor", readRole, h.Rapor)
 	protected.Post("/guru/santri/:sid/catatan", writeRole, h.CatatanCreate)
 	protected.Post("/guru/santri/:sid/kontak", writeRole, h.KontakCreate)
 
@@ -134,6 +135,9 @@ func TestRiayahSantriKoordinatorHanyaMembaca(t *testing.T) {
 
 	component, _ = inertiaPage(t, f.do(t, cookie, http.MethodGet, fmt.Sprintf("/app/guru/santri/%d", f.santriA), ""))
 	require.Equal(t, "guru/SantriProfil", component)
+	component, props = inertiaPage(t, f.do(t, cookie, http.MethodGet, fmt.Sprintf("/app/guru/santri/%d/rapor", f.santriA), ""))
+	require.Equal(t, "guru/RaporSantri", component)
+	require.Equal(t, false, props["can_write"])
 
 	resp := f.do(t, cookie, http.MethodPost, fmt.Sprintf("/app/guru/santri/%d/catatan", f.santriA), `{"catatan":"tidak boleh"}`)
 	require.Equal(t, http.StatusForbidden, resp.StatusCode)
@@ -151,6 +155,9 @@ func TestRiayahSantriGuruTerbatasPadaKelasnya(t *testing.T) {
 	require.Equal(t, "/app/guru/riayah", resp.Header.Get("Location"))
 	resp = f.do(t, guruB, http.MethodPost, profil+"/catatan", `{"catatan":"bukan santri saya"}`)
 	require.Equal(t, http.StatusSeeOther, resp.StatusCode)
+	resp = f.do(t, guruB, http.MethodGet, profil+"/rapor", "")
+	require.Equal(t, http.StatusSeeOther, resp.StatusCode)
+	require.Equal(t, "/app/guru/riayah", resp.Header.Get("Location"))
 
 	guruA := f.login(t, "guru-a@example.com")
 	component, props := inertiaPage(t, f.do(t, guruA, http.MethodGet, profil, ""))

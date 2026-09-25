@@ -272,3 +272,77 @@ func TestRiayahPenandaBelumDisapaDanCatatKontak(t *testing.T) {
 	require.ErrorIs(t, f.service.HapusKontak(guruB, lama, kontakID), ErrRiayahAksesDitolak)
 	require.NoError(t, f.service.HapusKontak(guruA, lama, kontakID))
 }
+
+func TestRiayahRaporBulananDanPelacakanPengiriman(t *testing.T) {
+	f := setupRiayahSantri(t)
+	santri := f.insertSantri(t, "Santri Rapor", f.kelasA)
+	lain := f.insertSantri(t, "Santri Lain", f.kelasA)
+	// today = 2026-09-25, jadi bulan lalu = 2026-08.
+	f.absen(t, f.kelasA, santri, 57, "hadir", "Juz 1") // 2026-07-30, di luar periode
+	f.absen(t, f.kelasA, santri, 52, "hadir", "Juz 2") // 2026-08-04
+	f.absen(t, f.kelasA, santri, 45, "izin", "")       // 2026-08-11
+	f.absen(t, f.kelasA, santri, 38, "hadir", "Juz 3") // 2026-08-18
+	f.absen(t, f.kelasA, santri, 25, "hadir", "Juz 4") // 2026-08-31
+	f.absen(t, f.kelasA, santri, 24, "alpa", "")       // 2026-09-01, di luar periode
+
+	guruA := models.RiayahViewer{UserID: f.guruAUser, GuruID: &f.guruA, CanWrite: true}
+	rapor, err := f.service.GetRapor(guruA, santri, "", f.today)
+	require.NoError(t, err)
+	require.Equal(t, "2026-08", rapor.Periode)
+	require.Equal(t, int64(4), rapor.Rekap.Total)
+	require.Equal(t, int64(3), rapor.Rekap.Hadir)
+	require.Equal(t, int64(1), rapor.Rekap.Izin)
+	require.Equal(t, "Juz 2", rapor.BatasAwal)
+	require.Equal(t, "Juz 4", rapor.BatasAkhir)
+	require.Len(t, rapor.Pertemuan, 4)
+	require.Empty(t, rapor.TerkirimPada)
+	require.Equal(t, []string{"2026-09", "2026-08", "2026-07", "2026-06", "2026-05", "2026-04"}, rapor.PeriodeOpsi)
+
+	_, err = f.service.GetRapor(guruA, santri, "2026-10", f.today)
+	require.Error(t, err)
+	_, err = f.service.GetRapor(guruA, santri, "Agustus", f.today)
+	require.Error(t, err)
+
+	rapor08 := models.RiayahKontakInput{Media: "wa", Jenis: "rapor", Periode: "2026-08"}
+	rapor08.Catatan = "Mantap"
+	require.Error(t, f.service.CatatKontak(guruA, santri, rapor08, f.today), "pesan pribadi terlalu pendek")
+	rapor08.Catatan = "Masya Allah, bacaan ananda makin tartil bulan ini."
+	require.NoError(t, f.service.CatatKontak(guruA, santri, rapor08, f.today))
+	require.Error(t, f.service.CatatKontak(guruA, santri, models.RiayahKontakInput{Media: "wa", Jenis: "rapor", Periode: "2026-10", Catatan: rapor08.Catatan}, f.today))
+
+	rapor, err = f.service.GetRapor(guruA, santri, "2026-08", f.today)
+	require.NoError(t, err)
+	require.Equal(t, []string{"2026-09-25"}, rapor.TerkirimPada)
+
+	items, ringkasan, err := f.service.ListPerhatian(guruA, f.today)
+	require.NoError(t, err)
+	require.Equal(t, "2026-08", ringkasan.RaporPeriode)
+	require.Equal(t, 1, ringkasan.RaporTerkirim)
+	require.True(t, findItem(items, santri).RaporTerkirim)
+	require.False(t, findItem(items, lain).RaporTerkirim)
+	// Mengirim rapor juga dihitung sebagai menyapa santri.
+	require.Equal(t, "2026-09-25", findItem(items, santri).KontakTerakhir)
+
+	// Koordinator boleh melihat rapor tetapi tidak mencatat pengiriman.
+	_, err = f.service.GetRapor(models.RiayahViewer{UserID: 99}, santri, "2026-08", f.today)
+	require.NoError(t, err)
+	_, err = f.service.GetRapor(models.RiayahViewer{UserID: f.guruBUser, GuruID: &f.guruB, CanWrite: true}, santri, "2026-08", f.today)
+	require.ErrorIs(t, err, ErrRiayahAksesDitolak)
+}
+
+func TestRiayahTemplateWA(t *testing.T) {
+	f := setupRiayahSantri(t)
+	_, err := f.db.Exec(`INSERT INTO wa_template (nama, target_type, body, is_aktif) VALUES
+		('Sapaan Koordinator', 'santri', 'Halo {nama}', 1),
+		('Nonaktif', 'santri', 'x', 0),
+		('Untuk Guru', 'guru', 'y', 1)`)
+	require.NoError(t, err)
+
+	templates := f.service.ListTemplateWA()
+	require.Equal(t, "Sapaan Koordinator", templates[0].Nama)
+	require.Len(t, templates, 1+len(riayahTemplateBawaan))
+	for _, tpl := range templates {
+		require.NotEqual(t, "Nonaktif", tpl.Nama)
+		require.NotEqual(t, "Untuk Guru", tpl.Nama)
+	}
+}

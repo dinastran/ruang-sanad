@@ -4,20 +4,22 @@
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import PenandaBadge from "@components/riayah/PenandaBadge.svelte";
 	import CatatKontakDialog from "@components/riayah/CatatKontakDialog.svelte";
+	import SapaWADialog from "@components/riayah/SapaWADialog.svelte";
 	import { formatTanggal, hariLalu, mediaKontak } from "@lib/riayah";
-	import type { Flash, User, RiayahSantriProfil, RiayahTimelineItem } from "@lib/types";
-	import { ArrowLeft, BookOpen, NotebookPen, Trash2, CalendarCheck, MessageCircle } from "lucide-svelte";
+	import type { Flash, User, RiayahSantriProfil, RiayahTimelineItem, RiayahWATemplate } from "@lib/types";
+	import { ArrowLeft, BookOpen, NotebookPen, Trash2, CalendarCheck, MessageCircle, FileText, PhoneCall } from "lucide-svelte";
 
 	interface Props {
 		user?: User;
 		profil: RiayahSantriProfil;
 		can_write?: boolean;
+		wa_templates?: RiayahWATemplate[];
 		flash?: Flash;
 		success?: string;
 		error?: string;
 	}
 
-	let { user, profil, can_write = false, flash, success, error }: Props = $props();
+	let { user, profil, can_write = false, wa_templates = [], flash, success, error }: Props = $props();
 
 	let s = $derived(profil.santri);
 	let rekap = $derived(profil.rekap);
@@ -30,6 +32,7 @@
 	let saving = $state(false);
 	let deleting = $state<string | null>(null);
 	let kontakOpen = $state(false);
+	let waOpen = $state(false);
 
 	function simpanCatatan() {
 		if (!catatan.trim() || saving) return;
@@ -136,11 +139,19 @@
 					<div class="flex justify-between gap-3"><dt class="text-neutral-500">No. WA</dt><dd class="text-right font-mono text-neutral-800 dark:text-neutral-200">{s.no_wa || "–"}</dd></div>
 					<div class="flex justify-between gap-3"><dt class="text-neutral-500">Terakhir disapa</dt><dd class="text-right text-neutral-800 dark:text-neutral-200">{s.kontak_terakhir ? `${formatTanggal(s.kontak_terakhir)} (${hariLalu(s.kontak_terakhir)})` : "Belum pernah"}</dd></div>
 				</dl>
-				{#if can_write}
-					<button type="button" onclick={() => (kontakOpen = true)} class="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-brand-500/40 px-4 text-sm font-semibold text-brand-700 hover:bg-brand-400/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 dark:text-brand-300">
-						<MessageCircle class="w-4 h-4" /> Catat sapaan
-					</button>
-				{/if}
+				<div class="mt-4 grid gap-2">
+					{#if can_write}
+						<button type="button" onclick={() => (waOpen = true)} class="inline-flex min-h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60">
+							<MessageCircle class="w-4 h-4" /> Sapa via WhatsApp
+						</button>
+						<button type="button" onclick={() => (kontakOpen = true)} class="inline-flex min-h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-neutral-200 px-4 text-sm font-medium text-neutral-700 hover:border-brand-400/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 dark:border-neutral-700 dark:text-neutral-300">
+							<PhoneCall class="w-4 h-4" /> Catat sapaan lain
+						</button>
+					{/if}
+					<a href={`/app/guru/santri/${s.id}/rapor`} use:inertia class="inline-flex min-h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-neutral-200 px-4 text-sm font-medium text-neutral-700 hover:border-brand-400/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 dark:border-neutral-700 dark:text-neutral-300">
+						<FileText class="w-4 h-4" /> Rapor bulanan
+					</a>
+				</div>
 			</section>
 		</div>
 
@@ -219,5 +230,8 @@
 
 	{#if kontakOpen}
 		<CatatKontakDialog santri={s} onclose={() => (kontakOpen = false)} />
+	{/if}
+	{#if waOpen}
+		<SapaWADialog santri={s} templates={wa_templates} pengirim={user?.name ?? ""} onclose={() => (waOpen = false)} />
 	{/if}
 </AppLayout>

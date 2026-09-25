@@ -32,6 +32,7 @@ type RiayahSantriItem struct {
 	TotalPertemuan30    int64           `json:"total_pertemuan_30"`
 	BatasMateriTerakhir string          `json:"batas_materi_terakhir"`
 	KontakTerakhir      string          `json:"kontak_terakhir"`
+	RaporTerkirim       bool            `json:"rapor_terkirim"`
 	Penanda             []RiayahPenanda `json:"penanda"`
 }
 
@@ -41,6 +42,9 @@ type RiayahRingkasan struct {
 	Kehadiran      int `json:"kehadiran"`
 	Kontak         int `json:"kontak"`
 	Progres        int `json:"progres"`
+	// Rapor bulan lalu yang sudah dikirim, untuk memantau pengiriman rapor.
+	RaporPeriode  string `json:"rapor_periode"`
+	RaporTerkirim int    `json:"rapor_terkirim"`
 }
 
 // RiayahTimelineItem menggabungkan absensi, catatan riayah, dan log kontak
@@ -92,4 +96,22 @@ type RiayahKontakInput struct {
 	Jenis   string `json:"jenis" form:"jenis"`
 	Periode string `json:"periode" form:"periode"`
 	Catatan string `json:"catatan" form:"catatan"`
+}
+
+type RiayahWATemplate struct {
+	Nama string `json:"nama"`
+	Body string `json:"body"`
+}
+
+// RiayahRapor adalah bahan rapor bulanan satu santri.
+type RiayahRapor struct {
+	Periode      string               `json:"periode"`
+	PeriodeOpsi  []string             `json:"periode_opsi"`
+	Santri       RiayahSantriItem     `json:"santri"`
+	Rekap        RiayahRekapKehadiran `json:"rekap"`
+	BatasAwal    string               `json:"batas_awal"`
+	BatasAkhir   string               `json:"batas_akhir"`
+	Pertemuan    []RiayahTimelineItem `json:"pertemuan"`
+	TerkirimPada []string             `json:"terkirim_pada"`
+	PesanMinimal int                  `json:"pesan_minimal"`
 }

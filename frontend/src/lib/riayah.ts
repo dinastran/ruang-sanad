@@ -45,3 +45,23 @@ export function waLink(noWa: string, text: string): string {
 	const phone = waPhone(noWa);
 	return phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : "";
 }
+
+/** Ganti variabel {nama}, {nama_kelas}, {jadwal}, {level}, {guru} pada template. */
+export function isiTemplate(body: string, vars: Record<string, string>): string {
+	return body.replace(/\{(\w+)\}/g, (match, key: string) => (key in vars && vars[key] ? vars[key] : match));
+}
+
+/** "2026-08" -> "Agustus 2026" */
+export function labelPeriode(periode: string): string {
+	const d = new Date(periode + "-01T00:00:00");
+	return Number.isNaN(d.getTime()) ? periode : d.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+}
+
+export async function salinTeks(text: string): Promise<boolean> {
+	try {
+		await navigator.clipboard.writeText(text);
+		return true;
+	} catch {
+		return false;
+	}
+}

@@ -71,6 +71,66 @@ func (q *Queries) GetRiayahKontakByID(ctx context.Context, id int64) (RiayahKont
 	return i, err
 }
 
+const listAbsensiSantriPeriode = `-- name: ListAbsensiSantriPeriode :many
+SELECT a.status, a.catatan, a.batas_materi,
+    p.tanggal, p.pertemuan_level_ke, p.materi, k.nama_kelas
+FROM absensi a
+JOIN pertemuan p ON p.id = a.pertemuan_id
+JOIN kelas k ON k.id = p.kelas_id
+WHERE a.santri_id = ?1
+  AND p.status = 'selesai'
+  AND p.tanggal >= CAST(?2 AS TEXT)
+  AND p.tanggal < CAST(?3 AS TEXT)
+ORDER BY p.tanggal, p.id
+`
+
+type ListAbsensiSantriPeriodeParams struct {
+	SantriID int64
+	Mulai    string
+	Selesai  string
+}
+
+type ListAbsensiSantriPeriodeRow struct {
+	Status           string
+	Catatan          string
+	BatasMateri      string
+	Tanggal          time.Time
+	PertemuanLevelKe int64
+	Materi           string
+	NamaKelas        string
+}
+
+func (q *Queries) ListAbsensiSantriPeriode(ctx context.Context, arg ListAbsensiSantriPeriodeParams) ([]ListAbsensiSantriPeriodeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAbsensiSantriPeriode, arg.SantriID, arg.Mulai, arg.Selesai)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAbsensiSantriPeriodeRow
+	for rows.Next() {
+		var i ListAbsensiSantriPeriodeRow
+		if err := rows.Scan(
+			&i.Status,
+			&i.Catatan,
+			&i.BatasMateri,
+			&i.Tanggal,
+			&i.PertemuanLevelKe,
+			&i.Materi,
+			&i.NamaKelas,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAbsensiTerakhirRiayah = `-- name: ListAbsensiTerakhirRiayah :many
 SELECT santri_id, status, batas_materi, tanggal, urutan
 FROM (
@@ -164,6 +224,41 @@ func (q *Queries) ListKontakTerakhirRiayah(ctx context.Context, guruID interface
 	return items, nil
 }
 
+const listRaporTerkirimSantri = `-- name: ListRaporTerkirimSantri :many
+SELECT periode, tanggal
+FROM riayah_kontak
+WHERE santri_id = ? AND jenis = 'rapor'
+ORDER BY tanggal DESC, id DESC
+`
+
+type ListRaporTerkirimSantriRow struct {
+	Periode string
+	Tanggal string
+}
+
+func (q *Queries) ListRaporTerkirimSantri(ctx context.Context, santriID int64) ([]ListRaporTerkirimSantriRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRaporTerkirimSantri, santriID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRaporTerkirimSantriRow
+	for rows.Next() {
+		var i ListRaporTerkirimSantriRow
+		if err := rows.Scan(&i.Periode, &i.Tanggal); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRiayahKontakBySantri = `-- name: ListRiayahKontakBySantri :many
 SELECT rk.id, rk.santri_id, rk.guru_id, rk.author_user_id, rk.tanggal, rk.media, rk.jenis, rk.periode, rk.catatan, rk.created_at, COALESCE(u.name, '') AS penulis_nama
 FROM riayah_kontak rk
@@ -212,6 +307,45 @@ func (q *Queries) ListRiayahKontakBySantri(ctx context.Context, santriID int64) 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSantriRaporTerkirimPeriode = `-- name: ListSantriRaporTerkirimPeriode :many
+SELECT DISTINCT rk.santri_id
+FROM riayah_kontak rk
+JOIN santri s ON s.id = rk.santri_id
+JOIN kelas k ON k.id = s.kelas_id
+WHERE rk.jenis = 'rapor'
+  AND rk.periode = ?1
+  AND s.status = 'aktif'
+  AND (?2 IS NULL OR k.guru_id = ?2)
+`
+
+type ListSantriRaporTerkirimPeriodeParams struct {
+	Periode string
+	GuruID  interface{}
+}
+
+func (q *Queries) ListSantriRaporTerkirimPeriode(ctx context.Context, arg ListSantriRaporTerkirimPeriodeParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listSantriRaporTerkirimPeriode, arg.Periode, arg.GuruID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var santri_id int64
+		if err := rows.Scan(&santri_id); err != nil {
+			return nil, err
+		}
+		items = append(items, santri_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

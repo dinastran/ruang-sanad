@@ -75,11 +75,12 @@ func (h *RiayahSantriHandler) Index(c *fiber.Ctx) error {
 	}
 
 	return h.inertiaService.Render(c, "guru/RiayahSantri", fiber.Map{
-		"user":      user,
-		"santri":    items,
-		"ringkasan": ringkasan,
-		"can_write": viewer.CanWrite,
-		"is_semua":  viewer.GuruID == nil,
+		"user":         user,
+		"santri":       items,
+		"ringkasan":    ringkasan,
+		"can_write":    viewer.CanWrite,
+		"is_semua":     viewer.GuruID == nil,
+		"wa_templates": h.riayahSantriService.ListTemplateWA(),
 	})
 }
 
@@ -101,8 +102,36 @@ func (h *RiayahSantriHandler) Profil(c *fiber.Ctx) error {
 	}
 
 	return h.inertiaService.Render(c, "guru/SantriProfil", fiber.Map{
+		"user":         user,
+		"profil":       profil,
+		"can_write":    viewer.CanWrite,
+		"wa_templates": h.riayahSantriService.ListTemplateWA(),
+	})
+}
+
+func (h *RiayahSantriHandler) Rapor(c *fiber.Ctx) error {
+	viewer, user, err := h.viewer(c)
+	if err != nil {
+		h.store.Flash(c, "error", "Data guru tidak ditemukan")
+		return h.inertiaService.Redirect(c, "/app/profile")
+	}
+	santriID, _ := strconv.ParseInt(c.Params("sid"), 10, 64)
+
+	rapor, err := h.riayahSantriService.GetRapor(viewer, santriID, c.Query("periode"), time.Now())
+	if err != nil {
+		if !errors.Is(err, services.ErrRiayahAksesDitolak) {
+			slog.Error("riayah rapor failed", "santri_id", santriID, "error", err)
+		}
+		h.store.Flash(c, "error", err.Error())
+		if errors.Is(err, services.ErrRiayahAksesDitolak) {
+			return h.inertiaService.Redirect(c, "/app/guru/riayah")
+		}
+		return h.inertiaService.Redirect(c, "/app/guru/santri/"+c.Params("sid"))
+	}
+
+	return h.inertiaService.Render(c, "guru/RaporSantri", fiber.Map{
 		"user":      user,
-		"profil":    profil,
+		"rapor":     rapor,
 		"can_write": viewer.CanWrite,
 	})
 }

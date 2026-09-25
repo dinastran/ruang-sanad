@@ -487,6 +487,7 @@ export interface RiayahSantriItem {
 	total_pertemuan_30: number;
 	batas_materi_terakhir: string;
 	kontak_terakhir: string;
+	rapor_terkirim: boolean;
 	penanda: RiayahPenanda[];
 }
 
@@ -496,6 +497,8 @@ export interface RiayahRingkasan {
 	kehadiran: number;
 	kontak: number;
 	progres: number;
+	rapor_periode: string;
+	rapor_terkirim: number;
 }
 
 export interface RiayahTimelineItem {
@@ -529,4 +532,21 @@ export interface RiayahSantriProfil {
 	mulai_belajar: string;
 	rekap: RiayahRekapKehadiran;
 	timeline: RiayahTimelineItem[];
+}
+
+export interface RiayahWATemplate {
+	nama: string;
+	body: string;
+}
+
+export interface RiayahRapor {
+	periode: string;
+	periode_opsi: string[];
+	santri: RiayahSantriItem;
+	rekap: RiayahRekapKehadiran;
+	batas_awal: string;
+	batas_akhir: string;
+	pertemuan: RiayahTimelineItem[];
+	terkirim_pada: string[];
+	pesan_minimal: number;
 }

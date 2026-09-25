@@ -80,3 +80,31 @@ JOIN kelas k ON k.id = s.kelas_id
 WHERE s.status = 'aktif'
   AND (sqlc.narg('guru_id') IS NULL OR k.guru_id = sqlc.narg('guru_id'))
 GROUP BY rk.santri_id;
+
+-- name: ListAbsensiSantriPeriode :many
+SELECT a.status, a.catatan, a.batas_materi,
+    p.tanggal, p.pertemuan_level_ke, p.materi, k.nama_kelas
+FROM absensi a
+JOIN pertemuan p ON p.id = a.pertemuan_id
+JOIN kelas k ON k.id = p.kelas_id
+WHERE a.santri_id = sqlc.arg('santri_id')
+  AND p.status = 'selesai'
+  AND p.tanggal >= CAST(sqlc.arg('mulai') AS TEXT)
+  AND p.tanggal < CAST(sqlc.arg('selesai') AS TEXT)
+ORDER BY p.tanggal, p.id;
+
+-- name: ListRaporTerkirimSantri :many
+SELECT periode, tanggal
+FROM riayah_kontak
+WHERE santri_id = ? AND jenis = 'rapor'
+ORDER BY tanggal DESC, id DESC;
+
+-- name: ListSantriRaporTerkirimPeriode :many
+SELECT DISTINCT rk.santri_id
+FROM riayah_kontak rk
+JOIN santri s ON s.id = rk.santri_id
+JOIN kelas k ON k.id = s.kelas_id
+WHERE rk.jenis = 'rapor'
+  AND rk.periode = sqlc.arg('periode')
+  AND s.status = 'aktif'
+  AND (sqlc.narg('guru_id') IS NULL OR k.guru_id = sqlc.narg('guru_id'));
