@@ -190,6 +190,21 @@ type Level struct {
 	Urutan int64
 }
 
+type MahasantriProduk struct {
+	ID             int64
+	SantriID       int64
+	ProdukID       int64
+	ProdukBatchID  sql.NullInt64
+	Tanggal        time.Time
+	Status         string
+	Catatan        string
+	DicatatOleh    sql.NullInt64
+	DibatalkanAt   sql.NullTime
+	DibatalkanOleh sql.NullInt64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
 type Notification struct {
 	ID            int64
 	UserID        int64
@@ -258,6 +273,28 @@ type Pertemuan struct {
 	UpdatedAt        time.Time
 	LevelNama        string
 	PertemuanLevelKe int64
+}
+
+type Produk struct {
+	ID           int64
+	Nama         string
+	Kategori     string
+	TrackStok    int64
+	IsAktif      int64
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	MinimumStock int64
+}
+
+type ProdukBatch struct {
+	ID             int64
+	ProdukID       int64
+	Nama           string
+	TanggalMulai   sql.NullTime
+	TanggalSelesai sql.NullTime
+	IsAktif        int64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type RapatAbsen struct {
@@ -353,6 +390,31 @@ type Session struct {
 	ExpiresAt time.Time
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type StokMutasi struct {
+	ID            int64
+	ProdukID      int64
+	ProdukBatchID sql.NullInt64
+	Tipe          string
+	Qty           int64
+	ReferensiType string
+	ReferensiID   sql.NullInt64
+	Catatan       string
+	DicatatOleh   sql.NullInt64
+	CreatedAt     time.Time
+}
+
+type StokOpname struct {
+	ID            int64
+	ProdukID      int64
+	ProdukBatchID sql.NullInt64
+	StokSistem    int64
+	StokFisik     int64
+	Selisih       int64
+	Catatan       string
+	DicatatOleh   sql.NullInt64
+	CreatedAt     time.Time
 }
 
 type Tagihan struct {

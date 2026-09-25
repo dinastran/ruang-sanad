@@ -3,6 +3,7 @@ package handlers
 import (
 	"log/slog"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/models"
@@ -15,6 +16,7 @@ type GuruHandler struct {
 	pertemuanService    *services.PertemuanService
 	riayahService       *services.RiayahService
 	notificationService *services.NotificationService
+	riayahSantriService *services.RiayahSantriService
 	store               *session.Store
 	inertiaService      *services.InertiaService
 }
@@ -30,6 +32,12 @@ func NewGuruHandler(guruService *services.GuruService, pertemuanService *service
 	if len(notificationServices) > 0 {
 		h.notificationService = notificationServices[0]
 	}
+	return h
+}
+
+// WithRiayahSantri mengaktifkan ringkasan riayah santri di dashboard guru.
+func (h *GuruHandler) WithRiayahSantri(svc *services.RiayahSantriService) *GuruHandler {
+	h.riayahSantriService = svc
 	return h
 }
 
@@ -66,11 +74,23 @@ func (h *GuruHandler) Dashboard(c *fiber.Ctx) error {
 		}
 	}
 
+	var riayah *models.RiayahRingkasan
+	if h.riayahSantriService != nil {
+		if viewer, err := riayahViewer(c, h.guruService, userID, user); err == nil {
+			if ringkasan, err := h.riayahSantriService.Ringkasan(viewer, time.Now()); err == nil {
+				riayah = &ringkasan
+			} else {
+				slog.Error("guru dashboard riayah summary failed", "user_id", userID, "error", err)
+			}
+		}
+	}
+
 	return h.inertiaService.Render(c, "guru/Dashboard", fiber.Map{
 		"user":          user,
 		"dashboard":     dashboard,
 		"tilawah":       tilawah,
 		"notifications": notifications,
+		"riayah":        riayah,
 	})
 }
 

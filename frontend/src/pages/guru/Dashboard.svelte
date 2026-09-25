@@ -2,20 +2,21 @@
 	import { inertia, router } from "@inertiajs/svelte";
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
-	import type { AppNotification, Flash, User, GuruDashboard, TilawahStatus } from "@lib/types";
-	import { BookOpen, Users, Clock, CheckCircle, AlertCircle, ArrowRight, Play, BookMarked, BellRing } from "lucide-svelte";
+	import type { AppNotification, Flash, User, GuruDashboard, TilawahStatus, RiayahRingkasan } from "@lib/types";
+	import { BookOpen, Users, Clock, CheckCircle, AlertCircle, ArrowRight, Play, BookMarked, BellRing, HeartHandshake } from "lucide-svelte";
 
 	interface Props {
 		user?: User;
 		dashboard?: GuruDashboard;
 		tilawah?: TilawahStatus;
 		notifications?: AppNotification[];
+		riayah?: RiayahRingkasan | null;
 		flash?: Flash;
 		success?: string;
 		error?: string;
 	}
 
-	let { user, dashboard, tilawah, notifications = [], flash, success, error }: Props = $props();
+	let { user, dashboard, tilawah, notifications = [], riayah = null, flash, success, error }: Props = $props();
 
 	let canEdit = $derived(user?.role === "guru");
 	let d = $derived(dashboard as GuruDashboard);
@@ -146,6 +147,28 @@
 					</button>
 				{/if}
 			</div>
+		{/if}
+
+		{#if riayah}
+			<a href="/app/guru/riayah" use:inertia class="block rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-5 transition-all hover:border-brand-400/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50" in:fly={{ y: 20, duration: 600, delay: 90 }}>
+				<div class="flex items-center justify-between gap-4 flex-wrap">
+					<div class="flex items-center gap-3">
+						<div class="w-11 h-11 rounded-xl bg-brand-400/10 flex items-center justify-center"><HeartHandshake class="w-5 h-5 text-brand-600 dark:text-brand-400" /></div>
+						<div>
+							<p class="text-sm font-semibold text-neutral-900 dark:text-white">Riayah Santri</p>
+							<p class="text-xs text-neutral-500 dark:text-neutral-400">
+								{#if riayah.perlu_perhatian > 0}{riayah.perlu_perhatian} dari {riayah.total_santri} santri perlu diperhatikan{:else}Tidak ada santri yang ditandai dari {riayah.total_santri} santri{/if}
+							</p>
+						</div>
+					</div>
+					<div class="flex flex-wrap items-center gap-2 text-xs">
+						{#if riayah.kehadiran > 0}<span class="inline-flex items-center gap-1.5 rounded-lg bg-red-500/10 px-2 py-1 font-medium text-red-700 dark:text-red-300"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Kehadiran {riayah.kehadiran}</span>{/if}
+						{#if riayah.kontak > 0}<span class="inline-flex items-center gap-1.5 rounded-lg bg-orange-500/10 px-2 py-1 font-medium text-orange-700 dark:text-orange-300"><span class="h-1.5 w-1.5 rounded-full bg-orange-500"></span>Belum disapa {riayah.kontak}</span>{/if}
+						{#if riayah.progres > 0}<span class="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 px-2 py-1 font-medium text-amber-800 dark:text-amber-300"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Progres macet {riayah.progres}</span>{/if}
+						<ArrowRight class="w-4 h-4 text-brand-500" />
+					</div>
+				</div>
+			</a>
 		{/if}
 
 		{#if jadwalHariIni.length > 0}

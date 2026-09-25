@@ -30,6 +30,7 @@ type Handlers struct {
 	Pertemuan                   *handlers.PertemuanHandler
 	JadwalPertemuan             *handlers.JadwalPertemuanHandler
 	Riayah                      *handlers.RiayahHandler
+	RiayahSantri                *handlers.RiayahSantriHandler
 	KoordinatorGuru             *handlers.KoordinatorGuruHandler
 	KoordinatorGuruDirectory    *handlers.KoordinatorGuruDirectoryHandler
 	KoordinatorMonitoring       *handlers.KoordinatorMonitoringHandler
@@ -236,6 +237,14 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Post("/guru/tilawah", guruWriteRole, h.Guru.TilawahCheckin)
 	protected.Delete("/guru/tilawah", guruWriteRole, h.Guru.TilawahUncheck)
 	protected.Get("/guru/tsi", guruPersonalReadRole, h.TSI.Saya)
+
+	// Riayah santri — koordinator guru hanya membaca.
+	riayahReadRole := middlewares.RoleRequired(store, userService, "guru", "admin_kelas", "super_admin", "koordinator_guru")
+	riayahWriteRole := middlewares.RoleRequired(store, userService, "guru", "admin_kelas", "super_admin")
+	protected.Get("/guru/riayah", riayahReadRole, h.RiayahSantri.Index)
+	protected.Get("/guru/santri/:sid", riayahReadRole, h.RiayahSantri.Profil)
+	protected.Post("/guru/santri/:sid/catatan", riayahWriteRole, h.RiayahSantri.CatatanCreate)
+	protected.Delete("/guru/santri/:sid/catatan/:rid", riayahWriteRole, h.RiayahSantri.CatatanDelete)
 
 	// Koordinator Guru — dashboard & direktori guru
 	protected.Get("/koordinator-guru", koordinatorRole, h.KoordinatorGuru.Dashboard)

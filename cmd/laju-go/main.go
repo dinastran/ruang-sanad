@@ -119,6 +119,7 @@ func main() {
 	jadwalPertemuanService := services.NewJadwalPertemuanService(querier)
 	notificationService := services.NewNotificationService(querier)
 	riayahService := services.NewRiayahService(querier)
+	riayahSantriService := services.NewRiayahSantriService(querier)
 	koordinatorService := services.NewKoordinatorService(querier)
 	koordinatorMonitoringService := services.NewKoordinatorMonitoringService(querier, jadwalPertemuanService)
 	tsiService := services.NewTSIService(querier)
@@ -155,10 +156,11 @@ func main() {
 	laporanHandler := handlers.NewLaporanHandler(laporanService, sessionStore, inertiaService)
 	adminHandler := handlers.NewAdminHandler(userService, sessionStore, inertiaService)
 	dashboardHandler := handlers.NewDashboardHandler(santriService, laporanService, kelasService, sessionStore, inertiaService)
-	guruHandler := handlers.NewGuruHandler(guruService, pertemuanService, riayahService, sessionStore, inertiaService, notificationService)
+	guruHandler := handlers.NewGuruHandler(guruService, pertemuanService, riayahService, sessionStore, inertiaService, notificationService).WithRiayahSantri(riayahSantriService)
 	pertemuanHandler := handlers.NewPertemuanHandler(guruService, pertemuanService, jadwalPertemuanService, sessionStore, inertiaService)
 	jadwalPertemuanHandler := handlers.NewJadwalPertemuanHandler(guruService, jadwalPertemuanService, sessionStore, inertiaService)
 	riayahHandler := handlers.NewRiayahHandler(guruService, riayahService, sessionStore, inertiaService)
+	riayahSantriHandler := handlers.NewRiayahSantriHandler(guruService, riayahSantriService, sessionStore, inertiaService)
 	koordinatorGuruHandler := handlers.NewKoordinatorGuruHandler(koordinatorService, sessionStore, inertiaService)
 	koordinatorGuruDirectoryHandler := handlers.NewKoordinatorGuruDirectoryHandler(guruService, koordinatorService, riayahService, sessionStore, inertiaService)
 	koordinatorMonitoringHandler := handlers.NewKoordinatorMonitoringHandler(koordinatorMonitoringService, koordinatorService, sessionStore, inertiaService)
@@ -186,6 +188,7 @@ func main() {
 		Pertemuan:                   pertemuanHandler,
 		JadwalPertemuan:             jadwalPertemuanHandler,
 		Riayah:                      riayahHandler,
+		RiayahSantri:                riayahSantriHandler,
 		KoordinatorGuru:             koordinatorGuruHandler,
 		KoordinatorGuruDirectory:    koordinatorGuruDirectoryHandler,
 		KoordinatorMonitoring:       koordinatorMonitoringHandler,

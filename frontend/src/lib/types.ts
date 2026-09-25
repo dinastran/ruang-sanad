@@ -462,3 +462,71 @@ export interface RingkasanKeuangan {
 	total_terlambat: number;
 	kolektibilitas: number;
 }
+
+// Riayah santri
+export type RiayahPenandaKode = "kehadiran" | "kontak" | "progres";
+export type RiayahPenandaLevel = "merah" | "oranye" | "kuning";
+
+export interface RiayahPenanda {
+	kode: RiayahPenandaKode;
+	level: RiayahPenandaLevel;
+	alasan: string;
+}
+
+export interface RiayahSantriItem {
+	id: number;
+	nama: string;
+	id_mahasantri: string;
+	no_wa: string;
+	kelas_id: number;
+	nama_kelas: string;
+	level: string;
+	jadwal: string;
+	guru_nama: string;
+	persen_hadir_30: number | null;
+	total_pertemuan_30: number;
+	batas_materi_terakhir: string;
+	kontak_terakhir: string;
+	penanda: RiayahPenanda[];
+}
+
+export interface RiayahRingkasan {
+	total_santri: number;
+	perlu_perhatian: number;
+	kehadiran: number;
+	kontak: number;
+	progres: number;
+}
+
+export interface RiayahTimelineItem {
+	jenis: "pertemuan" | "catatan" | "kontak";
+	id: number;
+	tanggal: string;
+	waktu: string;
+	judul: string;
+	status?: string;
+	isi?: string;
+	materi?: string;
+	batas_materi?: string;
+	media?: string;
+	penulis?: string;
+	bisa_hapus: boolean;
+}
+
+export interface RiayahRekapKehadiran {
+	total: number;
+	hadir: number;
+	telat: number;
+	izin: number;
+	sakit: number;
+	alpa: number;
+}
+
+export interface RiayahSantriProfil {
+	santri: RiayahSantriItem;
+	domisili: string;
+	usia: number | null;
+	mulai_belajar: string;
+	rekap: RiayahRekapKehadiran;
+	timeline: RiayahTimelineItem[];
+}
