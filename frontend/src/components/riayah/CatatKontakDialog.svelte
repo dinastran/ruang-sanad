@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { router } from "@inertiajs/svelte";
 	import RiayahDialog from "./RiayahDialog.svelte";
-	import { mediaKontak, todayISO } from "@lib/riayah";
+	import { adaFlashError, mediaKontak, todayISO } from "@lib/riayah";
 
 	interface Props {
 		santri: { id: number; nama: string };
@@ -25,7 +25,12 @@
 		const query = kembali ? `?kembali=${encodeURIComponent(kembali)}` : "";
 		router.post(`/app/guru/santri/${santri.id}/kontak${query}`, { media, tanggal, catatan, jenis: "sapa" }, {
 			preserveScroll: true,
-			onSuccess: () => onclose(),
+			preserveState: true,
+			// Server menjawab error dengan redirect + flash; dialog tetap terbuka
+			// supaya isian guru tidak hilang.
+			onSuccess: (page) => {
+				if (!adaFlashError(page)) onclose();
+			},
 			onFinish: () => (busy = false),
 		});
 	}

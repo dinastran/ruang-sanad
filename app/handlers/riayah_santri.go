@@ -3,8 +3,8 @@ package handlers
 import (
 	"errors"
 	"log/slog"
+	"net/url"
 	"strconv"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/models"
@@ -67,7 +67,7 @@ func (h *RiayahSantriHandler) Index(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, "/app/profile")
 	}
 
-	items, ringkasan, err := h.riayahSantriService.ListPerhatian(viewer, time.Now())
+	items, ringkasan, err := h.riayahSantriService.ListPerhatian(viewer, services.HariIniRiayah())
 	if err != nil {
 		slog.Error("riayah santri list failed", "user_id", viewer.UserID, "error", err)
 		h.store.Flash(c, "error", "Gagal memuat data riayah santri")
@@ -92,7 +92,7 @@ func (h *RiayahSantriHandler) Profil(c *fiber.Ctx) error {
 	}
 	santriID, _ := strconv.ParseInt(c.Params("sid"), 10, 64)
 
-	profil, err := h.riayahSantriService.GetProfil(viewer, santriID, time.Now())
+	profil, err := h.riayahSantriService.GetProfil(viewer, santriID, services.HariIniRiayah())
 	if err != nil {
 		if !errors.Is(err, services.ErrRiayahAksesDitolak) {
 			slog.Error("riayah santri profil failed", "santri_id", santriID, "error", err)
@@ -117,7 +117,7 @@ func (h *RiayahSantriHandler) Rapor(c *fiber.Ctx) error {
 	}
 	santriID, _ := strconv.ParseInt(c.Params("sid"), 10, 64)
 
-	rapor, err := h.riayahSantriService.GetRapor(viewer, santriID, c.Query("periode"), time.Now())
+	rapor, err := h.riayahSantriService.GetRapor(viewer, santriID, c.Query("periode"), services.HariIniRiayah())
 	if err != nil {
 		if !errors.Is(err, services.ErrRiayahAksesDitolak) {
 			slog.Error("riayah rapor failed", "santri_id", santriID, "error", err)
@@ -194,8 +194,11 @@ func (h *RiayahSantriHandler) KontakCreate(c *fiber.Ctx) error {
 		h.store.Flash(c, "error", "Data tidak valid")
 		return h.inertiaService.Redirect(c, back)
 	}
-	if err := h.riayahSantriService.CatatKontak(viewer, santriID, input, time.Now()); err != nil {
+	if err := h.riayahSantriService.CatatKontak(viewer, santriID, input, services.HariIniRiayah()); err != nil {
 		h.store.Flash(c, "error", err.Error())
+		if input.Jenis == "rapor" {
+			back = "/app/guru/santri/" + c.Params("sid") + "/rapor?periode=" + url.QueryEscape(input.Periode)
+		}
 		return h.inertiaService.Redirect(c, back)
 	}
 	pesan := "Kontak dengan santri tercatat"

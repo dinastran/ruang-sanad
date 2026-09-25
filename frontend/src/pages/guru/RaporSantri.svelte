@@ -4,7 +4,7 @@
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import RiayahDialog from "@components/riayah/RiayahDialog.svelte";
 	import type { Flash, User, RiayahRapor } from "@lib/types";
-	import { formatTanggal, labelPeriode, salinTeks, waLink } from "@lib/riayah";
+	import { adaFlashError, formatTanggal, labelPeriode, salinTeks, waLink } from "@lib/riayah";
 	import { ArrowLeft, MessageCircle, Copy, CheckCircle, Eye, NotebookPen } from "lucide-svelte";
 
 	interface Props {
@@ -81,6 +81,12 @@
 		if (busy) return;
 		busy = true;
 		router.post(`/app/guru/santri/${s.id}/kontak`, { media: "wa", jenis: "rapor", periode: rapor.periode, catatan: pesanPribadi.trim() }, {
+			// Jika ditolak, server kembali ke halaman rapor; state dipertahankan
+			// agar pesan pribadi guru tidak hilang.
+			preserveState: true,
+			onSuccess: (page) => {
+				if (adaFlashError(page)) konfirmasi = false;
+			},
 			onFinish: () => (busy = false),
 		});
 	}

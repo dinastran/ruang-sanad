@@ -11,6 +11,24 @@ import (
 	"time"
 )
 
+const countRaporSantriPeriode = `-- name: CountRaporSantriPeriode :one
+SELECT COUNT(*) FROM riayah_kontak
+WHERE santri_id = ? AND jenis = 'rapor' AND periode = ? AND tanggal = ?
+`
+
+type CountRaporSantriPeriodeParams struct {
+	SantriID int64
+	Periode  string
+	Tanggal  string
+}
+
+func (q *Queries) CountRaporSantriPeriode(ctx context.Context, arg CountRaporSantriPeriodeParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countRaporSantriPeriode, arg.SantriID, arg.Periode, arg.Tanggal)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createRiayahKontak = `-- name: CreateRiayahKontak :execresult
 INSERT INTO riayah_kontak (santri_id, guru_id, author_user_id, tanggal, media, jenis, periode, catatan)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -139,7 +157,7 @@ FROM (
     FROM absensi a
     JOIN pertemuan p ON p.id = a.pertemuan_id
     JOIN santri s ON s.id = a.santri_id
-    JOIN kelas k ON k.id = s.kelas_id
+    LEFT JOIN kelas k ON k.id = s.kelas_id
     WHERE p.status = 'selesai'
       AND s.status = 'aktif'
       AND (?1 IS NULL OR k.guru_id = ?1)
@@ -190,7 +208,7 @@ const listKontakTerakhirRiayah = `-- name: ListKontakTerakhirRiayah :many
 SELECT rk.santri_id, CAST(MAX(rk.tanggal) AS TEXT) AS kontak_terakhir
 FROM riayah_kontak rk
 JOIN santri s ON s.id = rk.santri_id
-JOIN kelas k ON k.id = s.kelas_id
+LEFT JOIN kelas k ON k.id = s.kelas_id
 WHERE s.status = 'aktif'
   AND (?1 IS NULL OR k.guru_id = ?1)
 GROUP BY rk.santri_id
@@ -321,7 +339,7 @@ const listSantriRaporTerkirimPeriode = `-- name: ListSantriRaporTerkirimPeriode 
 SELECT DISTINCT rk.santri_id
 FROM riayah_kontak rk
 JOIN santri s ON s.id = rk.santri_id
-JOIN kelas k ON k.id = s.kelas_id
+LEFT JOIN kelas k ON k.id = s.kelas_id
 WHERE rk.jenis = 'rapor'
   AND rk.periode = ?1
   AND s.status = 'aktif'
@@ -359,14 +377,15 @@ func (q *Queries) ListSantriRaporTerkirimPeriode(ctx context.Context, arg ListSa
 const listSantriRiayahScope = `-- name: ListSantriRiayahScope :many
 SELECT s.id, s.nama, s.id_mahasantri, s.no_wa, s.jenis_kelamin,
     s.mulai_belajar, s.tanggal_daftar,
-    k.id AS kelas_id, k.nama_kelas, k.level, k.jadwal,
+    COALESCE(k.id, 0) AS kelas_id, COALESCE(k.nama_kelas, '') AS nama_kelas,
+    COALESCE(k.level, '') AS level, COALESCE(k.jadwal, '') AS jadwal,
     COALESCE(g.nama, '') AS guru_nama
 FROM santri s
-JOIN kelas k ON k.id = s.kelas_id
+LEFT JOIN kelas k ON k.id = s.kelas_id
 LEFT JOIN guru g ON g.id = k.guru_id
 WHERE s.status = 'aktif'
   AND (?1 IS NULL OR k.guru_id = ?1)
-ORDER BY k.nama_kelas, s.nama
+ORDER BY COALESCE(k.nama_kelas, ''), s.nama
 `
 
 type ListSantriRiayahScopeRow struct {
@@ -485,7 +504,7 @@ SELECT a.santri_id,
 FROM absensi a
 JOIN pertemuan p ON p.id = a.pertemuan_id
 JOIN santri s ON s.id = a.santri_id
-JOIN kelas k ON k.id = s.kelas_id
+LEFT JOIN kelas k ON k.id = s.kelas_id
 WHERE p.status = 'selesai'
   AND s.status = 'aktif'
   AND p.tanggal >= CAST(?1 AS TEXT)

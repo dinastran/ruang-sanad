@@ -251,7 +251,7 @@ func TestRiayahPenandaBelumDisapaDanCatatKontak(t *testing.T) {
 
 	// Validasi input.
 	require.Error(t, f.service.CatatKontak(guruA, lama, models.RiayahKontakInput{Media: "surat"}, f.today))
-	require.Error(t, f.service.CatatKontak(guruA, lama, models.RiayahKontakInput{Media: "wa", Tanggal: f.today.AddDate(0, 0, 1).Format("2006-01-02")}, f.today))
+	require.Error(t, f.service.CatatKontak(guruA, lama, models.RiayahKontakInput{Media: "wa", Tanggal: f.today.AddDate(0, 0, 2).Format("2006-01-02")}, f.today))
 	require.Error(t, f.service.CatatKontak(guruA, lama, models.RiayahKontakInput{Media: "wa", Jenis: "rapor", Periode: "2026-09"}, f.today), "rapor tanpa pesan pribadi")
 	require.ErrorIs(t, f.service.CatatKontak(models.RiayahViewer{UserID: 99}, lama, models.RiayahKontakInput{Media: "wa"}, f.today), ErrRiayahAksesDitolak)
 
@@ -345,4 +345,51 @@ func TestRiayahTemplateWA(t *testing.T) {
 		require.NotEqual(t, "Nonaktif", tpl.Nama)
 		require.NotEqual(t, "Untuk Guru", tpl.Nama)
 	}
+}
+
+func TestRiayahPerbaikanReview(t *testing.T) {
+	f := setupRiayahSantri(t)
+	guruA := models.RiayahViewer{UserID: f.guruAUser, GuruID: &f.guruA, CanWrite: true}
+
+	// Hadir tanpa batas materi memutus deret "progres macet".
+	putus := f.insertSantri(t, "Deret Putus", f.kelasA)
+	f.absen(t, f.kelasA, putus, 28, "hadir", "B")
+	f.absen(t, f.kelasA, putus, 21, "hadir", "B")
+	f.absen(t, f.kelasA, putus, 14, "hadir", "B")
+	f.absen(t, f.kelasA, putus, 7, "hadir", "")
+	f.absen(t, f.kelasA, putus, 1, "hadir", "B")
+
+	// Santri aktif tanpa kelas: terlihat oleh admin, tidak oleh guru.
+	tanpaKelas, err := f.db.Exec(`INSERT INTO santri (nama, status) VALUES ('Tanpa Kelas', 'aktif')`)
+	require.NoError(t, err)
+	tanpaKelasID, err := tanpaKelas.LastInsertId()
+	require.NoError(t, err)
+
+	items, _, err := f.service.ListPerhatian(guruA, f.today)
+	require.NoError(t, err)
+	require.Empty(t, findItem(items, putus).Penanda)
+	require.Nil(t, findItem(items, tanpaKelasID))
+
+	admin := models.RiayahViewer{UserID: 1, CanWrite: true}
+	semua, _, err := f.service.ListPerhatian(admin, f.today)
+	require.NoError(t, err)
+	require.NotNil(t, findItem(semua, tanpaKelasID))
+	// Profil santri tanpa kelas tetap menampilkan penandanya.
+	profil, err := f.service.GetProfil(admin, tanpaKelasID, f.today)
+	require.NoError(t, err)
+	require.Equal(t, findItem(semua, tanpaKelasID).Penanda, profil.Santri.Penanda)
+
+	// Rapor tidak tercatat ganda di hari yang sama.
+	rapor := models.RiayahKontakInput{Media: "wa", Jenis: "rapor", Periode: "2026-08", Catatan: "Bacaan ananda makin lancar, terus semangat."}
+	require.NoError(t, f.service.CatatKontak(guruA, putus, rapor, f.today))
+	require.Error(t, f.service.CatatKontak(guruA, putus, rapor, f.today))
+}
+
+func TestRiayahHariDihitungPerKalenderWIB(t *testing.T) {
+	// 03:00 WIB tanggal 25, kontak terakhir tanggal 10 = 15 hari kalender.
+	today := time.Date(2026, 9, 25, 3, 0, 0, 0, ZonaWaktuRiayah)
+	p := hitungPenandaKontak("2026-09-10", "", today)
+	require.NotNil(t, p)
+	require.Contains(t, p.Alasan, "15 hari")
+	require.Nil(t, hitungPenandaKontak("2026-09-11", "", today))
 }

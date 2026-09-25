@@ -3,7 +3,7 @@
 	import { router } from "@inertiajs/svelte";
 	import RiayahDialog from "./RiayahDialog.svelte";
 	import type { RiayahSantriItem, RiayahWATemplate } from "@lib/types";
-	import { isiTemplate, salinTeks, waLink } from "@lib/riayah";
+	import { adaFlashError, isiTemplate, salinTeks, waLink } from "@lib/riayah";
 	import { MessageCircle, Copy, CheckCircle } from "lucide-svelte";
 
 	interface Props {
@@ -49,7 +49,12 @@
 		const query = kembali ? `?kembali=${encodeURIComponent(kembali)}` : "";
 		router.post(`/app/guru/santri/${santri.id}/kontak${query}`, { media: "wa", jenis: "sapa", catatan: pesan.trim() }, {
 			preserveScroll: true,
-			onSuccess: () => onclose(),
+			preserveState: true,
+			// Server menjawab error dengan redirect + flash; dialog tetap terbuka
+			// supaya isian guru tidak hilang.
+			onSuccess: (page) => {
+				if (!adaFlashError(page)) onclose();
+			},
 			onFinish: () => (busy = false),
 		});
 	}

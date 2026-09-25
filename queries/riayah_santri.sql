@@ -2,14 +2,15 @@
 -- Santri aktif yang menjadi tanggung jawab riayah. guru_id NULL = semua santri.
 SELECT s.id, s.nama, s.id_mahasantri, s.no_wa, s.jenis_kelamin,
     s.mulai_belajar, s.tanggal_daftar,
-    k.id AS kelas_id, k.nama_kelas, k.level, k.jadwal,
+    COALESCE(k.id, 0) AS kelas_id, COALESCE(k.nama_kelas, '') AS nama_kelas,
+    COALESCE(k.level, '') AS level, COALESCE(k.jadwal, '') AS jadwal,
     COALESCE(g.nama, '') AS guru_nama
 FROM santri s
-JOIN kelas k ON k.id = s.kelas_id
+LEFT JOIN kelas k ON k.id = s.kelas_id
 LEFT JOIN guru g ON g.id = k.guru_id
 WHERE s.status = 'aktif'
   AND (sqlc.narg('guru_id') IS NULL OR k.guru_id = sqlc.narg('guru_id'))
-ORDER BY k.nama_kelas, s.nama;
+ORDER BY COALESCE(k.nama_kelas, ''), s.nama;
 
 -- name: ListAbsensiTerakhirRiayah :many
 -- 12 absensi terakhir per santri dalam scope, terbaru dulu.
@@ -20,7 +21,7 @@ FROM (
     FROM absensi a
     JOIN pertemuan p ON p.id = a.pertemuan_id
     JOIN santri s ON s.id = a.santri_id
-    JOIN kelas k ON k.id = s.kelas_id
+    LEFT JOIN kelas k ON k.id = s.kelas_id
     WHERE p.status = 'selesai'
       AND s.status = 'aktif'
       AND (sqlc.narg('guru_id') IS NULL OR k.guru_id = sqlc.narg('guru_id'))
@@ -36,7 +37,7 @@ SELECT a.santri_id,
 FROM absensi a
 JOIN pertemuan p ON p.id = a.pertemuan_id
 JOIN santri s ON s.id = a.santri_id
-JOIN kelas k ON k.id = s.kelas_id
+LEFT JOIN kelas k ON k.id = s.kelas_id
 WHERE p.status = 'selesai'
   AND s.status = 'aktif'
   AND p.tanggal >= CAST(sqlc.arg('sejak') AS TEXT)
@@ -76,7 +77,7 @@ LIMIT 200;
 SELECT rk.santri_id, CAST(MAX(rk.tanggal) AS TEXT) AS kontak_terakhir
 FROM riayah_kontak rk
 JOIN santri s ON s.id = rk.santri_id
-JOIN kelas k ON k.id = s.kelas_id
+LEFT JOIN kelas k ON k.id = s.kelas_id
 WHERE s.status = 'aktif'
   AND (sqlc.narg('guru_id') IS NULL OR k.guru_id = sqlc.narg('guru_id'))
 GROUP BY rk.santri_id;
@@ -93,6 +94,10 @@ WHERE a.santri_id = sqlc.arg('santri_id')
   AND p.tanggal < CAST(sqlc.arg('selesai') AS TEXT)
 ORDER BY p.tanggal, p.id;
 
+-- name: CountRaporSantriPeriode :one
+SELECT COUNT(*) FROM riayah_kontak
+WHERE santri_id = ? AND jenis = 'rapor' AND periode = ? AND tanggal = ?;
+
 -- name: ListRaporTerkirimSantri :many
 SELECT periode, tanggal
 FROM riayah_kontak
@@ -103,7 +108,7 @@ ORDER BY tanggal DESC, id DESC;
 SELECT DISTINCT rk.santri_id
 FROM riayah_kontak rk
 JOIN santri s ON s.id = rk.santri_id
-JOIN kelas k ON k.id = s.kelas_id
+LEFT JOIN kelas k ON k.id = s.kelas_id
 WHERE rk.jenis = 'rapor'
   AND rk.periode = sqlc.arg('periode')
   AND s.status = 'aktif'

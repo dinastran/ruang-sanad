@@ -3,7 +3,6 @@ package handlers
 import (
 	"log/slog"
 	"strconv"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/models"
@@ -77,7 +76,7 @@ func (h *GuruHandler) Dashboard(c *fiber.Ctx) error {
 	var riayah *models.RiayahRingkasan
 	if h.riayahSantriService != nil {
 		if viewer, err := riayahViewer(c, h.guruService, userID, user); err == nil {
-			if ringkasan, err := h.riayahSantriService.Ringkasan(viewer, time.Now()); err == nil {
+			if ringkasan, err := h.riayahSantriService.Ringkasan(viewer, services.HariIniRiayah()); err == nil {
 				riayah = &ringkasan
 			} else {
 				slog.Error("guru dashboard riayah summary failed", "user_id", userID, "error", err)

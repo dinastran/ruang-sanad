@@ -34,6 +34,15 @@ var riayahMediaKontak = map[string]string{
 	"lainnya":    "lainnya",
 }
 
+// ZonaWaktuRiayah dipakai untuk menentukan "hari ini" (Indonesia tidak
+// memakai DST, jadi zona tetap sudah akurat). Server bisa berjalan di UTC.
+var ZonaWaktuRiayah = time.FixedZone("WIB", 7*3600)
+
+// HariIniRiayah mengembalikan waktu sekarang dalam zona WIB.
+func HariIniRiayah() time.Time {
+	return time.Now().In(ZonaWaktuRiayah)
+}
+
 var ErrRiayahAksesDitolak = errors.New("anda tidak memiliki akses ke santri ini")
 
 type RiayahSantriService struct {
@@ -209,8 +218,13 @@ func hitungPenandaRiayah(absen []queries.ListAbsensiTerakhirRiayahRow, total30, 
 
 	batas := make([]string, 0, riayahProgresMacetJumlah)
 	for _, a := range absen {
-		if (a.Status != "hadir" && a.Status != "telat") || strings.TrimSpace(a.BatasMateri) == "" {
+		if a.Status != "hadir" && a.Status != "telat" {
 			continue
+		}
+		// Pertemuan hadir tanpa batas materi memutus deret: tidak bisa
+		// disimpulkan progresnya macet.
+		if strings.TrimSpace(a.BatasMateri) == "" {
+			break
 		}
 		batas = append(batas, a.BatasMateri)
 		if len(batas) == riayahProgresMacetJumlah {
@@ -248,11 +262,12 @@ func hitungPenandaKontak(kontakTerakhir, mulai string, today time.Time) *models.
 	if acuan == "" {
 		return &models.RiayahPenanda{Kode: models.PenandaKontak, Level: models.LevelOranye, Alasan: "Belum pernah disapa"}
 	}
-	t, err := time.Parse("2006-01-02", acuan[:min(len(acuan), 10)])
+	t, err := time.ParseInLocation("2006-01-02", acuan[:min(len(acuan), 10)], today.Location())
 	if err != nil || acuan > hariIni {
 		return nil
 	}
-	selisih := int(today.Sub(t).Hours() / 24)
+	awalHariIni := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
+	selisih := int(awalHariIni.Sub(t).Hours()/24 + 0.5)
 	if selisih <= riayahBelumDisapaHari {
 		return nil
 	}
@@ -338,7 +353,9 @@ func (s *RiayahSantriService) GetProfil(viewer models.RiayahViewer, santriID int
 	}
 	// Penanda dihitung dari daftar yang sama agar konsisten dengan halaman riayah,
 	// dipersempit ke guru kelas santri supaya tidak memindai semua santri.
-	if santri.Status == "aktif" && kelasGuruID != nil {
+	if santri.Status == "aktif" {
+		// Dipersempit ke guru kelas bila ada; santri tanpa guru/kelas dihitung
+		// dari cakupan semua santri.
 		scope := viewer
 		scope.GuruID = kelasGuruID
 		if list, _, err := s.ListPerhatian(scope, today); err == nil {
@@ -547,7 +564,8 @@ func (s *RiayahSantriService) CatatKontak(viewer models.RiayahViewer, santriID i
 	if err != nil {
 		return fmt.Errorf("tanggal kontak tidak valid")
 	}
-	if input.Tanggal > today.Format("2006-01-02") {
+	// Toleransi 1 hari untuk perangkat di WITA/WIT yang sudah berganti tanggal.
+	if input.Tanggal > today.AddDate(0, 0, 1).Format("2006-01-02") {
 		return fmt.Errorf("tanggal kontak tidak boleh di masa depan")
 	}
 	if _, err := s.EnsureCanAccessSantri(viewer, santriID); err != nil {
@@ -564,6 +582,16 @@ func (s *RiayahSantriService) CatatKontak(viewer models.RiayahViewer, santriID i
 	}
 	if viewer.GuruID != nil {
 		params.GuruID = sql.NullInt64{Int64: *viewer.GuruID, Valid: true}
+	}
+	if input.Jenis == "rapor" {
+		// Cegah catatan ganda (klik dua kali / dua tab) di hari yang sama.
+		n, err := s.querier.CountRaporSantriPeriode(context.Background(), queries.CountRaporSantriPeriodeParams{SantriID: santriID, Periode: input.Periode, Tanggal: params.Tanggal})
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			return fmt.Errorf("rapor periode ini sudah tercatat terkirim hari ini")
+		}
 	}
 	_, err = s.querier.CreateRiayahKontak(context.Background(), params)
 	return err

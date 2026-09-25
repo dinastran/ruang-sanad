@@ -32,13 +32,26 @@ export const mediaKontak = [
 	{ value: "lainnya", label: "Lainnya" },
 ] as const;
 
-/** Normalisasi nomor WA Indonesia ke format wa.me (tanpa "+"). */
+/**
+ * Normalisasi nomor WA ke format wa.me (tanpa "+").
+ * "+60..." dan "0060..." dianggap nomor internasional dan dipertahankan;
+ * "08..." dan "8..." dianggap nomor Indonesia.
+ */
 export function waPhone(noWa: string): string {
-	let digits = (noWa || "").replace(/[^\d]/g, "");
+	const raw = (noWa || "").trim();
+	let digits = raw.replace(/[^\d]/g, "");
 	if (!digits) return "";
-	if (digits.startsWith("0")) digits = "62" + digits.slice(1);
-	else if (!digits.startsWith("62")) digits = "62" + digits;
-	return digits;
+	if (raw.startsWith("+")) return digits;
+	if (digits.startsWith("00")) return digits.slice(2);
+	if (digits.startsWith("62")) return digits;
+	if (digits.startsWith("0")) return "62" + digits.slice(1);
+	return "62" + digits;
+}
+
+/** true bila respons Inertia membawa flash error (server menolak aksi). */
+export function adaFlashError(page: { props: Record<string, unknown> }): boolean {
+	const flash = page.props.flash as { error?: string } | undefined;
+	return Boolean(flash?.error || page.props.error);
 }
 
 export function waLink(noWa: string, text: string): string {
