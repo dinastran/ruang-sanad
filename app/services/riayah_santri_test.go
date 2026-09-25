@@ -57,7 +57,9 @@ func (f *riayahTestFixture) insertKelas(t *testing.T, kunci, nama string, guruID
 
 func (f *riayahTestFixture) insertSantri(t *testing.T, nama string, kelasID int64) int64 {
 	t.Helper()
-	_, err := f.db.Exec(`INSERT INTO santri (nama, kelas_id, status) VALUES (?, ?, 'aktif')`, nama, kelasID)
+	// Mulai belajar 5 hari lalu agar penanda "belum disapa" tidak ikut muncul.
+	mulai := f.today.AddDate(0, 0, -5).Format("2006-01-02")
+	_, err := f.db.Exec(`INSERT INTO santri (nama, kelas_id, status, mulai_belajar) VALUES (?, ?, 'aktif', ?)`, nama, kelasID, mulai)
 	require.NoError(t, err)
 	id, err := lastID(f.db)
 	require.NoError(t, err)
@@ -214,4 +216,59 @@ func TestRiayahProfilTimelineDanHakHapusCatatan(t *testing.T) {
 
 	require.ErrorIs(t, f.service.HapusCatatan(guruA, santri, catatanLain), ErrRiayahAksesDitolak)
 	require.NoError(t, f.service.HapusCatatan(models.RiayahViewer{UserID: 1, CanWrite: true}, santri, catatanLain))
+}
+
+func TestRiayahPenandaBelumDisapaDanCatatKontak(t *testing.T) {
+	f := setupRiayahSantri(t)
+	baru := f.insertSantri(t, "Santri Baru", f.kelasA)
+	lama := f.insertSantri(t, "Santri Lama", f.kelasA)
+	tanpaTanggal := f.insertSantri(t, "Tanpa Tanggal", f.kelasA)
+	_, err := f.db.Exec(`UPDATE santri SET mulai_belajar = ? WHERE id = ?`, f.today.AddDate(0, 0, -60).Format("2006-01-02"), lama)
+	require.NoError(t, err)
+	_, err = f.db.Exec(`UPDATE santri SET mulai_belajar = NULL WHERE id = ?`, tanpaTanggal)
+	require.NoError(t, err)
+
+	guruA := models.RiayahViewer{UserID: f.guruAUser, GuruID: &f.guruA, CanWrite: true}
+	items, ringkasan, err := f.service.ListPerhatian(guruA, f.today)
+	require.NoError(t, err)
+	require.Empty(t, findItem(items, baru).Penanda)
+	require.Equal(t, []string{models.PenandaKontak}, kodePenanda(findItem(items, lama)))
+	require.Contains(t, findItem(items, lama).Penanda[0].Alasan, "sejak mulai belajar (60 hari)")
+	require.Equal(t, "Belum pernah disapa", findItem(items, tanpaTanggal).Penanda[0].Alasan)
+	require.Equal(t, 2, ringkasan.Kontak)
+
+	// Kontak 20 hari lalu masih ditandai; kontak 3 hari lalu menghapus penanda.
+	require.NoError(t, f.service.CatatKontak(guruA, lama, models.RiayahKontakInput{Media: "wa", Tanggal: f.today.AddDate(0, 0, -20).Format("2006-01-02")}, f.today))
+	items, _, err = f.service.ListPerhatian(guruA, f.today)
+	require.NoError(t, err)
+	require.Contains(t, findItem(items, lama).Penanda[0].Alasan, "Terakhir disapa 20 hari lalu")
+
+	require.NoError(t, f.service.CatatKontak(guruA, lama, models.RiayahKontakInput{Media: "telepon", Catatan: "Kabar baik"}, f.today))
+	items, _, err = f.service.ListPerhatian(guruA, f.today)
+	require.NoError(t, err)
+	require.Empty(t, findItem(items, lama).Penanda)
+	require.Equal(t, f.today.Format("2006-01-02"), findItem(items, lama).KontakTerakhir)
+
+	// Validasi input.
+	require.Error(t, f.service.CatatKontak(guruA, lama, models.RiayahKontakInput{Media: "surat"}, f.today))
+	require.Error(t, f.service.CatatKontak(guruA, lama, models.RiayahKontakInput{Media: "wa", Tanggal: f.today.AddDate(0, 0, 1).Format("2006-01-02")}, f.today))
+	require.Error(t, f.service.CatatKontak(guruA, lama, models.RiayahKontakInput{Media: "wa", Jenis: "rapor", Periode: "2026-09"}, f.today), "rapor tanpa pesan pribadi")
+	require.ErrorIs(t, f.service.CatatKontak(models.RiayahViewer{UserID: 99}, lama, models.RiayahKontakInput{Media: "wa"}, f.today), ErrRiayahAksesDitolak)
+
+	// Kontak muncul di timeline dan hanya penulisnya (guru) yang bisa menghapus.
+	profil, err := f.service.GetProfil(guruA, lama, f.today)
+	require.NoError(t, err)
+	var kontakID int64
+	jumlahKontak := 0
+	for _, item := range profil.Timeline {
+		if item.Jenis == "kontak" {
+			jumlahKontak++
+			require.True(t, item.BisaHapus)
+			kontakID = item.ID
+		}
+	}
+	require.Equal(t, 2, jumlahKontak)
+	guruB := models.RiayahViewer{UserID: f.guruBUser, GuruID: &f.guruB, CanWrite: true}
+	require.ErrorIs(t, f.service.HapusKontak(guruB, lama, kontakID), ErrRiayahAksesDitolak)
+	require.NoError(t, f.service.HapusKontak(guruA, lama, kontakID))
 }

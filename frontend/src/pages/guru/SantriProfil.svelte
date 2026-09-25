@@ -3,8 +3,10 @@
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import PenandaBadge from "@components/riayah/PenandaBadge.svelte";
+	import CatatKontakDialog from "@components/riayah/CatatKontakDialog.svelte";
+	import { formatTanggal, hariLalu, mediaKontak } from "@lib/riayah";
 	import type { Flash, User, RiayahSantriProfil, RiayahTimelineItem } from "@lib/types";
-	import { ArrowLeft, BookOpen, NotebookPen, Trash2, CalendarCheck } from "lucide-svelte";
+	import { ArrowLeft, BookOpen, NotebookPen, Trash2, CalendarCheck, MessageCircle } from "lucide-svelte";
 
 	interface Props {
 		user?: User;
@@ -26,7 +28,8 @@
 
 	let catatan = $state("");
 	let saving = $state(false);
-	let deleting = $state<number | null>(null);
+	let deleting = $state<string | null>(null);
+	let kontakOpen = $state(false);
 
 	function simpanCatatan() {
 		if (!catatan.trim() || saving) return;
@@ -38,10 +41,15 @@
 		});
 	}
 
-	function hapusCatatan(item: RiayahTimelineItem) {
-		if (!confirm("Hapus catatan riayah ini?")) return;
-		deleting = item.id;
-		router.delete(`/app/guru/santri/${s.id}/catatan/${item.id}`, { preserveScroll: true, onFinish: () => (deleting = null) });
+	function hapus(item: RiayahTimelineItem) {
+		const kontak = item.jenis === "kontak";
+		if (!confirm(kontak ? "Hapus log kontak ini?" : "Hapus catatan riayah ini?")) return;
+		deleting = `${item.jenis}-${item.id}`;
+		router.delete(`/app/guru/santri/${s.id}/${kontak ? "kontak" : "catatan"}/${item.id}`, { preserveScroll: true, onFinish: () => (deleting = null) });
+	}
+
+	function labelMedia(value?: string): string {
+		return mediaKontak.find((m) => m.value === value)?.label ?? "";
 	}
 
 	const statusStyle: Record<string, string> = {
@@ -51,12 +59,6 @@
 		sakit: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
 		alpa: "bg-red-500/10 text-red-700 dark:text-red-400",
 	};
-
-	function formatTanggal(t: string): string {
-		if (!t) return "–";
-		const d = new Date(t + "T00:00:00");
-		return Number.isNaN(d.getTime()) ? t : d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
-	}
 
 	let rekapItems = $derived([
 		{ label: "Hadir", value: rekap.hadir, cls: "text-green-700 dark:text-green-400" },
@@ -70,6 +72,7 @@
 		{ key: "semua" as JenisFilter, label: "Semua", count: profil.timeline.length },
 		{ key: "pertemuan" as JenisFilter, label: "Pertemuan", count: profil.timeline.filter((t) => t.jenis === "pertemuan").length },
 		{ key: "catatan" as JenisFilter, label: "Catatan", count: profil.timeline.filter((t) => t.jenis === "catatan").length },
+		{ key: "kontak" as JenisFilter, label: "Sapaan", count: profil.timeline.filter((t) => t.jenis === "kontak").length },
 	]);
 </script>
 
@@ -131,7 +134,13 @@
 					<div class="flex justify-between gap-3"><dt class="text-neutral-500">Usia</dt><dd class="text-right text-neutral-800 dark:text-neutral-200">{profil.usia ? `${profil.usia} tahun` : "–"}</dd></div>
 					<div class="flex justify-between gap-3"><dt class="text-neutral-500">Domisili</dt><dd class="text-right text-neutral-800 dark:text-neutral-200">{profil.domisili || "–"}</dd></div>
 					<div class="flex justify-between gap-3"><dt class="text-neutral-500">No. WA</dt><dd class="text-right font-mono text-neutral-800 dark:text-neutral-200">{s.no_wa || "–"}</dd></div>
+					<div class="flex justify-between gap-3"><dt class="text-neutral-500">Terakhir disapa</dt><dd class="text-right text-neutral-800 dark:text-neutral-200">{s.kontak_terakhir ? `${formatTanggal(s.kontak_terakhir)} (${hariLalu(s.kontak_terakhir)})` : "Belum pernah"}</dd></div>
 				</dl>
+				{#if can_write}
+					<button type="button" onclick={() => (kontakOpen = true)} class="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-brand-500/40 px-4 text-sm font-semibold text-brand-700 hover:bg-brand-400/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 dark:text-brand-300">
+						<MessageCircle class="w-4 h-4" /> Catat sapaan
+					</button>
+				{/if}
 			</section>
 		</div>
 
@@ -176,8 +185,8 @@
 				<ol class="mt-4 border-l border-neutral-200 dark:border-neutral-800 ml-2 space-y-4">
 					{#each timeline as item (`${item.jenis}-${item.id}`)}
 						<li class="relative ml-5">
-							<span class="absolute -left-[25px] top-4 h-2.5 w-2.5 rounded-full ring-4 ring-white dark:ring-neutral-950 {item.jenis === 'catatan' ? 'bg-brand-500' : item.status === 'alpa' ? 'bg-red-500' : 'bg-neutral-400'}" aria-hidden="true"></span>
-							<article class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-4 {item.jenis === 'catatan' ? 'border-brand-400/30' : ''}">
+							<span class="absolute -left-[25px] top-4 h-2.5 w-2.5 rounded-full ring-4 ring-white dark:ring-neutral-950 {item.jenis === 'catatan' ? 'bg-brand-500' : item.jenis === 'kontak' ? 'bg-green-500' : item.status === 'alpa' ? 'bg-red-500' : 'bg-neutral-400'}" aria-hidden="true"></span>
+							<article class="rounded-2xl border bg-white dark:bg-neutral-925/50 p-4 {item.jenis === 'catatan' ? 'border-brand-400/30' : item.jenis === 'kontak' ? 'border-green-500/25' : 'border-neutral-200/80 dark:border-white/[0.06]'}">
 								<header class="flex flex-wrap items-center justify-between gap-2">
 									<div class="flex flex-wrap items-center gap-2">
 										<time class="text-xs font-medium text-neutral-500" datetime={item.tanggal}>{formatTanggal(item.tanggal)}{item.waktu ? ` · ${item.waktu}` : ""}</time>
@@ -185,7 +194,7 @@
 										{#if item.status}<span class="rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize {statusStyle[item.status] ?? 'bg-neutral-500/10 text-neutral-600'}">{item.status}</span>{/if}
 									</div>
 									{#if item.bisa_hapus}
-										<button type="button" onclick={() => hapusCatatan(item)} disabled={deleting === item.id} class="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs text-neutral-500 hover:text-red-600 disabled:opacity-50" aria-label="Hapus catatan">
+										<button type="button" onclick={() => hapus(item)} disabled={deleting === `${item.jenis}-${item.id}`} class="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs text-neutral-500 hover:text-red-600 disabled:opacity-50" aria-label={item.jenis === "kontak" ? "Hapus log kontak" : "Hapus catatan"}>
 											<Trash2 class="w-3.5 h-3.5" /> Hapus
 										</button>
 									{/if}
@@ -197,8 +206,8 @@
 									</dl>
 									{#if item.isi}<p class="mt-2 rounded-lg bg-neutral-50 dark:bg-neutral-900/50 px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300 whitespace-pre-line">{item.isi}</p>{/if}
 								{:else}
-									<p class="mt-2 text-sm text-neutral-800 dark:text-neutral-200 whitespace-pre-line">{item.isi}</p>
-									{#if item.penulis}<p class="mt-2 text-xs text-neutral-500">oleh {item.penulis}</p>{/if}
+									{#if item.isi}<p class="mt-2 text-sm text-neutral-800 dark:text-neutral-200 whitespace-pre-line">{item.isi}</p>{/if}
+									{#if item.penulis || item.media}<p class="mt-2 text-xs text-neutral-500">{[item.jenis === "kontak" ? labelMedia(item.media) : "", item.penulis && `oleh ${item.penulis}`].filter(Boolean).join(" · ")}</p>{/if}
 								{/if}
 							</article>
 						</li>
@@ -207,4 +216,8 @@
 			{/if}
 		</section>
 	</div>
+
+	{#if kontakOpen}
+		<CatatKontakDialog santri={s} onclose={() => (kontakOpen = false)} />
+	{/if}
 </AppLayout>

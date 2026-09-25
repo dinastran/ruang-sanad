@@ -11,6 +11,66 @@ import (
 	"time"
 )
 
+const createRiayahKontak = `-- name: CreateRiayahKontak :execresult
+INSERT INTO riayah_kontak (santri_id, guru_id, author_user_id, tanggal, media, jenis, periode, catatan)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type CreateRiayahKontakParams struct {
+	SantriID     int64
+	GuruID       sql.NullInt64
+	AuthorUserID sql.NullInt64
+	Tanggal      string
+	Media        string
+	Jenis        string
+	Periode      string
+	Catatan      string
+}
+
+func (q *Queries) CreateRiayahKontak(ctx context.Context, arg CreateRiayahKontakParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, createRiayahKontak,
+		arg.SantriID,
+		arg.GuruID,
+		arg.AuthorUserID,
+		arg.Tanggal,
+		arg.Media,
+		arg.Jenis,
+		arg.Periode,
+		arg.Catatan,
+	)
+}
+
+const deleteRiayahKontakByID = `-- name: DeleteRiayahKontakByID :exec
+DELETE FROM riayah_kontak WHERE id = ?
+`
+
+func (q *Queries) DeleteRiayahKontakByID(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteRiayahKontakByID, id)
+	return err
+}
+
+const getRiayahKontakByID = `-- name: GetRiayahKontakByID :one
+SELECT id, santri_id, guru_id, author_user_id, tanggal, media, jenis, periode, catatan, created_at FROM riayah_kontak WHERE id = ?
+`
+
+func (q *Queries) GetRiayahKontakByID(ctx context.Context, id int64) (RiayahKontak, error) {
+	row := q.db.QueryRowContext(ctx, getRiayahKontakByID, id)
+	var i RiayahKontak
+	err := row.Scan(
+		&i.ID,
+		&i.SantriID,
+		&i.GuruID,
+		&i.AuthorUserID,
+		&i.Tanggal,
+		&i.Media,
+		&i.Jenis,
+		&i.Periode,
+		&i.Catatan,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listAbsensiTerakhirRiayah = `-- name: ListAbsensiTerakhirRiayah :many
 SELECT santri_id, status, batas_materi, tanggal, urutan
 FROM (
@@ -52,6 +112,102 @@ func (q *Queries) ListAbsensiTerakhirRiayah(ctx context.Context, guruID interfac
 			&i.BatasMateri,
 			&i.Tanggal,
 			&i.Urutan,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listKontakTerakhirRiayah = `-- name: ListKontakTerakhirRiayah :many
+SELECT rk.santri_id, CAST(MAX(rk.tanggal) AS TEXT) AS kontak_terakhir
+FROM riayah_kontak rk
+JOIN santri s ON s.id = rk.santri_id
+JOIN kelas k ON k.id = s.kelas_id
+WHERE s.status = 'aktif'
+  AND (?1 IS NULL OR k.guru_id = ?1)
+GROUP BY rk.santri_id
+`
+
+type ListKontakTerakhirRiayahRow struct {
+	SantriID       int64
+	KontakTerakhir string
+}
+
+func (q *Queries) ListKontakTerakhirRiayah(ctx context.Context, guruID interface{}) ([]ListKontakTerakhirRiayahRow, error) {
+	rows, err := q.db.QueryContext(ctx, listKontakTerakhirRiayah, guruID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListKontakTerakhirRiayahRow
+	for rows.Next() {
+		var i ListKontakTerakhirRiayahRow
+		if err := rows.Scan(&i.SantriID, &i.KontakTerakhir); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRiayahKontakBySantri = `-- name: ListRiayahKontakBySantri :many
+SELECT rk.id, rk.santri_id, rk.guru_id, rk.author_user_id, rk.tanggal, rk.media, rk.jenis, rk.periode, rk.catatan, rk.created_at, COALESCE(u.name, '') AS penulis_nama
+FROM riayah_kontak rk
+LEFT JOIN users u ON u.id = rk.author_user_id
+WHERE rk.santri_id = ?
+ORDER BY rk.tanggal DESC, rk.id DESC
+LIMIT 200
+`
+
+type ListRiayahKontakBySantriRow struct {
+	ID           int64
+	SantriID     int64
+	GuruID       sql.NullInt64
+	AuthorUserID sql.NullInt64
+	Tanggal      string
+	Media        string
+	Jenis        string
+	Periode      string
+	Catatan      string
+	CreatedAt    time.Time
+	PenulisNama  string
+}
+
+func (q *Queries) ListRiayahKontakBySantri(ctx context.Context, santriID int64) ([]ListRiayahKontakBySantriRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRiayahKontakBySantri, santriID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRiayahKontakBySantriRow
+	for rows.Next() {
+		var i ListRiayahKontakBySantriRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SantriID,
+			&i.GuruID,
+			&i.AuthorUserID,
+			&i.Tanggal,
+			&i.Media,
+			&i.Jenis,
+			&i.Periode,
+			&i.Catatan,
+			&i.CreatedAt,
+			&i.PenulisNama,
 		); err != nil {
 			return nil, err
 		}

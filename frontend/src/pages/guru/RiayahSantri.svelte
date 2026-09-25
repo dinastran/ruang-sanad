@@ -3,8 +3,10 @@
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import PenandaBadge from "@components/riayah/PenandaBadge.svelte";
+	import CatatKontakDialog from "@components/riayah/CatatKontakDialog.svelte";
+	import { hariLalu } from "@lib/riayah";
 	import type { Flash, User, RiayahSantriItem, RiayahRingkasan, RiayahPenandaKode } from "@lib/types";
-	import { HeartHandshake, Search, ChevronRight, Users, Eye } from "lucide-svelte";
+	import { HeartHandshake, Search, ChevronRight, Users, Eye, NotebookPen } from "lucide-svelte";
 
 	interface Props {
 		user?: User;
@@ -42,9 +44,12 @@
 	let chips = $derived([
 		{ key: "perhatian" as Filter, label: "Perlu perhatian", count: ringkasan?.perlu_perhatian ?? 0, dot: "bg-brand-500" },
 		{ key: "kehadiran" as Filter, label: "Kehadiran", count: ringkasan?.kehadiran ?? 0, dot: "bg-red-500" },
+		{ key: "kontak" as Filter, label: "Belum disapa", count: ringkasan?.kontak ?? 0, dot: "bg-orange-500" },
 		{ key: "progres" as Filter, label: "Progres macet", count: ringkasan?.progres ?? 0, dot: "bg-amber-500" },
 		{ key: "semua" as Filter, label: "Semua santri", count: ringkasan?.total_santri ?? santri.length, dot: "bg-neutral-400" },
 	]);
+
+	let kontakSantri = $state<RiayahSantriItem | null>(null);
 
 	function persen(v: number | null): string {
 		return v === null ? "–" : `${Math.round(v)}%`;
@@ -127,8 +132,8 @@
 			{:else}
 				<ul class="divide-y divide-neutral-100 dark:divide-neutral-800">
 					{#each filtered as s (s.id)}
-						<li>
-							<a href={`/app/guru/santri/${s.id}`} use:inertia class="flex items-start gap-4 px-5 py-4 hover:bg-neutral-50 dark:hover:bg-white/[0.02] focus:outline-none focus-visible:bg-brand-400/5">
+						<li class="flex items-stretch hover:bg-neutral-50 dark:hover:bg-white/[0.02]">
+							<a href={`/app/guru/santri/${s.id}`} use:inertia class="flex min-w-0 flex-1 items-start gap-4 px-5 py-4 focus:outline-none focus-visible:bg-brand-400/5">
 								<div class="min-w-0 flex-1">
 									<div class="flex flex-wrap items-baseline gap-x-2">
 										<p class="font-semibold text-neutral-900 dark:text-white">{s.nama}</p>
@@ -142,10 +147,18 @@
 									<dl class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-neutral-500">
 										<div class="flex gap-1"><dt>Hadir 30 hari:</dt><dd class="font-mono text-neutral-700 dark:text-neutral-300">{persen(s.persen_hadir_30)}{s.total_pertemuan_30 ? ` (${s.total_pertemuan_30}x)` : ""}</dd></div>
 										<div class="flex gap-1 min-w-0"><dt>Batas materi:</dt><dd class="truncate text-neutral-700 dark:text-neutral-300">{s.batas_materi_terakhir || "–"}</dd></div>
+										<div class="flex gap-1"><dt>Disapa:</dt><dd class="text-neutral-700 dark:text-neutral-300">{s.kontak_terakhir ? hariLalu(s.kontak_terakhir) : "belum pernah"}</dd></div>
 									</dl>
 								</div>
 								<ChevronRight class="mt-1 w-4 h-4 shrink-0 text-neutral-400" />
 							</a>
+							{#if can_write}
+								<div class="flex shrink-0 items-center pr-4">
+									<button type="button" onclick={() => (kontakSantri = s)} class="inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-xl border border-neutral-200 px-3 text-xs font-semibold text-neutral-700 hover:border-brand-400/40 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:text-brand-300" aria-label={`Catat sapaan untuk ${s.nama}`}>
+										<NotebookPen class="w-3.5 h-3.5" /><span class="hidden sm:inline">Catat sapaan</span>
+									</button>
+								</div>
+							{/if}
 						</li>
 					{/each}
 				</ul>
@@ -154,7 +167,12 @@
 
 		<p class="text-xs text-neutral-500">
 			Penanda: <span class="text-red-600 dark:text-red-400">merah</span> alpa 2x berturut-turut atau kehadiran di bawah 70% (minimal 3 pertemuan dalam 30 hari);
+			<span class="text-orange-700 dark:text-orange-400">oranye</span> belum disapa lebih dari 14 hari (dihitung dari mulai belajar jika belum pernah);
 			<span class="text-amber-700 dark:text-amber-400">kuning</span> batas materi tidak berubah dalam 4 pertemuan hadir terakhir.
 		</p>
 	</div>
+
+	{#if kontakSantri}
+		<CatatKontakDialog santri={kontakSantri} kembali="/app/guru/riayah" onclose={() => (kontakSantri = null)} />
+	{/if}
 </AppLayout>

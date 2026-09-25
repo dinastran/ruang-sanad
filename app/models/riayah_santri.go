@@ -85,3 +85,11 @@ type RiayahViewer struct {
 	GuruID   *int64
 	CanWrite bool
 }
+
+type RiayahKontakInput struct {
+	Tanggal string `json:"tanggal" form:"tanggal"`
+	Media   string `json:"media" form:"media"`
+	Jenis   string `json:"jenis" form:"jenis"`
+	Periode string `json:"periode" form:"periode"`
+	Catatan string `json:"catatan" form:"catatan"`
+}

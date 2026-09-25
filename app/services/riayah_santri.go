@@ -20,7 +20,16 @@ const (
 	riayahBatasPersenHadir   = 70.0
 	riayahAlpaBerturut       = 2
 	riayahProgresMacetJumlah = 4
+	riayahBelumDisapaHari    = 14
 )
+
+// Media kontak yang diterima.
+var riayahMediaKontak = map[string]string{
+	"wa":         "WhatsApp",
+	"telepon":    "telepon",
+	"tatap_muka": "tatap muka",
+	"lainnya":    "lainnya",
+}
 
 var ErrRiayahAksesDitolak = errors.New("anda tidak memiliki akses ke santri ini")
 
@@ -57,6 +66,15 @@ func (s *RiayahSantriService) ListPerhatian(viewer models.RiayahViewer, today ti
 	rekapRows, err := s.querier.RekapKehadiranRiayahSejak(ctx, queries.RekapKehadiranRiayahSejakParams{Sejak: sejak, GuruID: scope})
 	if err != nil {
 		return nil, models.RiayahRingkasan{}, err
+	}
+
+	kontakRows, err := s.querier.ListKontakTerakhirRiayah(ctx, scope)
+	if err != nil {
+		return nil, models.RiayahRingkasan{}, err
+	}
+	kontakBySantri := make(map[int64]string, len(kontakRows))
+	for _, row := range kontakRows {
+		kontakBySantri[row.SantriID] = row.KontakTerakhir
 	}
 
 	absensiBySantri := make(map[int64][]queries.ListAbsensiTerakhirRiayahRow, len(santriRows))
@@ -100,7 +118,20 @@ func (s *RiayahSantriService) ListPerhatian(viewer models.RiayahViewer, today ti
 				break
 			}
 		}
+		item.KontakTerakhir = kontakBySantri[row.ID]
 		item.Penanda = hitungPenandaRiayah(absen, r.total, r.hadir)
+		mulai := ""
+		if row.MulaiBelajar.Valid {
+			mulai = row.MulaiBelajar.Time.Format("2006-01-02")
+		} else if row.TanggalDaftar.Valid {
+			mulai = row.TanggalDaftar.Time.Format("2006-01-02")
+		}
+		if p := hitungPenandaKontak(item.KontakTerakhir, mulai, today); p != nil {
+			item.Penanda = append(item.Penanda, *p)
+			sort.SliceStable(item.Penanda, func(i, j int) bool {
+				return bobotLevel(item.Penanda[i].Level) > bobotLevel(item.Penanda[j].Level)
+			})
+		}
 
 		if len(item.Penanda) > 0 {
 			ringkasan.PerluPerhatian++
@@ -189,21 +220,53 @@ func hitungPenandaRiayah(absen []queries.ListAbsensiTerakhirRiayahRow, total30, 
 	return penanda
 }
 
+// hitungPenandaKontak menandai santri yang belum disapa lebih dari 14 hari.
+// Jika belum pernah dikontak, hitungan dimulai dari tanggal mulai belajar
+// supaya santri baru tidak langsung ditandai.
+func hitungPenandaKontak(kontakTerakhir, mulai string, today time.Time) *models.RiayahPenanda {
+	hariIni := today.Format("2006-01-02")
+	acuan := kontakTerakhir
+	if acuan == "" {
+		acuan = mulai
+	}
+	if acuan == "" {
+		return &models.RiayahPenanda{Kode: models.PenandaKontak, Level: models.LevelOranye, Alasan: "Belum pernah disapa"}
+	}
+	t, err := time.Parse("2006-01-02", acuan[:min(len(acuan), 10)])
+	if err != nil || acuan > hariIni {
+		return nil
+	}
+	selisih := int(today.Sub(t).Hours() / 24)
+	if selisih <= riayahBelumDisapaHari {
+		return nil
+	}
+	alasan := fmt.Sprintf("Terakhir disapa %d hari lalu", selisih)
+	if kontakTerakhir == "" {
+		alasan = fmt.Sprintf("Belum pernah disapa sejak mulai belajar (%d hari)", selisih)
+	}
+	return &models.RiayahPenanda{Kode: models.PenandaKontak, Level: models.LevelOranye, Alasan: alasan}
+}
+
 func normalisasiBatas(s string) string {
 	return strings.Join(strings.Fields(strings.ToLower(s)), " ")
+}
+
+func bobotLevel(level string) int {
+	switch level {
+	case models.LevelMerah:
+		return 100
+	case models.LevelOranye:
+		return 10
+	case models.LevelKuning:
+		return 1
+	}
+	return 0
 }
 
 func skorPenanda(penanda []models.RiayahPenanda) int {
 	skor := 0
 	for _, p := range penanda {
-		switch p.Level {
-		case models.LevelMerah:
-			skor += 100
-		case models.LevelOranye:
-			skor += 10
-		case models.LevelKuning:
-			skor++
-		}
+		skor += bobotLevel(p.Level)
 	}
 	return skor
 }
@@ -342,6 +405,28 @@ func (s *RiayahSantriService) GetProfil(viewer models.RiayahViewer, santriID int
 		})
 	}
 
+	kontak, err := s.querier.ListRiayahKontakBySantri(ctx, santriID)
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range kontak {
+		judul := "Menyapa via " + riayahMediaKontak[k.Media]
+		if k.Jenis == "rapor" {
+			judul = "Rapor " + k.Periode + " dikirim via " + riayahMediaKontak[k.Media]
+		}
+		profil.Timeline = append(profil.Timeline, models.RiayahTimelineItem{
+			Jenis:     "kontak",
+			ID:        k.ID,
+			Tanggal:   k.Tanggal,
+			Waktu:     k.CreatedAt.Format("15:04"),
+			Judul:     judul,
+			Isi:       k.Catatan,
+			Media:     k.Media,
+			Penulis:   k.PenulisNama,
+			BisaHapus: viewer.CanWrite && bisaKelolaCatatan(viewer, k.GuruID),
+		})
+	}
+
 	urutkanTimeline(profil.Timeline)
 	profil.Santri = item
 	return profil, nil
@@ -410,4 +495,76 @@ func (s *RiayahSantriService) HapusCatatan(viewer models.RiayahViewer, santriID,
 		return ErrRiayahAksesDitolak
 	}
 	return s.querier.DeleteRiayahByID(ctx, catatanID)
+}
+
+// CatatKontak mencatat bahwa guru telah menyapa/menghubungi santri.
+func (s *RiayahSantriService) CatatKontak(viewer models.RiayahViewer, santriID int64, input models.RiayahKontakInput, today time.Time) error {
+	if !viewer.CanWrite {
+		return ErrRiayahAksesDitolak
+	}
+	if _, ok := riayahMediaKontak[input.Media]; !ok {
+		return fmt.Errorf("media kontak tidak valid")
+	}
+	if input.Jenis == "" {
+		input.Jenis = "sapa"
+	}
+	if input.Jenis != "sapa" && input.Jenis != "rapor" {
+		return fmt.Errorf("jenis kontak tidak valid")
+	}
+	if input.Jenis == "rapor" {
+		if _, err := time.Parse("2006-01", input.Periode); err != nil {
+			return fmt.Errorf("periode rapor tidak valid")
+		}
+		if strings.TrimSpace(input.Catatan) == "" {
+			return fmt.Errorf("pesan pribadi guru wajib diisi")
+		}
+	} else {
+		input.Periode = ""
+	}
+	if input.Tanggal == "" {
+		input.Tanggal = today.Format("2006-01-02")
+	}
+	t, err := time.Parse("2006-01-02", input.Tanggal)
+	if err != nil {
+		return fmt.Errorf("tanggal kontak tidak valid")
+	}
+	if input.Tanggal > today.Format("2006-01-02") {
+		return fmt.Errorf("tanggal kontak tidak boleh di masa depan")
+	}
+	if _, err := s.EnsureCanAccessSantri(viewer, santriID); err != nil {
+		return err
+	}
+	params := queries.CreateRiayahKontakParams{
+		SantriID:     santriID,
+		AuthorUserID: sql.NullInt64{Int64: viewer.UserID, Valid: true},
+		Tanggal:      t.Format("2006-01-02"),
+		Media:        input.Media,
+		Jenis:        input.Jenis,
+		Periode:      input.Periode,
+		Catatan:      strings.TrimSpace(input.Catatan),
+	}
+	if viewer.GuruID != nil {
+		params.GuruID = sql.NullInt64{Int64: *viewer.GuruID, Valid: true}
+	}
+	_, err = s.querier.CreateRiayahKontak(context.Background(), params)
+	return err
+}
+
+// HapusKontak menghapus log kontak milik viewer (koreksi salah catat).
+func (s *RiayahSantriService) HapusKontak(viewer models.RiayahViewer, santriID, kontakID int64) error {
+	if !viewer.CanWrite {
+		return ErrRiayahAksesDitolak
+	}
+	if _, err := s.EnsureCanAccessSantri(viewer, santriID); err != nil {
+		return err
+	}
+	ctx := context.Background()
+	k, err := s.querier.GetRiayahKontakByID(ctx, kontakID)
+	if err != nil || k.SantriID != santriID {
+		return fmt.Errorf("log kontak tidak ditemukan")
+	}
+	if !bisaKelolaCatatan(viewer, k.GuruID) {
+		return ErrRiayahAksesDitolak
+	}
+	return s.querier.DeleteRiayahKontakByID(ctx, kontakID)
 }

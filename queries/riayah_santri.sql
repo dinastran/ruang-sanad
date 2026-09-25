@@ -53,3 +53,30 @@ JOIN kelas k ON k.id = p.kelas_id
 WHERE a.santri_id = ? AND p.status = 'selesai'
 ORDER BY p.tanggal DESC, p.id DESC
 LIMIT 200;
+
+-- name: CreateRiayahKontak :execresult
+INSERT INTO riayah_kontak (santri_id, guru_id, author_user_id, tanggal, media, jenis, periode, catatan)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: GetRiayahKontakByID :one
+SELECT * FROM riayah_kontak WHERE id = ?;
+
+-- name: DeleteRiayahKontakByID :exec
+DELETE FROM riayah_kontak WHERE id = ?;
+
+-- name: ListRiayahKontakBySantri :many
+SELECT rk.*, COALESCE(u.name, '') AS penulis_nama
+FROM riayah_kontak rk
+LEFT JOIN users u ON u.id = rk.author_user_id
+WHERE rk.santri_id = ?
+ORDER BY rk.tanggal DESC, rk.id DESC
+LIMIT 200;
+
+-- name: ListKontakTerakhirRiayah :many
+SELECT rk.santri_id, CAST(MAX(rk.tanggal) AS TEXT) AS kontak_terakhir
+FROM riayah_kontak rk
+JOIN santri s ON s.id = rk.santri_id
+JOIN kelas k ON k.id = s.kelas_id
+WHERE s.status = 'aktif'
+  AND (sqlc.narg('guru_id') IS NULL OR k.guru_id = sqlc.narg('guru_id'))
+GROUP BY rk.santri_id;

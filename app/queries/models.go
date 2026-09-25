@@ -319,6 +319,19 @@ type RapatGuru struct {
 	UpdatedAt time.Time
 }
 
+type RiayahKontak struct {
+	ID           int64
+	SantriID     int64
+	GuruID       sql.NullInt64
+	AuthorUserID sql.NullInt64
+	Tanggal      string
+	Media        string
+	Jenis        string
+	Periode      string
+	Catatan      string
+	CreatedAt    time.Time
+}
+
 type Santri struct {
 	ID                    int64
 	IDMahasantri          string

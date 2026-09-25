@@ -147,3 +147,49 @@ func (h *RiayahSantriHandler) CatatanDelete(c *fiber.Ctx) error {
 	h.store.Flash(c, "success", "Catatan riayah dihapus")
 	return h.inertiaService.Redirect(c, back)
 }
+
+func (h *RiayahSantriHandler) KontakCreate(c *fiber.Ctx) error {
+	viewer, _, err := h.viewer(c)
+	santriID, _ := strconv.ParseInt(c.Params("sid"), 10, 64)
+	back := c.Query("kembali")
+	if back != "/app/guru/riayah" {
+		back = "/app/guru/santri/" + c.Params("sid")
+	}
+	if err != nil {
+		h.store.Flash(c, "error", "Data guru tidak ditemukan")
+		return h.inertiaService.Redirect(c, back)
+	}
+
+	var input models.RiayahKontakInput
+	if err := c.BodyParser(&input); err != nil {
+		h.store.Flash(c, "error", "Data tidak valid")
+		return h.inertiaService.Redirect(c, back)
+	}
+	if err := h.riayahSantriService.CatatKontak(viewer, santriID, input, time.Now()); err != nil {
+		h.store.Flash(c, "error", err.Error())
+		return h.inertiaService.Redirect(c, back)
+	}
+	pesan := "Kontak dengan santri tercatat"
+	if input.Jenis == "rapor" {
+		pesan = "Pengiriman rapor tercatat"
+	}
+	h.store.Flash(c, "success", pesan)
+	return h.inertiaService.Redirect(c, back)
+}
+
+func (h *RiayahSantriHandler) KontakDelete(c *fiber.Ctx) error {
+	viewer, _, err := h.viewer(c)
+	santriID, _ := strconv.ParseInt(c.Params("sid"), 10, 64)
+	kontakID, _ := strconv.ParseInt(c.Params("kid"), 10, 64)
+	back := "/app/guru/santri/" + c.Params("sid")
+	if err != nil {
+		h.store.Flash(c, "error", "Data guru tidak ditemukan")
+		return h.inertiaService.Redirect(c, back)
+	}
+	if err := h.riayahSantriService.HapusKontak(viewer, santriID, kontakID); err != nil {
+		h.store.Flash(c, "error", err.Error())
+		return h.inertiaService.Redirect(c, back)
+	}
+	h.store.Flash(c, "success", "Log kontak dihapus")
+	return h.inertiaService.Redirect(c, back)
+}

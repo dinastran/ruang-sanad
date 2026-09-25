@@ -245,6 +245,8 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Get("/guru/santri/:sid", riayahReadRole, h.RiayahSantri.Profil)
 	protected.Post("/guru/santri/:sid/catatan", riayahWriteRole, h.RiayahSantri.CatatanCreate)
 	protected.Delete("/guru/santri/:sid/catatan/:rid", riayahWriteRole, h.RiayahSantri.CatatanDelete)
+	protected.Post("/guru/santri/:sid/kontak", riayahWriteRole, h.RiayahSantri.KontakCreate)
+	protected.Delete("/guru/santri/:sid/kontak/:kid", riayahWriteRole, h.RiayahSantri.KontakDelete)
 
 	// Koordinator Guru — dashboard & direktori guru
 	protected.Get("/koordinator-guru", koordinatorRole, h.KoordinatorGuru.Dashboard)

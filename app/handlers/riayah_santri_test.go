@@ -77,6 +77,7 @@ func setupRiayahHandler(t *testing.T) *riayahHandlerFixture {
 	protected.Get("/guru/riayah", readRole, h.Index)
 	protected.Get("/guru/santri/:sid", readRole, h.Profil)
 	protected.Post("/guru/santri/:sid/catatan", writeRole, h.CatatanCreate)
+	protected.Post("/guru/santri/:sid/kontak", writeRole, h.KontakCreate)
 
 	return &riayahHandlerFixture{app: app, db: db, santriA: santriA}
 }
@@ -136,6 +137,8 @@ func TestRiayahSantriKoordinatorHanyaMembaca(t *testing.T) {
 
 	resp := f.do(t, cookie, http.MethodPost, fmt.Sprintf("/app/guru/santri/%d/catatan", f.santriA), `{"catatan":"tidak boleh"}`)
 	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	resp = f.do(t, cookie, http.MethodPost, fmt.Sprintf("/app/guru/santri/%d/kontak", f.santriA), `{"media":"wa"}`)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 }
 
 func TestRiayahSantriGuruTerbatasPadaKelasnya(t *testing.T) {
@@ -158,5 +161,13 @@ func TestRiayahSantriGuruTerbatasPadaKelasnya(t *testing.T) {
 
 	var jumlah int
 	require.NoError(t, f.db.QueryRow(`SELECT COUNT(*) FROM catatan_riayah WHERE target_type = 'santri' AND target_id = ?`, f.santriA).Scan(&jumlah))
+	require.Equal(t, 1, jumlah)
+
+	resp = f.do(t, guruA, http.MethodPost, profil+"/kontak?kembali=/app/guru/riayah", `{"media":"telepon","catatan":"Menanyakan kabar"}`)
+	require.Equal(t, http.StatusSeeOther, resp.StatusCode)
+	require.Equal(t, "/app/guru/riayah", resp.Header.Get("Location"))
+	resp = f.do(t, guruB, http.MethodPost, profil+"/kontak", `{"media":"wa"}`)
+	require.Equal(t, http.StatusSeeOther, resp.StatusCode)
+	require.NoError(t, f.db.QueryRow(`SELECT COUNT(*) FROM riayah_kontak WHERE santri_id = ?`, f.santriA).Scan(&jumlah))
 	require.Equal(t, 1, jumlah)
 }
