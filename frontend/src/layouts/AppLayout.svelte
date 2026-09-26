@@ -27,6 +27,7 @@
 		ChevronDown,
 		Award,
 		Boxes,
+		HeartHandshake,
 	} from "lucide-svelte";
 	import DarkModeToggle from "@components/DarkModeToggle.svelte";
 	import Logo from "@components/Logo.svelte";
@@ -76,8 +77,10 @@
 		{ href: "/app/guru", label: "Dashboard Guru", group: "guru-dashboard", category: "Guru", show: isGuruWorkflow, icon: GraduationCap },
 		{ href: "/app/guru/jadwal-pertemuan", label: "Jadwal Pertemuan", group: "guru-jadwal", category: "Guru", show: isGuruWorkflow, icon: CalendarClock },
 		{ href: "/app/guru/kelas", label: "Kelas Guru", group: "guru-kelas", category: "Guru", show: isGuruWorkflow, icon: ClipboardList },
+		{ href: "/app/guru/riayah", label: "Riayah Santri", group: "guru-riayah", category: "Guru", show: isGuruWorkflow, icon: HeartHandshake },
 		{ href: "/app/guru/tsi", label: "Nilai TSI Saya", group: "guru-tsi", category: "Guru", show: isGuru, icon: Award },
 		{ href: "/app/koordinator-guru", label: "Dashboard Koordinator", group: "koordinator", category: "Koordinator Guru", show: isKoordinator, icon: UserCheck },
+		{ href: "/app/guru/riayah", label: "Riayah Santri", group: "guru-riayah", category: "Koordinator Guru", show: role === "koordinator_guru", icon: HeartHandshake },
 		{ href: "/app/koordinator-guru/monitoring-kelas", label: "Monitoring Kelas", group: "koordinator-monitoring", category: "Koordinator Guru", show: isKoordinator, icon: CalendarClock },
 		{ href: "/app/koordinator-guru/guru", label: "Data Guru", group: "koordinator-guru", category: "Koordinator Guru", show: isKoordinator, icon: Users },
 		{ href: "/app/koordinator-guru/pembinaan", label: "Pembinaan", group: "koordinator-pembinaan", category: "Koordinator Guru", show: isKoordinator, icon: GraduationCap },
@@ -116,6 +119,7 @@
 		if (path.startsWith("/app/guru/jadwal-pertemuan")) return "guru-jadwal";
 		if (path.startsWith("/app/guru/kelas")) return "guru-kelas";
 		if (path.startsWith("/app/guru/tsi")) return "guru-tsi";
+		if (path.startsWith("/app/guru/riayah") || path.startsWith("/app/guru/santri")) return "guru-riayah";
 		if (path === "/app/guru" || path === "/app/guru/") return "guru-dashboard";
 		if (path.startsWith("/app/koordinator-guru/monitoring-kelas")) return "koordinator-monitoring";
 		if (path.startsWith("/app/koordinator-guru/tsi")) return "koordinator-tsi";

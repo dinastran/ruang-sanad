@@ -462,3 +462,131 @@ export interface RingkasanKeuangan {
 	total_terlambat: number;
 	kolektibilitas: number;
 }
+
+// Riayah santri
+export type RiayahPenandaKode = "kehadiran" | "kontak" | "progres";
+export type RiayahPenandaLevel = "merah" | "oranye" | "kuning";
+
+export interface RiayahPenanda {
+	kode: RiayahPenandaKode;
+	level: RiayahPenandaLevel;
+	alasan: string;
+}
+
+export interface RiayahSantriItem {
+	id: number;
+	nama: string;
+	id_mahasantri: string;
+	no_wa: string;
+	kelas_id: number;
+	nama_kelas: string;
+	level: string;
+	jadwal: string;
+	guru_nama: string;
+	persen_hadir_30: number | null;
+	total_pertemuan_30: number;
+	batas_materi_terakhir: string;
+	kontak_terakhir: string;
+	rapor_terkirim: boolean;
+	penanda: RiayahPenanda[];
+}
+
+export interface RiayahRingkasan {
+	total_santri: number;
+	perlu_perhatian: number;
+	kehadiran: number;
+	kontak: number;
+	progres: number;
+	rapor_periode: string;
+	rapor_terkirim: number;
+}
+
+export interface RiayahTimelineItem {
+	jenis: "pertemuan" | "catatan" | "kontak";
+	id: number;
+	tanggal: string;
+	waktu: string;
+	judul: string;
+	status?: string;
+	isi?: string;
+	materi?: string;
+	batas_materi?: string;
+	media?: string;
+	penulis?: string;
+	bisa_hapus: boolean;
+}
+
+export interface RiayahRekapKehadiran {
+	total: number;
+	hadir: number;
+	telat: number;
+	izin: number;
+	sakit: number;
+	alpa: number;
+}
+
+export interface RiayahSantriProfil {
+	santri: RiayahSantriItem;
+	domisili: string;
+	usia: number | null;
+	mulai_belajar: string;
+	rekap: RiayahRekapKehadiran;
+	timeline: RiayahTimelineItem[];
+}
+
+export interface RiayahWATemplate {
+	nama: string;
+	body: string;
+}
+
+export interface RiayahRapor {
+	periode: string;
+	periode_opsi: string[];
+	santri: RiayahSantriItem;
+	rekap: RiayahRekapKehadiran;
+	batas_awal: string;
+	batas_akhir: string;
+	pertemuan: RiayahTimelineItem[];
+	terkirim_pada: string[];
+	pesan_minimal: number;
+}
+
+// Dashboard guru
+export type GuruSlotStatus = "belum" | "berlangsung" | "selesai" | "dibadalkan";
+
+export interface GuruSlotKelas {
+	kelas_id: number;
+	nama_kelas: string;
+	level: string;
+	tanggal: string;
+	jam: string;
+	jumlah_santri: number;
+	sumber: "rutin" | "jadwal";
+	jadwal_id: number;
+	jadwal_status: string;
+	status: GuruSlotStatus;
+	pertemuan_id: number;
+	keterangan: string;
+	sebagai_badal: boolean;
+}
+
+export interface GuruKinerja {
+	tilawah_streak: number;
+	tilawah_bulan_ini: number;
+	sudah_tilawah: boolean;
+	tsi_bulan: string;
+	tsi_total: number | null;
+	tsi_predikat: string;
+	pembinaan_hadir: number;
+	pembinaan_total: number;
+	rapat_hadir: number;
+}
+
+export interface GuruBeranda {
+	tanggal: string;
+	hari_ini: GuruSlotKelas[];
+	tertunda: GuruSlotKelas[];
+	jadwal_tak_terbaca: { kelas_id: number; nama_kelas: string; jadwal: string }[];
+	kinerja: GuruKinerja | null;
+	agenda: { jenis: "pembinaan" | "rapat" | "kalam"; tanggal: string; judul: string }[];
+}

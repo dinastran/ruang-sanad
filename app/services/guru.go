@@ -534,20 +534,21 @@ func monthRange(now time.Time) (string, string) {
 }
 
 func (s *GuruService) CheckinTilawah(guruID int64) error {
-	today := time.Now().Format("2006-01-02")
+	today := HariIniRiayah().Format("2006-01-02")
 	t, _ := time.Parse("2006-01-02", today)
 	return s.querier.CreateTilawah(context.Background(), queries.CreateTilawahParams{GuruID: guruID, Tanggal: t})
 }
 
 func (s *GuruService) UncheckTilawah(guruID int64) error {
-	today := time.Now().Format("2006-01-02")
+	today := HariIniRiayah().Format("2006-01-02")
 	t, _ := time.Parse("2006-01-02", today)
 	return s.querier.DeleteTilawah(context.Background(), queries.DeleteTilawahParams{GuruID: guruID, Tanggal: t})
 }
 
 func (s *GuruService) GetTilawahStatus(guruID int64) (*models.TilawahStatusResponse, error) {
 	ctx := context.Background()
-	now := time.Now()
+	// Tanggal tilawah mengikuti WIB, bukan jam server (UTC).
+	now := HariIniRiayah()
 	today, _ := time.Parse("2006-01-02", now.Format("2006-01-02"))
 	startStr, endStr := monthRange(now)
 	start, _ := time.Parse("2006-01-02", startStr)

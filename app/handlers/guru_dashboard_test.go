@@ -49,7 +49,7 @@ func TestGuruDashboardRedirectsTerminate(t *testing.T) {
 			store := session.New(q, nil, time.Hour)
 			inertia := services.NewInertiaService(services.NewAssetService("", "", false), store)
 			auth := NewAuthHandler(services.NewAuthService(q, services.AuthServiceConfig{SessionSecret: "test-secret-32-chars-long-for-testing!!"}), store, inertia)
-			guru := NewGuruHandler(services.NewGuruService(q), nil, nil, store, inertia)
+			guru := NewGuruHandler(services.NewGuruService(q), nil, nil, store, inertia).WithBeranda(services.NewGuruBerandaService(q, services.NewTSIService(q)))
 			dashboard := NewDashboardHandler(nil, nil, nil, store, inertia)
 			profile := NewAppHandler(services.NewUserService(q), store, inertia)
 			app := fiber.New()
