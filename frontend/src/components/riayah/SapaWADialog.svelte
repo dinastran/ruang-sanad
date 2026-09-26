@@ -10,7 +10,7 @@
 		santri: RiayahSantriItem;
 		templates: RiayahWATemplate[];
 		pengirim?: string;
-		kembali?: "/app/guru/riayah" | "";
+		kembali?: "/app/guru/riayah" | "/app/guru" | "";
 		onclose: () => void;
 	}
 

@@ -181,7 +181,7 @@ func (h *RiayahSantriHandler) KontakCreate(c *fiber.Ctx) error {
 	viewer, _, err := h.viewer(c)
 	santriID, _ := strconv.ParseInt(c.Params("sid"), 10, 64)
 	back := c.Query("kembali")
-	if back != "/app/guru/riayah" {
+	if back != "/app/guru/riayah" && back != "/app/guru" {
 		back = "/app/guru/santri/" + c.Params("sid")
 	}
 	if err != nil {

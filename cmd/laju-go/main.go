@@ -156,7 +156,7 @@ func main() {
 	laporanHandler := handlers.NewLaporanHandler(laporanService, sessionStore, inertiaService)
 	adminHandler := handlers.NewAdminHandler(userService, sessionStore, inertiaService)
 	dashboardHandler := handlers.NewDashboardHandler(santriService, laporanService, kelasService, sessionStore, inertiaService)
-	guruHandler := handlers.NewGuruHandler(guruService, pertemuanService, riayahService, sessionStore, inertiaService, notificationService).WithRiayahSantri(riayahSantriService)
+	guruHandler := handlers.NewGuruHandler(guruService, pertemuanService, riayahService, sessionStore, inertiaService, notificationService).WithRiayahSantri(riayahSantriService).WithBeranda(services.NewGuruBerandaService(querier, tsiService))
 	pertemuanHandler := handlers.NewPertemuanHandler(guruService, pertemuanService, jadwalPertemuanService, sessionStore, inertiaService)
 	jadwalPertemuanHandler := handlers.NewJadwalPertemuanHandler(guruService, jadwalPertemuanService, sessionStore, inertiaService)
 	riayahHandler := handlers.NewRiayahHandler(guruService, riayahService, sessionStore, inertiaService)

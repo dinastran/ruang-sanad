@@ -550,3 +550,43 @@ export interface RiayahRapor {
 	terkirim_pada: string[];
 	pesan_minimal: number;
 }
+
+// Dashboard guru
+export type GuruSlotStatus = "belum" | "berlangsung" | "selesai" | "dibadalkan";
+
+export interface GuruSlotKelas {
+	kelas_id: number;
+	nama_kelas: string;
+	level: string;
+	tanggal: string;
+	jam: string;
+	jumlah_santri: number;
+	sumber: "rutin" | "jadwal";
+	jadwal_id: number;
+	jadwal_status: string;
+	status: GuruSlotStatus;
+	pertemuan_id: number;
+	keterangan: string;
+	sebagai_badal: boolean;
+}
+
+export interface GuruKinerja {
+	tilawah_streak: number;
+	tilawah_bulan_ini: number;
+	sudah_tilawah: boolean;
+	tsi_bulan: string;
+	tsi_total: number | null;
+	tsi_predikat: string;
+	pembinaan_hadir: number;
+	pembinaan_total: number;
+	rapat_hadir: number;
+}
+
+export interface GuruBeranda {
+	tanggal: string;
+	hari_ini: GuruSlotKelas[];
+	tertunda: GuruSlotKelas[];
+	jadwal_tak_terbaca: { kelas_id: number; nama_kelas: string; jadwal: string }[];
+	kinerja: GuruKinerja | null;
+	agenda: { jenis: "pembinaan" | "rapat" | "kalam"; tanggal: string; judul: string }[];
+}

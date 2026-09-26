@@ -6,7 +6,7 @@
 	interface Props {
 		santri: { id: number; nama: string };
 		/** Halaman tujuan setelah simpan; default profil santri. */
-		kembali?: "/app/guru/riayah" | "";
+		kembali?: "/app/guru/riayah" | "/app/guru" | "";
 		onclose: () => void;
 	}
 

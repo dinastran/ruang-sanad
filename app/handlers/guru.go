@@ -16,6 +16,7 @@ type GuruHandler struct {
 	riayahService       *services.RiayahService
 	notificationService *services.NotificationService
 	riayahSantriService *services.RiayahSantriService
+	berandaService      *services.GuruBerandaService
 	store               *session.Store
 	inertiaService      *services.InertiaService
 }
@@ -31,6 +32,12 @@ func NewGuruHandler(guruService *services.GuruService, pertemuanService *service
 	if len(notificationServices) > 0 {
 		h.notificationService = notificationServices[0]
 	}
+	return h
+}
+
+// WithBeranda mengaktifkan dashboard guru berbasis jadwal hari ini.
+func (h *GuruHandler) WithBeranda(svc *services.GuruBerandaService) *GuruHandler {
+	h.berandaService = svc
 	return h
 }
 
@@ -53,7 +60,12 @@ func (h *GuruHandler) Dashboard(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, "/app/profile")
 	}
 
-	dashboard, err := h.guruService.GetDashboardForViewer(guruID)
+	var dashboard interface{}
+	if h.berandaService != nil {
+		dashboard, err = h.berandaService.GetBeranda(guruID, services.HariIniRiayah())
+	} else {
+		dashboard, err = h.guruService.GetDashboardForViewer(guruID)
+	}
 	if err != nil {
 		slog.Error("guru dashboard load failed", "user_id", userID, "error", err)
 		h.store.Flash(c, "error", "Gagal memuat dashboard")
@@ -74,10 +86,19 @@ func (h *GuruHandler) Dashboard(c *fiber.Ctx) error {
 	}
 
 	var riayah *models.RiayahRingkasan
+	riayahTeratas := []models.RiayahSantriItem{}
+	var waTemplates []models.RiayahWATemplate
 	if h.riayahSantriService != nil {
 		if viewer, err := riayahViewer(c, h.guruService, userID, user); err == nil {
-			if ringkasan, err := h.riayahSantriService.Ringkasan(viewer, services.HariIniRiayah()); err == nil {
+			if items, ringkasan, err := h.riayahSantriService.ListPerhatian(viewer, services.HariIniRiayah()); err == nil {
 				riayah = &ringkasan
+				for _, item := range items {
+					if len(item.Penanda) == 0 || len(riayahTeratas) == 5 {
+						break
+					}
+					riayahTeratas = append(riayahTeratas, item)
+				}
+				waTemplates = h.riayahSantriService.ListTemplateWA()
 			} else {
 				slog.Error("guru dashboard riayah summary failed", "user_id", userID, "error", err)
 			}
@@ -85,11 +106,13 @@ func (h *GuruHandler) Dashboard(c *fiber.Ctx) error {
 	}
 
 	return h.inertiaService.Render(c, "guru/Dashboard", fiber.Map{
-		"user":          user,
-		"dashboard":     dashboard,
-		"tilawah":       tilawah,
-		"notifications": notifications,
-		"riayah":        riayah,
+		"user":           user,
+		"beranda":        dashboard,
+		"tilawah":        tilawah,
+		"notifications":  notifications,
+		"riayah":         riayah,
+		"riayah_teratas": riayahTeratas,
+		"wa_templates":   waTemplates,
 	})
 }
 
