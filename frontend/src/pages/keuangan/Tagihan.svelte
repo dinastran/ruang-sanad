@@ -82,6 +82,21 @@
 		router.get(`/app/keuangan/tagihan?${p}`);
 	}
 
+	function resetFilter() {
+		search = "";
+		status = "";
+		tanggalDari = "";
+		tanggalSampai = "";
+		kelasID = "";
+		angkatan = "";
+		guruID = "";
+		frekuensi = "";
+		level = "";
+		gender = "";
+		bulanKe = "";
+		router.get("/app/keuangan/tagihan");
+	}
+
 	function lunasi() {
 		if (!selected) return;
 		router.put(
@@ -253,7 +268,12 @@
 			<select bind:value={gender} class="px-3 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-sm"><option value="">Semua gender</option><option value="L">Laki-laki</option><option value="P">Perempuan</option></select>
 			<input bind:value={kelasID} type="number" min="1" placeholder="ID kelas" class="px-3 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-sm" />
 			<input bind:value={guruID} type="number" min="1" placeholder="ID guru" class="px-3 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-sm" />
-			<button class="px-4 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold">Terapkan</button>
+			<div class="flex gap-2 sm:col-span-2 lg:col-span-2">
+				<button type="submit" class="flex-1 px-4 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold">Terapkan</button>
+				<button type="button" onclick={resetFilter} class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 text-sm font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-800">
+					<RotateCcw size="16" /> Reset Filter
+				</button>
+			</div>
 		</form>
 
 		<div class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-925 overflow-x-auto">
