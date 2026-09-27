@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - integration/finance-and-santri-notes
+  pull_request:
+    branches:
+      - main
 
 jobs:
   verify:
