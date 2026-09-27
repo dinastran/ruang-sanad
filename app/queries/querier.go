@@ -363,6 +363,156 @@ func (q *Querier) ListImportLogs(ctx context.Context) ([]ImportLog, error) {
 	return items, rows.Err()
 }
 
+// --- Tagihan finance helpers (hand-written to keep the change scoped) ---
+
+const syncOpenTagihanNominalForSantri = `
+UPDATE tagihan
+SET nominal = ?, updated_at = CURRENT_TIMESTAMP
+WHERE santri_id = ?
+  AND status = 'belum_bayar'
+  AND NOT EXISTS (
+      SELECT 1 FROM tagihan_nominal_override o WHERE o.tagihan_id = tagihan.id
+  )`
+
+func (q *Querier) SyncOpenTagihanNominalForSantri(ctx context.Context, santriID, nominal int64) error {
+	_, err := q.Queries.db.ExecContext(ctx, syncOpenTagihanNominalForSantri, nominal, santriID)
+	return err
+}
+
+const updateTagihanNominal = `
+UPDATE tagihan
+SET nominal = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'belum_bayar'`
+
+func (q *Querier) UpdateTagihanNominal(ctx context.Context, tagihanID, nominal int64) (int64, error) {
+	result, err := q.Queries.db.ExecContext(ctx, updateTagihanNominal, nominal, tagihanID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const upsertTagihanNominalOverride = `
+INSERT INTO tagihan_nominal_override (tagihan_id, nominal, updated_by)
+VALUES (?, ?, ?)
+ON CONFLICT(tagihan_id) DO UPDATE SET
+    nominal = excluded.nominal,
+    updated_by = excluded.updated_by,
+    updated_at = CURRENT_TIMESTAMP`
+
+func (q *Querier) UpsertTagihanNominalOverride(ctx context.Context, tagihanID, nominal, userID int64) error {
+	_, err := q.Queries.db.ExecContext(ctx, upsertTagihanNominalOverride, tagihanID, nominal, nullablePositiveInt64(userID))
+	return err
+}
+
+const deleteTagihanNominalOverride = `
+DELETE FROM tagihan_nominal_override WHERE tagihan_id = ?`
+
+func (q *Querier) DeleteTagihanNominalOverride(ctx context.Context, tagihanID int64) error {
+	_, err := q.Queries.db.ExecContext(ctx, deleteTagihanNominalOverride, tagihanID)
+	return err
+}
+
+const resetTagihanNominalToSantri = `
+UPDATE tagihan
+SET nominal = (SELECT nominal FROM santri WHERE santri.id = tagihan.santri_id),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'belum_bayar'`
+
+func (q *Querier) ResetTagihanNominalToSantri(ctx context.Context, tagihanID int64) (int64, error) {
+	result, err := q.Queries.db.ExecContext(ctx, resetTagihanNominalToSantri, tagihanID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const listTagihanNominalOverrideIDs = `
+SELECT tagihan_id FROM tagihan_nominal_override`
+
+func (q *Querier) ListTagihanNominalOverrideIDs(ctx context.Context) (map[int64]bool, error) {
+	rows, err := q.Queries.db.QueryContext(ctx, listTagihanNominalOverrideIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]bool{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
+
+const hasTagihanNominalOverride = `
+SELECT COUNT(*) FROM tagihan_nominal_override WHERE tagihan_id = ?`
+
+func (q *Querier) HasTagihanNominalOverride(ctx context.Context, tagihanID int64) (bool, error) {
+	var count int64
+	if err := q.Queries.db.QueryRowContext(ctx, hasTagihanNominalOverride, tagihanID).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+type TagihanFollowUpLogRow struct {
+	ID           int64
+	TagihanID    int64
+	TemplateID   sql.NullInt64
+	TemplateNama string
+	MessageBody  string
+	DikirimOleh  sql.NullInt64
+	PetugasNama  string
+	CreatedAt    time.Time
+}
+
+const createTagihanFollowUpLog = `
+INSERT INTO tagihan_follow_up_log
+(tagihan_id, template_id, template_nama, message_body, dikirim_oleh)
+VALUES (?, ?, ?, ?, ?)`
+
+func (q *Querier) CreateTagihanFollowUpLog(ctx context.Context, tagihanID int64, templateID sql.NullInt64, templateNama, messageBody string, userID int64) error {
+	_, err := q.Queries.db.ExecContext(ctx, createTagihanFollowUpLog,
+		tagihanID, templateID, templateNama, messageBody, nullablePositiveInt64(userID),
+	)
+	return err
+}
+
+const listTagihanFollowUpLogs = `
+SELECT l.id, l.tagihan_id, l.template_id, l.template_nama, l.message_body,
+       l.dikirim_oleh, COALESCE(u.name, '') AS petugas_nama, l.created_at
+FROM tagihan_follow_up_log l
+LEFT JOIN users u ON u.id = l.dikirim_oleh
+WHERE l.tagihan_id = ?
+ORDER BY l.created_at DESC, l.id DESC`
+
+func (q *Querier) ListTagihanFollowUpLogs(ctx context.Context, tagihanID int64) ([]TagihanFollowUpLogRow, error) {
+	rows, err := q.Queries.db.QueryContext(ctx, listTagihanFollowUpLogs, tagihanID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TagihanFollowUpLogRow
+	for rows.Next() {
+		var row TagihanFollowUpLogRow
+		if err := rows.Scan(
+			&row.ID, &row.TagihanID, &row.TemplateID, &row.TemplateNama,
+			&row.MessageBody, &row.DikirimOleh, &row.PetugasNama, &row.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+func nullablePositiveInt64(v int64) sql.NullInt64 {
+	return sql.NullInt64{Int64: v, Valid: v > 0}
+}
+
 // isDuplicateEmail checks if the error is a duplicate email error
 func isDuplicateEmail(err error) bool {
 	if err == nil {
