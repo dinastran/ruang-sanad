@@ -128,12 +128,11 @@ func (s *UserService) DeleteManagedUser(actorID, targetID int64) error {
 	if err := q.ClearUserReferences(ctx, targetID); err != nil {
 		return errors.New("gagal membersihkan keterkaitan user")
 	}
-	rows, err := q.DeleteUser(ctx, targetID)
-	if err != nil {
+	if err := q.DeleteUser(ctx, targetID); err != nil {
+		if errors.Is(err, queries.ErrUserNotFound) {
+			return errors.New("user tidak ditemukan")
+		}
 		return errors.New("user masih memiliki data terkait dan belum dapat dihapus")
-	}
-	if rows == 0 {
-		return errors.New("user tidak ditemukan")
 	}
 	return tx.Commit()
 }
