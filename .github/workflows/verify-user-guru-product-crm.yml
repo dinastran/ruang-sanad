@@ -36,7 +36,9 @@ jobs:
       - name: Go formatting check
         run: |
           files="app/handlers/admin.go app/models/guru.go app/models/product_crm.go app/queries/querier.go app/queries/product_crm.go app/services/guru.go app/services/guru_directory_test.go app/services/product_crm.go app/services/product_crm_test.go app/services/user.go app/services/user_admin_test.go routes/web.go"
-          test -z "$(gofmt -l $files)"
+          unformatted="$(gofmt -l $files)"
+          printf '%s\n' "$unformatted"
+          test -z "$unformatted"
 
       - name: Targeted behavior tests
         run: go test ./app/services -run 'TestDeleteManagedUserAuthorizationAndSelfProtection|TestGuruDirectoryDetailIncludesLinkedUserIdentity|TestProductPurchaseReducesAndCancellationRestoresStock'
