@@ -72,6 +72,9 @@ func TestProductPurchaseReducesAndCancellationRestoresStock(t *testing.T) {
 	require.NoError(t, f.service.AssignProduct(f.santriID, models.AssignProductRequest{
 		ProdukID: productID, Tanggal: "2026-09-23",
 	}, f.adminID))
+	// Simulate a pre-change history row that stored the internal santri ID in its note.
+	_, err := f.db.Exec("UPDATE stok_mutasi SET catatan = ? WHERE tipe = 'pembelian'", "Pembelian oleh mahasantri #999")
+	require.NoError(t, err)
 	mutations, err := f.service.Mutations(10)
 	require.NoError(t, err)
 	require.NotEmpty(t, mutations)
