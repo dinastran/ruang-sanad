@@ -284,7 +284,11 @@ func TestTagihanNominalSyncOverrideResetDanLunas(t *testing.T) {
 	require.False(t, item.NominalOverride)
 
 	// Setelah lunas, perubahan master berikutnya tidak mengubah histori transaksi.
-	require.NoError(t, service.MarkLunas(tagihanID, 0, models.MarkTagihanLunasRequest{}))
+	userResult, err := db.Exec(`INSERT INTO users (email, name, role) VALUES ('finance-test@example.com', 'Finance Test', 'keuangan')`)
+	require.NoError(t, err)
+	userID, err := userResult.LastInsertId()
+	require.NoError(t, err)
+	require.NoError(t, service.MarkLunas(tagihanID, userID, models.MarkTagihanLunasRequest{}))
 	_, err = db.Exec(`UPDATE santri SET nominal = 300000 WHERE id = ?`, santriID)
 	require.NoError(t, err)
 	require.NoError(t, q.SyncOpenTagihanNominalForSantri(context.Background(), santriID, 300000))
@@ -302,24 +306,29 @@ func TestTagihanFollowUpMultiTemplateCustomDanHistory(t *testing.T) {
 
 	var tagihanID int64
 	require.NoError(t, db.QueryRow(`SELECT id FROM tagihan`).Scan(&tagihanID))
+	userResult, err := db.Exec(`INSERT INTO users (email, name, role) VALUES ('fu-test@example.com', 'Petugas FU', 'keuangan')`)
+	require.NoError(t, err)
+	userID, err := userResult.LastInsertId()
+	require.NoError(t, err)
 	templates, err := service.ListTagihanTemplates()
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(templates), 3)
 	require.NotEqual(t, templates[0].Nama, templates[1].Nama)
 
-	link, err := service.FollowUpURL(tagihanID, 0, models.FollowUpTagihanRequest{TemplateID: templates[0].ID})
+	link, err := service.FollowUpURL(tagihanID, userID, models.FollowUpTagihanRequest{TemplateID: templates[0].ID})
 	require.NoError(t, err)
 	require.Contains(t, link, "https://wa.me/6281234567890?text=")
 	logs, err := service.ListFollowUpLogs(tagihanID)
 	require.NoError(t, err)
 	require.Len(t, logs, 1)
 	require.Equal(t, templates[0].Nama, logs[0].TemplateNama)
+	require.Equal(t, "Petugas FU", logs[0].PetugasNama)
 	require.Contains(t, logs[0].MessageBody, "Ahmad")
 	require.Contains(t, logs[0].MessageBody, "100.000")
 	require.NotContains(t, logs[0].MessageBody, "{nama}")
 
 	custom := "Pesan khusus hasil edit petugas"
-	_, err = service.FollowUpURL(tagihanID, 0, models.FollowUpTagihanRequest{TemplateID: templates[1].ID, Message: custom})
+	_, err = service.FollowUpURL(tagihanID, userID, models.FollowUpTagihanRequest{TemplateID: templates[1].ID, Message: custom})
 	require.NoError(t, err)
 	logs, err = service.ListFollowUpLogs(tagihanID)
 	require.NoError(t, err)
