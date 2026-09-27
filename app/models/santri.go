@@ -142,3 +142,18 @@ type SantriStatusLogResponse struct {
 	DibuatOlehNama string `json:"dibuat_oleh_nama"`
 	CreatedAt      string `json:"created_at"`
 }
+
+
+type SantriAdminNoteRequest struct {
+	Catatan string `json:"catatan"`
+}
+
+type SantriAdminNoteResponse struct {
+	ID               int64  `json:"id"`
+	SantriID         int64  `json:"santri_id"`
+	Catatan          string `json:"catatan"`
+	AuthorName       string `json:"author_name"`
+	UpdatedByName    string `json:"updated_by_name"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+}
