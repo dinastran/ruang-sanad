@@ -46,7 +46,11 @@ func (h *TagihanHandler) List(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return h.inertiaService.Render(c, "keuangan/Tagihan", fiber.Map{"user": sessionUser(sess), "tagihan": tagihan, "filter": fiber.Map{"status": c.Query("status"), "search": c.Query("search"), "tanggal_dari": c.Query("tanggal_dari"), "tanggal_sampai": c.Query("tanggal_sampai"), "kelas_id": c.Query("kelas_id"), "angkatan_kelas": c.Query("angkatan_kelas"), "guru_id": c.Query("guru_id"), "frekuensi": c.Query("frekuensi"), "level": c.Query("level"), "gender": c.Query("gender"), "bulan_ke": c.Query("bulan_ke")}})
+	templates, err := h.tagihan.ListTagihanTemplates()
+	if err != nil {
+		return err
+	}
+	return h.inertiaService.Render(c, "keuangan/Tagihan", fiber.Map{"user": sessionUser(sess), "tagihan": tagihan, "templates": templates, "filter": fiber.Map{"status": c.Query("status"), "search": c.Query("search"), "tanggal_dari": c.Query("tanggal_dari"), "tanggal_sampai": c.Query("tanggal_sampai"), "kelas_id": c.Query("kelas_id"), "angkatan_kelas": c.Query("angkatan_kelas"), "guru_id": c.Query("guru_id"), "frekuensi": c.Query("frekuensi"), "level": c.Query("level"), "gender": c.Query("gender"), "bulan_ke": c.Query("bulan_ke")}})
 }
 
 func (h *TagihanHandler) Detail(c *fiber.Ctx) error {
@@ -56,7 +60,11 @@ func (h *TagihanHandler) Detail(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return h.inertiaService.Render(c, "keuangan/DetailTagihan", fiber.Map{"user": sessionUser(sess), "tagihan": tagihan})
+	logs, err := h.tagihan.ListFollowUpLogs(id)
+	if err != nil {
+		return err
+	}
+	return h.inertiaService.Render(c, "keuangan/DetailTagihan", fiber.Map{"user": sessionUser(sess), "tagihan": tagihan, "follow_up_logs": logs})
 }
 
 func (h *TagihanHandler) MarkLunas(c *fiber.Ctx) error {
@@ -88,11 +96,73 @@ func (h *TagihanHandler) Batal(c *fiber.Ctx) error {
 
 func (h *TagihanHandler) FollowUp(c *fiber.Ctx) error {
 	id, _ := strconv.ParseInt(c.Params("id"), 10, 64)
-	link, err := h.tagihan.FollowUpURL(id)
+	var req models.FollowUpTagihanRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "data follow-up tidak valid")
+	}
+	sess, _ := h.store.Get(c)
+	link, err := h.tagihan.FollowUpURL(id, toInt64(sess.Get("user_id")), req)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	return c.JSON(fiber.Map{"url": link})
+}
+
+func (h *TagihanHandler) UpdateNominal(c *fiber.Ctx) error {
+	id, _ := strconv.ParseInt(c.Params("id"), 10, 64)
+	var req models.UpdateTagihanNominalRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "nominal tidak valid")
+	}
+	sess, _ := h.store.Get(c)
+	if err := h.tagihan.SetNominalOverride(id, toInt64(sess.Get("user_id")), req.Nominal); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	h.store.Flash(c, "success", "Nominal tagihan diperbarui sebagai nominal khusus")
+	return h.inertiaService.Back(c, "/app/keuangan/tagihan")
+}
+
+func (h *TagihanHandler) ResetNominal(c *fiber.Ctx) error {
+	id, _ := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err := h.tagihan.ResetNominalOverride(id); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	h.store.Flash(c, "success", "Nominal tagihan kembali mengikuti Data Santri")
+	return h.inertiaService.Back(c, "/app/keuangan/tagihan")
+}
+
+func (h *TagihanHandler) CreateTemplate(c *fiber.Ctx) error {
+	var req models.WaTemplateRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "template tidak valid")
+	}
+	if _, err := h.tagihan.CreateTagihanTemplate(req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	h.store.Flash(c, "success", "Template follow-up ditambahkan")
+	return h.inertiaService.Back(c, "/app/keuangan/tagihan")
+}
+
+func (h *TagihanHandler) UpdateTemplate(c *fiber.Ctx) error {
+	id, _ := strconv.ParseInt(c.Params("id"), 10, 64)
+	var req models.WaTemplateRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "template tidak valid")
+	}
+	if err := h.tagihan.UpdateTagihanTemplate(id, req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	h.store.Flash(c, "success", "Template follow-up diperbarui")
+	return h.inertiaService.Back(c, "/app/keuangan/tagihan")
+}
+
+func (h *TagihanHandler) DeleteTemplate(c *fiber.Ctx) error {
+	id, _ := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err := h.tagihan.DeleteTagihanTemplate(id); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	h.store.Flash(c, "success", "Template follow-up dihapus")
+	return h.inertiaService.Back(c, "/app/keuangan/tagihan")
 }
 
 func (h *TagihanHandler) Sync(c *fiber.Ctx) error {
