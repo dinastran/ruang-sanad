@@ -174,7 +174,8 @@ func (s *TagihanService) List(filter models.TagihanFilter) ([]models.TagihanResp
 	if filter.TanggalSampai != "" {
 		sampai = filter.TanggalSampai
 	}
-	rows, err := s.querier.ListTagihan(context.Background(), queries.ListTagihanParams{
+	ctx := context.Background()
+	rows, err := s.querier.ListTagihan(ctx, queries.ListTagihanParams{
 		Status: status, KelasID: kelasID, AngkatanKelas: filter.AngkatanKelas, GuruID: guruID,
 		Frekuensi: filter.Frekuensi, Level: filter.Level, Gender: filter.Gender,
 		BulanKe: bulanKe, TanggalDari: dari, TanggalSampai: sampai, Search: filter.Search,
@@ -182,9 +183,14 @@ func (s *TagihanService) List(filter models.TagihanFilter) ([]models.TagihanResp
 	if err != nil {
 		return nil, err
 	}
+	overrides, err := s.querier.ListTagihanNominalOverrideIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]models.TagihanResponse, 0, len(rows))
 	for _, row := range rows {
 		item := tagihanResponse(row.ID, row.SantriID, row.KelasID, row.BulanKe, row.PertemuanKe, row.Nominal, row.TanggalTagih, row.JatuhTempo, row.Status, row.TanggalBayar, row.Metode, row.Catatan, row.FuTerakhir, row.FuCount, row.SantriNama, row.IDMahasantri, row.NoWa, row.Angkatan, row.AngkatanKelas, row.Frekuensi, row.NamaKelas, row.GuruNama)
+		item.NominalOverride = overrides[row.ID]
 		if filter.Status == "terlambat" && (item.Status != "belum_bayar" || item.JatuhTempo == "" || !time.Now().After(row.JatuhTempo.Time)) {
 			continue
 		}
@@ -205,6 +211,11 @@ func (s *TagihanService) Get(id int64) (*models.TagihanResponse, error) {
 	if item.Status == "belum_bayar" && r.JatuhTempo.Valid && time.Now().After(r.JatuhTempo.Time) {
 		item.Status = "terlambat"
 	}
+	override, err := s.querier.HasTagihanNominalOverride(context.Background(), id)
+	if err != nil {
+		return nil, err
+	}
+	item.NominalOverride = override
 	return &item, nil
 }
 
@@ -250,7 +261,142 @@ func (s *TagihanService) RingkasanPeriode(dari, sampai time.Time) (*models.Tagih
 	return out, nil
 }
 
-func (s *TagihanService) FollowUpURL(id int64) (string, error) {
+func (s *TagihanService) SetNominalOverride(id, userID, nominal int64) error {
+	if nominal < 0 {
+		return fmt.Errorf("nominal tidak boleh negatif")
+	}
+	tagihan, err := s.Get(id)
+	if err != nil {
+		return err
+	}
+	if tagihan.Status != "belum_bayar" && tagihan.Status != "terlambat" {
+		return fmt.Errorf("nominal hanya dapat diubah untuk tagihan yang belum dibayar")
+	}
+	ctx := context.Background()
+	tx, err := s.querier.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.querier.WithTx(tx)
+	rows, err := q.UpdateTagihanNominal(ctx, id, nominal)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("tagihan tidak dapat diubah")
+	}
+	if err := q.UpsertTagihanNominalOverride(ctx, id, nominal, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *TagihanService) ResetNominalOverride(id int64) error {
+	tagihan, err := s.Get(id)
+	if err != nil {
+		return err
+	}
+	if tagihan.Status != "belum_bayar" && tagihan.Status != "terlambat" {
+		return fmt.Errorf("nominal hanya dapat direset untuk tagihan yang belum dibayar")
+	}
+	ctx := context.Background()
+	tx, err := s.querier.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.querier.WithTx(tx)
+	if err := q.DeleteTagihanNominalOverride(ctx, id); err != nil {
+		return err
+	}
+	rows, err := q.ResetTagihanNominalToSantri(ctx, id)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("tagihan tidak dapat direset")
+	}
+	return tx.Commit()
+}
+
+func (s *TagihanService) ListTagihanTemplates() ([]models.WaTemplateResponse, error) {
+	rows, err := s.querier.ListWaTemplate(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.WaTemplateResponse, 0, len(rows))
+	for _, r := range rows {
+		if r.TargetType != "tagihan" {
+			continue
+		}
+		out = append(out, models.WaTemplateResponse{
+			ID: r.ID, Nama: r.Nama, TargetType: r.TargetType, Body: r.Body, IsAktif: r.IsAktif == 1,
+		})
+	}
+	return out, nil
+}
+
+func (s *TagihanService) CreateTagihanTemplate(req models.WaTemplateRequest) (int64, error) {
+	if strings.TrimSpace(req.Nama) == "" || strings.TrimSpace(req.Body) == "" {
+		return 0, fmt.Errorf("nama dan isi template wajib diisi")
+	}
+	return s.querier.CreateWaTemplate(context.Background(), queries.CreateWaTemplateParams{
+		Nama: strings.TrimSpace(req.Nama), TargetType: "tagihan", Body: strings.TrimSpace(req.Body),
+		IsAktif: boolToInt(req.IsAktif),
+	})
+}
+
+func (s *TagihanService) UpdateTagihanTemplate(id int64, req models.WaTemplateRequest) error {
+	current, err := s.querier.GetWaTemplate(context.Background(), id)
+	if err != nil {
+		return err
+	}
+	if current.TargetType != "tagihan" {
+		return fmt.Errorf("template bukan milik modul tagihan")
+	}
+	if strings.TrimSpace(req.Nama) == "" || strings.TrimSpace(req.Body) == "" {
+		return fmt.Errorf("nama dan isi template wajib diisi")
+	}
+	return s.querier.UpdateWaTemplate(context.Background(), queries.UpdateWaTemplateParams{
+		Nama: strings.TrimSpace(req.Nama), TargetType: "tagihan", Body: strings.TrimSpace(req.Body),
+		IsAktif: boolToInt(req.IsAktif), ID: id,
+	})
+}
+
+func (s *TagihanService) DeleteTagihanTemplate(id int64) error {
+	current, err := s.querier.GetWaTemplate(context.Background(), id)
+	if err != nil {
+		return err
+	}
+	if current.TargetType != "tagihan" {
+		return fmt.Errorf("template bukan milik modul tagihan")
+	}
+	return s.querier.DeleteWaTemplate(context.Background(), id)
+}
+
+func (s *TagihanService) ListFollowUpLogs(tagihanID int64) ([]models.TagihanFollowUpLogResponse, error) {
+	rows, err := s.querier.ListTagihanFollowUpLogs(context.Background(), tagihanID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.TagihanFollowUpLogResponse, 0, len(rows))
+	for _, row := range rows {
+		var templateID *int64
+		if row.TemplateID.Valid {
+			v := row.TemplateID.Int64
+			templateID = &v
+		}
+		out = append(out, models.TagihanFollowUpLogResponse{
+			ID: row.ID, TemplateID: templateID, TemplateNama: row.TemplateNama,
+			MessageBody: row.MessageBody, PetugasNama: row.PetugasNama,
+			CreatedAt: row.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	return out, nil
+}
+
+func (s *TagihanService) FollowUpURL(id, userID int64, req models.FollowUpTagihanRequest) (string, error) {
 	t, err := s.Get(id)
 	if err != nil {
 		return "", err
@@ -259,20 +405,80 @@ func (s *TagihanService) FollowUpURL(id int64) (string, error) {
 	if nomor == "" {
 		return "", fmt.Errorf("nomor WA belum diisi atau tidak valid")
 	}
-	if err := s.querier.TouchFollowUp(context.Background(), id); err != nil {
-		return "", err
-	}
-	template := s.template
-	if templates, err := s.querier.ListWaTemplate(context.Background()); err == nil {
+
+	templateID := req.TemplateID
+	templateName := "Custom"
+	templateBody := s.template
+	if templateID > 0 {
+		candidate, err := s.querier.GetWaTemplate(context.Background(), templateID)
+		if err != nil {
+			return "", fmt.Errorf("template tidak ditemukan")
+		}
+		if candidate.TargetType != "tagihan" || candidate.IsAktif != 1 {
+			return "", fmt.Errorf("template tagihan tidak aktif atau tidak valid")
+		}
+		templateName = candidate.Nama
+		templateBody = candidate.Body
+	} else if templates, err := s.ListTagihanTemplates(); err == nil {
 		for _, candidate := range templates {
-			if candidate.TargetType == "tagihan" && candidate.IsAktif == 1 {
-				template = candidate.Body
+			if candidate.IsAktif {
+				templateID = candidate.ID
+				templateName = candidate.Nama
+				templateBody = candidate.Body
 				break
 			}
 		}
 	}
-	pesan := strings.NewReplacer("{nama}", t.SantriNama, "{bulan_ke}", strconv.FormatInt(t.BulanKe, 10), "{nominal}", formatRibuan(t.Nominal), "{tanggal_tagih}", t.TanggalTagih, "{kelas}", t.KelasNama).Replace(template)
-	return "https://wa.me/" + nomor + "?text=" + url.QueryEscape(pesan), nil
+
+	message := strings.TrimSpace(req.Message)
+	if message == "" {
+		message = renderTagihanTemplate(templateBody, t)
+	}
+	if message == "" {
+		return "", fmt.Errorf("pesan follow-up tidak boleh kosong")
+	}
+	if len(message) > 5000 {
+		return "", fmt.Errorf("pesan follow-up terlalu panjang")
+	}
+
+	ctx := context.Background()
+	tx, err := s.querier.BeginTx(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+	q := s.querier.WithTx(tx)
+	if err := q.TouchFollowUp(ctx, id); err != nil {
+		return "", err
+	}
+	if err := q.CreateTagihanFollowUpLog(
+		ctx, id,
+		sql.NullInt64{Int64: templateID, Valid: templateID > 0},
+		templateName, message, userID,
+	); err != nil {
+		return "", err
+	}
+	if err := tx.Commit(); err != nil {
+		return "", err
+	}
+	return "https://wa.me/" + nomor + "?text=" + url.QueryEscape(message), nil
+}
+
+func renderTagihanTemplate(template string, t *models.TagihanResponse) string {
+	return strings.NewReplacer(
+		"{nama}", t.SantriNama,
+		"{id_mahasantri}", t.IDMahasantri,
+		"{bulan_ke}", strconv.FormatInt(t.BulanKe, 10),
+		"{pertemuan_ke}", strconv.FormatInt(t.PertemuanKe, 10),
+		"{nominal}", formatRibuan(t.Nominal),
+		"{tanggal_tagih}", t.TanggalTagih,
+		"{jatuh_tempo}", t.JatuhTempo,
+		"{kelas}", t.KelasNama,
+		"{guru}", t.GuruNama,
+		"{angkatan}", t.Angkatan,
+		"{angkatan_kelas}", t.AngkatanKelas,
+		"{frekuensi}", t.Frekuensi,
+	).Replace(template)
 }
 
 func normalisasiNomorWA(raw string) string {
