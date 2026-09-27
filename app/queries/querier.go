@@ -520,6 +520,73 @@ func financeNullablePositiveInt64(v int64) sql.NullInt64 {
 	return sql.NullInt64{Int64: v, Valid: v > 0}
 }
 
+// --- Santri Admin Kelas note helpers ---
+
+type SantriAdminNoteRow struct {
+	ID            int64
+	SantriID      int64
+	Catatan       string
+	AuthorName    string
+	UpdatedByName string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+func (q *Querier) ListSantriAdminNotes(ctx context.Context, santriID int64) ([]SantriAdminNoteRow, error) {
+	rows, err := q.Queries.db.QueryContext(ctx, `
+SELECT n.id, n.santri_id, n.catatan,
+       COALESCE(author.name, '') AS author_name,
+       COALESCE(editor.name, '') AS updated_by_name,
+       n.created_at, n.updated_at
+FROM santri_admin_note n
+LEFT JOIN users author ON author.id = n.author_user_id
+LEFT JOIN users editor ON editor.id = n.updated_by_user_id
+WHERE n.santri_id = ?
+ORDER BY n.created_at DESC, n.id DESC
+`, santriID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []SantriAdminNoteRow{}
+	for rows.Next() {
+		var row SantriAdminNoteRow
+		if err := rows.Scan(
+			&row.ID, &row.SantriID, &row.Catatan,
+			&row.AuthorName, &row.UpdatedByName,
+			&row.CreatedAt, &row.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+func (q *Querier) CreateSantriAdminNote(ctx context.Context, santriID, actorID int64, catatan string) (int64, error) {
+	result, err := q.Queries.db.ExecContext(ctx, `
+INSERT INTO santri_admin_note (santri_id, author_user_id, updated_by_user_id, catatan)
+VALUES (?, ?, ?, ?)
+`, santriID, actorID, actorID, catatan)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
+}
+
+func (q *Querier) UpdateSantriAdminNote(ctx context.Context, santriID, noteID, actorID int64, catatan string) (int64, error) {
+	result, err := q.Queries.db.ExecContext(ctx, `
+UPDATE santri_admin_note
+SET catatan = ?, updated_by_user_id = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND santri_id = ?
+`, catatan, actorID, noteID, santriID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 // isDuplicateEmail checks if the error is a duplicate email error
 func isDuplicateEmail(err error) bool {
 	if err == nil {
