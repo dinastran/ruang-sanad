@@ -335,6 +335,7 @@ func setupAdminRoutes(app *fiber.App, h Handlers, store *session.Store, userServ
 	sa.Get("/", h.Admin.Dashboard)
 	sa.Get("/users", h.Admin.Users)
 	sa.Put("/users/:id/role", h.Admin.UpdateUserRole)
+	sa.Delete("/users/:id", h.Admin.DeleteUser)
 	sa.Get("/import", h.Import.Show)
 	sa.Post("/import", h.Import.Upload)
 	sa.Get("/import/template", h.Import.Template)
