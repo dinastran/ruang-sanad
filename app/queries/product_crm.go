@@ -401,11 +401,22 @@ func (q *Queries) ListStockMutations(ctx context.Context, limit int64) ([]models
 	}
 	rows, err := q.db.QueryContext(ctx, `
 		SELECT sm.id, sm.produk_id, sm.produk_batch_id, p.nama, COALESCE(pb.nama, ''),
-		       sm.tipe, sm.qty, sm.catatan, COALESCE(u.name, ''),
+		       sm.tipe, sm.qty,
+		       CASE
+		           WHEN sm.referensi_type = 'mahasantri_produk' AND s.id IS NOT NULL AND sm.tipe = 'pembelian'
+		               THEN 'Pembelian oleh ' || s.nama
+		           WHEN sm.referensi_type = 'mahasantri_produk' AND s.id IS NOT NULL AND sm.tipe = 'pembatalan'
+		               THEN 'Pembatalan transaksi produk ' || s.nama
+		           ELSE sm.catatan
+		       END AS catatan,
+		       COALESCE(s.nama, '') AS mahasantri_nama,
+		       COALESCE(u.name, ''),
 		       strftime('%Y-%m-%d %H:%M', sm.created_at)
 		FROM stok_mutasi sm
 		JOIN produk p ON p.id = sm.produk_id
 		LEFT JOIN produk_batch pb ON pb.id = sm.produk_batch_id
+		LEFT JOIN mahasantri_produk mp ON sm.referensi_type = 'mahasantri_produk' AND mp.id = sm.referensi_id
+		LEFT JOIN santri s ON s.id = mp.santri_id
 		LEFT JOIN users u ON u.id = sm.dicatat_oleh
 		ORDER BY sm.id DESC
 		LIMIT ?`, limit)
@@ -420,7 +431,7 @@ func (q *Queries) ListStockMutations(ctx context.Context, limit int64) ([]models
 		var batchID sql.NullInt64
 		if err := rows.Scan(
 			&item.ID, &item.ProdukID, &batchID, &item.ProdukNama, &item.BatchNama,
-			&item.Tipe, &item.Qty, &item.Catatan, &item.DicatatOleh, &item.CreatedAt,
+			&item.Tipe, &item.Qty, &item.Catatan, &item.MahasantriNama, &item.DicatatOleh, &item.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
