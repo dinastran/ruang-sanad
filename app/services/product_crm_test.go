@@ -72,6 +72,12 @@ func TestProductPurchaseReducesAndCancellationRestoresStock(t *testing.T) {
 	require.NoError(t, f.service.AssignProduct(f.santriID, models.AssignProductRequest{
 		ProdukID: productID, Tanggal: "2026-09-23",
 	}, f.adminID))
+	mutations, err := f.service.Mutations(10)
+	require.NoError(t, err)
+	require.NotEmpty(t, mutations)
+	require.Equal(t, "Ahmad", mutations[0].MahasantriNama)
+	require.Equal(t, "Pembelian oleh Ahmad", mutations[0].Catatan)
+
 	stock, err := f.querier.CurrentProdukStock(t.Context(), productID, sql.NullInt64{})
 	require.NoError(t, err)
 	require.Equal(t, int64(1), stock)
@@ -82,6 +88,12 @@ func TestProductPurchaseReducesAndCancellationRestoresStock(t *testing.T) {
 	require.Equal(t, "Buku Tahsin 1", owned[0].ProdukNama)
 
 	require.NoError(t, f.service.CancelAssignment(owned[0].ID, f.adminID))
+	mutations, err = f.service.Mutations(10)
+	require.NoError(t, err)
+	require.NotEmpty(t, mutations)
+	require.Equal(t, "Ahmad", mutations[0].MahasantriNama)
+	require.Equal(t, "Pembatalan transaksi produk Ahmad", mutations[0].Catatan)
+
 	stock, err = f.querier.CurrentProdukStock(t.Context(), productID, sql.NullInt64{})
 	require.NoError(t, err)
 	require.Equal(t, int64(2), stock)
