@@ -62,7 +62,7 @@
 
 	function handleDeleteUser(target: UserItem) {
 		if (target.id === user?.id) return;
-		if (!confirm(`Hapus akun ${target.name} (${target.email})?\n\nAkun dan sesi login akan dihapus. Histori operasional tetap dipertahankan.`)) return;
+		if (!confirm(`Hapus akun ${target.name} (${target.email})?\n\nAkun dan sesi login akan dihapus. Tindakan ini tidak dapat dibatalkan.`)) return;
 		deletingUser[target.id] = true;
 		router.delete(`/admin/users/${target.id}`, {
 			preserveScroll: true,
