@@ -176,17 +176,69 @@ func (h *SantriHandler) Show(c *fiber.Ctx) error {
 	guruList, _ := h.masterService.ListGuru()
 	kodeKelasList, _ := h.masterService.ListKodeKelas()
 	produkMahasantri, _ := h.productCRMService.ListMahasantriProducts(id)
+	adminNotes := []models.SantriAdminNoteResponse{}
+	role := requestRole(c, user)
+	if role == models.RoleAdminKelas || role == models.RoleSuperAdmin {
+		adminNotes, err = h.santriService.ListAdminNotes(id)
+		if err != nil {
+			return err
+		}
+	}
 
 	return h.inertiaService.Render(c, "app/SantriForm", fiber.Map{
 		"user":       user,
 		"santri":     santri,
 		"mahasantri_produk": produkMahasantri,
+		"admin_notes": adminNotes,
 		"angkatan":   angkatanList,
 		"levels":     levelList,
 		"jadwals":    jadwalList,
 		"gurus":      guruList,
 		"kode_kelas": kodeKelasList,
 	})
+}
+
+func (h *SantriHandler) CreateAdminNote(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return h.inertiaService.Redirect(c, "/app/santri")
+	}
+	var req models.SantriAdminNoteRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Catatan tidak valid")
+		return h.inertiaService.Redirect(c, "/app/santri/"+c.Params("id"))
+	}
+	sess, _ := h.store.Get(c)
+	if err := h.santriService.CreateAdminNote(id, sessionUser(sess).ID, req); err != nil {
+		h.store.Flash(c, "error", "Gagal menyimpan catatan: "+err.Error())
+		return h.inertiaService.Redirect(c, "/app/santri/"+c.Params("id"))
+	}
+	h.store.Flash(c, "success", "Catatan Admin Kelas tersimpan")
+	return h.inertiaService.Redirect(c, "/app/santri/"+c.Params("id"))
+}
+
+func (h *SantriHandler) UpdateAdminNote(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return h.inertiaService.Redirect(c, "/app/santri")
+	}
+	noteID, err := strconv.ParseInt(c.Params("noteID"), 10, 64)
+	if err != nil {
+		h.store.Flash(c, "error", "Catatan tidak valid")
+		return h.inertiaService.Redirect(c, "/app/santri/"+c.Params("id"))
+	}
+	var req models.SantriAdminNoteRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Catatan tidak valid")
+		return h.inertiaService.Redirect(c, "/app/santri/"+c.Params("id"))
+	}
+	sess, _ := h.store.Get(c)
+	if err := h.santriService.UpdateAdminNote(id, noteID, sessionUser(sess).ID, req); err != nil {
+		h.store.Flash(c, "error", "Gagal memperbarui catatan: "+err.Error())
+		return h.inertiaService.Redirect(c, "/app/santri/"+c.Params("id"))
+	}
+	h.store.Flash(c, "success", "Catatan Admin Kelas diperbarui")
+	return h.inertiaService.Redirect(c, "/app/santri/"+c.Params("id"))
 }
 
 func (h *SantriHandler) UpdateCS(c *fiber.Ctx) error {
