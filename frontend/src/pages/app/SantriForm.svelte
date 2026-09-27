@@ -8,7 +8,7 @@
 	import StatusBadge from "@components/StatusBadge.svelte";
 	import GenderBadge from "@components/GenderBadge.svelte";
 	import type { Flash, User } from "@lib/types";
-	import { Save, User as UserIcon, BookOpen, Calendar, MapPin, DollarSign, Hash, GraduationCap, Users, Phone, Mail, ClipboardList, Plus, Trash2, Upload, AlertTriangle, Boxes, ExternalLink } from "lucide-svelte";
+	import { Save, User as UserIcon, BookOpen, Calendar, MapPin, DollarSign, Hash, GraduationCap, Users, Phone, Mail, ClipboardList, Plus, Trash2, Upload, AlertTriangle, Boxes, ExternalLink, NotebookPen, Pencil, X } from "lucide-svelte";
 
 	interface MasterItem {
 		id: number;
@@ -67,6 +67,16 @@
 		catatan: string;
 	}
 
+	interface SantriAdminNoteItem {
+		id: number;
+		santri_id: number;
+		catatan: string;
+		author_name: string;
+		updated_by_name: string;
+		created_at: string;
+		updated_at: string;
+	}
+
 	interface Props {
 		user?: User;
 		santri?: SantriItem | null;
@@ -76,12 +86,13 @@
 		gurus?: MasterItem[];
 		kode_kelas?: KodeKelasItem[];
 		mahasantri_produk?: MahasantriProductItem[];
+		admin_notes?: SantriAdminNoteItem[];
 		success?: string;
 		error?: string;
 		flash?: Flash;
 	}
 
-	let { user, santri = null, angkatan = [], levels = [], jadwals = [], gurus = [], kode_kelas = [], mahasantri_produk = [], success, error, flash }: Props = $props();
+	let { user, santri = null, angkatan = [], levels = [], jadwals = [], gurus = [], kode_kelas = [], mahasantri_produk = [], admin_notes = [], success, error, flash }: Props = $props();
 	let successMessage = $derived(flash?.success ?? success);
 	let errorMessage = $derived(flash?.error ?? error);
 
@@ -160,6 +171,54 @@
 	let isCorrectionLoading = $state(false);
 	let correctionForm = $state({ angkatan: santri?.angkatan ?? "", tanggal_daftar: santri?.tanggal_daftar ?? "", konfirmasi: false });
 	let canDelete = $derived(santri !== null && deleteName === santri.nama && !isDeleteLoading);
+
+	let adminNoteDraft = $state("");
+	let adminNoteLoading = $state(false);
+	let editingAdminNoteID = $state<number | null>(null);
+	let editingAdminNoteDraft = $state("");
+
+	function addAdminNote(e: SubmitEvent) {
+		e.preventDefault();
+		if (!santri?.id || !adminNoteDraft.trim()) return;
+		adminNoteLoading = true;
+		router.post(
+			`/app/santri/${santri.id}/admin-notes`,
+			{ catatan: adminNoteDraft },
+			{
+				onSuccess: () => { adminNoteDraft = ""; },
+				onFinish: () => { adminNoteLoading = false; },
+			},
+		);
+	}
+
+	function startEditAdminNote(note: SantriAdminNoteItem) {
+		editingAdminNoteID = note.id;
+		editingAdminNoteDraft = note.catatan;
+	}
+
+	function cancelEditAdminNote() {
+		editingAdminNoteID = null;
+		editingAdminNoteDraft = "";
+	}
+
+	function updateAdminNote(note: SantriAdminNoteItem) {
+		if (!santri?.id || !editingAdminNoteDraft.trim()) return;
+		adminNoteLoading = true;
+		router.put(
+			`/app/santri/${santri.id}/admin-notes/${note.id}`,
+			{ catatan: editingAdminNoteDraft },
+			{
+				onSuccess: cancelEditAdminNote,
+				onFinish: () => { adminNoteLoading = false; },
+			},
+		);
+	}
+
+	function formatNoteTime(value: string): string {
+		if (!value) return "-";
+		const date = new Date(value);
+		return Number.isNaN(date.getTime()) ? value : date.toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+	}
 
 	function handleCsSubmit(e: Event) {
 		e.preventDefault();
@@ -777,6 +836,75 @@
 					</fieldset>
 				</form>
 			</div>
+		{/if}
+
+		{#if isEdit && isAdminKelas}
+			<section class="rounded-2xl border border-neutral-200 bg-white p-6 dark:border-white/[0.06] dark:bg-neutral-925/50" aria-labelledby="admin-notes-title">
+				<div class="flex items-start gap-3">
+					<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary-500/10 text-secondary-600 dark:text-secondary-400">
+						<NotebookPen class="h-5 w-5" />
+					</div>
+					<div>
+						<h2 id="admin-notes-title" class="text-base font-semibold text-neutral-900 dark:text-white">Catatan Admin Kelas</h2>
+						<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Riwayat catatan operasional santri. Hanya terlihat oleh Admin Kelas dan Super Admin.</p>
+					</div>
+				</div>
+
+				<form onsubmit={addAdminNote} class="mt-5">
+					<label for="admin-note-new" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Tambah catatan</label>
+					<textarea
+						id="admin-note-new"
+						bind:value={adminNoteDraft}
+						maxlength="4000"
+						rows="4"
+						placeholder="Contoh: santri meminta pindah jadwal karena perubahan jam kerja..."
+						class="mt-2 w-full rounded-xl border border-neutral-300 bg-neutral-50 px-4 py-3 text-sm text-neutral-900 outline-none transition focus:border-secondary-400 focus:ring-2 focus:ring-secondary-400/20 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+					></textarea>
+					<div class="mt-3 flex items-center justify-between gap-3">
+						<p class="text-xs text-neutral-500">{adminNoteDraft.length}/4000 karakter</p>
+						<button
+							type="submit"
+							disabled={adminNoteLoading || !adminNoteDraft.trim()}
+							class="inline-flex items-center gap-2 rounded-xl bg-secondary-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-secondary-600 disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							<Plus class="h-4 w-4" /> {adminNoteLoading ? "Menyimpan..." : "Tambah Catatan"}
+						</button>
+					</div>
+				</form>
+
+				<div class="mt-6 space-y-3">
+					{#each admin_notes as note (note.id)}
+						<article class="rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+							{#if editingAdminNoteID === note.id}
+								<textarea
+									bind:value={editingAdminNoteDraft}
+									maxlength="4000"
+									rows="4"
+									class="w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm outline-none focus:border-secondary-400 focus:ring-2 focus:ring-secondary-400/20 dark:border-neutral-700 dark:bg-neutral-900"
+								></textarea>
+								<div class="mt-3 flex justify-end gap-2">
+									<button type="button" onclick={cancelEditAdminNote} disabled={adminNoteLoading} class="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"><X class="h-4 w-4" /> Batal</button>
+									<button type="button" onclick={() => updateAdminNote(note)} disabled={adminNoteLoading || !editingAdminNoteDraft.trim()} class="inline-flex items-center gap-1.5 rounded-lg bg-secondary-500 px-3 py-2 text-sm font-semibold text-white hover:bg-secondary-600 disabled:opacity-50"><Save class="h-4 w-4" /> Simpan Edit</button>
+								</div>
+							{:else}
+								<div class="flex items-start justify-between gap-4">
+									<p class="whitespace-pre-wrap text-sm leading-6 text-neutral-800 dark:text-neutral-200">{note.catatan}</p>
+									<button type="button" onclick={() => startEditAdminNote(note)} class="shrink-0 rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-secondary-600 dark:hover:bg-neutral-800" aria-label="Edit catatan"><Pencil class="h-4 w-4" /></button>
+								</div>
+							{/if}
+							<div class="mt-3 border-t border-neutral-100 pt-3 text-xs text-neutral-500 dark:border-neutral-800">
+								<span>Ditulis oleh {note.author_name || "User"}</span>
+								<span> · {formatNoteTime(note.created_at)}</span>
+								{#if note.updated_at !== note.created_at}
+									<span> · Diedit oleh {note.updated_by_name || note.author_name || "User"} pada {formatNoteTime(note.updated_at)}</span>
+								{/if}
+							</div>
+						</article>
+					{:else}
+						<div class="rounded-xl border border-dashed border-neutral-300 p-5 text-center text-sm text-neutral-500 dark:border-neutral-700">Belum ada catatan Admin Kelas untuk santri ini.</div>
+					{/each}
+				</div>
+			</section>
 		{/if}
 
 		{#if isEdit && isAdminKelas}
