@@ -259,12 +259,12 @@ func (s *ProductCRMService) AssignProduct(santriID int64, req models.AssignProdu
 	defer func() { _ = tx.Rollback() }()
 	q := s.querier.WithTx(tx)
 
-	exists, err := q.MahasantriExists(ctx, santriID)
+	santri, err := q.GetSantriByID(ctx, santriID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("mahasantri tidak ditemukan")
+		}
 		return err
-	}
-	if !exists {
-		return errors.New("mahasantri tidak ditemukan")
 	}
 	product, err := q.GetProduk(ctx, req.ProdukID)
 	if err != nil {
@@ -298,7 +298,7 @@ func (s *ProductCRMService) AssignProduct(santriID int64, req models.AssignProdu
 		return err
 	}
 	if product.TrackStok {
-		if _, err := q.InsertStockMutation(ctx, product.ID, batch, "pembelian", -1, "mahasantri_produk", nullRef(assignmentID), fmt.Sprintf("Pembelian oleh mahasantri #%d", santriID), userID); err != nil {
+		if _, err := q.InsertStockMutation(ctx, product.ID, batch, "pembelian", -1, "mahasantri_produk", nullRef(assignmentID), fmt.Sprintf("Pembelian oleh %s", santri.Nama), userID); err != nil {
 			return err
 		}
 	}
