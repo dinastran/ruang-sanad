@@ -974,12 +974,15 @@ func TestSantriDeleteRemovesRelatedDataAndVoiceNoteButKeepsKelas(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO catatan_riayah (target_type, target_id, catatan) VALUES ('santri', ?, 'Catatan santri')`, santriID)
 	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO santri_admin_note (santri_id, catatan) VALUES (?, 'Catatan Admin Kelas')`, santriID)
+	require.NoError(t, err)
 
 	require.NoError(t, service.Delete(santriID))
 	requireTableCount(t, db, "santri", 0)
 	requireTableCount(t, db, "absensi", 0)
 	requireTableCount(t, db, "tagihan", 0)
 	requireTableCount(t, db, "catatan_riayah", 0)
+	requireTableCount(t, db, "santri_admin_note", 0)
 	requireTableCount(t, db, "kelas", 1)
 	_, err = os.Stat(voiceNotePath)
 	require.ErrorIs(t, err, os.ErrNotExist)
@@ -1036,3 +1039,57 @@ func TestSafeVoiceNotePath(t *testing.T) {
 		})
 	}
 }
+
+
+func TestSantriAdminNoteHistoryCreateEditAndScope(t *testing.T) {
+	db, service := setupSantriDeleteService(t)
+	result, err := db.Exec(`INSERT INTO santri (nama, status) VALUES ('Santri Catatan', 'aktif')`)
+	require.NoError(t, err)
+	santriID, err := result.LastInsertId()
+	require.NoError(t, err)
+	result, err = db.Exec(`INSERT INTO santri (nama, status) VALUES ('Santri Lain', 'aktif')`)
+	require.NoError(t, err)
+	otherSantriID, err := result.LastInsertId()
+	require.NoError(t, err)
+
+	result, err = db.Exec(`INSERT INTO users (email, name, role) VALUES ('admin-a@example.com', 'Admin A', 'admin_kelas')`)
+	require.NoError(t, err)
+	adminA, err := result.LastInsertId()
+	require.NoError(t, err)
+	result, err = db.Exec(`INSERT INTO users (email, name, role) VALUES ('admin-b@example.com', 'Admin B', 'admin_kelas')`)
+	require.NoError(t, err)
+	adminB, err := result.LastInsertId()
+	require.NoError(t, err)
+
+	require.NoError(t, service.CreateAdminNote(santriID, adminA, models.SantriAdminNoteRequest{Catatan: "  Catatan pertama  "}))
+	require.NoError(t, service.CreateAdminNote(santriID, adminB, models.SantriAdminNoteRequest{Catatan: "Catatan kedua"}))
+
+	notes, err := service.ListAdminNotes(santriID)
+	require.NoError(t, err)
+	require.Len(t, notes, 2)
+	require.Equal(t, "Catatan kedua", notes[0].Catatan)
+	require.Equal(t, "Admin B", notes[0].AuthorName)
+	require.Equal(t, "Catatan pertama", notes[1].Catatan)
+	require.Equal(t, "Admin A", notes[1].AuthorName)
+
+	firstID := notes[1].ID
+	require.NoError(t, service.UpdateAdminNote(santriID, firstID, adminB, models.SantriAdminNoteRequest{Catatan: "Catatan pertama dikoreksi"}))
+	notes, err = service.ListAdminNotes(santriID)
+	require.NoError(t, err)
+	var edited models.SantriAdminNoteResponse
+	for _, note := range notes {
+		if note.ID == firstID {
+			edited = note
+			break
+		}
+	}
+	require.Equal(t, "Catatan pertama dikoreksi", edited.Catatan)
+	require.Equal(t, "Admin A", edited.AuthorName, "author asli harus tetap tercatat")
+	require.Equal(t, "Admin B", edited.UpdatedByName, "editor terakhir harus tercatat")
+
+	err = service.UpdateAdminNote(otherSantriID, firstID, adminB, models.SantriAdminNoteRequest{Catatan: "Tidak boleh pindah scope"})
+	require.ErrorContains(t, err, "catatan tidak ditemukan")
+	require.ErrorContains(t, service.CreateAdminNote(santriID, adminA, models.SantriAdminNoteRequest{Catatan: "   "}), "wajib diisi")
+	require.ErrorContains(t, service.CreateAdminNote(santriID, adminA, models.SantriAdminNoteRequest{Catatan: strings.Repeat("a", 4001)}), "maksimal 4000")
+}
+
