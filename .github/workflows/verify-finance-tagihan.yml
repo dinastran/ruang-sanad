@@ -24,6 +24,9 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Install templ
+        run: go install github.com/a-h/templ/cmd/templ@v0.3.1020
+
       - name: Install frontend dependencies
         run: npm ci
 
