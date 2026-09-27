@@ -243,3 +243,92 @@ func TestTagihanSantriPindahKeKelasTertinggalMelanjutkanBulan(t *testing.T) {
 	}
 	require.Equal(t, []int64{4, 5}, bulan, "tagihan di kelas tujuan melanjutkan bulan, tidak hilang")
 }
+
+
+func TestTagihanNominalSyncOverrideResetDanLunas(t *testing.T) {
+	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
+	require.NoError(t, service.GenerateForPertemuan(createSelesaiPertemuan(t, db, kelasID, 8)))
+
+	var tagihanID, santriID int64
+	require.NoError(t, db.QueryRow(`SELECT id, santri_id FROM tagihan`).Scan(&tagihanID, &santriID))
+	q := queries.NewQuerier(db)
+
+	// Nominal master baru mengalir ke tagihan terbuka yang belum dioverride.
+	_, err := db.Exec(`UPDATE santri SET nominal = 200000 WHERE id = ?`, santriID)
+	require.NoError(t, err)
+	require.NoError(t, q.SyncOpenTagihanNominalForSantri(context.Background(), santriID, 200000))
+	item, err := service.Get(tagihanID)
+	require.NoError(t, err)
+	require.EqualValues(t, 200000, item.Nominal)
+	require.False(t, item.NominalOverride)
+
+	// Override Finance hanya berlaku pada tagihan ini dan kebal dari sync master.
+	require.NoError(t, service.SetNominalOverride(tagihanID, 0, 150000))
+	item, err = service.Get(tagihanID)
+	require.NoError(t, err)
+	require.EqualValues(t, 150000, item.Nominal)
+	require.True(t, item.NominalOverride)
+
+	_, err = db.Exec(`UPDATE santri SET nominal = 250000 WHERE id = ?`, santriID)
+	require.NoError(t, err)
+	require.NoError(t, q.SyncOpenTagihanNominalForSantri(context.Background(), santriID, 250000))
+	item, err = service.Get(tagihanID)
+	require.NoError(t, err)
+	require.EqualValues(t, 150000, item.Nominal)
+
+	// Reset mengembalikan tagihan ke nominal master terbaru.
+	require.NoError(t, service.ResetNominalOverride(tagihanID))
+	item, err = service.Get(tagihanID)
+	require.NoError(t, err)
+	require.EqualValues(t, 250000, item.Nominal)
+	require.False(t, item.NominalOverride)
+
+	// Setelah lunas, perubahan master berikutnya tidak mengubah histori transaksi.
+	require.NoError(t, service.MarkLunas(tagihanID, 0, models.MarkTagihanLunasRequest{}))
+	_, err = db.Exec(`UPDATE santri SET nominal = 300000 WHERE id = ?`, santriID)
+	require.NoError(t, err)
+	require.NoError(t, q.SyncOpenTagihanNominalForSantri(context.Background(), santriID, 300000))
+	item, err = service.Get(tagihanID)
+	require.NoError(t, err)
+	require.Equal(t, "lunas", item.Status)
+	require.EqualValues(t, 250000, item.Nominal)
+}
+
+func TestTagihanFollowUpMultiTemplateCustomDanHistory(t *testing.T) {
+	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
+	_, err := db.Exec(`UPDATE santri SET no_wa = '081234567890', id_mahasantri = 'RS-TEST-001'`)
+	require.NoError(t, err)
+	require.NoError(t, service.GenerateForPertemuan(createSelesaiPertemuan(t, db, kelasID, 8)))
+
+	var tagihanID int64
+	require.NoError(t, db.QueryRow(`SELECT id FROM tagihan`).Scan(&tagihanID))
+	templates, err := service.ListTagihanTemplates()
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(templates), 3)
+	require.NotEqual(t, templates[0].Nama, templates[1].Nama)
+
+	link, err := service.FollowUpURL(tagihanID, 0, models.FollowUpTagihanRequest{TemplateID: templates[0].ID})
+	require.NoError(t, err)
+	require.Contains(t, link, "https://wa.me/6281234567890?text=")
+	logs, err := service.ListFollowUpLogs(tagihanID)
+	require.NoError(t, err)
+	require.Len(t, logs, 1)
+	require.Equal(t, templates[0].Nama, logs[0].TemplateNama)
+	require.Contains(t, logs[0].MessageBody, "Ahmad")
+	require.Contains(t, logs[0].MessageBody, "100.000")
+	require.NotContains(t, logs[0].MessageBody, "{nama}")
+
+	custom := "Pesan khusus hasil edit petugas"
+	_, err = service.FollowUpURL(tagihanID, 0, models.FollowUpTagihanRequest{TemplateID: templates[1].ID, Message: custom})
+	require.NoError(t, err)
+	logs, err = service.ListFollowUpLogs(tagihanID)
+	require.NoError(t, err)
+	require.Len(t, logs, 2)
+	require.Equal(t, templates[1].Nama, logs[0].TemplateNama)
+	require.Equal(t, custom, logs[0].MessageBody)
+
+	item, err := service.Get(tagihanID)
+	require.NoError(t, err)
+	require.EqualValues(t, 2, item.FuCount)
+	require.NotEmpty(t, item.FuTerakhir)
+}
