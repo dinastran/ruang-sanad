@@ -442,6 +442,7 @@ export interface Tagihan {
 	bulan_ke: number;
 	pertemuan_ke: number;
 	nominal: number;
+	nominal_override: boolean;
 	tanggal_tagih: string;
 	jatuh_tempo: string;
 	status: string;
@@ -450,6 +451,15 @@ export interface Tagihan {
 	catatan: string;
 	fu_terakhir: string;
 	fu_count: number;
+}
+
+export interface TagihanFollowUpLog {
+	id: number;
+	template_id?: number;
+	template_nama: string;
+	message_body: string;
+	petugas_nama: string;
+	created_at: string;
 }
 
 export interface RingkasanKeuangan {

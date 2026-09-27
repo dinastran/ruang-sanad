@@ -685,6 +685,10 @@ func (s *KoordinatorService) ListWaTemplate() ([]models.WaTemplateResponse, erro
 	}
 	out := make([]models.WaTemplateResponse, 0, len(rows))
 	for _, r := range rows {
+		// Template tagihan dikelola oleh tim Keuangan dari Daftar Tagihan.
+		if r.TargetType == "tagihan" {
+			continue
+		}
 		out = append(out, models.WaTemplateResponse{ID: r.ID, Nama: r.Nama, TargetType: r.TargetType, Body: r.Body, IsAktif: r.IsAktif == 1})
 	}
 	return out, nil
