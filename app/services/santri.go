@@ -365,6 +365,11 @@ func (s *SantriService) UpdateByCS(id int64, req models.UpdateSantriCSRequest) e
 	}); err != nil {
 		return err
 	}
+	// Tagihan terbuka mengikuti nominal master santri selama belum dioverride
+	// manual oleh Keuangan. Tagihan lunas/batal dan override tetap menjadi histori.
+	if err := txQuerier.SyncOpenTagihanNominalForSantri(ctx, id, req.Nominal); err != nil {
+		return err
+	}
 	if !isValidIssuedIDMahasantriForRow(existing.IDMahasantri, id) {
 		_, _, angkatan, parsedDate, err := s.validateSantriInput(ctx, txQuerier, req.Nama, req.JenisKelamin, req.Angkatan, req.TanggalDaftar)
 		if err != nil {
