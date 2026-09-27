@@ -1,0 +1,44 @@
+name: Verify Finance + Santri Notes Integration
+
+on:
+  push:
+    branches:
+      - integration/finance-and-santri-notes
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install templ
+        run: go install github.com/a-h/templ/cmd/templ@v0.3.1020
+
+      - name: Prepare Go modules
+        run: go mod tidy
+
+      - name: Targeted finance and santri-note tests
+        run: |
+          go test ./app/services -run 'TestTagihanNominalSyncOverrideResetDanLunas|TestTagihanFollowUpMultiTemplateCustomDanHistory|TestSantriAdminNoteHistoryCreateEditAndScope|TestSantriDeleteRemovesRelatedDataAndVoiceNoteButKeepsKelas'
+
+      - name: Verify build and vet
+        run: npm run verify
+
+      - name: Go regression tests
+        run: go test ./...
