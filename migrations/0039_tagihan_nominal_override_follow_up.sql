@@ -25,6 +25,15 @@ CREATE TABLE IF NOT EXISTS tagihan_follow_up_log (
 CREATE INDEX IF NOT EXISTS idx_tagihan_follow_up_log_tagihan
 ON tagihan_follow_up_log(tagihan_id, created_at DESC);
 
+-- Backfill sekali untuk memperbaiki tagihan terbuka yang masih menyimpan
+-- snapshot nominal lama sebelum fitur sinkronisasi ini tersedia.
+UPDATE tagihan
+SET nominal = (
+        SELECT s.nominal FROM santri s WHERE s.id = tagihan.santri_id
+    ),
+    updated_at = CURRENT_TIMESTAMP
+WHERE status = 'belum_bayar';
+
 -- Jadikan tiga template bawaan tagihan sebagai tahapan FU awal.
 UPDATE wa_template
 SET nama = 'FU 1 - Pengingat Tagihan', is_aktif = 1, updated_at = CURRENT_TIMESTAMP
