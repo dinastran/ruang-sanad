@@ -3,7 +3,7 @@
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import type { User } from "@lib/types";
-	import { User as UserIcon, Mail, Shield, Calendar, Check, X } from "lucide-svelte";
+	import { User as UserIcon, Mail, Shield, Calendar, Check, X, Trash2 } from "lucide-svelte";
 
 	interface UserItem {
 		id: number;
@@ -45,6 +45,7 @@
 	let { user, users = [], success, error }: Props = $props();
 
 	let changingRole = $state<Record<number, boolean>>({});
+	let deletingUser = $state<Record<number, boolean>>({});
 
 	function handleRoleChange(userId: number, newRole: string, userIdCurrent: number) {
 		if (userId === userIdCurrent) return;
@@ -57,6 +58,16 @@
 				onError: () => { changingRole[userId] = false; },
 			}
 		);
+	}
+
+	function handleDeleteUser(target: UserItem) {
+		if (target.id === user?.id) return;
+		if (!confirm(`Hapus akun ${target.name} (${target.email})?\n\nAkun dan sesi login akan dihapus. Histori operasional tetap dipertahankan.`)) return;
+		deletingUser[target.id] = true;
+		router.delete(`/admin/users/${target.id}`, {
+			preserveScroll: true,
+			onFinish: () => { deletingUser[target.id] = false; },
+		});
 	}
 
 	function formatDate(d: string): string {
@@ -102,12 +113,13 @@
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Role</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Verified</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Created At</th>
+						<th class="px-4 py-3 text-right text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Aksi</th>
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-neutral-200/80 dark:divide-white/[0.04]">
 					{#if users.length === 0}
 						<tr>
-							<td colspan="5" class="px-4 py-12 text-center text-neutral-500 dark:text-neutral-400">
+							<td colspan="6" class="px-4 py-12 text-center text-neutral-500 dark:text-neutral-400">
 								Tidak ada user
 							</td>
 						</tr>
@@ -149,6 +161,15 @@
 									{/if}
 								</td>
 								<td class="px-4 py-3 text-neutral-500 dark:text-neutral-400 text-xs font-mono">{formatDate(u.created_at)}</td>
+								<td class="px-4 py-3 text-right">
+									{#if u.id === user?.id}
+										<span class="text-xs text-neutral-400">Akun aktif</span>
+									{:else}
+										<button type="button" onclick={() => handleDeleteUser(u)} disabled={deletingUser[u.id]} class="inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-400/40 disabled:opacity-50 dark:text-red-400">
+											<Trash2 class="w-3.5 h-3.5" /> {deletingUser[u.id] ? "Menghapus..." : "Hapus"}
+										</button>
+									{/if}
+								</td>
 							</tr>
 						{/each}
 					{/if}
