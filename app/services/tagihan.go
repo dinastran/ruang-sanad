@@ -183,7 +183,11 @@ func (s *TagihanService) List(filter models.TagihanFilter) ([]models.TagihanResp
 	if err != nil {
 		return nil, err
 	}
-	overrides, err := s.querier.ListTagihanNominalOverrideIDs(ctx)
+	tagihanIDs := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		tagihanIDs = append(tagihanIDs, row.ID)
+	}
+	overrides, err := s.querier.ListTagihanNominalOverrideIDs(ctx, tagihanIDs)
 	if err != nil {
 		return nil, err
 	}
