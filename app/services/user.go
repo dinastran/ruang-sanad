@@ -98,6 +98,45 @@ func (s *UserService) DeleteAccount(userID int64) error {
 	return s.querier.DeleteUser(context.Background(), userID)
 }
 
+// DeleteManagedUser deletes an account from User Management.
+// Authorization is checked here as defense-in-depth in addition to the route middleware.
+func (s *UserService) DeleteManagedUser(actorID, targetID int64) error {
+	if actorID <= 0 || targetID <= 0 {
+		return errors.New("user tidak valid")
+	}
+	ctx := context.Background()
+	actor, err := s.querier.GetUserByID(ctx, actorID)
+	if err != nil {
+		return errors.New("akun Super Admin tidak ditemukan")
+	}
+	if actor.Role != models.RoleSuperAdmin {
+		return errors.New("hanya Super Admin yang dapat menghapus user")
+	}
+	if actorID == targetID {
+		return errors.New("akun yang sedang digunakan tidak dapat dihapus")
+	}
+	if _, err := s.querier.GetUserByID(ctx, targetID); err != nil {
+		return errors.New("user tidak ditemukan")
+	}
+
+	tx, err := s.querier.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.querier.WithTx(tx)
+	if err := q.ClearUserReferences(ctx, targetID); err != nil {
+		return errors.New("gagal membersihkan keterkaitan user")
+	}
+	if err := q.DeleteUser(ctx, targetID); err != nil {
+		if errors.Is(err, queries.ErrUserNotFound) {
+			return errors.New("user tidak ditemukan")
+		}
+		return errors.New("user masih memiliki data terkait dan belum dapat dihapus")
+	}
+	return tx.Commit()
+}
+
 // IsAdmin checks if a user is an admin (direct DB query).
 func (s *UserService) IsAdmin(userID int64) (bool, error) {
 	user, err := s.querier.GetUserByID(context.Background(), userID)

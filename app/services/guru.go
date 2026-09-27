@@ -69,11 +69,19 @@ func (s *GuruService) ListDirectory() ([]models.GuruDirectoryResponse, error) {
 }
 
 func (s *GuruService) GetDirectoryByID(id int64) (*models.GuruDirectoryResponse, error) {
-	guru, err := s.querier.GuruGetByID(context.Background(), id)
+	ctx := context.Background()
+	guru, err := s.querier.GuruGetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("guru not found: %w", err)
 	}
 	result := s.mapDirectoryGuru(guru)
+	if result.UserID != nil {
+		linked, err := s.querier.GetUserByID(ctx, *result.UserID)
+		if err == nil {
+			result.LinkedUserName = linked.Name
+			result.LinkedUserEmail = linked.Email
+		}
+	}
 	return &result, nil
 }
 

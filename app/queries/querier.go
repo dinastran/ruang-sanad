@@ -67,6 +67,23 @@ func nullStringToString(ns sql.NullString) string {
 	return ""
 }
 
+// ClearUserReferences removes legacy author references that predate ON DELETE SET NULL.
+// Newer user foreign keys already cascade or null themselves at the schema level.
+func (q *Querier) ClearUserReferences(ctx context.Context, userID int64) error {
+	statements := []string{
+		`UPDATE pertemuan SET dibuat_oleh = NULL WHERE dibuat_oleh = ?`,
+		`UPDATE absensi SET dibuat_oleh = NULL WHERE dibuat_oleh = ?`,
+		`UPDATE tsi_audit SET oleh = NULL WHERE oleh = ?`,
+		`UPDATE jadwal_pertemuan SET dibuat_oleh = NULL WHERE dibuat_oleh = ?`,
+	}
+	for _, statement := range statements {
+		if _, err := q.Queries.db.ExecContext(ctx, statement, userID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // --- User operations ---
 
 func (q *Querier) CreateUser(ctx context.Context, user *models.User) error {

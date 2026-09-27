@@ -54,9 +54,10 @@ type StockMutation struct {
 	BatchNama     string `json:"batch_nama"`
 	Tipe          string `json:"tipe"`
 	Qty           int64  `json:"qty"`
-	Catatan       string `json:"catatan"`
-	DicatatOleh   string `json:"dicatat_oleh"`
-	CreatedAt     string `json:"created_at"`
+	Catatan         string `json:"catatan"`
+	MahasantriNama string `json:"mahasantri_nama"`
+	DicatatOleh     string `json:"dicatat_oleh"`
+	CreatedAt       string `json:"created_at"`
 }
 
 type ProductCRMFilters struct {

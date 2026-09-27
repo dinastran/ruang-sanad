@@ -11,8 +11,10 @@ type GuruDetailResponse struct {
 	TanggalGabung string `json:"tanggal_gabung"`
 	Foto          string `json:"foto"`
 	IsAktif       bool   `json:"is_aktif"`
-	UserID        *int64 `json:"user_id,omitempty"`
-	TotalKelas    int64  `json:"total_kelas"`
+	UserID          *int64 `json:"user_id,omitempty"`
+	LinkedUserName  string `json:"linked_user_name"`
+	LinkedUserEmail string `json:"linked_user_email"`
+	TotalKelas      int64  `json:"total_kelas"`
 	TotalSantri   int64  `json:"total_santri"`
 }
 
@@ -27,8 +29,10 @@ type GuruDirectoryResponse struct {
 	TanggalGabung string `json:"tanggal_gabung"`
 	Foto          string `json:"foto"`
 	IsAktif       bool   `json:"is_aktif"`
-	UserID        *int64 `json:"user_id,omitempty"`
-	TotalKelas    int64  `json:"total_kelas"`
+	UserID          *int64 `json:"user_id,omitempty"`
+	LinkedUserName  string `json:"linked_user_name"`
+	LinkedUserEmail string `json:"linked_user_email"`
+	TotalKelas      int64  `json:"total_kelas"`
 	TotalSantri   int64  `json:"total_santri"`
 }
 

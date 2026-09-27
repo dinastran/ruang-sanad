@@ -127,6 +127,8 @@ export interface GuruDirectory {
 	foto: string;
 	is_aktif: boolean;
 	user_id?: number;
+	linked_user_name: string;
+	linked_user_email: string;
 	total_kelas: number;
 	total_santri: number;
 }

@@ -64,6 +64,7 @@
 		tipe: string;
 		qty: number;
 		catatan: string;
+		mahasantri_nama: string;
 		dicatat_oleh: string;
 		created_at: string;
 	}
@@ -416,7 +417,7 @@
 		{:else}
 			<div class="overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-white/[0.06] dark:bg-neutral-925/50">
 				<div class="border-b border-neutral-200 px-5 py-4 dark:border-white/[0.05]"><h2 class="font-semibold text-neutral-900 dark:text-white">100 Mutasi Stok Terakhir</h2></div>
-				<div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-neutral-50 text-left text-xs uppercase text-neutral-500 dark:bg-neutral-900/70"><tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Produk</th><th class="px-4 py-3">Tipe</th><th class="px-4 py-3">Qty</th><th class="px-4 py-3">Catatan</th><th class="px-4 py-3">Admin</th></tr></thead><tbody class="divide-y divide-neutral-200 dark:divide-white/[0.05]">{#each mutations as m}<tr><td class="px-4 py-3 text-neutral-500">{m.created_at}</td><td class="px-4 py-3 font-medium">{m.produk_nama}{#if m.batch_nama}<span class="text-neutral-500"> · {m.batch_nama}</span>{/if}</td><td class="px-4 py-3">{m.tipe.replaceAll("_", " ")}</td><td class="px-4 py-3 font-mono font-bold {m.qty > 0 ? 'text-green-600' : 'text-red-500'}">{m.qty > 0 ? "+" : ""}{m.qty}</td><td class="px-4 py-3 text-neutral-500">{m.catatan || "-"}</td><td class="px-4 py-3 text-neutral-500">{m.dicatat_oleh || "-"}</td></tr>{:else}<tr><td colspan="6" class="px-4 py-10 text-center text-neutral-500">Belum ada mutasi stok.</td></tr>{/each}</tbody></table></div>
+				<div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-neutral-50 text-left text-xs uppercase text-neutral-500 dark:bg-neutral-900/70"><tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Produk</th><th class="px-4 py-3">Mahasantri</th><th class="px-4 py-3">Tipe</th><th class="px-4 py-3">Qty</th><th class="px-4 py-3">Catatan</th><th class="px-4 py-3">Admin</th></tr></thead><tbody class="divide-y divide-neutral-200 dark:divide-white/[0.05]">{#each mutations as m}<tr><td class="px-4 py-3 text-neutral-500">{m.created_at}</td><td class="px-4 py-3 font-medium">{m.produk_nama}{#if m.batch_nama}<span class="text-neutral-500"> · {m.batch_nama}</span>{/if}</td><td class="px-4 py-3 font-medium text-neutral-700 dark:text-neutral-300">{m.mahasantri_nama || "-"}</td><td class="px-4 py-3">{m.tipe.replaceAll("_", " ")}</td><td class="px-4 py-3 font-mono font-bold {m.qty > 0 ? 'text-green-600' : 'text-red-500'}">{m.qty > 0 ? "+" : ""}{m.qty}</td><td class="px-4 py-3 text-neutral-500">{m.catatan || "-"}</td><td class="px-4 py-3 text-neutral-500">{m.dicatat_oleh || "-"}</td></tr>{:else}<tr><td colspan="7" class="px-4 py-10 text-center text-neutral-500">Belum ada mutasi stok.</td></tr>{/each}</tbody></table></div>
 			</div>
 		{/if}
 	</div>

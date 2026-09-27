@@ -49,6 +49,28 @@ func (h *AdminHandler) Users(c *fiber.Ctx) error {
 	})
 }
 
+func (h *AdminHandler) DeleteUser(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil || id < 1 {
+		h.store.Flash(c, "error", "User tidak valid")
+		return h.inertiaService.Redirect(c, "/admin/users")
+	}
+
+	sess, _ := h.store.Get(c)
+	actor := sessionUser(sess)
+	if actor == nil {
+		h.store.Flash(c, "error", "Sesi tidak valid")
+		return h.inertiaService.Redirect(c, "/admin/users")
+	}
+	if err := h.userService.DeleteManagedUser(actor.ID, id); err != nil {
+		h.store.Flash(c, "error", err.Error())
+		return h.inertiaService.Redirect(c, "/admin/users")
+	}
+
+	h.store.Flash(c, "success", "User berhasil dihapus")
+	return h.inertiaService.Redirect(c, "/admin/users")
+}
+
 func (h *AdminHandler) UpdateUserRole(c *fiber.Ctx) error {
 	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 	if err != nil {
