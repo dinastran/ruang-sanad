@@ -28,8 +28,9 @@ type TagihanResponse struct {
 	Frekuensi     string `json:"frekuensi"`
 	BulanKe       int64  `json:"bulan_ke"`
 	PertemuanKe   int64  `json:"pertemuan_ke"`
-	Nominal       int64  `json:"nominal"`
-	TanggalTagih  string `json:"tanggal_tagih"`
+	Nominal         int64 `json:"nominal"`
+	NominalOverride bool  `json:"nominal_override"`
+	TanggalTagih    string `json:"tanggal_tagih"`
 	JatuhTempo    string `json:"jatuh_tempo"`
 	Status        string `json:"status"`
 	TanggalBayar  string `json:"tanggal_bayar"`
@@ -58,4 +59,23 @@ type MarkTagihanLunasRequest struct {
 
 type BatalkanTagihanRequest struct {
 	Catatan string `json:"catatan"`
+}
+
+
+type UpdateTagihanNominalRequest struct {
+	Nominal int64 `json:"nominal"`
+}
+
+type FollowUpTagihanRequest struct {
+	TemplateID int64  `json:"template_id"`
+	Message    string `json:"message"`
+}
+
+type TagihanFollowUpLogResponse struct {
+	ID           int64  `json:"id"`
+	TemplateID   *int64 `json:"template_id,omitempty"`
+	TemplateNama string `json:"template_nama"`
+	MessageBody  string `json:"message_body"`
+	PetugasNama  string `json:"petugas_nama"`
+	CreatedAt    string `json:"created_at"`
 }
