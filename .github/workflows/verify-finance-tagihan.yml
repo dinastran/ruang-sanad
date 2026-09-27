@@ -30,8 +30,8 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Download Go dependencies
-        run: go mod download
+      - name: Resolve Go dependencies in runner
+        run: go mod tidy
 
       - name: Verify
         run: npm run verify
