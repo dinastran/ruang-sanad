@@ -401,7 +401,7 @@ ON CONFLICT(tagihan_id) DO UPDATE SET
     updated_at = CURRENT_TIMESTAMP`
 
 func (q *Querier) UpsertTagihanNominalOverride(ctx context.Context, tagihanID, nominal, userID int64) error {
-	_, err := q.Queries.db.ExecContext(ctx, upsertTagihanNominalOverride, tagihanID, nominal, nullablePositiveInt64(userID))
+	_, err := q.Queries.db.ExecContext(ctx, upsertTagihanNominalOverride, tagihanID, nominal, financeNullablePositiveInt64(userID))
 	return err
 }
 
@@ -427,16 +427,23 @@ func (q *Querier) ResetTagihanNominalToSantri(ctx context.Context, tagihanID int
 	return result.RowsAffected()
 }
 
-const listTagihanNominalOverrideIDs = `
-SELECT tagihan_id FROM tagihan_nominal_override`
-
-func (q *Querier) ListTagihanNominalOverrideIDs(ctx context.Context) (map[int64]bool, error) {
-	rows, err := q.Queries.db.QueryContext(ctx, listTagihanNominalOverrideIDs)
+func (q *Querier) ListTagihanNominalOverrideIDs(ctx context.Context, tagihanIDs []int64) (map[int64]bool, error) {
+	out := map[int64]bool{}
+	if len(tagihanIDs) == 0 {
+		return out, nil
+	}
+	placeholders := make([]string, len(tagihanIDs))
+	args := make([]interface{}, len(tagihanIDs))
+	for i, id := range tagihanIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := "SELECT tagihan_id FROM tagihan_nominal_override WHERE tagihan_id IN (" + strings.Join(placeholders, ",") + ")"
+	rows, err := q.Queries.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[int64]bool{}
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
@@ -476,7 +483,7 @@ VALUES (?, ?, ?, ?, ?)`
 
 func (q *Querier) CreateTagihanFollowUpLog(ctx context.Context, tagihanID int64, templateID sql.NullInt64, templateNama, messageBody string, userID int64) error {
 	_, err := q.Queries.db.ExecContext(ctx, createTagihanFollowUpLog,
-		tagihanID, templateID, templateNama, messageBody, nullablePositiveInt64(userID),
+		tagihanID, templateID, templateNama, messageBody, financeNullablePositiveInt64(userID),
 	)
 	return err
 }
@@ -509,7 +516,7 @@ func (q *Querier) ListTagihanFollowUpLogs(ctx context.Context, tagihanID int64) 
 	return out, rows.Err()
 }
 
-func nullablePositiveInt64(v int64) sql.NullInt64 {
+func financeNullablePositiveInt64(v int64) sql.NullInt64 {
 	return sql.NullInt64{Int64: v, Valid: v > 0}
 }
 
