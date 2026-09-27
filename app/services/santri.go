@@ -234,6 +234,75 @@ func (s *SantriService) GetByID(id int64) (*models.SantriResponse, error) {
 	return &resp, nil
 }
 
+const maxSantriAdminNoteLength = 4000
+
+func validateSantriAdminNote(catatan string) (string, error) {
+	catatan = strings.TrimSpace(catatan)
+	if catatan == "" {
+		return "", errors.New("catatan wajib diisi")
+	}
+	if len([]rune(catatan)) > maxSantriAdminNoteLength {
+		return "", fmt.Errorf("catatan maksimal %d karakter", maxSantriAdminNoteLength)
+	}
+	return catatan, nil
+}
+
+func (s *SantriService) ListAdminNotes(id int64) ([]models.SantriAdminNoteResponse, error) {
+	ctx := context.Background()
+	if _, err := s.querier.GetSantriByID(ctx, id); err != nil {
+		return nil, err
+	}
+	rows, err := s.querier.ListSantriAdminNotes(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.SantriAdminNoteResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, models.SantriAdminNoteResponse{
+			ID: row.ID,
+			SantriID: row.SantriID,
+			Catatan: row.Catatan,
+			AuthorName: row.AuthorName,
+			UpdatedByName: row.UpdatedByName,
+			CreatedAt: row.CreatedAt.Format(time.RFC3339),
+			UpdatedAt: row.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+	return out, nil
+}
+
+func (s *SantriService) CreateAdminNote(id, actorID int64, req models.SantriAdminNoteRequest) error {
+	catatan, err := validateSantriAdminNote(req.Catatan)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	if _, err := s.querier.GetSantriByID(ctx, id); err != nil {
+		return err
+	}
+	_, err = s.querier.CreateSantriAdminNote(ctx, id, actorID, catatan)
+	return err
+}
+
+func (s *SantriService) UpdateAdminNote(id, noteID, actorID int64, req models.SantriAdminNoteRequest) error {
+	catatan, err := validateSantriAdminNote(req.Catatan)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	if _, err := s.querier.GetSantriByID(ctx, id); err != nil {
+		return err
+	}
+	rows, err := s.querier.UpdateSantriAdminNote(ctx, id, noteID, actorID, catatan)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errors.New("catatan tidak ditemukan")
+	}
+	return nil
+}
+
 func (s *SantriService) Delete(id int64) error {
 	ctx := context.Background()
 	tx, err := s.querier.BeginTx(ctx)
