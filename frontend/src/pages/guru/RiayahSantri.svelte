@@ -6,7 +6,7 @@
 	import CatatKontakDialog from "@components/riayah/CatatKontakDialog.svelte";
 	import SapaWADialog from "@components/riayah/SapaWADialog.svelte";
 	import { hariLalu, labelPeriode } from "@lib/riayah";
-	import type { Flash, User, RiayahSantriItem, RiayahRingkasan, RiayahPenandaKode, RiayahWATemplate } from "@lib/types";
+	import type { Flash, User, RiayahSantriItem, RiayahRingkasan, RiayahPenandaKode, RiayahWATemplate, RiayahGuruMonitoring } from "@lib/types";
 	import { HeartHandshake, Search, ChevronRight, Users, Eye, NotebookPen, MessageCircle, FileText } from "lucide-svelte";
 
 	interface Props {
@@ -15,49 +15,124 @@
 		ringkasan?: RiayahRingkasan;
 		can_write?: boolean;
 		is_semua?: boolean;
+		is_koordinator?: boolean;
+		guru_monitoring?: RiayahGuruMonitoring[];
+		monitoring_error?: string;
 		wa_templates?: RiayahWATemplate[];
 		flash?: Flash;
 		success?: string;
 		error?: string;
 	}
 
-	let { user, santri = [], ringkasan, can_write = false, is_semua = false, wa_templates = [], flash, success, error }: Props = $props();
+	let {
+		user,
+		santri = [],
+		ringkasan,
+		can_write = false,
+		is_semua = false,
+		is_koordinator = false,
+		guru_monitoring = [],
+		monitoring_error = "",
+		wa_templates = [],
+		flash,
+		success,
+		error,
+	}: Props = $props();
 
 	type Filter = "semua" | "perhatian" | "rapor" | RiayahPenandaKode;
+	type ViewMode = "guru" | "santri";
+	let mode = $state<ViewMode>(is_koordinator ? "guru" : "santri");
 	let filter = $state<Filter>("perhatian");
 	let search = $state("");
+	let guruSearch = $state("");
+	let guruID = $state("");
 	let kelasID = $state("");
 
 	let kelasOptions = $derived(
-		Array.from(new Map(santri.map((s) => [s.kelas_id, s.nama_kelas])).entries()).sort((a, b) => a[1].localeCompare(b[1])),
+		Array.from(new Map(santri.filter((s) => !guruID || String(s.guru_id) === guruID).map((s) => [s.kelas_id, s.nama_kelas])).entries()).sort((a, b) => a[1].localeCompare(b[1])),
 	);
+
+	let guruOptions = $derived(guru_monitoring.slice().sort((a, b) => a.guru_nama.localeCompare(b.guru_nama)));
+
+	function needsCoordinatorAttention(s: RiayahSantriItem): boolean {
+		return s.guru_belum_disapa || s.penanda.some((p) => p.kode !== "kontak");
+	}
+
+	let scopedSantri = $derived.by(() => santri.filter((s) => !guruID || String(s.guru_id) === guruID));
 
 	let filtered = $derived.by(() => {
 		const q = search.trim().toLowerCase();
-		return santri.filter((s) => {
-			if (filter === "perhatian" && s.penanda.length === 0) return false;
-			if (filter === "rapor" && s.rapor_terkirim) return false;
-			if (filter !== "semua" && filter !== "perhatian" && filter !== "rapor" && !s.penanda.some((p) => p.kode === filter)) return false;
+		return scopedSantri.filter((s) => {
+			if (is_koordinator) {
+				if (filter === "perhatian" && !needsCoordinatorAttention(s)) return false;
+				if (filter === "rapor" && s.guru_rapor_terkirim) return false;
+				if (filter === "kontak" && !s.guru_belum_disapa) return false;
+				if (filter !== "semua" && filter !== "perhatian" && filter !== "rapor" && filter !== "kontak" && !s.penanda.some((p) => p.kode === filter)) return false;
+			} else {
+				if (filter === "perhatian" && s.penanda.length === 0) return false;
+				if (filter === "rapor" && s.rapor_terkirim) return false;
+				if (filter !== "semua" && filter !== "perhatian" && filter !== "rapor" && !s.penanda.some((p) => p.kode === filter)) return false;
+			}
 			if (kelasID && String(s.kelas_id) !== kelasID) return false;
 			if (q && !s.nama.toLowerCase().includes(q) && !s.id_mahasantri.toLowerCase().includes(q) && !s.nama_kelas.toLowerCase().includes(q)) return false;
 			return true;
 		});
 	});
 
-	let chips = $derived([
-		{ key: "perhatian" as Filter, label: "Perlu perhatian", count: ringkasan?.perlu_perhatian ?? 0, dot: "bg-brand-500" },
-		{ key: "kehadiran" as Filter, label: "Kehadiran", count: ringkasan?.kehadiran ?? 0, dot: "bg-red-500" },
-		{ key: "kontak" as Filter, label: "Belum disapa", count: ringkasan?.kontak ?? 0, dot: "bg-orange-500" },
-		{ key: "progres" as Filter, label: "Progres macet", count: ringkasan?.progres ?? 0, dot: "bg-amber-500" },
-		{ key: "rapor" as Filter, label: `Rapor ${ringkasan?.rapor_periode ? labelPeriode(ringkasan.rapor_periode).split(" ")[0] : ""} belum dikirim`, count: (ringkasan?.total_santri ?? santri.length) - (ringkasan?.rapor_terkirim ?? 0), dot: "bg-sky-500" },
-		{ key: "semua" as Filter, label: "Semua santri", count: ringkasan?.total_santri ?? santri.length, dot: "bg-neutral-400" },
-	]);
+	let chips = $derived.by(() => {
+		const base = scopedSantri;
+		const perhatian = is_koordinator ? base.filter(needsCoordinatorAttention).length : (ringkasan?.perlu_perhatian ?? 0);
+		const kontak = is_koordinator ? base.filter((s) => s.guru_belum_disapa).length : (ringkasan?.kontak ?? 0);
+		const raporBelum = is_koordinator ? base.filter((s) => !s.guru_rapor_terkirim).length : (ringkasan?.total_santri ?? santri.length) - (ringkasan?.rapor_terkirim ?? 0);
+		return [
+			{ key: "perhatian" as Filter, label: "Perlu perhatian", count: perhatian, dot: "bg-brand-500" },
+			{ key: "kehadiran" as Filter, label: "Kehadiran", count: base.filter((s) => s.penanda.some((p) => p.kode === "kehadiran")).length, dot: "bg-red-500" },
+			{ key: "kontak" as Filter, label: is_koordinator ? "Belum disapa guru" : "Belum disapa", count: kontak, dot: "bg-orange-500" },
+			{ key: "progres" as Filter, label: "Progres macet", count: base.filter((s) => s.penanda.some((p) => p.kode === "progres")).length, dot: "bg-amber-500" },
+			{ key: "rapor" as Filter, label: `Rapor ${ringkasan?.rapor_periode ? labelPeriode(ringkasan.rapor_periode).split(" ")[0] : ""} belum dikirim`, count: raporBelum, dot: "bg-sky-500" },
+			{ key: "semua" as Filter, label: "Semua santri", count: base.length, dot: "bg-neutral-400" },
+		];
+	});
+
+	let filteredGuru = $derived.by(() => {
+		const q = guruSearch.trim().toLowerCase();
+		return guru_monitoring.filter((item) => !q || item.guru_nama.toLowerCase().includes(q));
+	});
+
+	let guruSummary = $derived({
+		totalGuru: guru_monitoring.length,
+		totalSantri: guru_monitoring.reduce((sum, item) => sum + item.total_santri, 0),
+		perluPerhatian: guru_monitoring.reduce((sum, item) => sum + item.perlu_perhatian, 0),
+		belumDisapa: guru_monitoring.reduce((sum, item) => sum + item.belum_disapa, 0),
+		belumPernah: guru_monitoring.reduce((sum, item) => sum + item.belum_pernah_disapa, 0),
+		raporBelum: guru_monitoring.reduce((sum, item) => sum + item.rapor_belum, 0),
+	});
 
 	let kontakSantri = $state<RiayahSantriItem | null>(null);
 	let waSantri = $state<RiayahSantriItem | null>(null);
 
 	function persen(v: number | null): string {
 		return v === null ? "–" : `${Math.round(v)}%`;
+	}
+
+	function pilihGuru(item: RiayahGuruMonitoring) {
+		guruID = String(item.guru_id);
+		kelasID = "";
+		search = "";
+		filter = "semua";
+		mode = "santri";
+	}
+
+	function resetGuruFilter() {
+		guruID = "";
+		kelasID = "";
+		search = "";
+		filter = "perhatian";
+	}
+
+	function aktivitasLabel(value: string): string {
+		if (!value) return "Belum ada aktivitas";
+		return hariLalu(value.slice(0, 10));
 	}
 </script>
 
