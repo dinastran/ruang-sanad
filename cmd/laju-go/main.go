@@ -115,6 +115,7 @@ func main() {
 	guruService := services.NewGuruService(querier)
 	tagihanService := services.NewTagihanService(querier)
 	productCRMService := services.NewProductCRMService(querier)
+	productOrderService := services.NewProductOrderService(querier)
 	pertemuanService := services.NewPertemuanService(querier, tagihanService)
 	jadwalPertemuanService := services.NewJadwalPertemuanService(querier)
 	notificationService := services.NewNotificationService(querier)
@@ -170,6 +171,7 @@ func main() {
 	tsiHandler := handlers.NewTSIHandler(tsiService, guruService, koordinatorService, sessionStore, inertiaService)
 	tagihanHandler := handlers.NewTagihanHandler(tagihanService, sessionStore, inertiaService)
 	productCRMHandler := handlers.NewProductCRMHandler(productCRMService, masterService, sessionStore, inertiaService)
+	productOrderHandler := handlers.NewProductOrderHandler(productOrderService, productCRMService, sessionStore, inertiaService)
 
 	routeHandlers := routes.Handlers{
 		Public:                      handlers.NewPublicHandler(authService, userService, inertiaService, assetService),
@@ -198,6 +200,7 @@ func main() {
 		TSI:                         tsiHandler,
 		Tagihan:                     tagihanHandler,
 		ProductCRM:                  productCRMHandler,
+		ProductOrders:               productOrderHandler,
 	}
 
 	// Setup CSRF middleware (Secure cookies only in production with HTTPS)
