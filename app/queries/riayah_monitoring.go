@@ -1,10 +1,6 @@
 package queries
 
-import (
-	"context"
-	"database/sql"
-	"time"
-)
+import "context"
 
 type RiayahCurrentAssignment struct {
 	SantriID int64
@@ -112,7 +108,7 @@ func (q *Queries) ListRiayahTeacherReports(ctx context.Context, periode string) 
 
 func (q *Queries) ListRiayahTeacherActivities(ctx context.Context) ([]RiayahTeacherActivity, error) {
 	rows, err := q.db.QueryContext(ctx, `
-		SELECT guru_id, MAX(activity_at)
+		SELECT guru_id, COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', MAX(activity_at)), '')
 		FROM (
 			SELECT rk.guru_id AS guru_id, rk.created_at AS activity_at
 			FROM riayah_kontak rk
@@ -139,12 +135,8 @@ func (q *Queries) ListRiayahTeacherActivities(ctx context.Context) ([]RiayahTeac
 	out := make([]RiayahTeacherActivity, 0)
 	for rows.Next() {
 		var item RiayahTeacherActivity
-		var last sql.NullTime
-		if err := rows.Scan(&item.GuruID, &last); err != nil {
+		if err := rows.Scan(&item.GuruID, &item.Terakhir); err != nil {
 			return nil, err
-		}
-		if last.Valid {
-			item.Terakhir = last.Time.Format(time.RFC3339)
 		}
 		out = append(out, item)
 	}
