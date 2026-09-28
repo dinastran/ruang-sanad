@@ -41,7 +41,7 @@
 
 	type Filter = "semua" | "perhatian" | "rapor" | RiayahPenandaKode;
 	type ViewMode = "guru" | "santri";
-	let mode = $state<ViewMode>(is_koordinator ? "guru" : "santri");
+	let mode = $state<ViewMode>(is_koordinator && !monitoring_error ? "guru" : "santri");
 	let filter = $state<Filter>("perhatian");
 	let search = $state("");
 	let guruSearch = $state("");
