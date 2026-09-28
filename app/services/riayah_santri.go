@@ -190,6 +190,128 @@ func (s *RiayahSantriService) Ringkasan(viewer models.RiayahViewer, today time.T
 	return ringkasan, err
 }
 
+// MonitoringGuru menyusun ringkasan riayah per guru untuk Koordinator Guru.
+// Hanya aktivitas yang benar-benar diatribusikan ke guru penanggung jawab saat ini
+// yang dihitung sebagai coverage, sehingga pencatatan admin tidak menaikkan kinerja guru.
+func (s *RiayahSantriService) MonitoringGuru(items []models.RiayahSantriItem, today time.Time) ([]models.RiayahSantriItem, []models.RiayahGuruMonitoring, error) {
+	ctx := context.Background()
+
+	assignments, err := s.querier.ListRiayahCurrentAssignments(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	contacts, err := s.querier.ListRiayahTeacherContacts(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	reports, err := s.querier.ListRiayahTeacherReports(ctx, periodeBulanLalu(today))
+	if err != nil {
+		return nil, nil, err
+	}
+	activities, err := s.querier.ListRiayahTeacherActivities(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	type pair struct {
+		guruID   int64
+		santriID int64
+	}
+	assignmentBySantri := make(map[int64]queries.RiayahCurrentAssignment, len(assignments))
+	for _, assignment := range assignments {
+		assignmentBySantri[assignment.SantriID] = assignment
+	}
+
+	contactByPair := make(map[pair]string, len(contacts))
+	for _, contact := range contacts {
+		contactByPair[pair{guruID: contact.GuruID, santriID: contact.SantriID}] = contact.KontakTerakhir
+	}
+	reportByPair := make(map[pair]bool, len(reports))
+	for _, report := range reports {
+		reportByPair[pair{guruID: report.GuruID, santriID: report.SantriID}] = true
+	}
+	activityByGuru := make(map[int64]string, len(activities))
+	for _, activity := range activities {
+		activityByGuru[activity.GuruID] = activity.Terakhir
+	}
+
+	summaryByGuru := make(map[int64]*models.RiayahGuruMonitoring)
+	coveredByGuru := make(map[int64]int)
+
+	for i := range items {
+		assignment, ok := assignmentBySantri[items[i].ID]
+		if !ok || assignment.GuruID <= 0 {
+			continue
+		}
+		items[i].GuruID = assignment.GuruID
+		if assignment.GuruNama != "" {
+			items[i].GuruNama = assignment.GuruNama
+		}
+
+		key := pair{guruID: assignment.GuruID, santriID: items[i].ID}
+		contactLast := contactByPair[key]
+		contactMarker := hitungPenandaKontak(contactLast, assignment.Mulai, today)
+		reportSent := reportByPair[key]
+
+		items[i].KontakGuruTerakhir = contactLast
+		items[i].GuruBelumPernahDisapa = contactLast == ""
+		items[i].GuruBelumDisapa = contactMarker != nil
+		items[i].GuruRaporTerkirim = reportSent
+
+		summary := summaryByGuru[assignment.GuruID]
+		if summary == nil {
+			summary = &models.RiayahGuruMonitoring{
+				GuruID:            assignment.GuruID,
+				GuruNama:          assignment.GuruNama,
+				AktivitasTerakhir: activityByGuru[assignment.GuruID],
+			}
+			summaryByGuru[assignment.GuruID] = summary
+		}
+		summary.TotalSantri++
+
+		if contactLast != "" && contactMarker == nil {
+			coveredByGuru[assignment.GuruID]++
+		}
+		if contactLast == "" {
+			summary.BelumPernahDisapa++
+		} else if contactMarker != nil {
+			summary.BelumDisapa++
+		}
+		if !reportSent {
+			summary.RaporBelum++
+		}
+
+		needsAttention := contactMarker != nil
+		for _, marker := range items[i].Penanda {
+			if marker.Kode != models.PenandaKontak {
+				needsAttention = true
+				break
+			}
+		}
+		if needsAttention {
+			summary.PerluPerhatian++
+		}
+	}
+
+	out := make([]models.RiayahGuruMonitoring, 0, len(summaryByGuru))
+	for guruID, summary := range summaryByGuru {
+		if summary.TotalSantri > 0 {
+			summary.CoverageRiayah = float64(coveredByGuru[guruID]) / float64(summary.TotalSantri) * 100
+		}
+		out = append(out, *summary)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].PerluPerhatian != out[j].PerluPerhatian {
+			return out[i].PerluPerhatian > out[j].PerluPerhatian
+		}
+		if out[i].CoverageRiayah != out[j].CoverageRiayah {
+			return out[i].CoverageRiayah < out[j].CoverageRiayah
+		}
+		return strings.ToLower(out[i].GuruNama) < strings.ToLower(out[j].GuruNama)
+	})
+	return items, out, nil
+}
+
 // hitungPenandaRiayah menerima absensi terbaru lebih dulu.
 func hitungPenandaRiayah(absen []queries.ListAbsensiTerakhirRiayahRow, total30, hadir30 int64) []models.RiayahPenanda {
 	penanda := []models.RiayahPenanda{}

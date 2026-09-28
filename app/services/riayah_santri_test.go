@@ -393,3 +393,75 @@ func TestRiayahHariDihitungPerKalenderWIB(t *testing.T) {
 	require.Contains(t, p.Alasan, "15 hari")
 	require.Nil(t, hitungPenandaKontak("2026-09-11", "", today))
 }
+
+
+func TestRiayahMonitoringGuruUsesTeacherAttribution(t *testing.T) {
+	f := setupRiayahSantri(t)
+	santriRecent := f.insertSantri(t, "Santri Recent", f.kelasA)
+	santriAdminOnly := f.insertSantri(t, "Santri Admin Only", f.kelasA)
+	santriOld := f.insertSantri(t, "Santri Old", f.kelasA)
+	_ = f.insertSantri(t, "Santri Guru B", f.kelasB)
+
+	oldStart := f.today.AddDate(0, 0, -60).Format("2006-01-02")
+	_, err := f.db.Exec(`UPDATE santri SET mulai_belajar = ? WHERE id IN (?, ?, ?)`, oldStart, santriRecent, santriAdminOnly, santriOld)
+	require.NoError(t, err)
+
+	guruA := models.RiayahViewer{UserID: f.guruAUser, GuruID: &f.guruA, CanWrite: true}
+	require.NoError(t, f.service.CatatKontak(guruA, santriRecent, models.RiayahKontakInput{
+		Media:   "wa",
+		Jenis:   "rapor",
+		Periode: "2026-08",
+		Catatan: "Bacaan ananda berkembang baik, mohon lanjutkan murojaah secara rutin.",
+	}, f.today))
+	require.NoError(t, f.service.CatatKontak(guruA, santriOld, models.RiayahKontakInput{
+		Media:   "telepon",
+		Tanggal: f.today.AddDate(0, 0, -20).Format("2006-01-02"),
+		Catatan: "Follow up lama",
+	}, f.today))
+
+	// Simulasikan follow-up Admin. Kontak ini boleh muncul di histori santri,
+	// tetapi tidak boleh dihitung sebagai coverage Guru A.
+	_, err = f.db.Exec(`
+		INSERT INTO riayah_kontak
+			(santri_id, guru_id, author_user_id, tanggal, media, jenis, periode, catatan)
+		VALUES (?, NULL, ?, ?, 'wa', 'sapa', '', 'Follow up Admin')`,
+		santriAdminOnly, f.guruBUser, f.today.Format("2006-01-02"),
+	)
+	require.NoError(t, err)
+
+	items, _, err := f.service.ListPerhatian(models.RiayahViewer{UserID: 99}, f.today)
+	require.NoError(t, err)
+	items, monitoring, err := f.service.MonitoringGuru(items, f.today)
+	require.NoError(t, err)
+
+	var summary *models.RiayahGuruMonitoring
+	for i := range monitoring {
+		if monitoring[i].GuruID == f.guruA {
+			summary = &monitoring[i]
+			break
+		}
+	}
+	require.NotNil(t, summary)
+	require.Equal(t, 3, summary.TotalSantri)
+	require.InDelta(t, 33.33, summary.CoverageRiayah, 0.1)
+	require.Equal(t, 1, summary.BelumDisapa)
+	require.Equal(t, 1, summary.BelumPernahDisapa)
+	require.Equal(t, 2, summary.PerluPerhatian)
+	require.Equal(t, 2, summary.RaporBelum)
+	require.NotEmpty(t, summary.AktivitasTerakhir)
+
+	adminOnly := findItem(items, santriAdminOnly)
+	require.NotNil(t, adminOnly)
+	require.Equal(t, f.guruA, adminOnly.GuruID)
+	require.Equal(t, f.today.Format("2006-01-02"), adminOnly.KontakTerakhir)
+	require.Empty(t, adminOnly.KontakGuruTerakhir)
+	require.True(t, adminOnly.GuruBelumPernahDisapa)
+	require.True(t, adminOnly.GuruBelumDisapa)
+	require.False(t, adminOnly.GuruRaporTerkirim)
+
+	recent := findItem(items, santriRecent)
+	require.NotNil(t, recent)
+	require.Equal(t, f.today.Format("2006-01-02"), recent.KontakGuruTerakhir)
+	require.True(t, recent.GuruRaporTerkirim)
+	require.False(t, recent.GuruBelumDisapa)
+}

@@ -67,20 +67,38 @@ func (h *RiayahSantriHandler) Index(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, "/app/profile")
 	}
 
-	items, ringkasan, err := h.riayahSantriService.ListPerhatian(viewer, services.HariIniRiayah())
+	today := services.HariIniRiayah()
+	items, ringkasan, err := h.riayahSantriService.ListPerhatian(viewer, today)
 	if err != nil {
 		slog.Error("riayah santri list failed", "user_id", viewer.UserID, "error", err)
 		h.store.Flash(c, "error", "Gagal memuat data riayah santri")
 		return h.inertiaService.Redirect(c, "/app/guru")
 	}
 
+	isKoordinator := requestRole(c, user) == models.RoleKoordinator
+	guruMonitoring := []models.RiayahGuruMonitoring{}
+	monitoringError := ""
+	if isKoordinator {
+		enrichedItems, monitoring, monitorErr := h.riayahSantriService.MonitoringGuru(items, today)
+		if monitorErr != nil {
+			slog.Error("riayah guru monitoring failed", "user_id", viewer.UserID, "error", monitorErr)
+			monitoringError = "Ringkasan per guru belum dapat dimuat. Daftar santri tetap tersedia."
+		} else {
+			items = enrichedItems
+			guruMonitoring = monitoring
+		}
+	}
+
 	return h.inertiaService.Render(c, "guru/RiayahSantri", fiber.Map{
-		"user":         user,
-		"santri":       items,
-		"ringkasan":    ringkasan,
-		"can_write":    viewer.CanWrite,
-		"is_semua":     viewer.GuruID == nil,
-		"wa_templates": h.riayahSantriService.ListTemplateWA(),
+		"user":             user,
+		"santri":           items,
+		"ringkasan":        ringkasan,
+		"can_write":        viewer.CanWrite,
+		"is_semua":         viewer.GuruID == nil,
+		"is_koordinator":   isKoordinator,
+		"guru_monitoring":  guruMonitoring,
+		"monitoring_error": monitoringError,
+		"wa_templates":     h.riayahSantriService.ListTemplateWA(),
 	})
 }
 
