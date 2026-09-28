@@ -65,8 +65,39 @@
 		qty: number;
 		catatan: string;
 		mahasantri_nama: string;
+		customer_nama: string;
+		source_type: string;
 		dicatat_oleh: string;
 		created_at: string;
+	}
+	interface ManualOrderItem {
+		id: number;
+		produk_id: number;
+		produk_batch_id: number;
+		produk_nama: string;
+		batch_nama: string;
+		kategori: string;
+		track_stok: boolean;
+		qty: number;
+	}
+	interface ManualOrder {
+		id: number;
+		order_no: string;
+		tanggal: string;
+		nama_pembeli: string;
+		no_wa: string;
+		sumber: string;
+		status: string;
+		catatan: string;
+		dicatat_oleh: string;
+		dibatalkan_oleh: string;
+		created_at: string;
+		items: ManualOrderItem[];
+	}
+	interface ManualOrderDraftItem {
+		produk_id: number;
+		produk_batch_id: number;
+		qty: number;
 	}
 	interface Angkatan { id: number; kode: string; keterangan: string; }
 	interface Filters {
@@ -85,6 +116,7 @@
 		page?: number;
 		limit?: number;
 		mutations?: Mutation[];
+		orders?: ManualOrder[];
 		angkatan?: Angkatan[];
 		tab?: string;
 		filters?: Filters;
@@ -107,6 +139,7 @@
 	let page = $derived(props.page ?? 1);
 	let limit = $derived(props.limit ?? 25);
 	let mutations = $derived(props.mutations ?? []);
+	let orders = $derived(props.orders ?? []);
 	let angkatan = $derived(props.angkatan ?? []);
 	let success = $derived(props.success);
 	let error = $derived(props.error);
@@ -144,6 +177,8 @@
 	let assignDialog = $state<HTMLDialogElement>();
 	let assignSantri = $state<CRMRow | null>(null);
 	let assignForm = $state({ produk_id: 0, produk_batch_id: 0, tanggal: todayLocal(), catatan: "" });
+	let orderForm = $state({ tanggal: todayLocal(), nama_pembeli: "", no_wa: "", sumber: "whatsapp", catatan: "" });
+	let orderItems = $state<ManualOrderDraftItem[]>([{ produk_id: 0, produk_batch_id: 0, qty: 1 }]);
 
 	let stockProduct = $derived(products.find((p) => p.id === Number(stockForm.produk_id)));
 	let opnameProduct = $derived(products.find((p) => p.id === Number(opnameForm.produk_id)));
@@ -155,6 +190,14 @@
 
 	function setTab(tab: string) {
 		activeTab = tab;
+		if (tab === "orders") {
+			router.get("/app/produk-crm/orders", {}, { preserveScroll: true });
+			return;
+		}
+		if (props.tab === "orders") {
+			router.get("/app/produk-crm", { tab }, { preserveScroll: true });
+			return;
+		}
 		const url = new URL(window.location.href);
 		url.searchParams.set("tab", tab);
 		history.replaceState({}, "", url);
@@ -225,6 +268,62 @@
 		});
 	}
 
+	function orderProduct(item: ManualOrderDraftItem) {
+		return products.find((p) => p.id === Number(item.produk_id));
+	}
+
+	function activeOrderBatches(item: ManualOrderDraftItem) {
+		return orderProduct(item)?.batches?.filter((batch) => batch.is_aktif) ?? [];
+	}
+
+	function addOrderItem() {
+		orderItems.push({ produk_id: 0, produk_batch_id: 0, qty: 1 });
+	}
+
+	function removeOrderItem(index: number) {
+		if (orderItems.length <= 1) return;
+		orderItems.splice(index, 1);
+	}
+
+	function resetOrderForm() {
+		orderForm = { tanggal: todayLocal(), nama_pembeli: "", no_wa: "", sumber: "whatsapp", catatan: "" };
+		orderItems = [{ produk_id: 0, produk_batch_id: 0, qty: 1 }];
+	}
+
+	function submitManualOrder(e: Event) {
+		e.preventDefault();
+		loading = "manual-order";
+		router.post("/app/produk-crm/orders", {
+			...orderForm,
+			items: orderItems.map((item) => ({
+				produk_id: Number(item.produk_id),
+				produk_batch_id: Number(item.produk_batch_id || 0),
+				qty: Number(item.qty),
+			})),
+		}, {
+			preserveScroll: true,
+			onSuccess: resetOrderForm,
+			onFinish: () => { loading = null; },
+		});
+	}
+
+	function cancelManualOrder(order: ManualOrder) {
+		if (!confirm(`Batalkan ${order.order_no}? Stok buku pada order ini akan dikembalikan.`)) return;
+		loading = `cancel-order-${order.id}`;
+		router.post(`/app/produk-crm/orders/${order.id}/batal`, {}, {
+			preserveScroll: true,
+			onFinish: () => { loading = null; },
+		});
+	}
+
+	function sourceLabel(value: string) {
+		if (value === "whatsapp") return "WhatsApp";
+		if (value === "instagram") return "Instagram";
+		if (value === "marketplace") return "Marketplace";
+		if (value === "offline") return "Offline";
+		return "Lainnya";
+	}
+
 	function applyFilters(pageNumber = 1) {
 		router.get("/app/produk-crm", {
 			tab: "crm",
@@ -262,7 +361,7 @@
 			<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-400/10 text-brand-600 dark:text-brand-400"><Boxes size="22" /></div>
 			<div>
 				<h1 class="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white sm:text-3xl">Produk & CRM Mahasantri</h1>
-				<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Kelola produk, batch/edisi, stok buku, dan riwayat kepemilikan produk Mahasantri.</p>
+				<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Kelola produk, order manual, stok buku, dan kepemilikan produk Mahasantri.</p>
 			</div>
 		</div>
 	</div>
@@ -276,6 +375,7 @@
 				{ id: "dashboard", label: "Dashboard", icon: BarChart3 },
 				{ id: "produk", label: "Master Produk", icon: ShoppingBag },
 				{ id: "stok", label: "Stok & Opname", icon: Boxes },
+				{ id: "orders", label: "Order Manual", icon: PackagePlus },
 				{ id: "crm", label: "CRM Mahasantri", icon: ClipboardCheck },
 				{ id: "riwayat", label: "Riwayat", icon: History },
 			] as tab}
@@ -350,7 +450,7 @@
 		{:else if activeTab === "stok"}
 			<div class="grid gap-5 lg:grid-cols-2">
 				<form onsubmit={addStock} class="space-y-4 rounded-2xl border border-neutral-200 bg-white p-5 dark:border-white/[0.06] dark:bg-neutral-925/50">
-					<div><h2 class="font-semibold text-neutral-900 dark:text-white">Stok Masuk</h2><p class="mt-1 text-xs text-neutral-500">Gunakan untuk stok awal atau restock. Pembelian Mahasantri otomatis mengurangi stok.</p></div>
+					<div><h2 class="font-semibold text-neutral-900 dark:text-white">Stok Masuk</h2><p class="mt-1 text-xs text-neutral-500">Gunakan untuk stok awal atau restock. Pembelian Mahasantri dan Order Manual otomatis mengurangi stok.</p></div>
 					<select bind:value={stockForm.produk_id} onchange={() => stockForm.produk_batch_id = 0} required class={inputCls}><option value={0}>Pilih buku</option>{#each products.filter((p) => p.track_stok) as p}<option value={p.id}>{p.nama} · stok {p.stok}</option>{/each}</select>
 					{#if stockProduct?.batches?.length}<select bind:value={stockForm.produk_batch_id} required class={inputCls}><option value={0}>Pilih batch/edisi</option>{#each stockProduct.batches.filter((b) => b.is_aktif) as b}<option value={b.id}>{b.nama}</option>{/each}</select>{/if}
 					<select bind:value={stockForm.tipe} class={inputCls}><option value="stok_masuk">Stok masuk</option><option value="stok_awal">Stok awal</option></select>
@@ -373,6 +473,105 @@
 				{#each products.filter((p) => p.track_stok) as p}
 					<div class="rounded-2xl border border-neutral-200 bg-white p-4 dark:border-white/[0.06] dark:bg-neutral-925/50"><p class="text-xs text-neutral-500">{p.nama}</p><p class="mt-2 text-2xl font-bold text-neutral-900 dark:text-white">{p.stok}</p><p class="text-xs text-neutral-500">stok tercatat</p></div>
 				{/each}
+			</div>
+		{:else if activeTab === "orders"}
+			<div class="grid gap-5 lg:grid-cols-[420px_1fr]">
+				<form onsubmit={submitManualOrder} class="space-y-4 rounded-2xl border border-neutral-200 bg-white p-5 dark:border-white/[0.06] dark:bg-neutral-925/50">
+					<div>
+						<h2 class="font-semibold text-neutral-900 dark:text-white">Tambah Order Manual</h2>
+						<p class="mt-1 text-xs leading-5 text-neutral-500">Untuk pembeli di luar Mahasantri. Buku langsung mengurangi stok saat order disimpan.</p>
+					</div>
+
+					<div class="grid gap-3 sm:grid-cols-2">
+						<label class="space-y-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-400">Tanggal order
+							<input type="date" bind:value={orderForm.tanggal} required class={inputCls} />
+						</label>
+						<label class="space-y-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-400">Sumber order
+							<select bind:value={orderForm.sumber} class={inputCls}>
+								<option value="whatsapp">WhatsApp</option>
+								<option value="instagram">Instagram</option>
+								<option value="marketplace">Marketplace</option>
+								<option value="offline">Offline</option>
+								<option value="lainnya">Lainnya</option>
+							</select>
+						</label>
+					</div>
+
+					<input bind:value={orderForm.nama_pembeli} required placeholder="Nama pembeli" class={inputCls} />
+					<input bind:value={orderForm.no_wa} placeholder="No. WhatsApp (opsional)" class={inputCls} />
+
+					<div class="space-y-3">
+						<div class="flex items-center justify-between">
+							<p class="text-xs font-semibold uppercase tracking-wide text-neutral-500">Produk / Program</p>
+							<button type="button" onclick={addOrderItem} class="inline-flex items-center gap-1 rounded-lg border border-brand-500/30 px-2.5 py-1.5 text-xs font-semibold text-brand-600"><Plus size="13" /> Tambah item</button>
+						</div>
+						{#each orderItems as item, index}
+							<div class="space-y-2 rounded-xl border border-neutral-200 p-3 dark:border-white/[0.07]">
+								<div class="flex items-start gap-2">
+									<select bind:value={item.produk_id} onchange={() => item.produk_batch_id = 0} required class={inputCls}>
+										<option value={0}>Pilih produk / program</option>
+										{#each products.filter((p) => p.is_aktif) as p}
+											<option value={p.id}>{p.nama}{p.track_stok ? ` · stok ${p.stok}` : " · program"}</option>
+										{/each}
+									</select>
+									{#if orderItems.length > 1}
+										<button type="button" onclick={() => removeOrderItem(index)} class="mt-1 rounded-lg p-2 text-neutral-400 hover:bg-red-500/10 hover:text-red-500" aria-label="Hapus item"><X size="16" /></button>
+									{/if}
+								</div>
+								{#if activeOrderBatches(item).length}
+									<select bind:value={item.produk_batch_id} required class={inputCls}>
+										<option value={0}>Pilih batch / edisi</option>
+										{#each activeOrderBatches(item) as batch}<option value={batch.id}>{batch.nama}</option>{/each}
+									</select>
+								{/if}
+								<label class="flex items-center gap-3 text-xs text-neutral-500">
+									<span class="shrink-0">Qty</span>
+									<input type="number" min="1" bind:value={item.qty} required class={inputCls} />
+								</label>
+							</div>
+						{/each}
+					</div>
+
+					<textarea bind:value={orderForm.catatan} rows="2" placeholder="Catatan opsional" class={inputCls}></textarea>
+					<button disabled={loading === "manual-order"} class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+						<PackagePlus size="16" /> Simpan Order
+					</button>
+				</form>
+
+				<div class="overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-white/[0.06] dark:bg-neutral-925/50">
+					<div class="border-b border-neutral-200 px-5 py-4 dark:border-white/[0.05]">
+						<h2 class="font-semibold text-neutral-900 dark:text-white">Order Manual Terakhir</h2>
+						<p class="mt-1 text-xs text-neutral-500">Order ini berdiri sendiri dan tidak membuat data Mahasantri.</p>
+					</div>
+					<div class="divide-y divide-neutral-200 dark:divide-white/[0.05]">
+						{#each orders as order (order.id)}
+							<div class="p-4 sm:p-5">
+								<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+									<div>
+										<div class="flex flex-wrap items-center gap-2">
+											<span class="font-mono text-xs font-semibold text-neutral-500">{order.order_no}</span>
+											<span class="rounded-full px-2 py-0.5 text-[11px] font-semibold {order.status === 'aktif' ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-neutral-500/10 text-neutral-500'}">{order.status === "aktif" ? "Aktif" : "Dibatalkan"}</span>
+										</div>
+										<h3 class="mt-1 font-semibold text-neutral-900 dark:text-white">{order.nama_pembeli}</h3>
+										<p class="mt-1 text-xs text-neutral-500">{order.tanggal} · {sourceLabel(order.sumber)}{order.no_wa ? ` · ${order.no_wa}` : ""}</p>
+									</div>
+									{#if order.status === "aktif"}
+										<button type="button" disabled={loading === `cancel-order-${order.id}`} onclick={() => cancelManualOrder(order)} class="rounded-lg border border-red-500/20 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-500/10 disabled:opacity-50">Batalkan Order</button>
+									{/if}
+								</div>
+								<div class="mt-3 flex flex-wrap gap-2">
+									{#each order.items as item}
+										<span class="rounded-lg bg-neutral-100 px-2.5 py-1.5 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">{item.produk_nama}{item.batch_nama ? ` · ${item.batch_nama}` : ""} × {item.qty}</span>
+									{/each}
+								</div>
+								{#if order.catatan}<p class="mt-3 text-xs leading-5 text-neutral-500">{order.catatan}</p>{/if}
+								<p class="mt-3 text-[11px] text-neutral-400">Dicatat oleh {order.dicatat_oleh || "-"} · {order.created_at}</p>
+							</div>
+						{:else}
+							<div class="p-10 text-center text-sm text-neutral-500">Belum ada Order Manual.</div>
+						{/each}
+					</div>
+				</div>
 			</div>
 		{:else if activeTab === "crm"}
 			<div class="rounded-2xl border border-neutral-200 bg-white p-4 dark:border-white/[0.06] dark:bg-neutral-925/50">
@@ -417,7 +616,7 @@
 		{:else}
 			<div class="overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-white/[0.06] dark:bg-neutral-925/50">
 				<div class="border-b border-neutral-200 px-5 py-4 dark:border-white/[0.05]"><h2 class="font-semibold text-neutral-900 dark:text-white">100 Mutasi Stok Terakhir</h2></div>
-				<div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-neutral-50 text-left text-xs uppercase text-neutral-500 dark:bg-neutral-900/70"><tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Produk</th><th class="px-4 py-3">Mahasantri</th><th class="px-4 py-3">Tipe</th><th class="px-4 py-3">Qty</th><th class="px-4 py-3">Catatan</th><th class="px-4 py-3">Admin</th></tr></thead><tbody class="divide-y divide-neutral-200 dark:divide-white/[0.05]">{#each mutations as m}<tr><td class="px-4 py-3 text-neutral-500">{m.created_at}</td><td class="px-4 py-3 font-medium">{m.produk_nama}{#if m.batch_nama}<span class="text-neutral-500"> · {m.batch_nama}</span>{/if}</td><td class="px-4 py-3 font-medium text-neutral-700 dark:text-neutral-300">{m.mahasantri_nama || "-"}</td><td class="px-4 py-3">{m.tipe.replaceAll("_", " ")}</td><td class="px-4 py-3 font-mono font-bold {m.qty > 0 ? 'text-green-600' : 'text-red-500'}">{m.qty > 0 ? "+" : ""}{m.qty}</td><td class="px-4 py-3 text-neutral-500">{m.catatan || "-"}</td><td class="px-4 py-3 text-neutral-500">{m.dicatat_oleh || "-"}</td></tr>{:else}<tr><td colspan="7" class="px-4 py-10 text-center text-neutral-500">Belum ada mutasi stok.</td></tr>{/each}</tbody></table></div>
+				<div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-neutral-50 text-left text-xs uppercase text-neutral-500 dark:bg-neutral-900/70"><tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Produk</th><th class="px-4 py-3">Pemilik / Customer</th><th class="px-4 py-3">Tipe</th><th class="px-4 py-3">Qty</th><th class="px-4 py-3">Catatan</th><th class="px-4 py-3">Admin</th></tr></thead><tbody class="divide-y divide-neutral-200 dark:divide-white/[0.05]">{#each mutations as m}<tr><td class="px-4 py-3 text-neutral-500">{m.created_at}</td><td class="px-4 py-3 font-medium">{m.produk_nama}{#if m.batch_nama}<span class="text-neutral-500"> · {m.batch_nama}</span>{/if}</td><td class="px-4 py-3 font-medium text-neutral-700 dark:text-neutral-300"><p>{m.customer_nama || m.mahasantri_nama || "-"}</p>{#if m.source_type}<p class="mt-0.5 text-[11px] font-normal text-neutral-400">{m.source_type === "order_manual" ? "Order Manual" : "Mahasantri"}</p>{/if}</td><td class="px-4 py-3">{m.tipe.replaceAll("_", " ")}</td><td class="px-4 py-3 font-mono font-bold {m.qty > 0 ? 'text-green-600' : 'text-red-500'}">{m.qty > 0 ? "+" : ""}{m.qty}</td><td class="px-4 py-3 text-neutral-500">{m.catatan || "-"}</td><td class="px-4 py-3 text-neutral-500">{m.dicatat_oleh || "-"}</td></tr>{:else}<tr><td colspan="7" class="px-4 py-10 text-center text-neutral-500">Belum ada mutasi stok.</td></tr>{/each}</tbody></table></div>
 			</div>
 		{/if}
 	</div>
