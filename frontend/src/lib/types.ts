@@ -494,13 +494,30 @@ export interface RiayahSantriItem {
 	nama_kelas: string;
 	level: string;
 	jadwal: string;
+	guru_id: number;
 	guru_nama: string;
 	persen_hadir_30: number | null;
 	total_pertemuan_30: number;
 	batas_materi_terakhir: string;
 	kontak_terakhir: string;
+	kontak_guru_terakhir: string;
+	guru_belum_disapa: boolean;
+	guru_belum_pernah_disapa: boolean;
+	guru_rapor_terkirim: boolean;
 	rapor_terkirim: boolean;
 	penanda: RiayahPenanda[];
+}
+
+export interface RiayahGuruMonitoring {
+	guru_id: number;
+	guru_nama: string;
+	total_santri: number;
+	perlu_perhatian: number;
+	belum_disapa: number;
+	belum_pernah_disapa: number;
+	coverage_riayah: number;
+	rapor_belum: number;
+	aktivitas_terakhir: string;
 }
 
 export interface RiayahRingkasan {
