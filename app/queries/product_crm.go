@@ -76,8 +76,9 @@ func (q *Queries) ProdukHasHistory(ctx context.Context, productID int64) (bool, 
 	err := q.db.QueryRowContext(ctx, `
 		SELECT
 			(SELECT COUNT(*) FROM mahasantri_produk WHERE produk_id = ?) +
-			(SELECT COUNT(*) FROM stok_mutasi WHERE produk_id = ?)`,
-		productID, productID,
+			(SELECT COUNT(*) FROM stok_mutasi WHERE produk_id = ?) +
+			(SELECT COUNT(*) FROM product_order_items WHERE produk_id = ?)`,
+		productID, productID, productID,
 	).Scan(&total)
 	return total > 0, err
 }
@@ -410,6 +411,12 @@ func (q *Queries) ListStockMutations(ctx context.Context, limit int64) ([]models
 		           ELSE sm.catatan
 		       END AS catatan,
 		       COALESCE(s.nama, '') AS mahasantri_nama,
+		       COALESCE(po.nama_pembeli, '') AS customer_nama,
+		       CASE
+		           WHEN po.id IS NOT NULL THEN 'order_manual'
+		           WHEN s.id IS NOT NULL THEN 'mahasantri'
+		           ELSE ''
+		       END AS source_type,
 		       COALESCE(u.name, ''),
 		       strftime('%Y-%m-%d %H:%M', sm.created_at)
 		FROM stok_mutasi sm
@@ -417,6 +424,8 @@ func (q *Queries) ListStockMutations(ctx context.Context, limit int64) ([]models
 		LEFT JOIN produk_batch pb ON pb.id = sm.produk_batch_id
 		LEFT JOIN mahasantri_produk mp ON sm.referensi_type = 'mahasantri_produk' AND mp.id = sm.referensi_id
 		LEFT JOIN santri s ON s.id = mp.santri_id
+		LEFT JOIN product_order_items poi ON sm.referensi_type = 'product_order_item' AND poi.id = sm.referensi_id
+		LEFT JOIN product_orders po ON po.id = poi.order_id
 		LEFT JOIN users u ON u.id = sm.dicatat_oleh
 		ORDER BY sm.id DESC
 		LIMIT ?`, limit)
@@ -431,7 +440,7 @@ func (q *Queries) ListStockMutations(ctx context.Context, limit int64) ([]models
 		var batchID sql.NullInt64
 		if err := rows.Scan(
 			&item.ID, &item.ProdukID, &batchID, &item.ProdukNama, &item.BatchNama,
-			&item.Tipe, &item.Qty, &item.Catatan, &item.MahasantriNama, &item.DicatatOleh, &item.CreatedAt,
+			&item.Tipe, &item.Qty, &item.Catatan, &item.MahasantriNama, &item.CustomerNama, &item.SourceType, &item.DicatatOleh, &item.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
