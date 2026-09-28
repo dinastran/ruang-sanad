@@ -47,17 +47,19 @@ type ProductCRMRow struct {
 }
 
 type StockMutation struct {
-	ID            int64  `json:"id"`
-	ProdukID      int64  `json:"produk_id"`
-	ProdukBatchID int64  `json:"produk_batch_id"`
-	ProdukNama    string `json:"produk_nama"`
-	BatchNama     string `json:"batch_nama"`
-	Tipe          string `json:"tipe"`
-	Qty           int64  `json:"qty"`
-	Catatan         string `json:"catatan"`
+	ID             int64  `json:"id"`
+	ProdukID       int64  `json:"produk_id"`
+	ProdukBatchID  int64  `json:"produk_batch_id"`
+	ProdukNama     string `json:"produk_nama"`
+	BatchNama      string `json:"batch_nama"`
+	Tipe           string `json:"tipe"`
+	Qty            int64  `json:"qty"`
+	Catatan        string `json:"catatan"`
 	MahasantriNama string `json:"mahasantri_nama"`
-	DicatatOleh     string `json:"dicatat_oleh"`
-	CreatedAt       string `json:"created_at"`
+	CustomerNama   string `json:"customer_nama"`
+	SourceType     string `json:"source_type"`
+	DicatatOleh    string `json:"dicatat_oleh"`
+	CreatedAt      string `json:"created_at"`
 }
 
 type ProductCRMFilters struct {
