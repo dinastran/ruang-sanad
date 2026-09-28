@@ -134,6 +134,35 @@
 		return item.guru_pengganti_nama || item.guru_utama_nama || "Belum ditetapkan";
 	}
 
+	function displayClassName(item: MonitoringKelasItem): string {
+		let name = (item.nama_kelas || "").trim();
+		const schedule = (item.jadwal_kelas || "").trim();
+
+		if (schedule && name.includes(schedule)) {
+			name = name.replace(schedule, "");
+		}
+
+		name = name
+			.replace(/[|/·•,&\s-]+$/g, "")
+			.replace(/\s{2,}/g, " ")
+			.trim();
+
+		return name || item.nama_kelas || "Kelas tanpa nama";
+	}
+
+	function scheduleSummary(value: string): string {
+		const schedule = (value || "").trim();
+		if (!schedule) return "Belum tersedia";
+		if (schedule.length <= 58) return schedule;
+
+		const dayPattern = /Senin|Selasa|Rabu|Kamis|Jumat|Sabtu|Ahad/gi;
+		const days = schedule.match(dayPattern) ?? [];
+		const uniqueDays = new Set(days.map((day) => day.toLowerCase())).size;
+
+		if (uniqueDays > 0) return `${uniqueDays} hari / pekan`;
+		return "Jadwal kelas tersedia";
+	}
+
 	function runFilter(reset = false) {
 		if (reset) {
 			startDate = "";
@@ -304,28 +333,67 @@
 					{#each data.items as item (item.tanpa_jadwal ? `p-${item.pertemuan_id}` : `j-${item.schedule_id}`)}
 						<article class="overflow-hidden rounded-xl border bg-white dark:bg-neutral-925/50 {item.needs_action ? 'border-error/35' : 'border-neutral-200/80 dark:border-white/[0.06]'}">
 							<div class="p-4 sm:p-5">
-								<div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+								<div class="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(440px,0.9fr)] xl:items-start">
 									<div class="min-w-0">
 										<div class="flex flex-wrap items-center gap-2">
-											<h3 class="font-semibold text-neutral-900 dark:text-white">{item.nama_kelas}</h3>
-											<span class="rounded-full px-2.5 py-1 text-xs font-semibold {statusClass(item.status)}">{statusLabel[item.status] ?? item.status}</span>
-											{#if item.tanpa_jadwal}<span class="rounded-full bg-neutral-200/70 px-2.5 py-1 text-xs font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300" title="Pertemuan dimulai langsung oleh guru tanpa jadwal pertemuan">Tanpa jadwal</span>{/if}
-											{#if item.needs_action}<span class="inline-flex items-center gap-1 rounded-full bg-error/10 px-2.5 py-1 text-xs font-semibold text-red-700 dark:text-red-400"><AlertTriangle class="h-3.5 w-3.5" /> Perlu tindakan</span>{/if}
+											<h3 class="min-w-0 max-w-full break-words text-base font-semibold leading-6 text-neutral-900 dark:text-white" title={item.nama_kelas}>{displayClassName(item)}</h3>
+											<span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold {statusClass(item.status)}">{statusLabel[item.status] ?? item.status}</span>
+											{#if item.tanpa_jadwal}<span class="shrink-0 rounded-full bg-neutral-200/70 px-2.5 py-1 text-xs font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300" title="Guru memulai sesi langsung tanpa jadwal pertemuan yang dibuat sebelumnya">Sesi spontan</span>{/if}
+											{#if item.needs_action}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-error/10 px-2.5 py-1 text-xs font-semibold text-red-700 dark:text-red-400"><AlertTriangle class="h-3.5 w-3.5" /> Perlu tindakan</span>{/if}
 										</div>
-										<p class="mt-1.5 text-sm font-medium text-neutral-700 dark:text-neutral-200">{formatDate(item.tanggal)} / {item.jam_mulai || "Jam belum tersedia"}</p>
-										<p class="mt-1 text-xs text-neutral-500">{item.angkatan || "Angkatan belum tersedia"} / {item.level || "Level belum tersedia"} / {item.frekuensi || "Frekuensi belum tersedia"}</p>
+
+										<div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+											<p class="font-medium text-neutral-700 dark:text-neutral-200">{formatDate(item.tanggal)} · {item.jam_mulai || "Jam belum tersedia"}</p>
+											<p class="text-neutral-500">{item.frekuensi || "Frekuensi belum tersedia"}</p>
+										</div>
+										<p class="mt-1 text-xs text-neutral-500">{item.angkatan || "Angkatan belum tersedia"} · {item.level || "Level belum tersedia"}</p>
 									</div>
-									<div class="grid shrink-0 grid-cols-2 gap-x-6 gap-y-2 text-xs sm:grid-cols-3 xl:min-w-[470px]">
-										<div><p class="text-neutral-500">Guru bertugas</p><p class="mt-0.5 font-medium text-neutral-800 dark:text-neutral-200">{teacherName(item)}</p></div>
-										<div><p class="text-neutral-500">Presensi guru</p><span class="mt-0.5 inline-flex rounded-full px-2 py-0.5 font-medium {attendanceClass(item.teacher_attendance)}">{attendanceLabel[item.teacher_attendance] ?? item.teacher_attendance}</span></div>
-										<div><p class="text-neutral-500">Absensi peserta</p><span class="mt-0.5 inline-flex rounded-full px-2 py-0.5 font-medium {attendanceClass(item.student_attendance)}">{attendanceLabel[item.student_attendance] ?? item.student_attendance}</span></div>
-										<div><p class="text-neutral-500">Peserta tercatat</p><p class="mt-0.5 font-medium text-neutral-800 dark:text-neutral-200">{item.attendance_count} / {item.active_student_count}</p></div>
-										<div class="col-span-2"><p class="text-neutral-500">Jadwal kelas</p><p class="mt-0.5 font-medium text-neutral-800 dark:text-neutral-200">{item.jadwal_kelas || "-"}</p></div>
+
+									<div class="grid min-w-0 grid-cols-2 gap-x-5 gap-y-3 text-xs sm:grid-cols-4 xl:grid-cols-2">
+										<div class="min-w-0">
+											<p class="text-neutral-500">Guru bertugas</p>
+											<p class="mt-0.5 truncate font-medium text-neutral-800 dark:text-neutral-200" title={teacherName(item)}>{teacherName(item)}</p>
+										</div>
+										<div>
+											<p class="text-neutral-500">Presensi guru</p>
+											<span class="mt-0.5 inline-flex rounded-full px-2 py-0.5 font-medium {attendanceClass(item.teacher_attendance)}">{attendanceLabel[item.teacher_attendance] ?? item.teacher_attendance}</span>
+										</div>
+										<div>
+											<p class="text-neutral-500">Absensi peserta</p>
+											<span class="mt-0.5 inline-flex rounded-full px-2 py-0.5 font-medium {attendanceClass(item.student_attendance)}">{attendanceLabel[item.student_attendance] ?? item.student_attendance}</span>
+										</div>
+										<div>
+											<p class="text-neutral-500">Peserta tercatat</p>
+											<p class="mt-0.5 font-medium text-neutral-800 dark:text-neutral-200">{item.attendance_count} / {item.active_student_count}</p>
+										</div>
 									</div>
 								</div>
 
+								<div class="mt-4 border-t border-neutral-200/70 pt-3 dark:border-white/[0.05]">
+									<div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+										<div class="flex min-w-0 items-center gap-2">
+											<CalendarClock class="h-4 w-4 shrink-0 text-neutral-400" />
+											<div class="min-w-0">
+												<p class="text-[11px] font-medium uppercase tracking-wide text-neutral-400">Jadwal kelas</p>
+												<p class="truncate text-xs font-medium text-neutral-700 dark:text-neutral-300" title={item.jadwal_kelas || "Belum tersedia"}>{scheduleSummary(item.jadwal_kelas)}</p>
+											</div>
+										</div>
+									</div>
+									{#if item.jadwal_kelas && item.jadwal_kelas.length > 58}
+										<details class="group mt-2">
+											<summary class="inline-flex cursor-pointer list-none items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
+												Lihat jadwal lengkap
+												<ChevronDown class="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+											</summary>
+											<div class="mt-2 rounded-lg bg-neutral-50 p-3 text-xs leading-5 text-neutral-600 dark:bg-neutral-900/60 dark:text-neutral-300">
+												{item.jadwal_kelas}
+											</div>
+										</details>
+									{/if}
+								</div>
+
 								{#if item.tanpa_jadwal}
-									<p class="mt-4 border-t border-neutral-200/70 pt-4 text-xs text-neutral-500 dark:border-white/[0.05]">Pertemuan ini dimulai langsung oleh guru tanpa jadwal, sehingga pengingat, catatan, dan perubahan jadwal tidak tersedia.</p>
+									<p class="mt-3 text-xs text-neutral-500">Sesi ini dimulai langsung oleh guru tanpa jadwal sesi yang dibuat sebelumnya, sehingga pengingat, catatan koordinator, dan perubahan jadwal tidak tersedia.</p>
 								{:else}
 								<div class="mt-4 flex flex-wrap gap-2 border-t border-neutral-200/70 pt-4 dark:border-white/[0.05]">
 									<button onclick={() => openAction("reminder_teacher", item)} disabled={!item.assigned_user_id || (item.status !== "belum_mulai" && item.status !== "terlambat")} title={!item.assigned_user_id ? "Akun guru belum terhubung" : item.status !== "belum_mulai" && item.status !== "terlambat" ? "Pertemuan sudah dimulai atau dibatalkan" : "Kirim pengingat presensi guru"} class="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-700 hover:border-brand-400/40 hover:text-brand-700 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:text-brand-300"><BellRing class="h-3.5 w-3.5" /> Presensi guru</button>
