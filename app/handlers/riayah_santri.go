@@ -79,10 +79,13 @@ func (h *RiayahSantriHandler) Index(c *fiber.Ctx) error {
 	guruMonitoring := []models.RiayahGuruMonitoring{}
 	monitoringError := ""
 	if isKoordinator {
-		items, guruMonitoring, err = h.riayahSantriService.MonitoringGuru(items, today)
-		if err != nil {
-			slog.Error("riayah guru monitoring failed", "user_id", viewer.UserID, "error", err)
+		enrichedItems, monitoring, monitorErr := h.riayahSantriService.MonitoringGuru(items, today)
+		if monitorErr != nil {
+			slog.Error("riayah guru monitoring failed", "user_id", viewer.UserID, "error", monitorErr)
 			monitoringError = "Ringkasan per guru belum dapat dimuat. Daftar santri tetap tersedia."
+		} else {
+			items = enrichedItems
+			guruMonitoring = monitoring
 		}
 	}
 
