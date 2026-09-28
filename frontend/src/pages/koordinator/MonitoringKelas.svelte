@@ -380,10 +380,10 @@
 										</div>
 									</div>
 									{#if item.jadwal_kelas && item.jadwal_kelas.length > 58}
-										<details class="group/schedule mt-2">
+										<details class="group mt-2">
 											<summary class="inline-flex cursor-pointer list-none items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
 												Lihat jadwal lengkap
-												<ChevronDown class="h-3.5 w-3.5 transition-transform group-open/schedule:rotate-180" />
+												<ChevronDown class="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
 											</summary>
 											<div class="mt-2 rounded-lg bg-neutral-50 p-3 text-xs leading-5 text-neutral-600 dark:bg-neutral-900/60 dark:text-neutral-300">
 												{item.jadwal_kelas}
