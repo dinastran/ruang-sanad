@@ -378,18 +378,18 @@
 												<p class="truncate text-xs font-medium text-neutral-700 dark:text-neutral-300" title={item.jadwal_kelas || "Belum tersedia"}>{scheduleSummary(item.jadwal_kelas)}</p>
 											</div>
 										</div>
-										{#if item.jadwal_kelas && item.jadwal_kelas.length > 58}
-											<details class="group/schedule shrink-0">
-												<summary class="inline-flex cursor-pointer list-none items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
-													Lihat jadwal
-													<ChevronDown class="h-3.5 w-3.5 transition-transform group-open/schedule:rotate-180" />
-												</summary>
-												<div class="mt-2 max-w-3xl rounded-lg bg-neutral-50 p-3 text-xs leading-5 text-neutral-600 dark:bg-neutral-900/60 dark:text-neutral-300 sm:absolute sm:right-0 sm:z-10 sm:w-[min(42rem,calc(100vw-3rem))] sm:shadow-lg">
-													{item.jadwal_kelas}
-												</div>
-											</details>
-										{/if}
 									</div>
+									{#if item.jadwal_kelas && item.jadwal_kelas.length > 58}
+										<details class="group/schedule mt-2">
+											<summary class="inline-flex cursor-pointer list-none items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
+												Lihat jadwal lengkap
+												<ChevronDown class="h-3.5 w-3.5 transition-transform group-open/schedule:rotate-180" />
+											</summary>
+											<div class="mt-2 rounded-lg bg-neutral-50 p-3 text-xs leading-5 text-neutral-600 dark:bg-neutral-900/60 dark:text-neutral-300">
+												{item.jadwal_kelas}
+											</div>
+										</details>
+									{/if}
 								</div>
 
 								{#if item.tanpa_jadwal}
