@@ -274,6 +274,32 @@ func TestReplayHistoriLamaMembuatHanyaPeriodeYangBelumAda(t *testing.T) {
 	require.EqualValues(t, 2, tagihanCount(t, db))
 }
 
+func TestReplayMenjagaNomorPeriodeTagihanExisting(t *testing.T) {
+	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
+	santriID := firstSantriID(t, db)
+	var p236 int64
+	for ke := int64(233); ke <= 236; ke++ {
+		p := createMeetingWithAbsensi(t, db, kelasID, ke, santriID, "hadir")
+		if ke == 236 {
+			p236 = p
+		}
+	}
+
+	// Simulasikan santri lama yang sudah berada di bulan 59, sementara aplikasi
+	// hanya memiliki empat absensi digital terbaru. Counter baru harus meneruskan
+	// nomor periode, bukan membuat ulang bulan 2.
+	_, err := db.Exec(`INSERT INTO tagihan (santri_id, kelas_id, pertemuan_id, bulan_ke, pertemuan_ke, nominal, tanggal_tagih, jatuh_tempo, angkatan_kelas) VALUES (?, ?, ?, 59, 236, 100000, '2026-07-13', '2026-07-20', '2026')`, santriID, kelasID, p236)
+	require.NoError(t, err)
+
+	require.NoError(t, service.Sync())
+	var month60 int64
+	require.NoError(t, db.QueryRow(`SELECT pertemuan_ke FROM tagihan WHERE bulan_ke = 60`).Scan(&month60))
+	require.EqualValues(t, 236, month60)
+	var lowMonths int64
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM tagihan WHERE bulan_ke BETWEEN 2 AND 58`).Scan(&lowMonths))
+	require.Zero(t, lowMonths)
+}
+
 func TestBaselineNomorKelasTidakMenentukanBulanTagihan(t *testing.T) {
 	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
 	santriID := firstSantriID(t, db)
