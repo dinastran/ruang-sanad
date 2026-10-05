@@ -167,9 +167,16 @@ func (h *GuruHandler) KelasSaya(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, "/app/guru")
 	}
 
+	santriSearch, err := h.guruService.BuildKelasSantriSearchIndex(kelas)
+	if err != nil {
+		h.store.Flash(c, "error", "Gagal memuat data pencarian mahasantri")
+		return h.inertiaService.Redirect(c, "/app/guru")
+	}
+
 	return h.inertiaService.Render(c, "guru/KelasList", fiber.Map{
-		"user":  user,
-		"kelas": kelas,
+		"user":          user,
+		"kelas":         kelas,
+		"santri_search": santriSearch,
 	})
 }
 

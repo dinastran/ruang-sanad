@@ -1,27 +1,72 @@
 <script lang="ts">
-	import { inertia, router } from "@inertiajs/svelte";
+	import { inertia } from "@inertiajs/svelte";
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import GenderBadge from "@components/GenderBadge.svelte";
 	import type { User, GuruKelas } from "@lib/types";
-	import { BookOpen, Users, Calendar, Clock, ArrowRight } from "lucide-svelte";
+	import { BookOpen, Users, Calendar, Clock, ArrowRight, Search, RotateCcw } from "lucide-svelte";
 
 	interface Props {
 		user?: User;
 		kelas?: GuruKelas[];
+		santri_search?: Record<string, string[]>;
 		success?: string;
 		error?: string;
 	}
 
-	let { user, kelas = [], success, error }: Props = $props();
+	let { user, kelas = [], santri_search = {}, success, error }: Props = $props();
 	let isAllGuruView = $derived(user?.role === "super_admin" || user?.role === "admin_kelas");
 	let selectedGuru = $state("");
+	let searchQuery = $state("");
+	let selectedLevel = $state("");
+	let selectedType = $state("");
+	let selectedFrequency = $state("");
+	let selectedDay = $state("");
 	let guruOptions = $derived(
 		Array.from(new Map(kelas.filter((k) => k.guru_id).map((k) => [String(k.guru_id), k.guru_nama])).entries())
 			.map(([id, nama]) => ({ id, nama }))
 			.sort((a, b) => a.nama.localeCompare(b.nama)),
 	);
-	let filteredKelas = $derived(selectedGuru ? kelas.filter((k) => String(k.guru_id ?? "") === selectedGuru) : kelas);
+	let levelOptions = $derived(Array.from(new Set(kelas.map((k) => k.level).filter(Boolean))).sort((a, b) => a.localeCompare(b)));
+	let typeOptions = $derived(Array.from(new Set(kelas.map((k) => k.tipe).filter(Boolean))).sort((a, b) => a.localeCompare(b)));
+	let frequencyOptions = $derived(Array.from(new Set(kelas.map((k) => k.frekuensi).filter(Boolean))).sort((a, b) => a.localeCompare(b)));
+	const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Ahad"];
+	let dayOptions = $derived(days.filter((day) => kelas.some((k) => k.jadwal?.toLowerCase().includes(day.toLowerCase()))));
+	let hasActiveFilters = $derived(
+		searchQuery.trim() !== "" ||
+			selectedGuru !== "" ||
+			selectedLevel !== "" ||
+			selectedType !== "" ||
+			selectedFrequency !== "" ||
+			selectedDay !== "",
+	);
+	let filteredKelas = $derived(
+		kelas.filter((k) => {
+			const query = searchQuery.trim().toLowerCase();
+			const santriTerms = santri_search[String(k.id)] ?? [];
+			const matchesSearch =
+				query === "" ||
+				k.nama_kelas.toLowerCase().includes(query) ||
+				santriTerms.some((term) => term.toLowerCase().includes(query));
+			return (
+				matchesSearch &&
+				(selectedGuru === "" || String(k.guru_id ?? "") === selectedGuru) &&
+				(selectedLevel === "" || k.level === selectedLevel) &&
+				(selectedType === "" || k.tipe === selectedType) &&
+				(selectedFrequency === "" || k.frekuensi === selectedFrequency) &&
+				(selectedDay === "" || k.jadwal?.toLowerCase().includes(selectedDay.toLowerCase()))
+			);
+		}),
+	);
+
+	function resetFilters() {
+		searchQuery = "";
+		selectedGuru = "";
+		selectedLevel = "";
+		selectedType = "";
+		selectedFrequency = "";
+		selectedDay = "";
+	}
 
 	function groupKelas(list: GuruKelas[]) {
 		const groups = new Map<string, { guruNama: string; kelas: GuruKelas[] }>();
@@ -68,17 +113,67 @@
 		{/if}
 
 		{#if kelas.length > 0}
-			{#if isAllGuruView}
-				<div class="flex items-center gap-3 rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-4" in:fly={{ y: 20, duration: 500 }}>
-					<label for="guru-filter" class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Guru</label>
-					<select id="guru-filter" bind:value={selectedGuru} class="min-w-52 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-neutral-100/80 dark:bg-neutral-800/50 px-3 py-2 text-sm text-neutral-900 dark:text-white outline-none focus:border-brand-400">
-						<option value="">Semua guru</option>
-						{#each guruOptions as guru}
-							<option value={guru.id}>{guru.nama}</option>
-						{/each}
+			<div class="rounded-2xl border border-neutral-200/80 bg-white p-4 dark:border-white/[0.06] dark:bg-neutral-925/50" in:fly={{ y: 20, duration: 500 }}>
+				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+					<label class="relative sm:col-span-2 lg:col-span-1">
+						<span class="sr-only">Cari mahasantri atau kelas</span>
+						<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+						<input
+							bind:value={searchQuery}
+							type="search"
+							placeholder="Cari nama mahasantri..."
+							class="w-full rounded-xl border border-neutral-300 bg-neutral-50 py-2.5 pl-9 pr-3 text-sm text-neutral-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-400/15 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-white"
+						/>
+					</label>
+
+					<select bind:value={selectedLevel} aria-label="Filter level"
+						class="w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-white"
+					>
+						<option value="">Semua level</option>
+						{#each levelOptions as level}<option value={level}>{level}</option>{/each}
 					</select>
+
+					<select bind:value={selectedType} aria-label="Filter tipe kelas"
+						class="w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-white"
+					>
+						<option value="">Semua tipe</option>
+						{#each typeOptions as type}<option value={type}>{type}</option>{/each}
+					</select>
+
+					<select bind:value={selectedFrequency} aria-label="Filter frekuensi"
+						class="w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-white"
+					>
+						<option value="">Semua frekuensi</option>
+						{#each frequencyOptions as frequency}<option value={frequency}>{frequency}</option>{/each}
+					</select>
+
+					<select bind:value={selectedDay} aria-label="Filter hari"
+						class="w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-white"
+					>
+						<option value="">Semua hari</option>
+						{#each dayOptions as day}<option value={day}>{day}</option>{/each}
+					</select>
+
+					{#if isAllGuruView}
+						<select bind:value={selectedGuru} aria-label="Filter guru"
+							class="w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-white"
+						>
+							<option value="">Semua guru</option>
+							{#each guruOptions as guru}<option value={guru.id}>{guru.nama}</option>{/each}
+						</select>
+					{/if}
 				</div>
-			{/if}
+				<div class="mt-3 flex items-center justify-between gap-3">
+					<p class="text-xs text-neutral-500 dark:text-neutral-400">{filteredKelas.length} dari {kelas.length} kelas ditampilkan</p>
+					{#if hasActiveFilters}
+						<button onclick={resetFilters}
+							class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+						>
+							<RotateCcw class="h-3.5 w-3.5" /> Reset filter
+						</button>
+					{/if}
+				</div>
+			</div>
 
 			{#if kelasPerGuru.length > 0}
 				<div class="space-y-7" in:fly={{ y: 20, duration: 600 }}>
@@ -143,7 +238,14 @@
 					{/each}
 				</div>
 			{:else}
-				<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-10 text-center text-sm text-neutral-500 dark:text-neutral-400">Tidak ada kelas untuk guru yang dipilih.</div>
+				<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-10 text-center">
+					<Search class="mx-auto mb-3 h-6 w-6 text-neutral-400" />
+					<p class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Tidak ada kelas yang sesuai filter</p>
+					<p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Ubah pencarian atau reset filter untuk menampilkan semua kelas.</p>
+					<button onclick={resetFilters} class="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-neutral-100 px-3 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700">
+						<RotateCcw class="h-3.5 w-3.5" /> Reset filter
+					</button>
+				</div>
 			{/if}
 		{:else}
 			<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-12 text-center" in:fly={{ y: 20, duration: 500, delay: 100 }}>
