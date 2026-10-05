@@ -352,6 +352,23 @@ func (s *GuruService) ListKelasForViewer(guruID *int64) ([]models.KelasGuruRespo
 	return s.listKelas(filter)
 }
 
+func (s *GuruService) BuildKelasSantriSearchIndex(kelas []models.KelasGuruResponse) (map[int64][]string, error) {
+	index := make(map[int64][]string, len(kelas))
+	ctx := context.Background()
+	for _, item := range kelas {
+		rows, err := s.querier.GetSantriByKelasID(ctx, sql.NullInt64{Int64: item.ID, Valid: true})
+		if err != nil {
+			return nil, err
+		}
+		terms := make([]string, 0, len(rows))
+		for _, santri := range rows {
+			terms = append(terms, santri.Nama+" "+santri.IDMahasantri)
+		}
+		index[item.ID] = terms
+	}
+	return index, nil
+}
+
 func (s *GuruService) listKelas(guruID sql.NullInt64) ([]models.KelasGuruResponse, error) {
 	rows, err := s.querier.ListKelasByGuruID(context.Background(), guruID)
 	if err != nil {
