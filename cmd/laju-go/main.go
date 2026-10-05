@@ -102,8 +102,12 @@ func main() {
 	// Initialize Inertia service (auto-detects Vite from .vite-port)
 	inertiaService := services.NewInertiaService(assetService, sessionStore)
 
+	// Billing must be available to the class engine so a frequency change can
+	// reconcile the santri-owned counter in the same transaction.
+	tagihanService := services.NewTagihanService(querier)
+
 	// Initialize master data via KelasEngineService
-	kelasEngine := services.NewKelasEngineService(querier)
+	kelasEngine := services.NewKelasEngineService(querier).WithBilling(tagihanService)
 
 	// Initialize new services
 	santriService := services.NewSantriService(querier, kelasEngine)
@@ -113,7 +117,6 @@ func main() {
 	laporanService := services.NewLaporanService(querier, santriService, kelasService)
 	importService := services.NewImportService(querier, santriService)
 	guruService := services.NewGuruService(querier)
-	tagihanService := services.NewTagihanService(querier)
 	productCRMService := services.NewProductCRMService(querier)
 	productOrderService := services.NewProductOrderService(querier)
 	pertemuanService := services.NewPertemuanService(querier, tagihanService)
