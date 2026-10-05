@@ -555,8 +555,8 @@ type SantriBillingMeetingRow struct {
 }
 
 type SantriBillingAnchorRow struct {
-	BulanKe      int64
-	PertemuanID  sql.NullInt64
+	BulanKe     int64
+	PertemuanID sql.NullInt64
 }
 
 func (q *Querier) GetSantriBillingProgress(ctx context.Context, santriID int64) (SantriBillingProgressRow, error) {
