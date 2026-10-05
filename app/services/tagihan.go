@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"database/sql"
 	"fmt"
 	"net/url"
@@ -132,7 +133,63 @@ func (s *TagihanService) backfillSantriBilling(ctx context.Context, q *queries.Q
 	return nil
 }
 
+// getOrInitializeBillingProgress anchors an existing santri to their latest
+// persisted invoice. Old installations may have high month numbers but only a
+// short digital attendance history, so initialization must never restart them
+// from month 1. For legacy invoices created one period late, attendance before
+// the previous threshold is marked consumed and the remaining meetings are
+// replayed under the new timing rule.
+func (s *TagihanService) getOrInitializeBillingProgress(ctx context.Context, q *queries.Querier, santriID int64) (queries.SantriBillingProgressRow, error) {
+	progress, err := q.GetSantriBillingProgress(ctx, santriID)
+	if err == nil {
+		return progress, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return queries.SantriBillingProgressRow{}, err
+	}
+
+	lastBilledMonth := int64(1)
+	anchor, anchorErr := q.GetLatestTagihanBillingAnchor(ctx, santriID)
+	if anchorErr == nil {
+		if anchor.BulanKe > lastBilledMonth {
+			lastBilledMonth = anchor.BulanKe
+		}
+		if anchor.PertemuanID.Valid {
+			events, err := q.ListUnprocessedBillingMeetingsForSantri(ctx, santriID)
+			if err != nil {
+				return queries.SantriBillingProgressRow{}, err
+			}
+			anchorIndex := -1
+			anchorThreshold := int64(0)
+			for i, event := range events {
+				if event.PertemuanID == anchor.PertemuanID.Int64 {
+					anchorIndex = i + 1
+					anchorThreshold, _ = frekuensiKePertemuan(event.Frekuensi)
+					break
+				}
+			}
+			consumed := anchorIndex - int(anchorThreshold)
+			if anchorIndex > 0 && anchorThreshold > 0 && consumed > 0 {
+				for i := 0; i < consumed; i++ {
+					if _, err := q.MarkSantriBillingMeetingProcessed(ctx, santriID, events[i].PertemuanID, events[i].Frekuensi); err != nil {
+						return queries.SantriBillingProgressRow{}, err
+					}
+				}
+			}
+		}
+	} else if !errors.Is(anchorErr, sql.ErrNoRows) {
+		return queries.SantriBillingProgressRow{}, anchorErr
+	}
+
+	return q.CreateSantriBillingProgress(ctx, santriID, lastBilledMonth)
+}
+
 func (s *TagihanService) processBillingMeeting(ctx context.Context, q *queries.Querier, santriID int64, event queries.SantriBillingMeetingRow) error {
+	progress, err := s.getOrInitializeBillingProgress(ctx, q, santriID)
+	if err != nil {
+		return err
+	}
+
 	processed, err := q.MarkSantriBillingMeetingProcessed(ctx, santriID, event.PertemuanID, event.Frekuensi)
 	if err != nil {
 		return err
@@ -149,10 +206,6 @@ func (s *TagihanService) processBillingMeeting(ctx context.Context, q *queries.Q
 		return nil
 	}
 
-	progress, err := q.GetOrCreateSantriBillingProgress(ctx, santriID)
-	if err != nil {
-		return err
-	}
 	progress.MeetingCount++
 
 	trigger := tagihanTrigger{
@@ -230,7 +283,7 @@ func (s *TagihanService) ReconcileFrequencyChangeWithQuerier(q *queries.Querier,
 	if err != nil {
 		return nil
 	}
-	progress, err := q.GetOrCreateSantriBillingProgress(ctx, santriID)
+	progress, err := s.getOrInitializeBillingProgress(ctx, q, santriID)
 	if err != nil {
 		return err
 	}
