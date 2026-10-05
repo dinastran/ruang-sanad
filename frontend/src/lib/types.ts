@@ -305,7 +305,7 @@ export interface MonitoringKelasItem {
 	tanggal: string;
 	jam_mulai: string;
 	schedule_note: string;
-	status: "belum_mulai" | "berlangsung" | "selesai" | "dibatalkan" | "terlambat";
+	status: "belum_mulai" | "berlangsung" | "selesai" | "dibatalkan" | "terlambat" | "tidak_terlaksana";
 	schedule_status: string;
 	jatuh_tempo: boolean;
 	is_reschedule: boolean;
