@@ -2,8 +2,8 @@ package services
 
 import (
 	"context"
-	"errors"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
