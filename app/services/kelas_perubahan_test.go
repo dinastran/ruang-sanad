@@ -288,8 +288,13 @@ func TestGantiLevelSantriNewClassDoesNotSkipBilledPeriods(t *testing.T) {
 	_, err := f.db.Exec(`UPDATE santri SET nominal = 100000`)
 	require.NoError(t, err)
 	tagihan := NewTagihanService(f.querier)
+	recordAttendance := func(pertemuanID int64) {
+		_, err := f.db.Exec(`INSERT INTO absensi (pertemuan_id, santri_id, status) VALUES (?, ?, 'hadir')`, pertemuanID, f.santri[0])
+		require.NoError(t, err)
+	}
 	for range 12 {
 		p := f.buatPertemuan(t, "selesai")
+		recordAttendance(p.ID)
 		require.NoError(t, tagihan.GenerateForPertemuan(p.ID))
 	}
 
@@ -306,6 +311,7 @@ func TestGantiLevelSantriNewClassDoesNotSkipBilledPeriods(t *testing.T) {
 	var last queries.Pertemuan
 	for range 4 {
 		last = baru.buatPertemuan(t, "selesai")
+		recordAttendance(last.ID)
 		require.NoError(t, tagihan.GenerateForPertemuan(last.ID))
 	}
 	require.EqualValues(t, 16, last.PertemuanKe)
@@ -313,7 +319,7 @@ func TestGantiLevelSantriNewClassDoesNotSkipBilledPeriods(t *testing.T) {
 
 	var bulanKe int64
 	require.NoError(t, f.db.QueryRow(`SELECT MAX(bulan_ke) FROM tagihan WHERE santri_id = ?`, f.santri[0]).Scan(&bulanKe))
-	require.EqualValues(t, 4, bulanKe, "month 4 must be billed after moving to the new-level class")
+	require.EqualValues(t, 5, bulanKe, "after 16 personal meetings the next invoice is month 5, even after moving level")
 }
 
 func TestGantiLevelSantriNewClassFitsLargeSelection(t *testing.T) {
