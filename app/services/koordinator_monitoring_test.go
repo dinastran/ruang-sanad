@@ -19,12 +19,38 @@ func TestKoordinatorMonitoringMenandaiJadwalTerlewat(t *testing.T) {
 	result, err := service.List(models.ClassMonitoringFilter{StartDate: yesterday, EndDate: yesterday})
 	require.NoError(t, err)
 	require.Len(t, result.Items, 1)
-	require.Equal(t, "terlambat", result.Items[0].Status)
+	require.Equal(t, "tidak_terlaksana", result.Items[0].Status)
 	require.Equal(t, "belum_hadir", result.Items[0].TeacherAttendance)
 	require.True(t, result.Items[0].NeedsAction)
+	require.True(t, result.Items[0].JatuhTempo)
 	require.EqualValues(t, 1, result.Summary.Total)
-	require.EqualValues(t, 1, result.Summary.BelumMulai)
+	require.EqualValues(t, 0, result.Summary.BelumMulai)
 	require.EqualValues(t, 1, result.Summary.PerluTindakan)
+	require.EqualValues(t, 1, result.Summary.TotalJadwal)
+	require.EqualValues(t, 1, result.Summary.JatuhTempo)
+	require.EqualValues(t, 1, result.Summary.TidakTerlaksana)
+	require.Equal(t, float64(0), result.Summary.KepatuhanJadwal)
+}
+
+func TestKoordinatorMonitoringTetapMenandaiTerlambatPadaHariYangSama(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	now := time.Now().In(wib)
+	if now.Hour() == 0 && now.Minute() < 2 {
+		t.Skip("test membutuhkan waktu lewat 00:01 WIB")
+	}
+	today := now.Format("2006-01-02")
+	pastTime := now.Add(-time.Minute).Format("15:04")
+	_, err := f.db.Exec(`INSERT INTO jadwal_pertemuan (kelas_id, tanggal, jam_mulai, status) VALUES (?, ?, ?, 'dijadwalkan')`, f.kelasID, today, pastTime)
+	require.NoError(t, err)
+
+	service := NewKoordinatorMonitoringService(f.querier, f.service)
+	result, err := service.List(models.ClassMonitoringFilter{StartDate: today, EndDate: today})
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	require.Equal(t, "terlambat", result.Items[0].Status)
+	require.True(t, result.Items[0].JatuhTempo)
+	require.EqualValues(t, 1, result.Summary.BelumMulai)
+	require.EqualValues(t, 0, result.Summary.TidakTerlaksana)
 }
 
 func TestKoordinatorMonitoringMengirimPengingatDanMencatatTindakLanjut(t *testing.T) {

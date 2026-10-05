@@ -76,6 +76,9 @@ func (s *KoordinatorMonitoringService) List(filter models.ClassMonitoringFilter)
 		response.Items = append(response.Items, item)
 		updateMonitoringSummary(&response.Summary, item)
 	}
+	if response.Summary.JatuhTempo > 0 {
+		response.Summary.KepatuhanJadwal = float64(response.Summary.TerlaksanaSesuaiJadwal) / float64(response.Summary.JatuhTempo) * 100
+	}
 	return response, nil
 }
 
@@ -274,17 +277,24 @@ func (s *KoordinatorMonitoringService) enrichMonitoringItem(item *models.ClassMo
 }
 
 func mapClassMonitoringItem(row queries.ListClassMonitoringSchedulesRow, now time.Time) models.ClassMonitoringItem {
-	scheduledAt, _ := time.ParseInLocation("2006-01-02 15:04", row.Tanggal.Format("2006-01-02")+" "+row.JamMulai, wib)
+	scheduledDate := row.Tanggal.Format("2006-01-02")
+	scheduledAt, _ := time.ParseInLocation("2006-01-02 15:04", scheduledDate+" "+row.JamMulai, wib)
 	status := "belum_mulai"
+	isDue := !scheduledAt.After(now)
 	switch {
 	case row.ScheduleStatus == "dibatalkan":
 		status = "dibatalkan"
 	case row.ScheduleStatus == "selesai" || row.MeetingStatus == "selesai":
 		status = "selesai"
+		isDue = true
 	case row.ScheduleStatus == "dimulai" || row.MeetingStatus == "berlangsung" || row.MeetingStatus == "menyelesaikan":
 		status = "berlangsung"
 	case !scheduledAt.After(now):
-		status = "terlambat"
+		if scheduledDate < now.In(wib).Format("2006-01-02") {
+			status = "tidak_terlaksana"
+		} else {
+			status = "terlambat"
+		}
 	}
 
 	teacherAttendance := "belum_hadir"
@@ -322,6 +332,7 @@ func mapClassMonitoringItem(row queries.ListClassMonitoringSchedulesRow, now tim
 		ScheduleNote:       row.ScheduleNote,
 		Status:             status,
 		ScheduleStatus:     row.ScheduleStatus,
+		JatuhTempo:         isDue,
 		IsReschedule:       row.IsReschedule == 1,
 		JadwalSemula:       row.JadwalSemula,
 		AlasanReschedule:   row.AlasanReschedule,
@@ -337,7 +348,7 @@ func mapClassMonitoringItem(row queries.ListClassMonitoringSchedulesRow, now tim
 		AttendanceCount:    row.AttendanceCount,
 		Materi:             row.Materi,
 		MeetingNote:        row.MeetingNote,
-		NeedsAction:        status == "terlambat" || (status == "selesai" && studentAttendance != "lengkap"),
+		NeedsAction:        status == "terlambat" || status == "tidak_terlaksana" || (status == "selesai" && studentAttendance != "lengkap"),
 		Attendance:         []models.MonitoringAttendance{},
 		Notes:              []models.MonitoringNote{},
 		Activities:         []models.ScheduleActivity{},
@@ -372,6 +383,7 @@ func mapUnscheduledMonitoringItem(row queries.ListUnscheduledMonitoringMeetingsR
 		JamMulai:           row.JamMulai,
 		Status:             status,
 		ScheduleStatus:     "tanpa_jadwal",
+		JatuhTempo:         false,
 		GuruUtamaNama:      row.GuruUtamaNama,
 		GuruPenggantiNama:  row.GuruPenggantiNama,
 		AlasanBadal:        row.AlasanBadal,
@@ -441,5 +453,25 @@ func updateMonitoringSummary(summary *models.ClassMonitoringSummary, item models
 	}
 	if item.NeedsAction {
 		summary.PerluTindakan++
+	}
+
+	if item.TanpaJadwal {
+		return
+	}
+	summary.TotalJadwal++
+	if item.JatuhTempo {
+		summary.JatuhTempo++
+	}
+	if item.IsReschedule {
+		summary.Reschedule++
+	}
+	if item.GuruPenggantiID != nil {
+		summary.Badal++
+	}
+	if item.Status == "tidak_terlaksana" {
+		summary.TidakTerlaksana++
+	}
+	if item.Status == "selesai" && !item.IsReschedule && item.GuruPenggantiID == nil {
+		summary.TerlaksanaSesuaiJadwal++
 	}
 }

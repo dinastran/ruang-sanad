@@ -34,6 +34,27 @@
 
 	type ActionType = "reminder_teacher" | "reminder_students" | "note" | "reschedule" | "substitute" | "cancel";
 	type ActionModal = { type: ActionType; item: MonitoringKelasItem };
+	type TeacherPerformance = {
+		guruID: number | null;
+		nama: string;
+		jadwal: number;
+		jatuhTempo: number;
+		sesuai: number;
+		reschedule: number;
+		badal: number;
+		tidakTerlaksana: number;
+		perubahan: number;
+		kepatuhan: number;
+	};
+	type WeeklyAnalysis = {
+		index: number;
+		label: string;
+		total: number;
+		sesuai: number;
+		reschedule: number;
+		badal: number;
+		tidakTerlaksana: number;
+	};
 
 	interface Props {
 		user?: User;
@@ -47,7 +68,21 @@
 
 	let { user, flash, error, monitoring, guru = [], kelas = [], filters }: Props = $props();
 
-	const emptySummary = { total: 0, belum_mulai: 0, berlangsung: 0, selesai: 0, dibatalkan: 0, perlu_tindakan: 0 };
+	const emptySummary = {
+		total: 0,
+		belum_mulai: 0,
+		berlangsung: 0,
+		selesai: 0,
+		dibatalkan: 0,
+		perlu_tindakan: 0,
+		total_jadwal: 0,
+		jatuh_tempo: 0,
+		terlaksana_sesuai_jadwal: 0,
+		reschedule: 0,
+		badal: 0,
+		tidak_terlaksana: 0,
+		kepatuhan_jadwal: 0,
+	};
 	const inputClass = "mt-1.5 w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-white";
 	const statusLabel: Record<string, string> = {
 		belum_mulai: "Belum mulai",
@@ -55,6 +90,7 @@
 		selesai: "Selesai",
 		dibatalkan: "Dibatalkan",
 		terlambat: "Terlambat",
+		tidak_terlaksana: "Tidak terlaksana",
 	};
 	const attendanceLabel: Record<string, string> = {
 		belum_hadir: "Belum hadir",
@@ -119,7 +155,7 @@
 		if (value === "selesai") return "bg-success/10 text-emerald-700 dark:text-emerald-400";
 		if (value === "berlangsung") return "bg-info/10 text-blue-700 dark:text-blue-400";
 		if (value === "terlambat") return "bg-warning/10 text-amber-700 dark:text-amber-400";
-		if (value === "dibatalkan") return "bg-error/10 text-red-700 dark:text-red-400";
+		if (value === "dibatalkan" || value === "tidak_terlaksana") return "bg-error/10 text-red-700 dark:text-red-400";
 		return "bg-neutral-200/70 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300";
 	}
 
@@ -161,6 +197,104 @@
 
 		if (uniqueDays > 0) return `${uniqueDays} hari / pekan`;
 		return "Jadwal kelas tersedia";
+	}
+
+
+	function formatPercent(value: number): string {
+		return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 }).format(value || 0) + "%";
+	}
+
+	function isBadal(item: MonitoringKelasItem): boolean {
+		return Boolean(item.guru_pengganti_id);
+	}
+
+	function isSesuaiJadwal(item: MonitoringKelasItem): boolean {
+		return item.status === "selesai" && !item.is_reschedule && !isBadal(item);
+	}
+
+	function buildTeacherPerformance(items: MonitoringKelasItem[]): TeacherPerformance[] {
+		const grouped = new Map<string, TeacherPerformance>();
+		for (const item of items) {
+			if (item.tanpa_jadwal) continue;
+			const key = item.guru_utama_id ? String(item.guru_utama_id) : `nama:${item.guru_utama_nama || "belum-ditetapkan"}`;
+			let row = grouped.get(key);
+			if (!row) {
+				row = {
+					guruID: item.guru_utama_id ?? null,
+					nama: item.guru_utama_nama || "Belum ditetapkan",
+					jadwal: 0,
+					jatuhTempo: 0,
+					sesuai: 0,
+					reschedule: 0,
+					badal: 0,
+					tidakTerlaksana: 0,
+					perubahan: 0,
+					kepatuhan: 0,
+				};
+				grouped.set(key, row);
+			}
+			row.jadwal++;
+			if (item.jatuh_tempo) row.jatuhTempo++;
+			if (isSesuaiJadwal(item)) row.sesuai++;
+			if (item.is_reschedule) row.reschedule++;
+			if (isBadal(item)) row.badal++;
+			if (item.status === "tidak_terlaksana") row.tidakTerlaksana++;
+			if (item.is_reschedule || isBadal(item)) row.perubahan++;
+		}
+		return Array.from(grouped.values())
+			.map((row) => ({ ...row, kepatuhan: row.jatuhTempo > 0 ? (row.sesuai / row.jatuhTempo) * 100 : 0 }))
+			.sort((a, b) => {
+				if (a.jatuhTempo === 0 && b.jatuhTempo > 0) return 1;
+				if (b.jatuhTempo === 0 && a.jatuhTempo > 0) return -1;
+				return a.kepatuhan - b.kepatuhan || b.jadwal - a.jadwal || a.nama.localeCompare(b.nama);
+			});
+	}
+
+	function buildWeeklyAnalysis(items: MonitoringKelasItem[], selectedStart: string): WeeklyAnalysis[] {
+		const scheduled = items.filter((item) => !item.tanpa_jadwal && item.tanggal);
+		if (scheduled.length === 0) return [];
+		const sortedDates = scheduled.map((item) => item.tanggal.slice(0, 10)).sort();
+		const baseValue = selectedStart || sortedDates[0];
+		const base = new Date(`${baseValue}T00:00:00`);
+		if (Number.isNaN(base.getTime())) return [];
+		const grouped = new Map<number, WeeklyAnalysis>();
+
+		for (const item of scheduled) {
+			const current = new Date(`${item.tanggal.slice(0, 10)}T00:00:00`);
+			if (Number.isNaN(current.getTime())) continue;
+			const diffDays = Math.max(0, Math.floor((current.getTime() - base.getTime()) / 86_400_000));
+			const index = Math.floor(diffDays / 7);
+			let row = grouped.get(index);
+			if (!row) {
+				row = { index, label: `Pekan ${index + 1}`, total: 0, sesuai: 0, reschedule: 0, badal: 0, tidakTerlaksana: 0 };
+				grouped.set(index, row);
+			}
+			row.total++;
+			if (isSesuaiJadwal(item)) row.sesuai++;
+			if (item.is_reschedule) row.reschedule++;
+			if (isBadal(item)) row.badal++;
+			if (item.status === "tidak_terlaksana") row.tidakTerlaksana++;
+		}
+		return Array.from(grouped.values()).sort((a, b) => a.index - b.index);
+	}
+
+	let teacherPerformance = $derived(buildTeacherPerformance(data.items));
+	let weeklyAnalysis = $derived(buildWeeklyAnalysis(data.items, startDate));
+	let weeklyMax = $derived(Math.max(1, ...weeklyAnalysis.flatMap((week) => [week.sesuai, week.reschedule, week.badal, week.tidakTerlaksana])));
+	let missedItems = $derived(data.items.filter((item) => item.status === "tidak_terlaksana"));
+	let incompleteAttendanceItems = $derived(data.items.filter((item) => item.status === "selesai" && item.student_attendance !== "lengkap"));
+	let lateTodayItems = $derived(data.items.filter((item) => item.status === "terlambat"));
+	let repeatedTeacherAlerts = $derived(teacherPerformance.filter((item) => item.perubahan >= 2));
+
+	function filterByStatus(value: string) {
+		status = value;
+		runFilter();
+	}
+
+	function filterByGuru(id: number | null) {
+		if (!id) return;
+		guruID = String(id);
+		runFilter();
 	}
 
 	function runFilter(reset = false) {
@@ -280,6 +414,70 @@
 			<div role="alert" class="rounded-xl border border-error/20 bg-error/10 p-4 text-sm font-medium text-red-700 dark:text-red-400">{error || flash?.error}</div>
 		{/if}
 
+
+		<section aria-labelledby="kpi-title">
+			<div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+				<div>
+					<h2 id="kpi-title" class="text-sm font-semibold text-neutral-900 dark:text-white">KPI pelaksanaan kelas</h2>
+					<p class="mt-1 text-xs text-neutral-500">Hanya jadwal resmi yang masuk perhitungan KPI. Sesi spontan tetap tercatat di monitoring operasional.</p>
+				</div>
+				<p class="text-xs text-neutral-500">{data.summary.jatuh_tempo} jadwal sudah jatuh tempo</p>
+			</div>
+			<div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+				<div class="rounded-xl border border-neutral-200/80 bg-white p-4 dark:border-white/[0.06] dark:bg-neutral-925/50"><CalendarClock class="h-4 w-4 text-neutral-500" /><p class="mt-3 text-2xl font-bold text-neutral-900 dark:text-white">{data.summary.total_jadwal}</p><p class="text-xs text-neutral-500">Total jadwal</p></div>
+				<div class="rounded-xl border border-success/20 bg-success/5 p-4"><CheckCircle2 class="h-4 w-4 text-emerald-600 dark:text-emerald-400" /><p class="mt-3 text-2xl font-bold text-emerald-700 dark:text-emerald-300">{data.summary.terlaksana_sesuai_jadwal}</p><p class="text-xs font-medium text-emerald-700 dark:text-emerald-300">Sesuai jadwal</p></div>
+				<div class="rounded-xl border border-warning/20 bg-warning/5 p-4"><RotateCcw class="h-4 w-4 text-amber-600 dark:text-amber-400" /><p class="mt-3 text-2xl font-bold text-neutral-900 dark:text-white">{data.summary.reschedule}</p><p class="text-xs text-neutral-500">Reschedule</p></div>
+				<div class="rounded-xl border border-info/20 bg-info/5 p-4"><UserRoundCheck class="h-4 w-4 text-blue-600 dark:text-blue-400" /><p class="mt-3 text-2xl font-bold text-neutral-900 dark:text-white">{data.summary.badal}</p><p class="text-xs text-neutral-500">Badal</p></div>
+				<div class="rounded-xl border border-error/25 bg-error/5 p-4"><Ban class="h-4 w-4 text-red-600 dark:text-red-400" /><p class="mt-3 text-2xl font-bold text-red-700 dark:text-red-300">{data.summary.tidak_terlaksana}</p><p class="text-xs font-medium text-red-700 dark:text-red-300">Tidak terlaksana</p></div>
+				<div class="rounded-xl border border-brand-400/25 bg-brand-400/10 p-4"><CheckCircle2 class="h-4 w-4 text-brand-600 dark:text-brand-400" /><p class="mt-3 text-2xl font-bold text-brand-700 dark:text-brand-300">{formatPercent(data.summary.kepatuhan_jadwal)}</p><p class="text-xs font-medium text-brand-700 dark:text-brand-300">Kepatuhan jadwal</p></div>
+			</div>
+		</section>
+
+		<section aria-labelledby="attention-title" class="rounded-xl border border-neutral-200/80 bg-white p-5 dark:border-white/[0.06] dark:bg-neutral-925/50">
+			<div class="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<div class="flex items-center gap-2"><AlertTriangle class="h-4 w-4 text-amber-600 dark:text-amber-400" /><h2 id="attention-title" class="text-sm font-semibold text-neutral-900 dark:text-white">Pusat perhatian koordinator</h2></div>
+					<p class="mt-1 text-xs text-neutral-500">Masalah yang perlu dilihat sebelum masuk ke daftar sesi satu per satu.</p>
+				</div>
+				<span class="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{missedItems.length + incompleteAttendanceItems.length + lateTodayItems.length} isu sesi</span>
+			</div>
+
+			{#if missedItems.length === 0 && incompleteAttendanceItems.length === 0 && lateTodayItems.length === 0 && repeatedTeacherAlerts.length === 0}
+				<div class="mt-4 rounded-lg border border-success/20 bg-success/5 p-4 text-sm text-emerald-700 dark:text-emerald-300">Tidak ada peringatan utama pada rentang yang dipilih.</div>
+			{:else}
+				<div class="mt-4 grid gap-3 md:grid-cols-2">
+					{#if missedItems.length > 0}
+						<button type="button" onclick={() => filterByStatus("tidak_terlaksana")} class="rounded-lg border border-error/20 bg-error/5 p-4 text-left hover:border-error/35">
+							<p class="font-semibold text-red-700 dark:text-red-300">{missedItems.length} kelas tidak terlaksana</p>
+							<p class="mt-1 text-xs leading-5 text-neutral-600 dark:text-neutral-400">Tanggal jadwal sudah lewat dan belum pernah ada pertemuan. Klik untuk memfilter.</p>
+						</button>
+					{/if}
+					{#if incompleteAttendanceItems.length > 0}
+						<div class="rounded-lg border border-error/20 bg-error/5 p-4">
+							<p class="font-semibold text-red-700 dark:text-red-300">{incompleteAttendanceItems.length} sesi selesai dengan absensi belum lengkap</p>
+							<p class="mt-1 text-xs leading-5 text-neutral-600 dark:text-neutral-400">Periksa sesi selesai di daftar bawah dan kirim pengingat bila diperlukan.</p>
+						</div>
+					{/if}
+					{#if lateTodayItems.length > 0}
+						<button type="button" onclick={() => filterByStatus("terlambat")} class="rounded-lg border border-warning/20 bg-warning/5 p-4 text-left hover:border-warning/35">
+							<p class="font-semibold text-amber-700 dark:text-amber-300">{lateTodayItems.length} kelas hari ini terlambat mulai</p>
+							<p class="mt-1 text-xs leading-5 text-neutral-600 dark:text-neutral-400">Jam jadwal sudah lewat, tetapi hari belum berganti. Klik untuk memfilter.</p>
+						</button>
+					{/if}
+					{#if repeatedTeacherAlerts.length > 0}
+						<div class="rounded-lg border border-warning/20 bg-warning/5 p-4">
+							<p class="font-semibold text-amber-700 dark:text-amber-300">{repeatedTeacherAlerts.length} guru memiliki perubahan jadwal berulang</p>
+							<div class="mt-2 flex flex-wrap gap-2">
+								{#each repeatedTeacherAlerts.slice(0, 5) as item}
+									<button type="button" disabled={!item.guruID} onclick={() => filterByGuru(item.guruID)} class="rounded-full bg-white/80 px-2.5 py-1 text-xs font-medium text-neutral-700 disabled:cursor-default dark:bg-neutral-900/60 dark:text-neutral-300">{item.nama}: {item.perubahan}x</button>
+								{/each}
+							</div>
+						</div>
+					{/if}
+				</div>
+			{/if}
+		</section>
+
 		<section aria-labelledby="summary-title">
 			<div class="mb-3 flex items-center justify-between gap-3">
 				<h2 id="summary-title" class="text-sm font-semibold text-neutral-900 dark:text-white">Ringkasan operasional</h2>
@@ -302,13 +500,75 @@
 				<label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">Tanggal selesai<input type="date" min={startDate || undefined} bind:value={endDate} class={inputClass} /></label>
 				<label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">Guru<select bind:value={guruID} class={inputClass}><option value="">Semua guru</option>{#each guru as item (item.id)}<option value={String(item.id)}>{item.nama}</option>{/each}</select></label>
 				<label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">Kelas<select bind:value={kelasID} class={inputClass}><option value="">Semua kelas</option>{#each kelas as item (item.id)}<option value={String(item.id)}>{item.nama_kelas}</option>{/each}</select></label>
-				<label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">Status<select bind:value={status} class={inputClass}><option value="">Semua status</option><option value="belum_mulai">Belum mulai</option><option value="berlangsung">Berlangsung</option><option value="selesai">Selesai</option><option value="dibatalkan">Dibatalkan</option><option value="terlambat">Terlambat</option></select></label>
+				<label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">Status<select bind:value={status} class={inputClass}><option value="">Semua status</option><option value="belum_mulai">Belum mulai</option><option value="berlangsung">Berlangsung</option><option value="selesai">Selesai</option><option value="dibatalkan">Dibatalkan</option><option value="terlambat">Terlambat</option><option value="tidak_terlaksana">Tidak terlaksana</option></select></label>
 			</div>
 			<div class="mt-4 flex flex-wrap justify-end gap-2 border-t border-neutral-200/70 pt-4 dark:border-white/[0.05]">
 				<button type="button" onclick={() => runFilter(true)} disabled={filtering} class="rounded-lg px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-50 dark:text-neutral-300 dark:hover:bg-neutral-800">Reset</button>
 				<button type="submit" disabled={filtering} class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-400">{filtering ? "Memuat..." : "Terapkan filter"}</button>
 			</div>
 		</form>
+
+
+		<section aria-labelledby="analytics-title">
+			<div class="mb-3">
+				<h2 id="analytics-title" class="text-sm font-semibold text-neutral-900 dark:text-white">Analisis pelaksanaan</h2>
+				<p class="mt-1 text-xs text-neutral-500">Frekuensi masalah per pekan dan performa jadwal per guru pada filter aktif.</p>
+			</div>
+			<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+				<div class="rounded-xl border border-neutral-200/80 bg-white p-5 dark:border-white/[0.06] dark:bg-neutral-925/50">
+					<div class="flex items-center justify-between gap-3">
+						<h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Frekuensi per pekan</h3>
+						<span class="text-xs text-neutral-500">{weeklyAnalysis.length} pekan</span>
+					</div>
+					{#if weeklyAnalysis.length === 0}
+						<p class="mt-6 text-sm text-neutral-500">Belum ada jadwal untuk dianalisis.</p>
+					{:else}
+						<div class="mt-5 space-y-5">
+							{#each weeklyAnalysis as week}
+								<div>
+									<div class="mb-2 flex items-center justify-between gap-3"><p class="text-sm font-semibold text-neutral-800 dark:text-neutral-200">{week.label}</p><span class="text-xs text-neutral-500">{week.total} jadwal</span></div>
+									<div class="space-y-2">
+										<div class="grid grid-cols-[112px_minmax(0,1fr)_28px] items-center gap-2 text-xs"><span class="text-neutral-500">Sesuai jadwal</span><div class="h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800"><div class="h-full rounded-full bg-emerald-500" style={"width: " + ((week.sesuai / weeklyMax) * 100) + "%"}></div></div><span class="text-right font-mono text-neutral-600 dark:text-neutral-300">{week.sesuai}</span></div>
+										<div class="grid grid-cols-[112px_minmax(0,1fr)_28px] items-center gap-2 text-xs"><span class="text-neutral-500">Reschedule</span><div class="h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800"><div class="h-full rounded-full bg-amber-500" style={"width: " + ((week.reschedule / weeklyMax) * 100) + "%"}></div></div><span class="text-right font-mono text-neutral-600 dark:text-neutral-300">{week.reschedule}</span></div>
+										<div class="grid grid-cols-[112px_minmax(0,1fr)_28px] items-center gap-2 text-xs"><span class="text-neutral-500">Badal</span><div class="h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800"><div class="h-full rounded-full bg-blue-500" style={"width: " + ((week.badal / weeklyMax) * 100) + "%"}></div></div><span class="text-right font-mono text-neutral-600 dark:text-neutral-300">{week.badal}</span></div>
+										<div class="grid grid-cols-[112px_minmax(0,1fr)_28px] items-center gap-2 text-xs"><span class="text-neutral-500">Tidak terlaksana</span><div class="h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800"><div class="h-full rounded-full bg-red-500" style={"width: " + ((week.tidakTerlaksana / weeklyMax) * 100) + "%"}></div></div><span class="text-right font-mono text-neutral-600 dark:text-neutral-300">{week.tidakTerlaksana}</span></div>
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+
+				<div class="rounded-xl border border-neutral-200/80 bg-white dark:border-white/[0.06] dark:bg-neutral-925/50">
+					<div class="border-b border-neutral-200/70 px-5 py-4 dark:border-white/[0.05]">
+						<h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Performa per guru</h3>
+						<p class="mt-1 text-xs text-neutral-500">Diurutkan dari kepatuhan terendah agar masalah lebih cepat terlihat. Badal dinilai pada guru PIC kelas.</p>
+					</div>
+					{#if teacherPerformance.length === 0}
+						<p class="p-5 text-sm text-neutral-500">Belum ada data guru untuk periode ini.</p>
+					{:else}
+						<div class="max-h-[420px] overflow-auto">
+							<table class="min-w-[720px] w-full text-sm">
+								<thead class="sticky top-0 bg-neutral-50 text-xs text-neutral-500 dark:bg-neutral-900"><tr><th class="px-4 py-3 text-left font-semibold">Guru</th><th class="px-3 py-3 text-right font-semibold">Jadwal</th><th class="px-3 py-3 text-right font-semibold">Sesuai</th><th class="px-3 py-3 text-right font-semibold">Reschedule</th><th class="px-3 py-3 text-right font-semibold">Badal</th><th class="px-3 py-3 text-right font-semibold">Tidak terlaksana</th><th class="px-4 py-3 text-right font-semibold">Kepatuhan</th></tr></thead>
+								<tbody class="divide-y divide-neutral-100 dark:divide-white/[0.04]">
+									{#each teacherPerformance as item}
+										<tr class="hover:bg-neutral-50/70 dark:hover:bg-white/[0.02]">
+											<td class="px-4 py-3 font-medium text-neutral-800 dark:text-neutral-200">{#if item.guruID}<button type="button" onclick={() => filterByGuru(item.guruID)} class="text-left hover:text-brand-600 dark:hover:text-brand-400">{item.nama}</button>{:else}{item.nama}{/if}</td>
+											<td class="px-3 py-3 text-right font-mono text-neutral-600 dark:text-neutral-300">{item.jadwal}</td>
+											<td class="px-3 py-3 text-right font-mono text-neutral-600 dark:text-neutral-300">{item.sesuai}</td>
+											<td class="px-3 py-3 text-right font-mono text-neutral-600 dark:text-neutral-300">{item.reschedule}</td>
+											<td class="px-3 py-3 text-right font-mono text-neutral-600 dark:text-neutral-300">{item.badal}</td>
+											<td class="px-3 py-3 text-right font-mono {item.tidakTerlaksana > 0 ? 'font-semibold text-red-600 dark:text-red-400' : 'text-neutral-600 dark:text-neutral-300'}">{item.tidakTerlaksana}</td>
+											<td class="px-4 py-3 text-right">{#if item.jatuhTempo > 0}<span class="font-semibold {item.kepatuhan >= 90 ? 'text-emerald-600 dark:text-emerald-400' : item.kepatuhan >= 75 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}">{formatPercent(item.kepatuhan)}</span>{:else}<span class="text-neutral-400">-</span>{/if}</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					{/if}
+				</div>
+			</div>
+		</section>
 
 		<section aria-labelledby="session-list-title" aria-busy={filtering}>
 			<div class="mb-3 flex items-center justify-between gap-3">
