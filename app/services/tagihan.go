@@ -254,10 +254,26 @@ func (s *TagihanService) createTagihanForMonth(ctx context.Context, q *queries.Q
 	if trigger.Tanggal.IsZero() {
 		trigger.Tanggal = time.Now()
 	}
+	pertemuanID := trigger.PertemuanID
+	if pertemuanID.Valid {
+		used, err := q.CountTagihanSantriPertemuan(ctx, queries.CountTagihanSantriPertemuanParams{
+			SantriID:    santriID,
+			PertemuanID: pertemuanID,
+		})
+		if err != nil {
+			return err
+		}
+		// During one-time replay of legacy billing, the old invoice may already
+		// point at the same boundary meeting. Preserve that history and create the
+		// newly aligned period without reusing the unique pertemuan_id.
+		if used > 0 {
+			pertemuanID = sql.NullInt64{}
+		}
+	}
 	_, err = q.CreateTagihan(ctx, queries.CreateTagihanParams{
 		SantriID:      santriID,
 		KelasID:       trigger.KelasID,
-		PertemuanID:   trigger.PertemuanID,
+		PertemuanID:   pertemuanID,
 		BulanKe:       bulanKe,
 		PertemuanKe:   trigger.PertemuanKe,
 		Nominal:       santri.Nominal,
