@@ -32,7 +32,11 @@ func (s *KelasEngineService) WithBilling(billing billingFrequencyReconciler) *Ke
 }
 
 func (s *KelasEngineService) WithQuerier(querier *queries.Querier) *KelasEngineService {
-	return &KelasEngineService{querier: querier, billing: s.billing}
+	var billing billingFrequencyReconciler
+	if s != nil {
+		billing = s.billing
+	}
+	return &KelasEngineService{querier: querier, billing: billing}
 }
 
 func (s *KelasEngineService) HitungTipe(kelasKode string) string {
