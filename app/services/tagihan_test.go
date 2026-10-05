@@ -309,9 +309,9 @@ func TestBaselineNomorKelasTidakMenentukanBulanTagihan(t *testing.T) {
 	next, err := queries.NewQuerier(db).GetNextPertemuanKe(context.Background(), kelasID)
 	require.NoError(t, err)
 	require.EqualValues(t, 233, next)
-	require.Error(t, NewKelasService(queries.NewQuerier(db)).SetPertemuanTerakhir(kelasID, 300))
 
 	generateMeetings(t, db, service, kelasID, santriID, 233, 4, "hadir")
+	require.Error(t, NewKelasService(queries.NewQuerier(db)).SetPertemuanTerakhir(kelasID, 300))
 	var bulanKe, pertemuanKe int64
 	require.NoError(t, db.QueryRow(`SELECT bulan_ke, pertemuan_ke FROM tagihan`).Scan(&bulanKe, &pertemuanKe))
 	require.EqualValues(t, 2, bulanKe)
