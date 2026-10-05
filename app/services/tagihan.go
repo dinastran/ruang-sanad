@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -37,108 +36,233 @@ func frekuensiKePertemuan(frekuensi string) (int64, error) {
 	}
 }
 
-func (s *TagihanService) GenerateForPertemuan(pertemuanID int64) error {
-	return s.generateForPertemuan(pertemuanID, true)
+type tagihanTrigger struct {
+	KelasID       sql.NullInt64
+	PertemuanID   sql.NullInt64
+	PertemuanKe   int64
+	Tanggal       time.Time
+	AngkatanKelas string
 }
 
-// GenerateOnCompletion runs immediately before a meeting is persisted as
-// selesai, so a generation error cannot leave a completed meeting unbilled.
+func (s *TagihanService) GenerateForPertemuan(pertemuanID int64) error {
+	ctx := context.Background()
+	tx, err := s.querier.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.querier.WithTx(tx)
+	if err := s.generateForPertemuanWithQuerier(ctx, q, pertemuanID, true); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// GenerateOnCompletion runs before the meeting is persisted as selesai. The
+// caller's transaction therefore contains attendance, billing progress, invoice
+// generation, and meeting completion atomically.
 func (s *TagihanService) GenerateOnCompletion(pertemuanID int64) error {
-	return s.generateForPertemuan(pertemuanID, false)
+	ctx := context.Background()
+	tx, err := s.querier.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.querier.WithTx(tx)
+	if err := s.generateForPertemuanWithQuerier(ctx, q, pertemuanID, false); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *TagihanService) GenerateOnCompletionWithQuerier(querier *queries.Querier, pertemuanID int64) error {
-	return (&TagihanService{querier: querier, template: s.template}).generateForPertemuan(pertemuanID, false)
+	return s.generateForPertemuanWithQuerier(context.Background(), querier, pertemuanID, false)
 }
 
-func (s *TagihanService) generateForPertemuan(pertemuanID int64, requireSelesai bool) error {
-	ctx := context.Background()
-	p, err := s.querier.GetPertemuanByID(ctx, pertemuanID)
+func (s *TagihanService) generateForPertemuanWithQuerier(ctx context.Context, q *queries.Querier, pertemuanID int64, requireSelesai bool) error {
+	p, err := q.GetPertemuanByID(ctx, pertemuanID)
 	if err != nil {
 		return err
 	}
 	if requireSelesai && p.Status != "selesai" {
 		return nil
 	}
-	kelas, err := s.querier.GetKelasByID(ctx, p.KelasID)
+
+	kelas, err := q.GetKelasByID(ctx, p.KelasID)
 	if err != nil {
 		return err
 	}
-	santri, err := s.querier.GetSantriByKelasID(ctx, sql.NullInt64{Int64: p.KelasID, Valid: true})
+	absensi, err := q.GetAbsensiByPertemuan(ctx, p.ID)
 	if err != nil {
 		return err
 	}
-	for _, st := range santri {
-		n, err := frekuensiKePertemuan(st.Frekuensi)
-		if err != nil || p.PertemuanKe < 2*n || p.PertemuanKe%n != 0 {
-			continue
-		}
-		bulanKe := p.PertemuanKe / n
-		periodeMulai := int64(1)
-		if st.PertemuanAwal > 0 {
-			periodeMulai = (st.PertemuanAwal + n - 1) / n
-		}
-		if bulanKe < periodeMulai {
-			continue
-		}
-		bulanKe, ok, err := s.bulanTagihanSantri(ctx, st.ID, p.ID, bulanKe)
-		if err != nil {
+
+	for _, a := range absensi {
+		// On the first run after the billing migration, rebuild this santri's
+		// progress from every completed historical attendance first. Existing
+		// bulan_ke invoices are anchors and will not be duplicated.
+		if err := s.backfillSantriBilling(ctx, q, a.SantriID); err != nil {
 			return err
 		}
-		if !ok {
-			continue
-		}
-		if _, err := s.querier.CreateTagihan(ctx, queries.CreateTagihanParams{
-			SantriID: st.ID, KelasID: sql.NullInt64{Int64: p.KelasID, Valid: true},
-			PertemuanID: sql.NullInt64{Int64: p.ID, Valid: true}, BulanKe: bulanKe,
-			PertemuanKe: p.PertemuanKe, Nominal: st.Nominal, TanggalTagih: p.Tanggal,
-			JatuhTempo:    sql.NullTime{Time: p.Tanggal.AddDate(0, 0, 7), Valid: true},
+		event := queries.SantriBillingMeetingRow{
+			PertemuanID:   p.ID,
+			KelasID:       p.KelasID,
+			PertemuanKe:   p.PertemuanKe,
+			Tanggal:       p.Tanggal,
+			Frekuensi:     kelas.Frekuensi,
 			AngkatanKelas: kelas.Angkatan,
-		}); err != nil {
+		}
+		if err := s.processBillingMeeting(ctx, q, a.SantriID, event); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// bulanTagihanSantri returns the bulan_ke to bill a santri for a meeting, or
-// ok=false when that meeting is already billed. bulan_ke follows the class's
-// meeting count, but a santri moved from a class further ahead already holds
-// those numbers; the bill then continues after their last bulan instead of
-// being dropped by the (santri_id, bulan_ke) conflict — provided the santri was
-// on that meeting's roster.
-func (s *TagihanService) bulanTagihanSantri(ctx context.Context, santriID, pertemuanID, bulanKelas int64) (int64, bool, error) {
-	billed, err := s.querier.CountTagihanSantriPertemuan(ctx, queries.CountTagihanSantriPertemuanParams{
-		SantriID:    santriID,
-		PertemuanID: sql.NullInt64{Int64: pertemuanID, Valid: true},
-	})
-	if err != nil || billed > 0 {
-		return 0, false, err
-	}
-	taken, err := s.querier.CountTagihanSantriBulan(ctx, queries.CountTagihanSantriBulanParams{SantriID: santriID, BulanKe: bulanKelas})
+func (s *TagihanService) backfillSantriBilling(ctx context.Context, q *queries.Querier, santriID int64) error {
+	events, err := q.ListUnprocessedBillingMeetingsForSantri(ctx, santriID)
 	if err != nil {
-		return 0, false, err
+		return err
 	}
-	if taken == 0 {
-		return bulanKelas, true, nil
-	}
-	// Continue numbering only for a meeting the santri actually attended the
-	// roster of (an absensi row exists). Otherwise Sync would bill past meetings
-	// they missed on cuti/nonaktif once they are aktif again.
-	if _, err := s.querier.GetAbsensiByPertemuanAndSantri(ctx, queries.GetAbsensiByPertemuanAndSantriParams{
-		PertemuanID: pertemuanID,
-		SantriID:    santriID,
-	}); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, false, nil
+	for _, event := range events {
+		if err := s.processBillingMeeting(ctx, q, santriID, event); err != nil {
+			return err
 		}
-		return 0, false, err
 	}
-	maxBulan, err := s.querier.GetMaxBulanKeSantri(ctx, santriID)
+	return nil
+}
+
+func (s *TagihanService) processBillingMeeting(ctx context.Context, q *queries.Querier, santriID int64, event queries.SantriBillingMeetingRow) error {
+	processed, err := q.MarkSantriBillingMeetingProcessed(ctx, santriID, event.PertemuanID, event.Frekuensi)
 	if err != nil {
-		return 0, false, err
+		return err
 	}
-	return maxBulan + 1, true, nil
+	if !processed {
+		return nil
+	}
+
+	threshold, err := frekuensiKePertemuan(event.Frekuensi)
+	if err != nil {
+		// Unsupported products remain outside the recurring SPP engine, matching
+		// the previous behavior. The event is still recorded so Sync cannot
+		// repeatedly reconsider the same meeting.
+		return nil
+	}
+
+	progress, err := q.GetOrCreateSantriBillingProgress(ctx, santriID)
+	if err != nil {
+		return err
+	}
+	progress.MeetingCount++
+
+	trigger := tagihanTrigger{
+		KelasID:       sql.NullInt64{Int64: event.KelasID, Valid: event.KelasID > 0},
+		PertemuanID:   sql.NullInt64{Int64: event.PertemuanID, Valid: event.PertemuanID > 0},
+		PertemuanKe:   event.PertemuanKe,
+		Tanggal:       event.Tanggal,
+		AngkatanKelas: event.AngkatanKelas,
+	}
+	if err := s.consumeBillingThreshold(ctx, q, santriID, &progress, threshold, trigger); err != nil {
+		return err
+	}
+	return q.UpdateSantriBillingProgress(ctx, santriID, progress.MeetingCount, progress.LastBilledMonth)
+}
+
+func (s *TagihanService) consumeBillingThreshold(ctx context.Context, q *queries.Querier, santriID int64, progress *queries.SantriBillingProgressRow, threshold int64, trigger tagihanTrigger) error {
+	for threshold > 0 && progress.MeetingCount >= threshold {
+		nextMonth := progress.LastBilledMonth + 1
+		existing, err := q.CountTagihanSantriBulan(ctx, queries.CountTagihanSantriBulanParams{
+			SantriID: santriID,
+			BulanKe:  nextMonth,
+		})
+		if err != nil {
+			return err
+		}
+		if existing == 0 {
+			if err := s.createTagihanForMonth(ctx, q, santriID, nextMonth, trigger); err != nil {
+				return err
+			}
+		}
+		progress.LastBilledMonth = nextMonth
+		progress.MeetingCount -= threshold
+	}
+	return nil
+}
+
+func (s *TagihanService) createTagihanForMonth(ctx context.Context, q *queries.Querier, santriID, bulanKe int64, trigger tagihanTrigger) error {
+	santri, err := q.GetSantriByID(ctx, santriID)
+	if err != nil {
+		return err
+	}
+	angkatanKelas := trigger.AngkatanKelas
+	if angkatanKelas == "" {
+		angkatanKelas = santri.AngkatanKelas
+	}
+	if trigger.Tanggal.IsZero() {
+		trigger.Tanggal = time.Now()
+	}
+	_, err = q.CreateTagihan(ctx, queries.CreateTagihanParams{
+		SantriID:      santriID,
+		KelasID:       trigger.KelasID,
+		PertemuanID:   trigger.PertemuanID,
+		BulanKe:       bulanKe,
+		PertemuanKe:   trigger.PertemuanKe,
+		Nominal:       santri.Nominal,
+		TanggalTagih:  trigger.Tanggal,
+		JatuhTempo:    sql.NullTime{Time: trigger.Tanggal.AddDate(0, 0, 7), Valid: true},
+		AngkatanKelas: angkatanKelas,
+	})
+	return err
+}
+
+// ReconcileFrequencyChangeWithQuerier applies a new frequency to the existing
+// per-santri counter without resetting it. Example: 6/8 changed to 1x/pekan
+// immediately bills one period at the change date and carries 2/4 forward.
+func (s *TagihanService) ReconcileFrequencyChangeWithQuerier(q *queries.Querier, santriID int64, oldFrekuensi, newFrekuensi string, changedAt time.Time) error {
+	if strings.EqualFold(strings.TrimSpace(oldFrekuensi), strings.TrimSpace(newFrekuensi)) {
+		return nil
+	}
+	ctx := context.Background()
+	if err := s.backfillSantriBilling(ctx, q, santriID); err != nil {
+		return err
+	}
+	threshold, err := frekuensiKePertemuan(newFrekuensi)
+	if err != nil {
+		return nil
+	}
+	progress, err := q.GetOrCreateSantriBillingProgress(ctx, santriID)
+	if err != nil {
+		return err
+	}
+	if progress.MeetingCount < threshold {
+		return nil
+	}
+
+	santri, err := q.GetSantriByID(ctx, santriID)
+	if err != nil {
+		return err
+	}
+	trigger := tagihanTrigger{
+		KelasID:       santri.KelasID,
+		Tanggal:       changedAt,
+		AngkatanKelas: santri.AngkatanKelas,
+	}
+	if trigger.Tanggal.IsZero() {
+		trigger.Tanggal = time.Now()
+	}
+	if santri.KelasID.Valid {
+		if kelas, err := q.GetKelasByID(ctx, santri.KelasID.Int64); err == nil {
+			trigger.AngkatanKelas = kelas.Angkatan
+		}
+	}
+	if latest, err := q.GetLatestProcessedBillingMeetingForSantri(ctx, santriID); err == nil {
+		trigger.PertemuanKe = latest.PertemuanKe
+	}
+
+	if err := s.consumeBillingThreshold(ctx, q, santriID, &progress, threshold, trigger); err != nil {
+		return err
+	}
+	return q.UpdateSantriBillingProgress(ctx, santriID, progress.MeetingCount, progress.LastBilledMonth)
 }
 
 func (s *TagihanService) Sync() error {
