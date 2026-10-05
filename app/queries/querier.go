@@ -537,6 +537,133 @@ func financeNullablePositiveInt64(v int64) sql.NullInt64 {
 	return sql.NullInt64{Int64: v, Valid: v > 0}
 }
 
+// --- Per-santri billing progress helpers ---
+
+type SantriBillingProgressRow struct {
+	SantriID        int64
+	MeetingCount    int64
+	LastBilledMonth int64
+}
+
+type SantriBillingMeetingRow struct {
+	PertemuanID    int64
+	KelasID        int64
+	PertemuanKe    int64
+	Tanggal        time.Time
+	Frekuensi      string
+	AngkatanKelas  string
+}
+
+func (q *Querier) GetOrCreateSantriBillingProgress(ctx context.Context, santriID int64) (SantriBillingProgressRow, error) {
+	if _, err := q.Queries.db.ExecContext(ctx, `
+INSERT INTO santri_billing_progress (santri_id, meeting_count, last_billed_month)
+VALUES (?, 0, 1)
+ON CONFLICT(santri_id) DO NOTHING
+`, santriID); err != nil {
+		return SantriBillingProgressRow{}, err
+	}
+	var row SantriBillingProgressRow
+	err := q.Queries.db.QueryRowContext(ctx, `
+SELECT santri_id, meeting_count, last_billed_month
+FROM santri_billing_progress
+WHERE santri_id = ?
+`, santriID).Scan(&row.SantriID, &row.MeetingCount, &row.LastBilledMonth)
+	return row, err
+}
+
+func (q *Querier) UpdateSantriBillingProgress(ctx context.Context, santriID, meetingCount, lastBilledMonth int64) error {
+	_, err := q.Queries.db.ExecContext(ctx, `
+UPDATE santri_billing_progress
+SET meeting_count = ?, last_billed_month = ?, updated_at = CURRENT_TIMESTAMP
+WHERE santri_id = ?
+`, meetingCount, lastBilledMonth, santriID)
+	return err
+}
+
+func (q *Querier) MarkSantriBillingMeetingProcessed(ctx context.Context, santriID, pertemuanID int64, frekuensi string) (bool, error) {
+	result, err := q.Queries.db.ExecContext(ctx, `
+INSERT INTO santri_billing_meeting (santri_id, pertemuan_id, frekuensi)
+VALUES (?, ?, ?)
+ON CONFLICT(santri_id, pertemuan_id) DO NOTHING
+`, santriID, pertemuanID, frekuensi)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rows > 0, nil
+}
+
+func (q *Querier) ListUnprocessedBillingMeetingsForSantri(ctx context.Context, santriID int64) ([]SantriBillingMeetingRow, error) {
+	rows, err := q.Queries.db.QueryContext(ctx, `
+SELECT p.id,
+       p.kelas_id,
+       p.pertemuan_ke,
+       p.tanggal,
+       COALESCE(NULLIF(k.frekuensi, ''), NULLIF(s.frekuensi, ''), '') AS frekuensi,
+       COALESCE(NULLIF(k.angkatan, ''), s.angkatan_kelas, '') AS angkatan_kelas
+FROM absensi a
+JOIN pertemuan p ON p.id = a.pertemuan_id
+JOIN santri s ON s.id = a.santri_id
+LEFT JOIN kelas k ON k.id = p.kelas_id
+LEFT JOIN santri_billing_meeting bm
+       ON bm.santri_id = a.santri_id AND bm.pertemuan_id = a.pertemuan_id
+WHERE a.santri_id = ?
+  AND p.status = 'selesai'
+  AND bm.id IS NULL
+ORDER BY p.tanggal, p.id, a.id
+`, santriID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []SantriBillingMeetingRow{}
+	for rows.Next() {
+		var row SantriBillingMeetingRow
+		if err := rows.Scan(
+			&row.PertemuanID,
+			&row.KelasID,
+			&row.PertemuanKe,
+			&row.Tanggal,
+			&row.Frekuensi,
+			&row.AngkatanKelas,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+func (q *Querier) GetLatestProcessedBillingMeetingForSantri(ctx context.Context, santriID int64) (SantriBillingMeetingRow, error) {
+	var row SantriBillingMeetingRow
+	err := q.Queries.db.QueryRowContext(ctx, `
+SELECT p.id,
+       p.kelas_id,
+       p.pertemuan_ke,
+       p.tanggal,
+       bm.frekuensi,
+       COALESCE(NULLIF(k.angkatan, ''), s.angkatan_kelas, '') AS angkatan_kelas
+FROM santri_billing_meeting bm
+JOIN pertemuan p ON p.id = bm.pertemuan_id
+JOIN santri s ON s.id = bm.santri_id
+LEFT JOIN kelas k ON k.id = p.kelas_id
+WHERE bm.santri_id = ?
+ORDER BY p.tanggal DESC, p.id DESC, bm.id DESC
+LIMIT 1
+`, santriID).Scan(
+		&row.PertemuanID,
+		&row.KelasID,
+		&row.PertemuanKe,
+		&row.Tanggal,
+		&row.Frekuensi,
+		&row.AngkatanKelas,
+	)
+	return row, err
+}
+
 // --- Santri Admin Kelas note helpers ---
 
 type SantriAdminNoteRow struct {
