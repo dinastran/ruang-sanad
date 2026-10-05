@@ -18,6 +18,7 @@ func setupTagihanService(t *testing.T, frekuensi string, pertemuanAwal int64) (*
 	t.Helper()
 	db, err := sql.Open("sqlite", ":memory:")
 	require.NoError(t, err)
+	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
 	_, err = db.Exec(`PRAGMA foreign_keys = ON`)
 	require.NoError(t, err)
@@ -27,7 +28,7 @@ func setupTagihanService(t *testing.T, frekuensi string, pertemuanAwal int64) (*
 	require.NoError(t, err)
 	kelasID, err := lastID(db)
 	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO santri (nama, nominal, frekuensi, kelas_id, status, pertemuan_awal) VALUES ('Ahmad', 100000, ?, ?, 'aktif', ?)`, frekuensi, kelasID, pertemuanAwal)
+	_, err = db.Exec(`INSERT INTO santri (nama, jenis_kelamin, nominal, frekuensi, kelas_id, status, pertemuan_awal, angkatan_kelas) VALUES ('Ahmad', 'L', 100000, ?, ?, 'aktif', ?, '2026')`, frekuensi, kelasID, pertemuanAwal)
 	require.NoError(t, err)
 	return db, NewTagihanService(queries.NewQuerier(db)), kelasID
 }
@@ -39,6 +40,37 @@ func createSelesaiPertemuan(t *testing.T, db *sql.DB, kelasID, pertemuanKe int64
 	id, err := lastID(db)
 	require.NoError(t, err)
 	return id
+}
+
+func firstSantriID(t *testing.T, db *sql.DB) int64 {
+	t.Helper()
+	var id int64
+	require.NoError(t, db.QueryRow(`SELECT id FROM santri ORDER BY id LIMIT 1`).Scan(&id))
+	return id
+}
+
+func addAbsensi(t *testing.T, db *sql.DB, pertemuanID, santriID int64, status string) {
+	t.Helper()
+	_, err := db.Exec(`INSERT INTO absensi (pertemuan_id, santri_id, status) VALUES (?, ?, ?)`, pertemuanID, santriID, status)
+	require.NoError(t, err)
+}
+
+func createMeetingWithAbsensi(t *testing.T, db *sql.DB, kelasID, pertemuanKe, santriID int64, status string) int64 {
+	t.Helper()
+	id := createSelesaiPertemuan(t, db, kelasID, pertemuanKe)
+	addAbsensi(t, db, id, santriID, status)
+	return id
+}
+
+func generateMeetings(t *testing.T, db *sql.DB, service *TagihanService, kelasID, santriID, start, count int64, status string) []int64 {
+	t.Helper()
+	ids := make([]int64, 0, count)
+	for i := int64(0); i < count; i++ {
+		id := createMeetingWithAbsensi(t, db, kelasID, start+i, santriID, status)
+		require.NoError(t, service.GenerateForPertemuan(id))
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func lastID(db *sql.DB) (int64, error) {
@@ -54,84 +86,224 @@ func tagihanCount(t *testing.T, db *sql.DB) int64 {
 	return count
 }
 
-func TestGenerateTagihanRegulerDanIdempoten(t *testing.T) {
+func TestTagihan1xTerbitSetelahEmpatPertemuanSantri(t *testing.T) {
 	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
-	pertemuan4 := createSelesaiPertemuan(t, db, kelasID, 4)
-	require.NoError(t, service.GenerateForPertemuan(pertemuan4))
+	santriID := firstSantriID(t, db)
+
+	ids := generateMeetings(t, db, service, kelasID, santriID, 1, 3, "hadir")
+	require.Len(t, ids, 3)
 	require.Zero(t, tagihanCount(t, db))
-	pertemuan8 := createSelesaiPertemuan(t, db, kelasID, 8)
-	require.NoError(t, service.GenerateForPertemuan(pertemuan8))
-	require.NoError(t, service.GenerateForPertemuan(pertemuan8))
+
+	p4 := createMeetingWithAbsensi(t, db, kelasID, 4, santriID, "hadir")
+	require.NoError(t, service.GenerateForPertemuan(p4))
 	require.EqualValues(t, 1, tagihanCount(t, db))
-	var bulanKe, nominal int64
-	require.NoError(t, db.QueryRow(`SELECT bulan_ke, nominal FROM tagihan`).Scan(&bulanKe, &nominal))
+	var bulanKe, pertemuanKe int64
+	require.NoError(t, db.QueryRow(`SELECT bulan_ke, pertemuan_ke FROM tagihan`).Scan(&bulanKe, &pertemuanKe))
 	require.EqualValues(t, 2, bulanKe)
-	require.EqualValues(t, 100000, nominal)
-	_, err := db.Exec(`UPDATE santri SET nominal = 200000`)
-	require.NoError(t, err)
-	pertemuan12 := createSelesaiPertemuan(t, db, kelasID, 12)
-	require.NoError(t, service.GenerateForPertemuan(pertemuan12))
-	var snapshot int64
-	require.NoError(t, db.QueryRow(`SELECT nominal FROM tagihan WHERE bulan_ke = 2`).Scan(&snapshot))
-	require.EqualValues(t, 100000, snapshot)
+	require.EqualValues(t, 4, pertemuanKe)
+
+	generateMeetings(t, db, service, kelasID, santriID, 5, 4, "hadir")
+	require.EqualValues(t, 2, tagihanCount(t, db))
+	require.NoError(t, db.QueryRow(`SELECT pertemuan_ke FROM tagihan WHERE bulan_ke = 3`).Scan(&pertemuanKe))
+	require.EqualValues(t, 8, pertemuanKe)
+
+	require.NoError(t, service.GenerateForPertemuan(p4))
+	require.NoError(t, service.Sync())
+	require.EqualValues(t, 2, tagihanCount(t, db), "retry dan Sync tidak boleh menggandakan tagihan")
 }
 
-func TestGenerateTagihanIntensifDanAnchorSantri(t *testing.T) {
+func TestTagihan2xTerbitSetelahDelapanPertemuanSantri(t *testing.T) {
 	db, service, kelasID := setupTagihanService(t, "2x/pekan", 0)
-	pertemuan8 := createSelesaiPertemuan(t, db, kelasID, 8)
-	require.NoError(t, service.GenerateForPertemuan(pertemuan8))
+	santriID := firstSantriID(t, db)
+
+	generateMeetings(t, db, service, kelasID, santriID, 1, 7, "hadir")
 	require.Zero(t, tagihanCount(t, db))
-	pertemuan16 := createSelesaiPertemuan(t, db, kelasID, 16)
-	require.NoError(t, service.GenerateForPertemuan(pertemuan16))
+	generateMeetings(t, db, service, kelasID, santriID, 8, 1, "hadir")
 	require.EqualValues(t, 1, tagihanCount(t, db))
 
-	dbAnchor, anchorService, anchorKelasID := setupTagihanService(t, "1x/pekan", 9)
-	anchored8 := createSelesaiPertemuan(t, dbAnchor, anchorKelasID, 8)
-	require.NoError(t, anchorService.GenerateForPertemuan(anchored8))
-	require.Zero(t, tagihanCount(t, dbAnchor))
-	anchored12 := createSelesaiPertemuan(t, dbAnchor, anchorKelasID, 12)
-	require.NoError(t, anchorService.GenerateForPertemuan(anchored12))
-	require.EqualValues(t, 1, tagihanCount(t, dbAnchor))
+	generateMeetings(t, db, service, kelasID, santriID, 9, 8, "hadir")
+	require.EqualValues(t, 2, tagihanCount(t, db))
+	var bulan2, bulan3 int64
+	require.NoError(t, db.QueryRow(`SELECT pertemuan_ke FROM tagihan WHERE bulan_ke = 2`).Scan(&bulan2))
+	require.NoError(t, db.QueryRow(`SELECT pertemuan_ke FROM tagihan WHERE bulan_ke = 3`).Scan(&bulan3))
+	require.EqualValues(t, 8, bulan2)
+	require.EqualValues(t, 16, bulan3)
 }
 
-func TestBaselinePertemuanMempertahankanNomorTagihanRiil(t *testing.T) {
+func TestSemuaStatusAbsensiMenghitungSatuPertemuan(t *testing.T) {
 	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
+	santriID := firstSantriID(t, db)
+	statuses := []string{"hadir", "izin", "sakit", "alpa"}
+	for i, status := range statuses {
+		p := createMeetingWithAbsensi(t, db, kelasID, int64(i+1), santriID, status)
+		require.NoError(t, service.GenerateForPertemuan(p))
+	}
+	require.EqualValues(t, 1, tagihanCount(t, db))
+
+	p5 := createMeetingWithAbsensi(t, db, kelasID, 5, santriID, "telat")
+	require.NoError(t, service.GenerateForPertemuan(p5))
+	var counter int64
+	require.NoError(t, db.QueryRow(`SELECT meeting_count FROM santri_billing_progress WHERE santri_id = ?`, santriID).Scan(&counter))
+	require.EqualValues(t, 1, counter, "status telat juga bernilai satu pertemuan")
+}
+
+func TestSantriMasukTengahKelasMengikutiPertemuanPribadi(t *testing.T) {
+	db, service, kelasID := setupTagihanService(t, "1x/pekan", 7)
+	santriID := firstSantriID(t, db)
+
+	// Nomor kelas sudah P7, tetapi ini adalah pertemuan pertama santri.
+	generateMeetings(t, db, service, kelasID, santriID, 7, 3, "hadir")
+	require.Zero(t, tagihanCount(t, db))
+	p10 := createMeetingWithAbsensi(t, db, kelasID, 10, santriID, "hadir")
+	require.NoError(t, service.GenerateForPertemuan(p10))
+
+	var bulanKe, pertemuanKe int64
+	require.NoError(t, db.QueryRow(`SELECT bulan_ke, pertemuan_ke FROM tagihan`).Scan(&bulanKe, &pertemuanKe))
+	require.EqualValues(t, 2, bulanKe)
+	require.EqualValues(t, 10, pertemuanKe)
+}
+
+func TestCutiTidakMenambahCounterDanAktifKembaliMelanjutkan(t *testing.T) {
+	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
+	santriID := firstSantriID(t, db)
+	generateMeetings(t, db, service, kelasID, santriID, 1, 3, "hadir")
+
+	// Saat cuti santri tidak ada di roster, sehingga tidak ada row absensi dan
+	// dua pertemuan kelas berikutnya tidak boleh menggerakkan billing.
+	for _, ke := range []int64{4, 5} {
+		p := createSelesaiPertemuan(t, db, kelasID, ke)
+		require.NoError(t, service.GenerateForPertemuan(p))
+	}
+	require.Zero(t, tagihanCount(t, db))
+
+	p6 := createMeetingWithAbsensi(t, db, kelasID, 6, santriID, "izin")
+	require.NoError(t, service.GenerateForPertemuan(p6))
+	var pertemuanKe int64
+	require.NoError(t, db.QueryRow(`SELECT pertemuan_ke FROM tagihan WHERE bulan_ke = 2`).Scan(&pertemuanKe))
+	require.EqualValues(t, 6, pertemuanKe)
+}
+
+func TestPindahKelasTidakMeresetCounter(t *testing.T) {
+	db, service, asalID := setupTagihanService(t, "1x/pekan", 0)
+	santriID := firstSantriID(t, db)
+	generateMeetings(t, db, service, asalID, santriID, 1, 2, "hadir")
+
+	_, err := db.Exec(`INSERT INTO kelas (kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, kapasitas, jumlah_santri) VALUES ('B', '2027', 'Reguler', 'L', 'Dasar', '1x/pekan', 'Selasa', 1, 'Kelas Tujuan', 20, 0)`)
+	require.NoError(t, err)
+	tujuanID, err := lastID(db)
+	require.NoError(t, err)
+	_, err = db.Exec(`UPDATE santri SET kelas_id = ?, angkatan_kelas = '2027' WHERE id = ?`, tujuanID, santriID)
+	require.NoError(t, err)
+
+	generateMeetings(t, db, service, tujuanID, santriID, 1, 2, "hadir")
+	var bulanKe, kelasTagihan int64
+	require.NoError(t, db.QueryRow(`SELECT bulan_ke, kelas_id FROM tagihan`).Scan(&bulanKe, &kelasTagihan))
+	require.EqualValues(t, 2, bulanKe)
+	require.EqualValues(t, tujuanID, kelasTagihan)
+}
+
+func TestFrekuensiNaikMempertahankanCounter(t *testing.T) {
+	db, service, asalID := setupTagihanService(t, "1x/pekan", 0)
+	santriID := firstSantriID(t, db)
+	generateMeetings(t, db, service, asalID, santriID, 1, 2, "hadir")
+
+	_, err := db.Exec(`INSERT INTO kelas (kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, kapasitas, jumlah_santri) VALUES ('B2', '2026', 'Reguler', 'L', 'Dasar', '2x/pekan', 'Selasa', 1, 'Kelas 2x', 20, 0)`)
+	require.NoError(t, err)
+	tujuanID, err := lastID(db)
+	require.NoError(t, err)
+	engine := NewKelasEngineService(queries.NewQuerier(db)).WithBilling(service)
+	require.NoError(t, engine.PindahkanSantri(context.Background(), santriID, tujuanID))
+
+	var counter int64
+	require.NoError(t, db.QueryRow(`SELECT meeting_count FROM santri_billing_progress WHERE santri_id = ?`, santriID).Scan(&counter))
+	require.EqualValues(t, 2, counter)
+	require.Zero(t, tagihanCount(t, db))
+
+	generateMeetings(t, db, service, tujuanID, santriID, 1, 6, "hadir")
+	require.EqualValues(t, 1, tagihanCount(t, db), "2 pertemuan lama + 6 pertemuan baru memenuhi threshold 8")
+}
+
+func TestFrekuensiTurunLangsungMenagihDanMembawaSisaCounter(t *testing.T) {
+	db, service, kelasID := setupTagihanService(t, "2x/pekan", 0)
+	santriID := firstSantriID(t, db)
+	generateMeetings(t, db, service, kelasID, santriID, 1, 6, "hadir")
+	require.Zero(t, tagihanCount(t, db))
+
+	changedAt := time.Date(2026, 8, 5, 11, 30, 0, 0, time.Local)
+	_, err := db.Exec(`UPDATE santri SET frekuensi = '1x/pekan' WHERE id = ?`, santriID)
+	require.NoError(t, err)
+	_, err = db.Exec(`UPDATE kelas SET frekuensi = '1x/pekan' WHERE id = ?`, kelasID)
+	require.NoError(t, err)
+	require.NoError(t, service.ReconcileFrequencyChangeWithQuerier(queries.NewQuerier(db), santriID, "2x/pekan", "1x/pekan", changedAt))
+
+	var bulanKe, counter int64
+	var tanggal time.Time
+	require.NoError(t, db.QueryRow(`SELECT bulan_ke, tanggal_tagih FROM tagihan`).Scan(&bulanKe, &tanggal))
+	require.EqualValues(t, 2, bulanKe)
+	require.Equal(t, changedAt.Format("2006-01-02"), tanggal.Format("2006-01-02"))
+	require.NoError(t, db.QueryRow(`SELECT meeting_count FROM santri_billing_progress WHERE santri_id = ?`, santriID).Scan(&counter))
+	require.EqualValues(t, 2, counter)
+
+	generateMeetings(t, db, service, kelasID, santriID, 7, 2, "hadir")
+	require.EqualValues(t, 2, tagihanCount(t, db))
+	require.NoError(t, db.QueryRow(`SELECT bulan_ke FROM tagihan WHERE bulan_ke = 3`).Scan(&bulanKe))
+	require.EqualValues(t, 3, bulanKe)
+}
+
+func TestReplayHistoriLamaMembuatHanyaPeriodeYangBelumAda(t *testing.T) {
+	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
+	santriID := firstSantriID(t, db)
+	var p8 int64
+	for ke := int64(1); ke <= 8; ke++ {
+		p := createMeetingWithAbsensi(t, db, kelasID, ke, santriID, "hadir")
+		if ke == 8 {
+			p8 = p
+		}
+	}
+	// Bentuk histori lama: bulan 2 baru tercatat di P8.
+	_, err := db.Exec(`INSERT INTO tagihan (santri_id, kelas_id, pertemuan_id, bulan_ke, pertemuan_ke, nominal, tanggal_tagih, jatuh_tempo, angkatan_kelas) VALUES (?, ?, ?, 2, 8, 100000, '2026-07-09', '2026-07-16', '2026')`, santriID, kelasID, p8)
+	require.NoError(t, err)
+
+	require.NoError(t, service.Sync())
+	require.EqualValues(t, 2, tagihanCount(t, db))
+	var month3Pertemuan int64
+	require.NoError(t, db.QueryRow(`SELECT pertemuan_ke FROM tagihan WHERE bulan_ke = 3`).Scan(&month3Pertemuan))
+	require.EqualValues(t, 8, month3Pertemuan)
+
+	require.NoError(t, service.Sync())
+	require.EqualValues(t, 2, tagihanCount(t, db))
+}
+
+func TestBaselineNomorKelasTidakMenentukanBulanTagihan(t *testing.T) {
+	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
+	santriID := firstSantriID(t, db)
 	_, err := db.Exec(`UPDATE kelas SET pertemuan_terakhir = 232 WHERE id = ?`, kelasID)
 	require.NoError(t, err)
 
 	next, err := queries.NewQuerier(db).GetNextPertemuanKe(context.Background(), kelasID)
 	require.NoError(t, err)
 	require.EqualValues(t, 233, next)
-
-	pertemuan233 := createSelesaiPertemuan(t, db, kelasID, 233)
-	require.NoError(t, service.GenerateForPertemuan(pertemuan233))
-	require.Zero(t, tagihanCount(t, db))
 	require.Error(t, NewKelasService(queries.NewQuerier(db)).SetPertemuanTerakhir(kelasID, 300))
 
-	pertemuan236 := createSelesaiPertemuan(t, db, kelasID, 236)
-	require.NoError(t, service.GenerateForPertemuan(pertemuan236))
-	require.EqualValues(t, 1, tagihanCount(t, db))
-
+	generateMeetings(t, db, service, kelasID, santriID, 233, 4, "hadir")
 	var bulanKe, pertemuanKe int64
 	require.NoError(t, db.QueryRow(`SELECT bulan_ke, pertemuan_ke FROM tagihan`).Scan(&bulanKe, &pertemuanKe))
-	require.EqualValues(t, 59, bulanKe)
+	require.EqualValues(t, 2, bulanKe)
 	require.EqualValues(t, 236, pertemuanKe)
 }
 
 func TestTagihanKeepsBilledClassCohortAfterSantriMoves(t *testing.T) {
 	db, service, oldKelasID := setupTagihanService(t, "1x/pekan", 0)
-	_, err := db.Exec(`UPDATE santri SET angkatan_kelas = '2026'`)
-	require.NoError(t, err)
-	pertemuan8 := createSelesaiPertemuan(t, db, oldKelasID, 8)
-	require.NoError(t, service.GenerateForPertemuan(pertemuan8))
+	santriID := firstSantriID(t, db)
+	generateMeetings(t, db, service, oldKelasID, santriID, 1, 4, "hadir")
 	var tagihanID int64
 	require.NoError(t, db.QueryRow(`SELECT id FROM tagihan`).Scan(&tagihanID))
 
-	_, err = db.Exec(`INSERT INTO kelas (kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, kapasitas) VALUES ('NEW', '2027', 'Reguler', 'L', 'Dasar', '1x/pekan', 'Selasa', 1, 'Kelas Baru', 20)`)
+	_, err := db.Exec(`INSERT INTO kelas (kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, kapasitas) VALUES ('NEW', '2027', 'Reguler', 'L', 'Dasar', '1x/pekan', 'Selasa', 1, 'Kelas Baru', 20)`)
 	require.NoError(t, err)
 	newKelasID, err := lastID(db)
 	require.NoError(t, err)
-	_, err = db.Exec(`UPDATE santri SET kelas_id = ?, angkatan_kelas = '2027'`, newKelasID)
+	_, err = db.Exec(`UPDATE santri SET kelas_id = ?, angkatan_kelas = '2027' WHERE id = ?`, newKelasID, santriID)
 	require.NoError(t, err)
 
 	item, err := service.Get(tagihanID)
@@ -150,12 +322,6 @@ func TestTagihanKeepsBilledClassCohortAfterSantriMoves(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "2026", item.AngkatanKelas)
 	require.Nil(t, item.KelasID)
-	oldCohort, err = service.List(models.TagihanFilter{AngkatanKelas: "2026"})
-	require.NoError(t, err)
-	require.Len(t, oldCohort, 1)
-	newCohort, err = service.List(models.TagihanFilter{AngkatanKelas: "2027"})
-	require.NoError(t, err)
-	require.Empty(t, newCohort)
 }
 
 func TestMigration0027SnapshotsExistingTagihanClassCohort(t *testing.T) {
@@ -199,61 +365,15 @@ func TestTagihanWhatsAppHelpers(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestTagihanSantriPindahKeKelasTertinggalMelanjutkanBulan(t *testing.T) {
-	db, service, asalID := setupTagihanService(t, "1x/pekan", 0)
-	require.NoError(t, service.GenerateForPertemuan(createSelesaiPertemuan(t, db, asalID, 8)))
-	require.NoError(t, service.GenerateForPertemuan(createSelesaiPertemuan(t, db, asalID, 12)))
-	require.EqualValues(t, 2, tagihanCount(t, db))
-
-	// Pindah ke kelas yang baru di pertemuan 1 (anchor = pertemuan berikutnya).
-	_, err := db.Exec(`INSERT INTO kelas (kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, kapasitas) VALUES ('B', '2026', 'Reguler', 'L', 'Dasar', '1x/pekan', 'Selasa', 1, 'Kelas Tujuan', 20)`)
-	require.NoError(t, err)
-	tujuanID, err := lastID(db)
-	require.NoError(t, err)
-	_, err = db.Exec(`UPDATE santri SET kelas_id = ?, pertemuan_awal = 2`, tujuanID)
-	require.NoError(t, err)
-
-	var santriID int64
-	require.NoError(t, db.QueryRow(`SELECT id FROM santri`).Scan(&santriID))
-	hadir := func(pertemuanID int64) {
-		_, err := db.Exec(`INSERT INTO absensi (pertemuan_id, santri_id, status) VALUES (?, ?, 'hadir')`, pertemuanID, santriID)
-		require.NoError(t, err)
-	}
-
-	p8 := createSelesaiPertemuan(t, db, tujuanID, 8)
-	hadir(p8)
-	require.NoError(t, service.GenerateForPertemuan(p8))
-	require.NoError(t, service.GenerateForPertemuan(p8), "idempoten per pertemuan")
-	p12 := createSelesaiPertemuan(t, db, tujuanID, 12)
-	hadir(p12)
-	require.NoError(t, service.GenerateForPertemuan(p12))
-	// Pertemuan 16 tanpa absensi santri (mis. sedang cuti): Sync tidak boleh
-	// menagihnya sebagai bulan lanjutan.
-	createSelesaiPertemuan(t, db, tujuanID, 16)
-	require.NoError(t, service.Sync())
-
-	rows, err := db.Query(`SELECT bulan_ke FROM tagihan WHERE kelas_id = ? ORDER BY bulan_ke`, tujuanID)
-	require.NoError(t, err)
-	defer rows.Close()
-	var bulan []int64
-	for rows.Next() {
-		var b int64
-		require.NoError(t, rows.Scan(&b))
-		bulan = append(bulan, b)
-	}
-	require.Equal(t, []int64{4, 5}, bulan, "tagihan di kelas tujuan melanjutkan bulan, tidak hilang")
-}
-
-
 func TestTagihanNominalSyncOverrideResetDanLunas(t *testing.T) {
 	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
-	require.NoError(t, service.GenerateForPertemuan(createSelesaiPertemuan(t, db, kelasID, 8)))
+	santriID := firstSantriID(t, db)
+	generateMeetings(t, db, service, kelasID, santriID, 1, 4, "hadir")
 
-	var tagihanID, santriID int64
-	require.NoError(t, db.QueryRow(`SELECT id, santri_id FROM tagihan`).Scan(&tagihanID, &santriID))
+	var tagihanID int64
+	require.NoError(t, db.QueryRow(`SELECT id FROM tagihan`).Scan(&tagihanID))
 	q := queries.NewQuerier(db)
 
-	// Nominal master baru mengalir ke tagihan terbuka yang belum dioverride.
 	_, err := db.Exec(`UPDATE santri SET nominal = 200000 WHERE id = ?`, santriID)
 	require.NoError(t, err)
 	require.NoError(t, q.SyncOpenTagihanNominalForSantri(context.Background(), santriID, 200000))
@@ -262,7 +382,6 @@ func TestTagihanNominalSyncOverrideResetDanLunas(t *testing.T) {
 	require.EqualValues(t, 200000, item.Nominal)
 	require.False(t, item.NominalOverride)
 
-	// Override Finance hanya berlaku pada tagihan ini dan kebal dari sync master.
 	require.NoError(t, service.SetNominalOverride(tagihanID, 0, 150000))
 	item, err = service.Get(tagihanID)
 	require.NoError(t, err)
@@ -276,14 +395,12 @@ func TestTagihanNominalSyncOverrideResetDanLunas(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 150000, item.Nominal)
 
-	// Reset mengembalikan tagihan ke nominal master terbaru.
 	require.NoError(t, service.ResetNominalOverride(tagihanID))
 	item, err = service.Get(tagihanID)
 	require.NoError(t, err)
 	require.EqualValues(t, 250000, item.Nominal)
 	require.False(t, item.NominalOverride)
 
-	// Setelah lunas, perubahan master berikutnya tidak mengubah histori transaksi.
 	userResult, err := db.Exec(`INSERT INTO users (email, name, role) VALUES ('finance-test@example.com', 'Finance Test', 'keuangan')`)
 	require.NoError(t, err)
 	userID, err := userResult.LastInsertId()
@@ -300,9 +417,10 @@ func TestTagihanNominalSyncOverrideResetDanLunas(t *testing.T) {
 
 func TestTagihanFollowUpMultiTemplateCustomDanHistory(t *testing.T) {
 	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
-	_, err := db.Exec(`UPDATE santri SET no_wa = '081234567890', id_mahasantri = 'RS-TEST-001'`)
+	santriID := firstSantriID(t, db)
+	_, err := db.Exec(`UPDATE santri SET no_wa = '081234567890', id_mahasantri = 'RS-TEST-001' WHERE id = ?`, santriID)
 	require.NoError(t, err)
-	require.NoError(t, service.GenerateForPertemuan(createSelesaiPertemuan(t, db, kelasID, 8)))
+	generateMeetings(t, db, service, kelasID, santriID, 1, 4, "hadir")
 
 	var tagihanID int64
 	require.NoError(t, db.QueryRow(`SELECT id FROM tagihan`).Scan(&tagihanID))
