@@ -9,12 +9,19 @@ type ClassMonitoringFilter struct {
 }
 
 type ClassMonitoringSummary struct {
-	Total         int64 `json:"total"`
-	BelumMulai    int64 `json:"belum_mulai"`
-	Berlangsung   int64 `json:"berlangsung"`
-	Selesai       int64 `json:"selesai"`
-	Dibatalkan    int64 `json:"dibatalkan"`
-	PerluTindakan int64 `json:"perlu_tindakan"`
+	Total                    int64   `json:"total"`
+	BelumMulai               int64   `json:"belum_mulai"`
+	Berlangsung              int64   `json:"berlangsung"`
+	Selesai                  int64   `json:"selesai"`
+	Dibatalkan               int64   `json:"dibatalkan"`
+	PerluTindakan            int64   `json:"perlu_tindakan"`
+	TotalJadwal              int64   `json:"total_jadwal"`
+	JatuhTempo               int64   `json:"jatuh_tempo"`
+	TerlaksanaSesuaiJadwal   int64   `json:"terlaksana_sesuai_jadwal"`
+	Reschedule               int64   `json:"reschedule"`
+	Badal                    int64   `json:"badal"`
+	TidakTerlaksana          int64   `json:"tidak_terlaksana"`
+	KepatuhanJadwal          float64 `json:"kepatuhan_jadwal"`
 }
 
 type MonitoringAttendance struct {
@@ -56,6 +63,7 @@ type ClassMonitoringItem struct {
 	ScheduleNote       string                 `json:"schedule_note"`
 	Status             string                 `json:"status"`
 	ScheduleStatus     string                 `json:"schedule_status"`
+	JatuhTempo         bool                   `json:"jatuh_tempo"`
 	IsReschedule       bool                   `json:"is_reschedule"`
 	JadwalSemula       string                 `json:"jadwal_semula"`
 	AlasanReschedule   string                 `json:"alasan_reschedule"`
