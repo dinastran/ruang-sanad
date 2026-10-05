@@ -19,6 +19,15 @@ jobs:
           go-version-file: go.mod
           cache: false
 
+      - name: Gofmt check
+        run: |
+          files="app/queries/querier.go app/services/kelas_engine.go app/services/tagihan.go app/services/tagihan_test.go app/services/kelas_perubahan_test.go cmd/laju-go/main.go"
+          diff="$(gofmt -d $files)"
+          if [ -n "$diff" ]; then
+            printf '%s\n' "$diff"
+            exit 1
+          fi
+
       - name: Targeted billing tests
         run: go test ./app/services -run 'Test(Tagihan|SemuaStatus|SantriMasuk|Cuti|Pindah|Frekuensi|Replay|Baseline)' -count=1
 
