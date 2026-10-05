@@ -9,13 +9,15 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      GOFLAGS: -mod=mod
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
 
       - name: Targeted billing tests
         run: go test ./app/services -run 'Test(Tagihan|SemuaStatus|SantriMasuk|Cuti|Pindah|Frekuensi|Replay|Baseline)' -count=1
