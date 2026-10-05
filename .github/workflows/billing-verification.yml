@@ -1,0 +1,27 @@
+name: Billing Verification
+
+on:
+  push:
+    branches:
+      - feature/santri-billing-counter
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Targeted billing tests
+        run: go test ./app/services -run 'Test(Tagihan|SemuaStatus|SantriMasuk|Cuti|Pindah|Frekuensi|Replay|Baseline)' -count=1
+
+      - name: Service package regression
+        run: go test ./app/services -count=1
+
+      - name: Go regression
+        run: go test ./... -count=1
