@@ -13,16 +13,26 @@ import (
 
 const DefaultKapasitas = 15
 
+type billingFrequencyReconciler interface {
+	ReconcileFrequencyChangeWithQuerier(*queries.Querier, int64, string, string, time.Time) error
+}
+
 type KelasEngineService struct {
-	querier *queries.Querier
+	querier  *queries.Querier
+	billing  billingFrequencyReconciler
 }
 
 func NewKelasEngineService(querier *queries.Querier) *KelasEngineService {
 	return &KelasEngineService{querier: querier}
 }
 
+func (s *KelasEngineService) WithBilling(billing billingFrequencyReconciler) *KelasEngineService {
+	s.billing = billing
+	return s
+}
+
 func (s *KelasEngineService) WithQuerier(querier *queries.Querier) *KelasEngineService {
-	return &KelasEngineService{querier: querier}
+	return &KelasEngineService{querier: querier, billing: s.billing}
 }
 
 func (s *KelasEngineService) HitungTipe(kelasKode string) string {
@@ -166,6 +176,11 @@ func (s *KelasEngineService) ProcessSantri(ctx context.Context, santri *queries.
 	}); err != nil {
 		return err
 	}
+	if s.billing != nil && santri.Frekuensi != frekuensi {
+		if err := s.billing.ReconcileFrequencyChangeWithQuerier(s.querier, santri.ID, santri.Frekuensi, frekuensi, now); err != nil {
+			return fmt.Errorf("reconcile billing setelah perubahan frekuensi: %w", err)
+		}
+	}
 	if kelasID.Valid && (!santri.KelasID.Valid || santri.KelasID.Int64 != kelasID.Int64) {
 		anchor := int64(0)
 		next, err := s.querier.GetNextPertemuanKe(ctx, kelasID.Int64)
@@ -263,7 +278,13 @@ func (s *KelasEngineService) PindahkanSantri(ctx context.Context, santriID, kela
 		ID:            santriID,
 	}
 	if santri.KelasID.Valid && santri.KelasID.Int64 == kelasTujuanID {
-		return s.querier.UpdateSantriKelas(ctx, updateTarget)
+		if err := s.querier.UpdateSantriKelas(ctx, updateTarget); err != nil {
+			return err
+		}
+		if s.billing != nil && santri.Frekuensi != kelasTujuan.Frekuensi {
+			return s.billing.ReconcileFrequencyChangeWithQuerier(s.querier, santriID, santri.Frekuensi, kelasTujuan.Frekuensi, now)
+		}
+		return nil
 	}
 	// Moving an aktif santri changes both rosters; a meeting in progress in
 	// either class could then not be finished.
@@ -284,6 +305,11 @@ func (s *KelasEngineService) PindahkanSantri(ctx context.Context, santriID, kela
 
 	if err := s.querier.UpdateSantriKelas(ctx, updateTarget); err != nil {
 		return err
+	}
+	if s.billing != nil && santri.Frekuensi != kelasTujuan.Frekuensi {
+		if err := s.billing.ReconcileFrequencyChangeWithQuerier(s.querier, santriID, santri.Frekuensi, kelasTujuan.Frekuensi, now); err != nil {
+			return fmt.Errorf("reconcile billing setelah pindah frekuensi: %w", err)
+		}
 	}
 	anchor := int64(0)
 	next, err := s.querier.GetNextPertemuanKe(ctx, kelasTujuanID)
