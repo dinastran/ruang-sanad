@@ -18,8 +18,8 @@ type billingFrequencyReconciler interface {
 }
 
 type KelasEngineService struct {
-	querier  *queries.Querier
-	billing  billingFrequencyReconciler
+	querier *queries.Querier
+	billing billingFrequencyReconciler
 }
 
 func NewKelasEngineService(querier *queries.Querier) *KelasEngineService {
