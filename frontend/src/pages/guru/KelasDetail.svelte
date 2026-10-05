@@ -9,7 +9,7 @@
 	import { Toast } from "@lib/notifications/toast";
 	import {
 		ArrowLeft, BookOpen, Users, Calendar, CalendarClock, Clock, Play, ClipboardList, MessageSquare,
-		FileText, User as UserIcon, ChevronDown, ChevronRight, ExternalLink, Copy, Check
+		FileText, User as UserIcon, ChevronDown, ChevronRight, ExternalLink, Copy, Check, Search, RotateCcw
 	} from "lucide-svelte";
 
 	interface Props {
@@ -54,6 +54,45 @@
 		open: false, santriId: 0, santriNama: "", notes: [], catatan: "", loading: false
 	});
 	let expandedRiwayat = $state<Record<number, boolean>>({});
+	let searchQuery = $state("");
+	let attendanceFilter = $state("all");
+	let recordFilter = $state("all");
+	let domicileFilter = $state("");
+	let domicileOptions = $derived(
+		Array.from(new Set(santri.map((item) => item.domisili?.trim()).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b)),
+	);
+	let hasActiveFilters = $derived(
+		searchQuery.trim() !== "" || attendanceFilter !== "all" || recordFilter !== "all" || domicileFilter !== "",
+	);
+	let filteredSantri = $derived(
+		santri.filter((item) => {
+			const query = searchQuery.trim().toLowerCase();
+			const matchesSearch =
+				query === "" ||
+				item.nama.toLowerCase().includes(query) ||
+				item.id_mahasantri.toLowerCase().includes(query);
+			const matchesAttendance =
+				attendanceFilter === "all" ||
+				(attendanceFilter === "good" && item.persen_hadir >= 85) ||
+				(attendanceFilter === "warning" && item.persen_hadir >= 70 && item.persen_hadir < 85) ||
+				(attendanceFilter === "low" && item.persen_hadir < 70);
+			const matchesRecord =
+				recordFilter === "all" ||
+				(recordFilter === "alpa" && item.total_alpa > 0) ||
+				(recordFilter === "late" && item.total_telat > 0) ||
+				(recordFilter === "izin-sakit" && item.total_izin + item.total_sakit > 0) ||
+				(recordFilter === "clean" && item.total_alpa === 0 && item.total_telat === 0);
+			const matchesDomicile = domicileFilter === "" || item.domisili === domicileFilter;
+			return matchesSearch && matchesAttendance && matchesRecord && matchesDomicile;
+		}),
+	);
+
+	function resetFilters() {
+		searchQuery = "";
+		attendanceFilter = "all";
+		recordFilter = "all";
+		domicileFilter = "";
+	}
 
 	function openRiayahModal(s: SantriGuru) {
 		riayahModal = { open: true, santriId: s.id, santriNama: s.nama, notes: [], catatan: "", loading: true };
@@ -208,15 +247,64 @@
 		</div>
 
 		<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 overflow-hidden" in:fly={{ y: 20, duration: 600, delay: 100 }}>
-			<div class="flex items-center justify-between px-6 py-4 border-b border-neutral-200/80 dark:border-white/[0.04]">
+			<div class="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-neutral-200/80 dark:border-white/[0.04]">
 				<div class="flex items-center gap-2.5">
 					<Users class="w-5 h-5 text-neutral-500" />
 					<h3 class="text-base font-semibold text-neutral-900 dark:text-white">Daftar Santri</h3>
-					<span class="text-sm font-normal text-neutral-500">({santri.length} santri)</span>
+					<span class="text-sm font-normal text-neutral-500">({filteredSantri.length} dari {santri.length} santri)</span>
 				</div>
+				{#if hasActiveFilters}
+					<button onclick={resetFilters}
+						class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+					>
+						<RotateCcw class="h-3.5 w-3.5" /> Reset filter
+					</button>
+				{/if}
 			</div>
 
 			{#if santri.length > 0}
+				<div class="grid gap-3 border-b border-neutral-200/80 bg-neutral-50/60 px-4 py-4 dark:border-white/[0.04] dark:bg-neutral-900/30 sm:grid-cols-2 lg:grid-cols-4">
+					<label class="relative sm:col-span-2 lg:col-span-1">
+						<span class="sr-only">Cari mahasantri</span>
+						<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+						<input
+							bind:value={searchQuery}
+							type="search"
+							placeholder="Cari nama atau ID..."
+							class="w-full rounded-xl border border-neutral-300 bg-white py-2.5 pl-9 pr-3 text-sm text-neutral-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-400/15 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+						/>
+					</label>
+
+					<select bind:value={attendanceFilter} aria-label="Filter persentase kehadiran"
+						class="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+					>
+						<option value="all">Semua kehadiran</option>
+						<option value="good">Kehadiran ≥ 85%</option>
+						<option value="warning">Kehadiran 70–84%</option>
+						<option value="low">Kehadiran &lt; 70%</option>
+					</select>
+
+					<select bind:value={recordFilter} aria-label="Filter riwayat absensi"
+						class="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+					>
+						<option value="all">Semua riwayat absensi</option>
+						<option value="alpa">Pernah alpa</option>
+						<option value="late">Pernah telat</option>
+						<option value="izin-sakit">Pernah izin / sakit</option>
+						<option value="clean">Tanpa alpa & telat</option>
+					</select>
+
+					<select bind:value={domicileFilter} aria-label="Filter domisili"
+						class="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+					>
+						<option value="">Semua domisili</option>
+						{#each domicileOptions as domicile}
+							<option value={domicile}>{domicile}</option>
+						{/each}
+					</select>
+				</div>
+
+				{#if filteredSantri.length > 0}
 				<div class="hidden sm:block overflow-x-auto">
 					<table class="w-full">
 						<thead>
@@ -234,7 +322,7 @@
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-neutral-200/80 dark:divide-white/[0.04]">
-							{#each santri as s, i}
+							{#each filteredSantri as s, i}
 								<tr class="hover:bg-neutral-50/50 dark:hover:bg-white/[0.015] transition-colors">
 									<td class="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400 font-mono">{i + 1}</td>
 									<td class="px-4 py-3">
@@ -297,7 +385,7 @@
 				</div>
 
 				<div class="sm:hidden divide-y divide-neutral-200/80 dark:divide-white/[0.04]">
-					{#each santri as s, i}
+					{#each filteredSantri as s, i}
 						<div class="p-4 space-y-2">
 							<div class="flex items-center justify-between">
 								<div class="flex items-center gap-2 min-w-0">
@@ -352,6 +440,16 @@
 						</div>
 					{/each}
 				</div>
+				{:else}
+					<div class="p-10 text-center">
+						<Search class="mx-auto mb-3 h-6 w-6 text-neutral-400" />
+						<p class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Tidak ada mahasantri yang sesuai filter</p>
+						<p class="mt-1 text-xs text-neutral-500">Ubah pencarian atau reset filter untuk menampilkan semua mahasantri.</p>
+						<button onclick={resetFilters} class="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-neutral-100 px-3 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700">
+							<RotateCcw class="h-3.5 w-3.5" /> Reset filter
+						</button>
+					</div>
+				{/if}
 			{:else}
 				<div class="p-12 text-center">
 					<div class="w-12 h-12 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mx-auto mb-3">
