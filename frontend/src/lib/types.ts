@@ -259,6 +259,13 @@ export interface MonitoringKelasSummary {
 	selesai: number;
 	dibatalkan: number;
 	perlu_tindakan: number;
+	total_jadwal: number;
+	jatuh_tempo: number;
+	terlaksana_sesuai_jadwal: number;
+	reschedule: number;
+	badal: number;
+	tidak_terlaksana: number;
+	kepatuhan_jadwal: number;
 }
 
 export interface MonitoringKelasAttendance {
@@ -300,6 +307,7 @@ export interface MonitoringKelasItem {
 	schedule_note: string;
 	status: "belum_mulai" | "berlangsung" | "selesai" | "dibatalkan" | "terlambat";
 	schedule_status: string;
+	jatuh_tempo: boolean;
 	is_reschedule: boolean;
 	jadwal_semula: string;
 	alasan_reschedule: string;
