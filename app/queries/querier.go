@@ -546,28 +546,52 @@ type SantriBillingProgressRow struct {
 }
 
 type SantriBillingMeetingRow struct {
-	PertemuanID    int64
-	KelasID        int64
-	PertemuanKe    int64
-	Tanggal        time.Time
-	Frekuensi      string
-	AngkatanKelas  string
+	PertemuanID   int64
+	KelasID       int64
+	PertemuanKe   int64
+	Tanggal       time.Time
+	Frekuensi     string
+	AngkatanKelas string
 }
 
-func (q *Querier) GetOrCreateSantriBillingProgress(ctx context.Context, santriID int64) (SantriBillingProgressRow, error) {
-	if _, err := q.Queries.db.ExecContext(ctx, `
-INSERT INTO santri_billing_progress (santri_id, meeting_count, last_billed_month)
-VALUES (?, 0, 1)
-ON CONFLICT(santri_id) DO NOTHING
-`, santriID); err != nil {
-		return SantriBillingProgressRow{}, err
-	}
+type SantriBillingAnchorRow struct {
+	BulanKe      int64
+	PertemuanID  sql.NullInt64
+}
+
+func (q *Querier) GetSantriBillingProgress(ctx context.Context, santriID int64) (SantriBillingProgressRow, error) {
 	var row SantriBillingProgressRow
 	err := q.Queries.db.QueryRowContext(ctx, `
 SELECT santri_id, meeting_count, last_billed_month
 FROM santri_billing_progress
 WHERE santri_id = ?
 `, santriID).Scan(&row.SantriID, &row.MeetingCount, &row.LastBilledMonth)
+	return row, err
+}
+
+func (q *Querier) CreateSantriBillingProgress(ctx context.Context, santriID, lastBilledMonth int64) (SantriBillingProgressRow, error) {
+	if lastBilledMonth < 1 {
+		lastBilledMonth = 1
+	}
+	if _, err := q.Queries.db.ExecContext(ctx, `
+INSERT INTO santri_billing_progress (santri_id, meeting_count, last_billed_month)
+VALUES (?, 0, ?)
+ON CONFLICT(santri_id) DO NOTHING
+`, santriID, lastBilledMonth); err != nil {
+		return SantriBillingProgressRow{}, err
+	}
+	return q.GetSantriBillingProgress(ctx, santriID)
+}
+
+func (q *Querier) GetLatestTagihanBillingAnchor(ctx context.Context, santriID int64) (SantriBillingAnchorRow, error) {
+	var row SantriBillingAnchorRow
+	err := q.Queries.db.QueryRowContext(ctx, `
+SELECT bulan_ke, pertemuan_id
+FROM tagihan
+WHERE santri_id = ?
+ORDER BY bulan_ke DESC, id DESC
+LIMIT 1
+`, santriID).Scan(&row.BulanKe, &row.PertemuanID)
 	return row, err
 }
 
