@@ -594,7 +594,7 @@
 						<div class="flex items-center gap-2">
 							<span class="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Level</span>
 							<button onclick={openLevelModal} class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold text-brand-600 hover:bg-brand-400/10 dark:text-brand-400">
-								<Pencil class="w-3 h-3" /> Ganti
+								<Pencil class="w-3 h-3" /> Ganti referensi
 							</button>
 						</div>
 						<p class="text-lg font-semibold text-neutral-900 dark:text-white mt-1">{levelKelasNama}</p>
@@ -605,7 +605,7 @@
 					</div>
 					<div>
 						<div class="flex items-center gap-2">
-							<span class="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Jadwal</span>
+							<span class="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Jadwal referensi</span>
 							<button onclick={openJadwalModal} class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold text-brand-600 hover:bg-brand-400/10 dark:text-brand-400">
 								<Pencil class="w-3 h-3" /> Ganti
 							</button>
@@ -1165,8 +1165,8 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
 		<button class="absolute inset-0 w-full h-full bg-neutral-900/50 backdrop-blur-sm" aria-label="Tutup modal" onclick={() => (jadwalModalOpen = false)}></button>
 		<div class="relative w-full max-w-md bg-white dark:bg-neutral-925 rounded-2xl shadow-xl border border-neutral-200/80 dark:border-white/[0.06] p-6" in:fly={{ y: 20, duration: 200 }}>
-			<h3 class="text-lg font-bold text-neutral-900 dark:text-white mb-1">Ganti Jadwal Kelas</h3>
-			<p class="text-sm text-neutral-600 dark:text-neutral-400 mb-4">Jadwal rutin saat ini: <strong>{kelas.jadwal || "-"}</strong>. Perubahan berlaku permanen untuk pertemuan berikutnya.</p>
+			<h3 class="text-lg font-bold text-neutral-900 dark:text-white mb-1">Ganti Jadwal Referensi</h3>
+			<p class="text-sm text-neutral-600 dark:text-neutral-400 mb-4">Referensi jadwal master saat ini: <strong>{kelas.jadwal || "-"}</strong>. Ini bukan sumber occurrence otomatis. Gunakan bagian Jadwal rutin otomatis pada halaman kelas untuk mengatur hari dan jam aktual.</p>
 			<label for="jadwal-baru" class="block text-xs font-medium uppercase tracking-wider text-neutral-500 mb-1.5">Jadwal baru</label>
 			<select id="jadwal-baru" bind:value={jadwalBaru} class="w-full px-4 py-3 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-sm">
 				<option value="" disabled>Pilih jadwal dari master</option>
@@ -1179,7 +1179,7 @@
 			<div class="mt-5 flex items-center gap-3">
 				<button onclick={() => (jadwalModalOpen = false)} class="flex-1 px-4 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-700/80 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">Batal</button>
 				<button onclick={submitGantiJadwal} disabled={!jadwalBaru || jadwalBaru === kelas.jadwal || isJadwalLoading} class="flex-1 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold transition-all dark:bg-brand-500 dark:hover:bg-brand-400 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
-					{isJadwalLoading ? "Menyimpan..." : "Ganti Jadwal"}
+					{isJadwalLoading ? "Menyimpan..." : "Ganti referensi"}
 				</button>
 			</div>
 		</div>
