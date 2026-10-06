@@ -100,6 +100,16 @@ WHERE kelas_id = ? AND is_aktif = 1 AND berlaku_sampai IS NULL
 	return err
 }
 
+func (q *Querier) DeleteFutureRoutineSchedules(ctx context.Context, kelasID int64, afterDate time.Time) error {
+	_, err := q.Queries.db.ExecContext(ctx, `
+DELETE FROM kelas_jadwal_rutin
+WHERE kelas_id = ?
+  AND is_aktif = 1
+  AND berlaku_mulai > ?
+`, kelasID, afterDate)
+	return err
+}
+
 func (q *Querier) DeleteFutureRoutineOccurrences(ctx context.Context, kelasID int64, afterDate time.Time) error {
 	_, err := q.Queries.db.ExecContext(ctx, `
 DELETE FROM jadwal_pertemuan
@@ -114,6 +124,33 @@ WHERE kelas_id = ?
 }
 
 func (q *Querier) CreateRoutineOccurrence(ctx context.Context, routineID, kelasID int64, tanggal time.Time, jamMulai string) (bool, error) {
+	adopted, err := q.Queries.db.ExecContext(ctx, `
+UPDATE jadwal_pertemuan
+SET jadwal_rutin_id = ?, tanggal_rutin = ?, is_otomatis = 1,
+    jadwal_kelas_berubah = 0, updated_at = CURRENT_TIMESTAMP
+WHERE id = (
+    SELECT id
+    FROM jadwal_pertemuan
+    WHERE kelas_id = ?
+      AND tanggal = ?
+      AND jam_mulai = ?
+      AND jadwal_rutin_id IS NULL
+      AND status = 'dijadwalkan'
+      AND is_reschedule = 0
+      AND guru_pengganti_id IS NULL
+    ORDER BY id
+    LIMIT 1
+)
+`, routineID, tanggal, kelasID, tanggal, jamMulai)
+	if err != nil {
+		return false, err
+	}
+	if rows, err := adopted.RowsAffected(); err != nil {
+		return false, err
+	} else if rows > 0 {
+		return true, nil
+	}
+
 	result, err := q.Queries.db.ExecContext(ctx, `
 INSERT OR IGNORE INTO jadwal_pertemuan
 (kelas_id, tanggal, jam_mulai, catatan, dibuat_oleh, jadwal_rutin_id, tanggal_rutin, is_otomatis)
