@@ -215,7 +215,7 @@
 	function buildTeacherPerformance(items: MonitoringKelasItem[]): TeacherPerformance[] {
 		const grouped = new Map<string, TeacherPerformance>();
 		for (const item of items) {
-			if (item.tanpa_jadwal) continue;
+			if (item.tanpa_jadwal || item.is_tambahan) continue;
 			const key = item.guru_utama_id ? String(item.guru_utama_id) : `nama:${item.guru_utama_nama || "belum-ditetapkan"}`;
 			let row = grouped.get(key);
 			if (!row) {
@@ -251,7 +251,7 @@
 	}
 
 	function buildWeeklyAnalysis(items: MonitoringKelasItem[], selectedStart: string): WeeklyAnalysis[] {
-		const scheduled = items.filter((item) => !item.tanpa_jadwal && item.tanggal);
+		const scheduled = items.filter((item) => !item.tanpa_jadwal && !item.is_tambahan && item.tanggal);
 		if (scheduled.length === 0) return [];
 		const sortedDates = scheduled.map((item) => item.tanggal.slice(0, 10)).sort();
 		const baseValue = selectedStart || sortedDates[0];
