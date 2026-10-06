@@ -29,6 +29,10 @@ func (s *KoordinatorMonitoringService) List(filter models.ClassMonitoringFilter)
 	if err := s.jadwalService.EnsureRoutineOccurrences(start, end, nil); err != nil {
 		return nil, err
 	}
+	extraScheduleIDs, err := s.querier.ListExtraScheduleIDsForRange(context.Background(), start, end)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.querier.ListClassMonitoringSchedules(context.Background(), queries.ListClassMonitoringSchedulesParams{
 		StartDate: start,
 		EndDate:   end,
@@ -47,7 +51,9 @@ func (s *KoordinatorMonitoringService) List(filter models.ClassMonitoringFilter)
 	now := time.Now()
 	items := make([]models.ClassMonitoringItem, 0, len(rows)+len(unscheduled))
 	for _, row := range rows {
-		items = append(items, mapClassMonitoringItem(row, now))
+		item := mapClassMonitoringItem(row, now)
+		item.IsTambahan = extraScheduleIDs[item.ScheduleID]
+		items = append(items, item)
 	}
 	for _, row := range unscheduled {
 		items = append(items, mapUnscheduledMonitoringItem(row))
@@ -458,7 +464,7 @@ func updateMonitoringSummary(summary *models.ClassMonitoringSummary, item models
 		summary.PerluTindakan++
 	}
 
-	if item.TanpaJadwal {
+	if item.TanpaJadwal || item.IsTambahan {
 		return
 	}
 	summary.TotalJadwal++
