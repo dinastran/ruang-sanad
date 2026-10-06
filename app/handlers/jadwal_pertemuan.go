@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/models"
@@ -35,14 +36,22 @@ func (h *JadwalPertemuanHandler) Index(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, "/app/guru")
 	}
 
-	jadwal, err := h.jadwalService.List(guruID)
-	if err != nil {
-		h.store.Flash(c, "error", "Gagal memuat jadwal pertemuan")
-		return h.inertiaService.Redirect(c, "/app/guru")
-	}
 	kelas, err := h.guruService.ListKelasForViewer(guruID)
 	if err != nil {
 		h.store.Flash(c, "error", "Gagal memuat daftar kelas")
+		return h.inertiaService.Redirect(c, "/app/guru")
+	}
+	today := startOfTodayForHandler()
+	until := today.AddDate(0, 0, 28)
+	for _, item := range kelas {
+		if err := h.jadwalService.EnsureRoutineOccurrencesForClass(item.ID, today, until); err != nil {
+			h.store.Flash(c, "error", "Gagal menyiapkan jadwal rutin otomatis")
+			return h.inertiaService.Redirect(c, "/app/guru")
+		}
+	}
+	jadwal, err := h.jadwalService.List(guruID)
+	if err != nil {
+		h.store.Flash(c, "error", "Gagal memuat jadwal pertemuan")
 		return h.inertiaService.Redirect(c, "/app/guru")
 	}
 	guruList, _ := h.guruService.ListDirectory()
@@ -159,6 +168,11 @@ func (h *JadwalPertemuanHandler) ensureCanManageClass(c *fiber.Ctx, kelasID int6
 		return 0, err
 	}
 	return userID, nil
+}
+
+func startOfTodayForHandler() time.Time {
+	now := time.Now()
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 }
 
 func scheduleParams(c *fiber.Ctx) (int64, int64) {
