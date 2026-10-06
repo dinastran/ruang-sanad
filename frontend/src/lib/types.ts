@@ -295,6 +295,7 @@ export interface MonitoringKelasActivity {
 export interface MonitoringKelasItem {
 	schedule_id: number;
 	tanpa_jadwal: boolean;
+	is_tambahan: boolean;
 	kelas_id: number;
 	nama_kelas: string;
 	angkatan: string;
