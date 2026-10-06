@@ -262,10 +262,21 @@ func (s *KelasService) SetJadwalRutin(kelasID, userID int64, req models.SetJadwa
 	effectiveStart := today
 	if len(existing) > 0 {
 		effectiveStart = today.AddDate(0, 0, 1)
-		if err := q.CloseActiveRoutineSchedules(ctx, kelasID, today); err != nil {
+		if err := q.DeleteFutureRoutineOccurrences(ctx, kelasID, today); err != nil {
 			return err
 		}
-		if err := q.DeleteFutureRoutineOccurrences(ctx, kelasID, today); err != nil {
+		pendingFuture := true
+		for _, row := range existing {
+			if !routineDate(row.BerlakuMulai, today.Location()).After(today) {
+				pendingFuture = false
+				break
+			}
+		}
+		if pendingFuture {
+			if err := q.DeleteFutureRoutineSchedules(ctx, kelasID, today); err != nil {
+				return err
+			}
+		} else if err := q.CloseActiveRoutineSchedules(ctx, kelasID, today); err != nil {
 			return err
 		}
 	}
