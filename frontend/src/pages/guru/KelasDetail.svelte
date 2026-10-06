@@ -8,7 +8,7 @@
 	import { getCSRFToken } from "@lib/utils/csrf";
 	import { Toast } from "@lib/notifications/toast";
 	import {
-		ArrowLeft, BookOpen, Users, Calendar, CalendarClock, Clock, Play, ClipboardList, MessageSquare,
+		ArrowLeft, BookOpen, Users, Calendar, Clock, Play, ClipboardList, MessageSquare,
 		FileText, User as UserIcon, ChevronDown, ChevronRight, ExternalLink, Copy, Check
 	} from "lucide-svelte";
 
@@ -175,17 +175,11 @@
 		{/if}
 
 		<div class="flex flex-wrap items-center gap-3" in:fly={{ y: 20, duration: 500 }}>
-			{#if canEdit}<a href={"/app/guru/jadwal-pertemuan?kelas_id=" + kelas.id} use:inertia
-				class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-400/10 text-brand-700 dark:text-brand-400 hover:bg-brand-400/20 font-semibold transition-colors text-sm"
-			>
-				<CalendarClock class="w-4 h-4" />
-				Jadwalkan
-			</a>{/if}
 			{#if canEdit && !active_pertemuan}<a href={"/app/guru/kelas/" + kelas.id + "/pertemuan/mulai"} use:inertia
 				class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold transition-all dark:bg-brand-500 dark:hover:bg-brand-400 shadow-lg shadow-brand-600/25 text-sm"
 			>
 				<Play class="w-4 h-4" />
-				Mulai Sekarang
+				Mulai Pertemuan
 			</a>{/if}
 			<a href={"/app/guru/kelas/" + kelas.id + "/rekap"} use:inertia
 				class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 font-semibold transition-colors text-sm"
