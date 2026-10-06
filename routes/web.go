@@ -161,6 +161,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/kelas/:id/materi-individual", akRole, h.Kelas.SetMateriIndividual)
 	protected.Put("/kelas/:id/level", akRole, h.Kelas.GantiLevel)
 	protected.Put("/kelas/:id/jadwal", akRole, h.Kelas.GantiJadwal)
+	protected.Put("/kelas/:id/jadwal-rutin", akRole, h.Kelas.SetJadwalRutin)
 	protected.Post("/kelas/:id/ganti-level-santri", akRole, h.Kelas.GantiLevelSantri)
 	protected.Delete("/kelas/:id", akRole, h.Kelas.Delete)
 
