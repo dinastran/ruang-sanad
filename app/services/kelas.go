@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/maulanashalihin/laju-go/app/models"
@@ -189,6 +191,131 @@ func (s *KelasService) Delete(kelasID int64) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+func (s *KelasService) ListJadwalRutin(kelasID int64) ([]models.JadwalRutinResponse, error) {
+	rows, err := s.querier.ListRoutineSchedulesByClass(context.Background(), kelasID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.JadwalRutinResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, models.JadwalRutinResponse{
+			ID:           row.ID,
+			KelasID:      row.KelasID,
+			Hari:         row.Hari,
+			JamMulai:     row.JamMulai,
+			BerlakuMulai: row.BerlakuMulai.Format("2006-01-02"),
+			IsAktif:      row.IsAktif == 1,
+		})
+	}
+	return out, nil
+}
+
+func (s *KelasService) SetJadwalRutin(kelasID, userID int64, req models.SetJadwalRutinRequest) error {
+	ctx := context.Background()
+	tx, err := s.querier.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := s.querier.WithTx(tx)
+
+	kelas, err := q.GetKelasByID(ctx, kelasID)
+	if err != nil {
+		return fmt.Errorf("kelas tidak ditemukan")
+	}
+	existing, err := q.ListRoutineSchedulesByClass(ctx, kelasID)
+	if err != nil {
+		return err
+	}
+
+	normalized := make([]models.JadwalRutinSlotRequest, 0, len(req.Slots))
+	seen := make(map[string]struct{}, len(req.Slots))
+	for _, slot := range req.Slots {
+		if slot.Hari < 1 || slot.Hari > 7 {
+			return fmt.Errorf("hari jadwal rutin tidak valid")
+		}
+		jam := strings.TrimSpace(slot.JamMulai)
+		if err := validateScheduleTime(jam); err != nil {
+			return err
+		}
+		key := fmt.Sprintf("%d|%s", slot.Hari, jam)
+		if _, ok := seen[key]; ok {
+			return fmt.Errorf("jadwal rutin %s pukul %s tercatat lebih dari sekali", routineDayName(slot.Hari), jam)
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, models.JadwalRutinSlotRequest{Hari: slot.Hari, JamMulai: jam})
+	}
+
+	oldSlots := make([]models.JadwalRutinSlotRequest, 0, len(existing))
+	for _, row := range existing {
+		oldSlots = append(oldSlots, models.JadwalRutinSlotRequest{Hari: row.Hari, JamMulai: row.JamMulai})
+	}
+	oldSummary := formatRoutineSlots(oldSlots)
+	newSummary := formatRoutineSlots(normalized)
+	if oldSummary == newSummary {
+		return fmt.Errorf("jadwal rutin baru sama dengan jadwal saat ini")
+	}
+
+	today := startOfToday()
+	effectiveStart := today
+	if len(existing) > 0 {
+		effectiveStart = today.AddDate(0, 0, 1)
+		if err := q.CloseActiveRoutineSchedules(ctx, kelasID, today); err != nil {
+			return err
+		}
+		if err := q.DeleteFutureRoutineOccurrences(ctx, kelasID, today); err != nil {
+			return err
+		}
+	}
+	for _, slot := range normalized {
+		if _, err := q.CreateRoutineSchedule(ctx, kelasID, slot.Hari, slot.JamMulai, effectiveStart, sql.NullInt64{Int64: userID, Valid: userID > 0}); err != nil {
+			return err
+		}
+	}
+
+	if err := q.CreateKelasPerubahan(ctx, queries.CreateKelasPerubahanParams{
+		KelasID:    sql.NullInt64{Int64: kelasID, Valid: true},
+		Jenis:      PerubahanJadwalRutin,
+		NilaiLama:  oldSummary,
+		NilaiBaru:  newSummary,
+		DibuatOleh: nullUserID(userID),
+	}); err != nil {
+		return err
+	}
+	if kelas.GuruID.Valid {
+		message := fmt.Sprintf("Jadwal rutin otomatis kelas %s diubah dari %s menjadi %s.", kelas.NamaKelas, oldSummary, newSummary)
+		if len(existing) > 0 {
+			message += " Pola baru berlaku mulai besok; jadwal hari ini tidak diubah."
+		}
+		if err := notifyGuruKelas(ctx, q, kelas.GuruID, kelasID, userID, "Jadwal rutin otomatis berubah", message); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func routineDayName(day int64) string {
+	return map[int64]string{1: "Senin", 2: "Selasa", 3: "Rabu", 4: "Kamis", 5: "Jumat", 6: "Sabtu", 7: "Ahad"}[day]
+}
+
+func formatRoutineSlots(slots []models.JadwalRutinSlotRequest) string {
+	if len(slots) == 0 {
+		return "Nonaktif"
+	}
+	copySlots := append([]models.JadwalRutinSlotRequest(nil), slots...)
+	sort.Slice(copySlots, func(i, j int) bool {
+		if copySlots[i].Hari != copySlots[j].Hari {
+			return copySlots[i].Hari < copySlots[j].Hari
+		}
+		return copySlots[i].JamMulai < copySlots[j].JamMulai
+	})
+	parts := make([]string, 0, len(copySlots))
+	for _, slot := range copySlots {
+		parts = append(parts, fmt.Sprintf("%s %s", routineDayName(slot.Hari), slot.JamMulai))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (s *KelasService) CountTotal() (int64, error) {
