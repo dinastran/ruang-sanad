@@ -331,6 +331,7 @@
 													<MoreHorizontal class="h-4 w-4" />
 												</button>
 												{#if openMenuID === item.id}
+													<button class="fixed inset-0 z-30 bg-black/20 sm:hidden" aria-label="Tutup menu aksi" onclick={() => (openMenuID = null)}></button>
 													<div class="fixed inset-x-3 bottom-3 z-40 w-auto overflow-hidden rounded-2xl border border-neutral-200 bg-white p-2 shadow-2xl sm:absolute sm:inset-auto sm:right-0 sm:bottom-auto sm:mt-2 sm:w-48 sm:rounded-xl sm:p-1.5 sm:shadow-xl dark:border-neutral-700 dark:bg-neutral-900">
 														<button onclick={() => openAction("reschedule", item)} class="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800"><RotateCcw class="h-4 w-4 text-blue-500" /> Reschedule</button>
 														<button onclick={() => openAction("badal", item)} class="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800"><UserRoundCheck class="h-4 w-4 text-secondary-500" /> Tetapkan badal</button>
