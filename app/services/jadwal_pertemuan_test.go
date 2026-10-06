@@ -186,6 +186,73 @@ func TestPerubahanJadwalRutinMenjagaExceptionMendatang(t *testing.T) {
 	require.Equal(t, tomorrow.Format("2006-01-02"), active[0].BerlakuMulai)
 }
 
+func TestPerubahanJadwalRutinBerulangDiHariYangSamaMenggantiVersiPending(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	kelasService := NewKelasService(f.querier)
+	today := startOfToday()
+	tomorrow := today.AddDate(0, 0, 1)
+	dayAfterTomorrow := today.AddDate(0, 0, 2)
+
+	require.NoError(t, kelasService.SetJadwalRutin(f.kelasID, f.guruUtamaUser, models.SetJadwalRutinRequest{
+		Slots: []models.JadwalRutinSlotRequest{{Hari: int64(isoWeekday(today)), JamMulai: "08:00"}},
+	}))
+	require.NoError(t, kelasService.SetJadwalRutin(f.kelasID, f.guruUtamaUser, models.SetJadwalRutinRequest{
+		Slots: []models.JadwalRutinSlotRequest{{Hari: int64(isoWeekday(tomorrow)), JamMulai: "09:00"}},
+	}))
+	require.NoError(t, kelasService.SetJadwalRutin(f.kelasID, f.guruUtamaUser, models.SetJadwalRutinRequest{
+		Slots: []models.JadwalRutinSlotRequest{{Hari: int64(isoWeekday(dayAfterTomorrow)), JamMulai: "10:00"}},
+	}))
+
+	active, err := kelasService.ListJadwalRutin(f.kelasID)
+	require.NoError(t, err)
+	require.Len(t, active, 1)
+	require.EqualValues(t, isoWeekday(dayAfterTomorrow), active[0].Hari)
+	require.Equal(t, "10:00", active[0].JamMulai)
+	require.Equal(t, tomorrow.Format("2006-01-02"), active[0].BerlakuMulai)
+
+	var pending int64
+	require.NoError(t, f.db.QueryRow(
+		`SELECT COUNT(*) FROM kelas_jadwal_rutin WHERE kelas_id = ? AND is_aktif = 1 AND berlaku_mulai > ?`,
+		f.kelasID, today,
+	).Scan(&pending))
+	require.EqualValues(t, 1, pending)
+}
+
+func TestGeneratorMengadopsiJadwalManualYangSamaTanpaDuplikasi(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	kelasService := NewKelasService(f.querier)
+	today := startOfToday()
+	manualID, err := f.service.Create(f.guruUtamaUser, models.BuatJadwalPertemuanRequest{
+		KelasID: f.kelasID,
+		Tanggal: today.Format("2006-01-02"),
+		JamMulai: "08:00",
+		Catatan: "Jadwal manual lama",
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, kelasService.SetJadwalRutin(f.kelasID, f.guruUtamaUser, models.SetJadwalRutinRequest{
+		Slots: []models.JadwalRutinSlotRequest{{Hari: int64(isoWeekday(today)), JamMulai: "08:00"}},
+	}))
+	require.NoError(t, f.service.EnsureRoutineOccurrencesForClass(f.kelasID, today, today))
+
+	var total, routineID, isExtra int64
+	require.NoError(t, f.db.QueryRow(
+		`SELECT COUNT(*), COALESCE(MAX(jadwal_rutin_id), 0), COALESCE(MAX(is_tambahan), 0)
+		 FROM jadwal_pertemuan WHERE kelas_id = ? AND tanggal = ? AND jam_mulai = '08:00'`,
+		f.kelasID, today,
+	).Scan(&total, &routineID, &isExtra))
+	require.EqualValues(t, 1, total)
+	require.NotZero(t, routineID)
+	require.Zero(t, isExtra)
+
+	var storedID int64
+	require.NoError(t, f.db.QueryRow(
+		`SELECT id FROM jadwal_pertemuan WHERE kelas_id = ? AND tanggal = ? AND jam_mulai = '08:00'`,
+		f.kelasID, today,
+	).Scan(&storedID))
+	require.Equal(t, manualID, storedID)
+}
+
 func TestJadwalTidakMengambilNomorPertemuanSebelumDimulai(t *testing.T) {
 	f := setupJadwalPertemuanService(t)
 	today := time.Now().Format("2006-01-02")
