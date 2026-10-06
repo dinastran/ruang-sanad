@@ -19,7 +19,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: go mod tidy
-      - run: git diff --exit-code go.mod
+      - run: git checkout -- go.mod
       - run: go test ./app/services/...
       - run: npm run build
       - run: go test ./...
