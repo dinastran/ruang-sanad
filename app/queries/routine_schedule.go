@@ -123,6 +123,43 @@ WHERE kelas_id = ?
 	return err
 }
 
+func (q *Querier) CreateExtraSchedule(ctx context.Context, kelasID int64, tanggal time.Time, jamMulai, catatan string, userID sql.NullInt64) (int64, error) {
+	row := q.Queries.db.QueryRowContext(ctx, `
+INSERT INTO jadwal_pertemuan
+(kelas_id, tanggal, jam_mulai, catatan, dibuat_oleh, is_tambahan)
+VALUES (?, ?, ?, ?, ?, 1)
+RETURNING id
+`, kelasID, tanggal, jamMulai, catatan, userID)
+	var id int64
+	if err := row.Scan(&id); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func (q *Querier) ListExtraScheduleIDsForRange(ctx context.Context, start, end time.Time) (map[int64]bool, error) {
+	rows, err := q.Queries.db.QueryContext(ctx, `
+SELECT id
+FROM jadwal_pertemuan
+WHERE is_tambahan = 1
+  AND substr(tanggal, 1, 10) >= substr(?, 1, 10)
+  AND substr(tanggal, 1, 10) <= substr(?, 1, 10)
+`, start, end)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]bool{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
+
 func (q *Querier) CreateRoutineOccurrence(ctx context.Context, routineID, kelasID int64, tanggal time.Time, jamMulai string) (bool, error) {
 	adopted, err := q.Queries.db.ExecContext(ctx, `
 UPDATE jadwal_pertemuan
