@@ -253,6 +253,33 @@ func TestGeneratorMengadopsiJadwalManualYangSamaTanpaDuplikasi(t *testing.T) {
 	require.Equal(t, manualID, storedID)
 }
 
+func TestSesiTambahanTidakBolehMenduplikasiOccurrenceRutin(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	kelasService := NewKelasService(f.querier)
+	today := startOfToday()
+
+	require.NoError(t, kelasService.SetJadwalRutin(f.kelasID, f.guruUtamaUser, models.SetJadwalRutinRequest{
+		Slots: []models.JadwalRutinSlotRequest{{Hari: int64(isoWeekday(today)), JamMulai: "08:00"}},
+	}))
+	require.NoError(t, f.service.EnsureRoutineOccurrencesForClass(f.kelasID, today, today))
+
+	_, err := f.service.Create(f.guruUtamaUser, models.BuatJadwalPertemuanRequest{
+		KelasID:  f.kelasID,
+		Tanggal:  today.Format("2006-01-02"),
+		JamMulai: "08:00",
+		Catatan:  "Duplikat",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "sudah ada jadwal aktif")
+
+	var total int64
+	require.NoError(t, f.db.QueryRow(
+		`SELECT COUNT(*) FROM jadwal_pertemuan WHERE kelas_id = ? AND tanggal = ? AND jam_mulai = '08:00'`,
+		f.kelasID, today,
+	).Scan(&total))
+	require.EqualValues(t, 1, total)
+}
+
 func TestJadwalTidakMengambilNomorPertemuanSebelumDimulai(t *testing.T) {
 	f := setupJadwalPertemuanService(t)
 	today := time.Now().Format("2006-01-02")
