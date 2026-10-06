@@ -110,6 +110,10 @@ func (h *KelasHandler) Show(c *fiber.Ctx) error {
 	if err != nil {
 		riwayatStatus = []models.SantriStatusLogResponse{}
 	}
+	jadwalRutin, err := h.kelasService.ListJadwalRutin(id)
+	if err != nil {
+		jadwalRutin = []models.JadwalRutinResponse{}
+	}
 
 	return h.inertiaService.Render(c, "app/KelasDetail", fiber.Map{
 		"user":              user,
@@ -120,6 +124,7 @@ func (h *KelasHandler) Show(c *fiber.Ctx) error {
 		"has_pertemuan":     hasPertemuan,
 		"levels":            levelList,
 		"jadwals":           jadwalList,
+		"jadwal_rutin":      jadwalRutin,
 		"riwayat_perubahan": riwayatPerubahan,
 		"riwayat_status":    riwayatStatus,
 		"return_to":         kelasListReturnURL(c),
@@ -297,6 +302,25 @@ func (h *KelasHandler) GantiLevel(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 	}
 	h.store.Flash(c, "success", "Level kelas berhasil diganti. Pertemuan berikutnya dimulai dari ke-1.")
+	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+}
+
+func (h *KelasHandler) SetJadwalRutin(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return h.inertiaService.Redirect(c, "/app/kelas")
+	}
+	var req models.SetJadwalRutinRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data jadwal rutin tidak valid")
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	sess, _ := h.store.Get(c)
+	if err := h.kelasService.SetJadwalRutin(id, sessionUser(sess).ID, req); err != nil {
+		h.store.Flash(c, "error", err.Error())
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	h.store.Flash(c, "success", "Jadwal rutin otomatis berhasil diperbarui")
 	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 }
 

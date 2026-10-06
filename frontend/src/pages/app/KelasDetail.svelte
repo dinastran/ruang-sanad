@@ -8,7 +8,7 @@
 	import { Toast } from "@lib/notifications/toast";
 	import {
 		ArrowLeft, Users, BookOpen, UserCheck, MoveRight, Calendar, Clock, GraduationCap, ChevronDown, UserX, Power, Trash2,
-		Layers, CalendarClock, History, ArrowUpCircle, Pencil, UserCog
+		Layers, CalendarClock, History, ArrowUpCircle, Pencil, UserCog, Plus
 	} from "lucide-svelte";
 
 	interface KelasResponse {
@@ -70,9 +70,23 @@
 		nama: string;
 	}
 
+	interface JadwalRutin {
+		id: number;
+		kelas_id: number;
+		hari: number;
+		jam_mulai: string;
+		berlaku_mulai: string;
+		is_aktif: boolean;
+	}
+
+	interface JadwalRutinDraft {
+		hari: number;
+		jam_mulai: string;
+	}
+
 	interface KelasPerubahan {
 		id: number;
-		jenis: "level_kelas" | "jadwal_kelas" | "level_santri";
+		jenis: "level_kelas" | "jadwal_kelas" | "jadwal_rutin" | "level_santri";
 		nilai_lama: string;
 		nilai_baru: string;
 		pertemuan_ke: number;
@@ -107,6 +121,7 @@
 		has_pertemuan?: boolean;
 		levels?: LevelOption[];
 		jadwals?: JadwalOption[];
+		jadwal_rutin?: JadwalRutin[];
 		riwayat_perubahan?: KelasPerubahan[];
 		riwayat_status?: SantriStatusLog[];
 		return_to?: string;
@@ -115,7 +130,7 @@
 		error?: string;
 	}
 
-	let { user, kelas, santri = [], gurus = [], kelas_lain = [], has_pertemuan = false, levels = [], jadwals = [], riwayat_perubahan = [], riwayat_status = [], return_to = "/app/kelas", flash, success, error }: Props = $props();
+	let { user, kelas, santri = [], gurus = [], kelas_lain = [], has_pertemuan = false, levels = [], jadwals = [], jadwal_rutin = [], riwayat_perubahan = [], riwayat_status = [], return_to = "/app/kelas", flash, success, error }: Props = $props();
 
 	// Kelas handlers report results via the session flash (props.flash); a failed
 	// action still redirects, so Inertia calls onSuccess and we must inspect it.
@@ -205,6 +220,55 @@
 		});
 	}
 
+	// --- Jadwal rutin otomatis ---
+	const hariOptions = [
+		{ value: 1, label: "Senin" },
+		{ value: 2, label: "Selasa" },
+		{ value: 3, label: "Rabu" },
+		{ value: 4, label: "Kamis" },
+		{ value: 5, label: "Jumat" },
+		{ value: 6, label: "Sabtu" },
+		{ value: 7, label: "Ahad" },
+	];
+	let routineModalOpen = $state(false);
+	let routineDraft = $state<JadwalRutinDraft[]>([]);
+	let isRoutineLoading = $state(false);
+	let routineFormValid = $derived(routineDraft.every((slot) => slot.hari >= 1 && slot.hari <= 7 && !!slot.jam_mulai));
+
+	function hariLabel(hari: number): string {
+		return hariOptions.find((item) => item.value === hari)?.label || "Hari";
+	}
+
+	function openRoutineModal() {
+		routineDraft = jadwal_rutin.length > 0
+			? jadwal_rutin.map((slot) => ({ hari: slot.hari, jam_mulai: slot.jam_mulai }))
+			: [{ hari: 1, jam_mulai: "19:30" }];
+		routineModalOpen = true;
+	}
+
+	function addRoutineSlot() {
+		routineDraft = [...routineDraft, { hari: 1, jam_mulai: "19:30" }];
+	}
+
+	function removeRoutineSlot(index: number) {
+		routineDraft = routineDraft.filter((_, itemIndex) => itemIndex !== index);
+	}
+
+	function submitRoutineSchedule() {
+		if (!routineFormValid || isRoutineLoading) return;
+		isRoutineLoading = true;
+		router.put(withReturnTo(`/app/kelas/${kelas.id}/jadwal-rutin`), { slots: routineDraft }, {
+			preserveScroll: true,
+			preserveState: true,
+			onSuccess: (p) => {
+				const err = flashError(p);
+				if (err) { Toast(err, "error"); return; }
+				routineModalOpen = false;
+			},
+			onFinish: () => { isRoutineLoading = false; },
+		});
+	}
+
 	// --- Ganti level per santri ---
 	let selectedSantri = $state<number[]>([]);
 	let levelSantriModal = $state<{ open: boolean; santriIds: number[] }>({ open: false, santriIds: [] });
@@ -266,6 +330,7 @@
 	function labelPerubahan(item: KelasPerubahan): string {
 		if (item.jenis === "level_kelas") return "Ganti level kelas";
 		if (item.jenis === "jadwal_kelas") return "Ganti jadwal kelas";
+		if (item.jenis === "jadwal_rutin") return "Jadwal rutin otomatis";
 		return "Santri naik level";
 	}
 
@@ -529,7 +594,7 @@
 						<div class="flex items-center gap-2">
 							<span class="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Level</span>
 							<button onclick={openLevelModal} class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold text-brand-600 hover:bg-brand-400/10 dark:text-brand-400">
-								<Pencil class="w-3 h-3" /> Ganti
+								<Pencil class="w-3 h-3" /> Ganti referensi
 							</button>
 						</div>
 						<p class="text-lg font-semibold text-neutral-900 dark:text-white mt-1">{levelKelasNama}</p>
@@ -540,7 +605,7 @@
 					</div>
 					<div>
 						<div class="flex items-center gap-2">
-							<span class="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Jadwal</span>
+							<span class="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Jadwal referensi</span>
 							<button onclick={openJadwalModal} class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold text-brand-600 hover:bg-brand-400/10 dark:text-brand-400">
 								<Pencil class="w-3 h-3" /> Ganti
 							</button>
@@ -551,6 +616,33 @@
 						<span class="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Jenis Kelamin</span>
 						<p class="mt-1"><GenderBadge gender={kelas.jenis_kelamin} /></p>
 					</div>
+				</div>
+
+				<div class="mt-6 rounded-xl border border-brand-400/20 bg-brand-400/5 p-4">
+					<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+						<div>
+							<div class="flex items-center gap-2">
+								<CalendarClock class="h-4 w-4 text-brand-600 dark:text-brand-400" />
+								<h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Jadwal rutin otomatis</h3>
+							</div>
+							<p class="mt-1 max-w-2xl text-xs leading-5 text-neutral-600 dark:text-neutral-400">Slot di bawah menjadi sumber jadwal mingguan otomatis untuk Guru dan Monitoring Koordinator. Satu kelas boleh memiliki beberapa jadwal dalam satu pekan.</p>
+						</div>
+						<button onclick={openRoutineModal} class="shrink-0 rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400">
+							{jadwal_rutin.length > 0 ? "Atur jadwal rutin" : "Aktifkan jadwal rutin"}
+						</button>
+					</div>
+					{#if jadwal_rutin.length > 0}
+						<div class="mt-4 flex flex-wrap gap-2">
+							{#each jadwal_rutin as slot (slot.id)}
+								<span class="inline-flex items-center gap-1.5 rounded-full border border-brand-400/20 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 dark:bg-neutral-900/60 dark:text-neutral-200">
+									<Calendar class="h-3.5 w-3.5 text-brand-500" /> {hariLabel(slot.hari)} <Clock class="ml-1 h-3.5 w-3.5 text-brand-500" /> {slot.jam_mulai}
+								</span>
+							{/each}
+						</div>
+						<p class="mt-3 text-xs text-neutral-500">Occurrence dibuat otomatis dan idempotent. Reschedule, badal, dan pembatalan tetap dilakukan pada pertemuan tertentu tanpa mengubah pola rutin lainnya.</p>
+					{:else}
+						<div class="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-5 text-amber-700 dark:text-amber-400">Belum aktif. Monitoring kelas masih bergantung pada jadwal manual atau pertemuan tambahan sampai slot rutin diatur.</div>
+					{/if}
 				</div>
 
 				<div class="mt-6 pt-6 border-t border-neutral-200/80 dark:border-white/[0.04]">
@@ -890,8 +982,8 @@
 				<ul class="divide-y divide-neutral-200/80 dark:divide-white/[0.04]">
 					{#each riwayat_perubahan as item (item.id)}
 						<li class="flex gap-3 px-6 py-4">
-							<div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg {item.jenis === 'jadwal_kelas' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-brand-400/10 text-brand-600 dark:text-brand-400'}">
-								{#if item.jenis === "jadwal_kelas"}<CalendarClock class="w-4 h-4" />{:else}<Layers class="w-4 h-4" />{/if}
+							<div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg {item.jenis === 'jadwal_kelas' || item.jenis === 'jadwal_rutin' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-brand-400/10 text-brand-600 dark:text-brand-400'}">
+								{#if item.jenis === "jadwal_kelas" || item.jenis === "jadwal_rutin"}<CalendarClock class="w-4 h-4" />{:else}<Layers class="w-4 h-4" />{/if}
 							</div>
 							<div class="min-w-0 flex-1">
 								<p class="text-sm font-semibold text-neutral-900 dark:text-white">
@@ -1073,8 +1165,8 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
 		<button class="absolute inset-0 w-full h-full bg-neutral-900/50 backdrop-blur-sm" aria-label="Tutup modal" onclick={() => (jadwalModalOpen = false)}></button>
 		<div class="relative w-full max-w-md bg-white dark:bg-neutral-925 rounded-2xl shadow-xl border border-neutral-200/80 dark:border-white/[0.06] p-6" in:fly={{ y: 20, duration: 200 }}>
-			<h3 class="text-lg font-bold text-neutral-900 dark:text-white mb-1">Ganti Jadwal Kelas</h3>
-			<p class="text-sm text-neutral-600 dark:text-neutral-400 mb-4">Jadwal rutin saat ini: <strong>{kelas.jadwal || "-"}</strong>. Perubahan berlaku permanen untuk pertemuan berikutnya.</p>
+			<h3 class="text-lg font-bold text-neutral-900 dark:text-white mb-1">Ganti Jadwal Referensi</h3>
+			<p class="text-sm text-neutral-600 dark:text-neutral-400 mb-4">Referensi jadwal master saat ini: <strong>{kelas.jadwal || "-"}</strong>. Ini bukan sumber occurrence otomatis. Gunakan bagian Jadwal rutin otomatis pada halaman kelas untuk mengatur hari dan jam aktual.</p>
 			<label for="jadwal-baru" class="block text-xs font-medium uppercase tracking-wider text-neutral-500 mb-1.5">Jadwal baru</label>
 			<select id="jadwal-baru" bind:value={jadwalBaru} class="w-full px-4 py-3 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-sm">
 				<option value="" disabled>Pilih jadwal dari master</option>
@@ -1087,7 +1179,50 @@
 			<div class="mt-5 flex items-center gap-3">
 				<button onclick={() => (jadwalModalOpen = false)} class="flex-1 px-4 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-700/80 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">Batal</button>
 				<button onclick={submitGantiJadwal} disabled={!jadwalBaru || jadwalBaru === kelas.jadwal || isJadwalLoading} class="flex-1 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold transition-all dark:bg-brand-500 dark:hover:bg-brand-400 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
-					{isJadwalLoading ? "Menyimpan..." : "Ganti Jadwal"}
+					{isJadwalLoading ? "Menyimpan..." : "Ganti referensi"}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+{#if routineModalOpen}
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+		<button class="absolute inset-0 h-full w-full bg-neutral-900/50 backdrop-blur-sm" aria-label="Tutup modal" onclick={() => (routineModalOpen = false)}></button>
+		<div class="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xl dark:border-white/[0.06] dark:bg-neutral-925" in:fly={{ y: 20, duration: 200 }}>
+			<h3 class="text-lg font-bold text-neutral-900 dark:text-white">Atur Jadwal Rutin Otomatis</h3>
+			<p class="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-400">Tambahkan semua hari dan jam rutin kelas. Cocok untuk reguler maupun privat yang belajar beberapa kali dalam satu pekan.</p>
+
+			<div class="mt-5 space-y-3">
+				{#each routineDraft as slot, index}
+					<div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px] items-end gap-2 rounded-xl border border-neutral-200/80 bg-neutral-50 p-3 dark:border-white/[0.05] dark:bg-neutral-900/50">
+						<label class="text-xs font-semibold text-neutral-600 dark:text-neutral-300">Hari
+							<select bind:value={slot.hari} class="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-sm dark:border-neutral-700 dark:bg-neutral-925 dark:text-white">
+								{#each hariOptions as hari}<option value={hari.value}>{hari.label}</option>{/each}
+							</select>
+						</label>
+						<label class="text-xs font-semibold text-neutral-600 dark:text-neutral-300">Jam
+							<input type="time" bind:value={slot.jam_mulai} class="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-sm dark:border-neutral-700 dark:bg-neutral-925 dark:text-white" />
+						</label>
+						<button type="button" onclick={() => removeRoutineSlot(index)} class="flex h-10 w-10 items-center justify-center rounded-lg text-red-600 hover:bg-red-500/10 dark:text-red-400" aria-label="Hapus slot"><Trash2 class="h-4 w-4" /></button>
+					</div>
+				{/each}
+			</div>
+
+			<button type="button" onclick={addRoutineSlot} class="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-brand-600 hover:bg-brand-400/10 dark:text-brand-400"><Plus class="h-4 w-4" /> Tambah jadwal</button>
+
+			<div class="mt-4 rounded-xl border border-blue-500/15 bg-blue-500/5 p-3 text-xs leading-5 text-neutral-600 dark:text-neutral-400">
+				{#if jadwal_rutin.length > 0}
+					Perubahan pola berlaku mulai besok. Jadwal hari ini dan exception yang sudah di-reschedule atau diberi badal tidak akan dihapus.
+				{:else}
+					Aktivasi pertama berlaku mulai hari ini dan tidak membuat histori jadwal ke belakang.
+				{/if}
+			</div>
+
+			<div class="mt-5 flex items-center gap-3">
+				<button onclick={() => (routineModalOpen = false)} class="flex-1 rounded-xl border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800">Batal</button>
+				<button onclick={submitRoutineSchedule} disabled={!routineFormValid || isRoutineLoading || (jadwal_rutin.length === 0 && routineDraft.length === 0)} class="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-400">
+					{isRoutineLoading ? "Menyimpan..." : routineDraft.length === 0 ? "Nonaktifkan" : "Simpan jadwal rutin"}
 				</button>
 			</div>
 		</div>

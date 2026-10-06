@@ -51,6 +51,7 @@ type ScheduleActivity struct {
 type ClassMonitoringItem struct {
 	ScheduleID         int64                  `json:"schedule_id"`
 	TanpaJadwal        bool                   `json:"tanpa_jadwal"`
+	IsTambahan         bool                   `json:"is_tambahan"`
 	KelasID            int64                  `json:"kelas_id"`
 	NamaKelas          string                 `json:"nama_kelas"`
 	Angkatan           string                 `json:"angkatan"`

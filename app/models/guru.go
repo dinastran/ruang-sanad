@@ -183,10 +183,11 @@ type GuruDashboardResponse struct {
 }
 
 type MulaiPertemuanRequest struct {
-	JadwalID    int64  `json:"jadwal_id"`
-	JamMulai    string `json:"jam_mulai"`
-	Catatan     string `json:"catatan"`
-	BatasMateri string `json:"batas_materi"`
+	JadwalID             int64  `json:"jadwal_id"`
+	JamMulai             string `json:"jam_mulai"`
+	Catatan              string `json:"catatan"`
+	BatasMateri          string `json:"batas_materi"`
+	KonfirmasiTambahan   bool   `json:"konfirmasi_tambahan"`
 }
 
 type BuatJadwalPertemuanRequest struct {

@@ -14,6 +14,7 @@ import (
 
 var ErrJadwalPertemuanAktif = errors.New("kelas masih memiliki jadwal pertemuan aktif")
 var ErrPertemuanBerlangsung = errors.New("kelas masih memiliki pertemuan yang sedang berlangsung")
+var ErrKonfirmasiPertemuanTambahan = errors.New("konfirmasi pertemuan tambahan wajib diberikan")
 
 type PertemuanService struct {
 	querier *queries.Querier
@@ -50,6 +51,9 @@ func (s *PertemuanService) MulaiPertemuan(kelasID, userID int64, req models.Mula
 	}
 	if dueSchedules > 0 {
 		return nil, ErrJadwalPertemuanAktif
+	}
+	if !req.KonfirmasiTambahan {
+		return nil, ErrKonfirmasiPertemuanTambahan
 	}
 
 	nextKe, err := querier.GetNextPertemuanKe(ctx, kelasID)

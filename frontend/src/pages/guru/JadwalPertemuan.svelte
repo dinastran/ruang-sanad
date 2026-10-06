@@ -104,11 +104,11 @@
 			<div class="flex flex-wrap items-end justify-between gap-4">
 				<div>
 					<h1 class="text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl dark:text-white">Jadwal Pertemuan</h1>
-					<p class="mt-2 max-w-2xl text-neutral-600 dark:text-neutral-400">Kelola sesi yang belum berjalan. Nomor pertemuan baru diberikan saat sesi dimulai.</p>
+					<p class="mt-2 max-w-2xl text-neutral-600 dark:text-neutral-400">Jadwal rutin kelas dibuat otomatis setiap pekan. Gunakan halaman ini untuk mulai, reschedule, badal, membatalkan, atau membuat sesi tambahan bila diperlukan.</p>
 				</div>
 				{#if kelas.length > 0}
-					<button onclick={() => (showCreate = !showCreate)} class="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400">
-						<Plus class="h-4 w-4" /> Buat jadwal
+					<button onclick={() => (showCreate = !showCreate)} class="inline-flex items-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800">
+						<Plus class="h-4 w-4" /> Buat sesi tambahan
 					</button>
 				{/if}
 			</div>
@@ -122,8 +122,8 @@
 		{#if showCreate}
 			<section class="rounded-2xl border border-brand-400/25 bg-brand-400/5 p-5 sm:p-6">
 				<div class="mb-5">
-					<h2 class="font-semibold text-neutral-900 dark:text-white">Jadwalkan sesi baru</h2>
-					<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Jadwal dapat diubah atau diberi guru badal sebelum dimulai.</p>
+					<h2 class="font-semibold text-neutral-900 dark:text-white">Buat sesi tambahan terjadwal</h2>
+					<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Gunakan hanya untuk pertemuan tambahan di luar pola rutin. Jadwal rutin utama dibuat otomatis oleh sistem.</p>
 				</div>
 				<div class="grid gap-4 md:grid-cols-3">
 					<label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Kelas
@@ -191,8 +191,8 @@
 		{:else if !showCreate}
 			<div class="rounded-2xl border border-neutral-200/80 bg-white p-12 text-center dark:border-white/[0.06] dark:bg-neutral-925/50">
 				<BookOpen class="mx-auto h-8 w-8 text-neutral-400" />
-				<h2 class="mt-4 font-semibold text-neutral-900 dark:text-white">Belum ada jadwal mendatang</h2>
-				<p class="mt-1 text-sm text-neutral-500">Buat jadwal untuk mengatur reschedule dan guru badal sebelum kelas berjalan.</p>
+				<h2 class="mt-4 font-semibold text-neutral-900 dark:text-white">Belum ada occurrence mendatang</h2>
+				<p class="mt-1 text-sm text-neutral-500">Jika jadwal rutin kelas sudah diatur oleh Admin Kelas, sistem akan membuat pertemuan mingguan otomatis. Sesi tambahan tetap dapat dibuat bila benar-benar diperlukan.</p>
 			</div>
 		{/if}
 	</div>

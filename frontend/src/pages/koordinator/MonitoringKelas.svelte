@@ -215,7 +215,7 @@
 	function buildTeacherPerformance(items: MonitoringKelasItem[]): TeacherPerformance[] {
 		const grouped = new Map<string, TeacherPerformance>();
 		for (const item of items) {
-			if (item.tanpa_jadwal) continue;
+			if (item.tanpa_jadwal || item.is_tambahan) continue;
 			const key = item.guru_utama_id ? String(item.guru_utama_id) : `nama:${item.guru_utama_nama || "belum-ditetapkan"}`;
 			let row = grouped.get(key);
 			if (!row) {
@@ -251,7 +251,7 @@
 	}
 
 	function buildWeeklyAnalysis(items: MonitoringKelasItem[], selectedStart: string): WeeklyAnalysis[] {
-		const scheduled = items.filter((item) => !item.tanpa_jadwal && item.tanggal);
+		const scheduled = items.filter((item) => !item.tanpa_jadwal && !item.is_tambahan && item.tanggal);
 		if (scheduled.length === 0) return [];
 		const sortedDates = scheduled.map((item) => item.tanggal.slice(0, 10)).sort();
 		const baseValue = selectedStart || sortedDates[0];
@@ -419,7 +419,7 @@
 			<div class="mb-3 flex flex-wrap items-end justify-between gap-3">
 				<div>
 					<h2 id="kpi-title" class="text-sm font-semibold text-neutral-900 dark:text-white">KPI pelaksanaan kelas</h2>
-					<p class="mt-1 text-xs text-neutral-500">Hanya jadwal resmi yang masuk perhitungan KPI. Sesi spontan tetap tercatat di monitoring operasional.</p>
+					<p class="mt-1 text-xs text-neutral-500">Hanya jadwal resmi yang masuk perhitungan KPI. Sesi spontan dan sesi tambahan tetap tercatat sebagai monitoring operasional, tetapi tidak masuk denominator KPI.</p>
 				</div>
 				<p class="text-xs text-neutral-500">{data.summary.jatuh_tempo} jadwal sudah jatuh tempo</p>
 			</div>
@@ -599,6 +599,7 @@
 											<h3 class="min-w-0 max-w-full break-words text-base font-semibold leading-6 text-neutral-900 dark:text-white" title={item.nama_kelas}>{displayClassName(item)}</h3>
 											<span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold {statusClass(item.status)}">{statusLabel[item.status] ?? item.status}</span>
 											{#if item.tanpa_jadwal}<span class="shrink-0 rounded-full bg-neutral-200/70 px-2.5 py-1 text-xs font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300" title="Guru memulai sesi langsung tanpa jadwal pertemuan yang dibuat sebelumnya">Sesi spontan</span>{/if}
+											{#if item.is_tambahan}<span class="shrink-0 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-400" title="Sesi tambahan di luar pola jadwal rutin. Tidak masuk denominator KPI kepatuhan.">Sesi tambahan</span>{/if}
 											{#if item.needs_action}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-error/10 px-2.5 py-1 text-xs font-semibold text-red-700 dark:text-red-400"><AlertTriangle class="h-3.5 w-3.5" /> Perlu tindakan</span>{/if}
 										</div>
 
