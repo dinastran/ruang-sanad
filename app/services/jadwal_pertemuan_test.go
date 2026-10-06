@@ -81,6 +81,111 @@ func insertTestGuru(t *testing.T, db *sql.DB, name string, userID int64) int64 {
 	return id
 }
 
+func TestJadwalRutinMenghasilkanBeberapaOccurrenceDanIdempotent(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	kelasService := NewKelasService(f.querier)
+	today := startOfToday()
+	tomorrow := today.AddDate(0, 0, 1)
+
+	err := kelasService.SetJadwalRutin(f.kelasID, f.guruUtamaUser, models.SetJadwalRutinRequest{
+		Slots: []models.JadwalRutinSlotRequest{
+			{Hari: int64(isoWeekday(today)), JamMulai: "08:00"},
+			{Hari: int64(isoWeekday(tomorrow)), JamMulai: "19:30"},
+		},
+	})
+	require.NoError(t, err)
+
+	end := today.AddDate(0, 0, 8)
+	require.NoError(t, f.service.EnsureRoutineOccurrencesForClass(f.kelasID, today, end))
+	require.NoError(t, f.service.EnsureRoutineOccurrencesForClass(f.kelasID, today, end))
+
+	var total int64
+	require.NoError(t, f.db.QueryRow(
+		`SELECT COUNT(*) FROM jadwal_pertemuan WHERE kelas_id = ? AND is_otomatis = 1`,
+		f.kelasID,
+	).Scan(&total))
+	require.EqualValues(t, 4, total)
+
+	var distinct int64
+	require.NoError(t, f.db.QueryRow(
+		`SELECT COUNT(DISTINCT jadwal_rutin_id || ':' || tanggal_rutin) FROM jadwal_pertemuan WHERE kelas_id = ? AND is_otomatis = 1`,
+		f.kelasID,
+	).Scan(&distinct))
+	require.EqualValues(t, total, distinct)
+}
+
+func TestJadwalRutinHariIniMenghalangiPertemuanTambahan(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	kelasService := NewKelasService(f.querier)
+	today := startOfToday()
+
+	require.NoError(t, kelasService.SetJadwalRutin(f.kelasID, f.guruUtamaUser, models.SetJadwalRutinRequest{
+		Slots: []models.JadwalRutinSlotRequest{{Hari: int64(isoWeekday(today)), JamMulai: "08:00"}},
+	}))
+	require.NoError(t, f.service.EnsureRoutineOccurrencesForClass(f.kelasID, today, today))
+
+	_, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{
+		KonfirmasiTambahan: true,
+		JamMulai:           "09:00",
+	})
+	require.ErrorIs(t, err, ErrJadwalPertemuanAktif)
+}
+
+func TestPertemuanTambahanMemerlukanKonfirmasi(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+
+	_, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "08:00"})
+	require.ErrorIs(t, err, ErrKonfirmasiPertemuanTambahan)
+
+	pertemuan, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{
+		KonfirmasiTambahan: true,
+		JamMulai:           "08:00",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, pertemuan)
+}
+
+func TestPerubahanJadwalRutinMenjagaExceptionMendatang(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	kelasService := NewKelasService(f.querier)
+	today := startOfToday()
+	tomorrow := today.AddDate(0, 0, 1)
+	nextWeek := today.AddDate(0, 0, 7)
+
+	require.NoError(t, kelasService.SetJadwalRutin(f.kelasID, f.guruUtamaUser, models.SetJadwalRutinRequest{
+		Slots: []models.JadwalRutinSlotRequest{{Hari: int64(isoWeekday(today)), JamMulai: "08:00"}},
+	}))
+	require.NoError(t, f.service.EnsureRoutineOccurrencesForClass(f.kelasID, today, nextWeek))
+
+	var futureID int64
+	require.NoError(t, f.db.QueryRow(
+		`SELECT id FROM jadwal_pertemuan WHERE kelas_id = ? AND tanggal = ? AND is_otomatis = 1`,
+		f.kelasID, nextWeek,
+	).Scan(&futureID))
+	require.NoError(t, f.service.Badal(futureID, f.kelasID, models.BadalRequest{
+		GuruPenggantiID: f.guruBadalID,
+		Alasan:          "Menjaga exception saat pola berubah",
+	}))
+
+	require.NoError(t, kelasService.SetJadwalRutin(f.kelasID, f.guruUtamaUser, models.SetJadwalRutinRequest{
+		Slots: []models.JadwalRutinSlotRequest{{Hari: int64(isoWeekday(tomorrow)), JamMulai: "10:00"}},
+	}))
+
+	var kept int64
+	require.NoError(t, f.db.QueryRow(
+		`SELECT COUNT(*) FROM jadwal_pertemuan WHERE id = ? AND guru_pengganti_id = ?`,
+		futureID, f.guruBadalID,
+	).Scan(&kept))
+	require.EqualValues(t, 1, kept)
+
+	active, err := kelasService.ListJadwalRutin(f.kelasID)
+	require.NoError(t, err)
+	require.Len(t, active, 1)
+	require.EqualValues(t, isoWeekday(tomorrow), active[0].Hari)
+	require.Equal(t, "10:00", active[0].JamMulai)
+	require.Equal(t, tomorrow.Format("2006-01-02"), active[0].BerlakuMulai)
+}
+
 func TestJadwalTidakMengambilNomorPertemuanSebelumDimulai(t *testing.T) {
 	f := setupJadwalPertemuanService(t)
 	today := time.Now().Format("2006-01-02")
@@ -94,18 +199,18 @@ func TestJadwalTidakMengambilNomorPertemuanSebelumDimulai(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 1, next)
 
-	_, err = f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "08:00"})
+	_, err = f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "08:00"})
 	require.ErrorIs(t, err, ErrJadwalPertemuanAktif)
 	require.NoError(t, f.service.Cancel(jadwalID, f.kelasID))
 
-	spontan, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "08:00"})
+	spontan, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "08:00"})
 	require.NoError(t, err)
 	require.EqualValues(t, 1, spontan.PertemuanKe)
 	active, err := f.pertemuan.GetActivePertemuan(f.kelasID)
 	require.NoError(t, err)
 	require.NotNil(t, active)
 	require.Equal(t, spontan.ID, active.ID)
-	_, err = f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "08:30"})
+	_, err = f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "08:30"})
 	require.ErrorIs(t, err, ErrPertemuanBerlangsung)
 }
 
@@ -120,7 +225,7 @@ func TestJadwalMendatangTidakMenghalangiPertemuanSpontan(t *testing.T) {
 	due, err := f.service.ListDue(f.kelasID)
 	require.NoError(t, err)
 	require.Empty(t, due)
-	spontan, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "08:00"})
+	spontan, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "08:00"})
 	require.NoError(t, err)
 	require.EqualValues(t, 1, spontan.PertemuanKe)
 }
@@ -214,7 +319,7 @@ func TestJadwalMenolakGuruYangTidakDitugaskanDanTanggalMendatang(t *testing.T) {
 
 func TestRiwayatHanyaMenampilkanPertemuanSelesai(t *testing.T) {
 	f := setupJadwalPertemuanService(t)
-	berlangsung, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "08:00"})
+	berlangsung, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "08:00"})
 	require.NoError(t, err)
 
 	riwayat, err := f.pertemuan.ListRiwayat(f.kelasID)
@@ -234,7 +339,7 @@ func TestSelesaiPertemuanMemvalidasiDanRollbackAbsensi(t *testing.T) {
 	require.NoError(t, err)
 	santriID, err := lastID(f.db)
 	require.NoError(t, err)
-	pertemuan, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "08:00"})
+	pertemuan, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "08:00"})
 	require.NoError(t, err)
 
 	err = f.pertemuan.SelesaiPertemuan(pertemuan.ID, f.kelasID, models.SelesaiPertemuanRequest{
@@ -273,7 +378,7 @@ func TestSelesaiPertemuanMateriIndividualMewajibkanDanMeneruskanBatasMateri(t *t
 	santriID, err := lastID(f.db)
 	require.NoError(t, err)
 
-	pertama, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "08:00"})
+	pertama, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "08:00"})
 	require.NoError(t, err)
 	err = f.pertemuan.SelesaiPertemuan(pertama.ID, f.kelasID, models.SelesaiPertemuanRequest{
 		Absensi: []models.AbsensiInput{{SantriID: santriID, Status: "hadir"}},
@@ -284,7 +389,7 @@ func TestSelesaiPertemuanMateriIndividualMewajibkanDanMeneruskanBatasMateri(t *t
 		Absensi: []models.AbsensiInput{{SantriID: santriID, Status: "hadir", BatasMateri: "Jilid 2 halaman 7"}},
 	}, f.guruUtamaUser))
 
-	kedua, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "09:00"})
+	kedua, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "09:00"})
 	require.NoError(t, err)
 	require.NoError(t, f.pertemuan.SelesaiPertemuan(kedua.ID, f.kelasID, models.SelesaiPertemuanRequest{
 		Absensi: []models.AbsensiInput{{SantriID: santriID, Status: "izin", BatasMateri: "Harus diabaikan"}},
@@ -308,13 +413,13 @@ func TestGetLastCompletedAbsensiHanyaMengambilPertemuanTerakhir(t *testing.T) {
 	santriID, err := lastID(f.db)
 	require.NoError(t, err)
 
-	pertama, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "08:00"})
+	pertama, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "08:00"})
 	require.NoError(t, err)
 	require.NoError(t, f.pertemuan.SelesaiPertemuan(pertama.ID, f.kelasID, models.SelesaiPertemuanRequest{
 		Materi: "Materi pertama", Absensi: []models.AbsensiInput{{SantriID: santriID, Status: "izin", Catatan: "Catatan lama"}},
 	}, f.guruUtamaUser))
 
-	kedua, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "09:00"})
+	kedua, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "09:00"})
 	require.NoError(t, err)
 	require.NoError(t, f.pertemuan.SelesaiPertemuan(kedua.ID, f.kelasID, models.SelesaiPertemuanRequest{
 		Materi: "Materi terbaru", Absensi: []models.AbsensiInput{{SantriID: santriID, Status: "hadir", Catatan: "Catatan terbaru"}},
@@ -341,7 +446,7 @@ func TestGetLastCompletedAbsensiTanpaPertemuanSelesai(t *testing.T) {
 
 func TestSelesaiPertemuanHanyaDapatDiprosesSekali(t *testing.T) {
 	f := setupJadwalPertemuanService(t)
-	pertemuan, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "08:00"})
+	pertemuan, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "08:00"})
 	require.NoError(t, err)
 
 	results := make(chan error, 2)
@@ -367,7 +472,7 @@ func TestStartTerjadwalDanSpontanBersamaanHanyaMembuatSatuPertemuan(t *testing.T
 		results <- startErr
 	}()
 	go func() {
-		_, startErr := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{JamMulai: "09:00"})
+		_, startErr := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "09:00"})
 		results <- startErr
 	}()
 	first, second := <-results, <-results
