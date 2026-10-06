@@ -167,20 +167,14 @@
 							<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Dimulai {active_pertemuan.tanggal} pukul {active_pertemuan.jam_mulai}</p>
 						</div>
 					</div>
-					<a href={"/app/guru/kelas/" + kelas.id + "/pertemuan/" + active_pertemuan.id + "/selesai"} use:inertia class="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-700">
-						<Play class="h-4 w-4" /> Lanjutkan
+					<a href={"/app/guru/jadwal-pertemuan?kelas_id=" + kelas.id + "&filter=attention"} use:inertia class="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 px-4 py-2.5 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-500/10 dark:text-amber-300">
+						<Play class="h-4 w-4" /> Buka Agenda Mengajar
 					</a>
 				</div>
 			</div>
 		{/if}
 
 		<div class="flex flex-wrap items-center gap-3" in:fly={{ y: 20, duration: 500 }}>
-			{#if canEdit && !active_pertemuan}<a href={"/app/guru/kelas/" + kelas.id + "/pertemuan/mulai"} use:inertia
-				class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold transition-all dark:bg-brand-500 dark:hover:bg-brand-400 shadow-lg shadow-brand-600/25 text-sm"
-			>
-				<Play class="w-4 h-4" />
-				Mulai Pertemuan
-			</a>{/if}
 			<a href={"/app/guru/kelas/" + kelas.id + "/rekap"} use:inertia
 				class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 font-semibold transition-colors text-sm"
 			>
