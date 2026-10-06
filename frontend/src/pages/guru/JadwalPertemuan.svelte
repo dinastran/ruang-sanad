@@ -204,18 +204,18 @@
 <svelte:head><title>Agenda Mengajar</title></svelte:head>
 
 <AppLayout {user} group="guru-jadwal">
-	<div class="border-b border-neutral-200/80 pt-8 pb-9 dark:border-white/[0.04]">
-		<div class="mx-auto max-w-6xl px-4 sm:px-6">
+	<div class="border-b border-neutral-200/80 pb-7 pt-6 sm:pb-9 sm:pt-8 dark:border-white/[0.04]">
+		<div class="mx-auto max-w-6xl px-3 sm:px-6">
 			<a href="/app/guru" use:inertia class="mb-4 inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-600 dark:hover:text-brand-400">
 				<ArrowLeft class="h-4 w-4" /> Dashboard
 			</a>
-			<div class="flex flex-wrap items-end justify-between gap-4">
+			<div class="flex flex-col items-stretch gap-4 sm:flex-row sm:items-end sm:justify-between">
 				<div>
 					<h1 class="text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl dark:text-white">Agenda Mengajar</h1>
-					<p class="mt-2 max-w-2xl text-neutral-600 dark:text-neutral-400">Pusat aktivitas mengajar. Mulai kelas, lanjutkan pertemuan, reschedule, badal, dan pembatalan dilakukan dari agenda ini.</p>
+					<p class="mt-2 max-w-2xl text-sm leading-6 text-neutral-600 sm:text-base dark:text-neutral-400">Pusat aktivitas mengajar. Mulai kelas, lanjutkan pertemuan, reschedule, badal, dan pembatalan dilakukan dari agenda ini.</p>
 				</div>
 				{#if kelas.length > 0}
-					<button onclick={() => (showCreate = !showCreate)} class="inline-flex items-center gap-2 rounded-xl border border-neutral-300 bg-white px-3.5 py-2 text-sm font-medium text-neutral-600 transition-colors hover:border-brand-400/50 hover:text-brand-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:text-brand-300">
+					<button onclick={() => (showCreate = !showCreate)} class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-3.5 py-2.5 text-sm font-medium text-neutral-600 transition-colors hover:border-brand-400/50 hover:text-brand-700 sm:w-auto sm:py-2 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:text-brand-300">
 						<Plus class="h-4 w-4" /> Sesi tambahan
 					</button>
 				{/if}
@@ -223,49 +223,49 @@
 		</div>
 	</div>
 
-	<div class="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
+	<div class="mx-auto max-w-6xl space-y-5 px-3 py-5 sm:space-y-6 sm:px-6 sm:py-8">
 		{#if success || flash?.success}<div class="rounded-xl border border-green-500/20 bg-green-500/10 p-4 text-sm font-medium text-green-700 dark:text-green-400">{success || flash?.success}</div>{/if}
 		{#if error || flash?.error}<div class="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm font-medium text-red-600 dark:text-red-400">{error || flash?.error}</div>{/if}
 
-		<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-			<button onclick={() => (agendaFilter = "attention")} class="rounded-2xl border p-4 text-left transition-all {agendaFilter === 'attention' ? 'border-red-500/35 bg-red-500/5 ring-1 ring-red-500/10' : 'border-neutral-200/80 bg-white hover:border-red-500/25 dark:border-white/[0.06] dark:bg-neutral-925/50'}">
+		<div class="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+			<button onclick={() => (agendaFilter = "attention")} class="min-h-[102px] rounded-2xl border p-3 text-left transition-all sm:min-h-0 sm:p-4 {agendaFilter === 'attention' ? 'border-red-500/35 bg-red-500/5 ring-1 ring-red-500/10' : 'border-neutral-200/80 bg-white hover:border-red-500/25 dark:border-white/[0.06] dark:bg-neutral-925/50'}">
 				<div class="flex items-center justify-between gap-2">
-					<span class="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500/10 text-red-600 dark:text-red-400"><AlertTriangle class="h-4 w-4" /></span>
-					<span class="font-mono text-2xl font-bold text-neutral-900 dark:text-white">{attentionItems.length}</span>
+					<span class="flex h-8 w-8 items-center justify-center rounded-xl sm:h-9 sm:w-9 bg-red-500/10 text-red-600 dark:text-red-400"><AlertTriangle class="h-4 w-4" /></span>
+					<span class="font-mono text-xl font-bold text-neutral-900 sm:text-2xl dark:text-white">{attentionItems.length}</span>
 				</div>
-				<p class="mt-2 text-xs font-semibold text-neutral-700 dark:text-neutral-300">Perlu tindakan</p>
+				<p class="mt-2 text-[11px] font-semibold leading-tight text-neutral-700 sm:text-xs dark:text-neutral-300">Perlu tindakan</p>
 			</button>
-			<button onclick={() => (agendaFilter = "today")} class="rounded-2xl border p-4 text-left transition-all {agendaFilter === 'today' ? 'border-brand-400/40 bg-brand-400/5 ring-1 ring-brand-400/10' : 'border-neutral-200/80 bg-white hover:border-brand-400/30 dark:border-white/[0.06] dark:bg-neutral-925/50'}">
+			<button onclick={() => (agendaFilter = "today")} class="min-h-[102px] rounded-2xl border p-3 text-left transition-all sm:min-h-0 sm:p-4 {agendaFilter === 'today' ? 'border-brand-400/40 bg-brand-400/5 ring-1 ring-brand-400/10' : 'border-neutral-200/80 bg-white hover:border-brand-400/30 dark:border-white/[0.06] dark:bg-neutral-925/50'}">
 				<div class="flex items-center justify-between gap-2">
-					<span class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-400/10 text-brand-600 dark:text-brand-400"><CalendarClock class="h-4 w-4" /></span>
-					<span class="font-mono text-2xl font-bold text-neutral-900 dark:text-white">{todayItems.length}</span>
+					<span class="flex h-8 w-8 items-center justify-center rounded-xl sm:h-9 sm:w-9 bg-brand-400/10 text-brand-600 dark:text-brand-400"><CalendarClock class="h-4 w-4" /></span>
+					<span class="font-mono text-xl font-bold text-neutral-900 sm:text-2xl dark:text-white">{todayItems.length}</span>
 				</div>
-				<p class="mt-2 text-xs font-semibold text-neutral-700 dark:text-neutral-300">Hari ini</p>
+				<p class="mt-2 text-[11px] font-semibold leading-tight text-neutral-700 sm:text-xs dark:text-neutral-300">Hari ini</p>
 			</button>
-			<button onclick={() => (agendaFilter = "week")} class="rounded-2xl border p-4 text-left transition-all {agendaFilter === 'week' ? 'border-sky-500/35 bg-sky-500/5 ring-1 ring-sky-500/10' : 'border-neutral-200/80 bg-white hover:border-sky-500/25 dark:border-white/[0.06] dark:bg-neutral-925/50'}">
+			<button onclick={() => (agendaFilter = "week")} class="min-h-[102px] rounded-2xl border p-3 text-left transition-all sm:min-h-0 sm:p-4 {agendaFilter === 'week' ? 'border-sky-500/35 bg-sky-500/5 ring-1 ring-sky-500/10' : 'border-neutral-200/80 bg-white hover:border-sky-500/25 dark:border-white/[0.06] dark:bg-neutral-925/50'}">
 				<div class="flex items-center justify-between gap-2">
-					<span class="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400"><CalendarDays class="h-4 w-4" /></span>
-					<span class="font-mono text-2xl font-bold text-neutral-900 dark:text-white">{weekItems.length}</span>
+					<span class="flex h-8 w-8 items-center justify-center rounded-xl sm:h-9 sm:w-9 bg-sky-500/10 text-sky-600 dark:text-sky-400"><CalendarDays class="h-4 w-4" /></span>
+					<span class="font-mono text-xl font-bold text-neutral-900 sm:text-2xl dark:text-white">{weekItems.length}</span>
 				</div>
-				<p class="mt-2 text-xs font-semibold text-neutral-700 dark:text-neutral-300">7 hari ke depan</p>
+				<p class="mt-2 text-[11px] font-semibold leading-tight text-neutral-700 sm:text-xs dark:text-neutral-300">7 hari ke depan</p>
 			</button>
-			<button onclick={() => (agendaFilter = "all")} class="rounded-2xl border p-4 text-left transition-all {agendaFilter === 'all' ? 'border-neutral-500/35 bg-neutral-500/5 ring-1 ring-neutral-500/10' : 'border-neutral-200/80 bg-white hover:border-neutral-400/40 dark:border-white/[0.06] dark:bg-neutral-925/50'}">
+			<button onclick={() => (agendaFilter = "all")} class="min-h-[102px] rounded-2xl border p-3 text-left transition-all sm:min-h-0 sm:p-4 {agendaFilter === 'all' ? 'border-neutral-500/35 bg-neutral-500/5 ring-1 ring-neutral-500/10' : 'border-neutral-200/80 bg-white hover:border-neutral-400/40 dark:border-white/[0.06] dark:bg-neutral-925/50'}">
 				<div class="flex items-center justify-between gap-2">
-					<span class="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-500/10 text-neutral-600 dark:text-neutral-400"><BookOpen class="h-4 w-4" /></span>
-					<span class="font-mono text-2xl font-bold text-neutral-900 dark:text-white">{jadwal.length}</span>
+					<span class="flex h-8 w-8 items-center justify-center rounded-xl sm:h-9 sm:w-9 bg-neutral-500/10 text-neutral-600 dark:text-neutral-400"><BookOpen class="h-4 w-4" /></span>
+					<span class="font-mono text-xl font-bold text-neutral-900 sm:text-2xl dark:text-white">{jadwal.length}</span>
 				</div>
-				<p class="mt-2 text-xs font-semibold text-neutral-700 dark:text-neutral-300">Semua agenda</p>
+				<p class="mt-2 text-[11px] font-semibold leading-tight text-neutral-700 sm:text-xs dark:text-neutral-300">Semua agenda</p>
 			</button>
 		</div>
 
-		<div class="flex flex-col gap-3 rounded-2xl border border-neutral-200/80 bg-white p-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.06] dark:bg-neutral-925/50">
+		<div class="flex flex-col gap-3 rounded-2xl border border-neutral-200/80 bg-white p-3.5 sm:flex-row sm:items-center sm:justify-between sm:p-4 dark:border-white/[0.06] dark:bg-neutral-925/50">
 			<div>
 				<p class="text-sm font-semibold text-neutral-900 dark:text-white">Menampilkan {filterLabel()}</p>
 				<p class="mt-0.5 text-xs text-neutral-500">{visibleItems.length} agenda ditemukan</p>
 			</div>
-			<label class="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
+			<label class="flex w-full flex-col items-stretch gap-1.5 text-sm text-neutral-600 sm:w-auto sm:flex-row sm:items-center sm:gap-2 dark:text-neutral-300">
 				<span class="shrink-0">Kelas</span>
-				<select bind:value={kelasFilter} class="min-w-44 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-white">
+				<select bind:value={kelasFilter} class="w-full min-w-0 rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm sm:w-auto sm:min-w-44 sm:py-2 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white">
 					<option value={0}>Semua kelas</option>
 					{#each kelas as item}<option value={item.id}>{item.nama_kelas}</option>{/each}
 				</select>
@@ -273,7 +273,7 @@
 		</div>
 
 		{#if showCreate}
-			<section class="rounded-2xl border border-neutral-300 bg-neutral-50/70 p-5 sm:p-6 dark:border-neutral-700 dark:bg-neutral-900/40">
+			<section class="rounded-2xl border border-neutral-300 bg-neutral-50/70 p-4 sm:p-6 dark:border-neutral-700 dark:bg-neutral-900/40">
 				<div class="mb-5">
 					<h2 class="font-semibold text-neutral-900 dark:text-white">Sesi tambahan</h2>
 					<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Hanya untuk pertemuan di luar pola rutin. Agenda rutin utama dibuat otomatis oleh sistem.</p>
@@ -294,9 +294,9 @@
 				<label class="mt-4 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Catatan <span class="font-normal text-neutral-400">(opsional)</span>
 					<textarea bind:value={catatan} rows="2" placeholder="Topik atau informasi persiapan sesi" class="mt-1.5 w-full resize-none rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"></textarea>
 				</label>
-				<div class="mt-5 flex justify-end gap-2">
-					<button onclick={() => (showCreate = false)} class="rounded-xl px-4 py-2.5 text-sm font-medium text-neutral-600 hover:bg-neutral-200/70 dark:text-neutral-300 dark:hover:bg-neutral-800">Batal</button>
-					<button onclick={createSchedule} disabled={submitting || !kelasID || !tanggal || !jamMulai} class="rounded-xl bg-neutral-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-neutral-900 disabled:opacity-50 dark:bg-neutral-200 dark:text-neutral-900 dark:hover:bg-white">{submitting ? "Menyimpan..." : "Tambah sesi"}</button>
+				<div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+					<button onclick={() => (showCreate = false)} class="w-full rounded-xl px-4 py-2.5 text-sm font-medium sm:w-auto text-neutral-600 hover:bg-neutral-200/70 dark:text-neutral-300 dark:hover:bg-neutral-800">Batal</button>
+					<button onclick={createSchedule} disabled={submitting || !kelasID || !tanggal || !jamMulai} class="w-full rounded-xl bg-neutral-800 px-4 py-2.5 sm:w-auto text-sm font-semibold text-white hover:bg-neutral-900 disabled:opacity-50 dark:bg-neutral-200 dark:text-neutral-900 dark:hover:bg-white">{submitting ? "Menyimpan..." : "Tambah sesi"}</button>
 				</div>
 			</section>
 		{/if}
@@ -305,36 +305,36 @@
 			<div class="space-y-7">
 				{#each groupedItems as [date, items] (date)}
 					<section>
-						<div class="mb-3 flex items-center gap-3">
-							<h2 class="text-sm font-bold uppercase tracking-wide text-neutral-700 dark:text-neutral-300">{dateGroupLabel(date)}</h2>
-							<span class="text-xs text-neutral-400">{items.length} kelas</span>
-							<div class="h-px flex-1 bg-neutral-200/80 dark:bg-white/[0.05]"></div>
+						<div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+							<h2 class="min-w-0 text-xs font-bold uppercase tracking-wide text-neutral-700 sm:text-sm dark:text-neutral-300">{dateGroupLabel(date)}</h2>
+							<span class="shrink-0 text-xs text-neutral-400">{items.length} kelas</span>
+							<div class="hidden h-px flex-1 bg-neutral-200/80 sm:block dark:bg-white/[0.05]"></div>
 						</div>
 
 						<div class="grid gap-3 lg:grid-cols-2">
 							{#each items as item (item.id)}
 								{@const status = statusInfo(item)}
-								<article class="relative rounded-2xl border p-5 {cardClass(item)}">
-									<div class="flex items-start justify-between gap-4">
+								<article class="relative rounded-2xl border p-4 sm:p-5 {cardClass(item)}">
+									<div class="flex items-start justify-between gap-3 sm:gap-4">
 										<div class="min-w-0">
 											<div class="flex flex-wrap items-center gap-2">
 												<span class="font-mono text-xl font-bold text-neutral-900 dark:text-white">{item.jam_mulai}</span>
 												<span class="rounded-full px-2.5 py-1 text-[11px] font-semibold {status.cls}">{status.label}</span>
 											</div>
-											<h3 class="mt-2 truncate text-base font-semibold text-neutral-900 dark:text-white">{item.kelas_nama}</h3>
+											<h3 class="mt-2 break-words text-base font-semibold text-neutral-900 dark:text-white">{item.kelas_nama}</h3>
 											<p class="mt-1 text-xs text-neutral-500">Guru utama: {item.guru_utama_nama || "Belum ditetapkan"}</p>
 										</div>
 
 										{#if item.can_manage}
 											<div class="relative">
-												<button onclick={() => (openMenuID = openMenuID === item.id ? null : item.id)} aria-label="Aksi lainnya" class="flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-800 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:text-white">
+												<button onclick={() => (openMenuID = openMenuID === item.id ? null : item.id)} aria-label="Aksi lainnya" class="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 hover:text-neutral-800 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:text-white">
 													<MoreHorizontal class="h-4 w-4" />
 												</button>
 												{#if openMenuID === item.id}
-													<div class="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-neutral-200 bg-white p-1.5 shadow-xl dark:border-neutral-700 dark:bg-neutral-900">
-														<button onclick={() => openAction("reschedule", item)} class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800"><RotateCcw class="h-4 w-4 text-blue-500" /> Reschedule</button>
-														<button onclick={() => openAction("badal", item)} class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800"><UserRoundCheck class="h-4 w-4 text-secondary-500" /> Tetapkan badal</button>
-														<button onclick={() => cancelSchedule(item)} class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-500/10 dark:text-red-400"><Ban class="h-4 w-4" /> Batalkan kelas</button>
+													<div class="fixed inset-x-3 bottom-3 z-40 w-auto overflow-hidden rounded-2xl border border-neutral-200 bg-white p-2 shadow-2xl sm:absolute sm:inset-auto sm:right-0 sm:bottom-auto sm:mt-2 sm:w-48 sm:rounded-xl sm:p-1.5 sm:shadow-xl dark:border-neutral-700 dark:bg-neutral-900">
+														<button onclick={() => openAction("reschedule", item)} class="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800"><RotateCcw class="h-4 w-4 text-blue-500" /> Reschedule</button>
+														<button onclick={() => openAction("badal", item)} class="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800"><UserRoundCheck class="h-4 w-4 text-secondary-500" /> Tetapkan badal</button>
+														<button onclick={() => cancelSchedule(item)} class="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-500/10 dark:text-red-400"><Ban class="h-4 w-4" /> Batalkan kelas</button>
 													</div>
 												{/if}
 											</div>
@@ -353,11 +353,11 @@
 
 									<div class="mt-4 border-t border-neutral-200/70 pt-4 dark:border-white/[0.05]">
 										{#if item.status === "dimulai" && item.pertemuan_id}
-											<a href={"/app/guru/kelas/" + item.kelas_id + "/pertemuan/" + item.pertemuan_id + "/selesai"} use:inertia class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 sm:w-auto">
+											<a href={"/app/guru/kelas/" + item.kelas_id + "/pertemuan/" + item.pertemuan_id + "/selesai"} use:inertia class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 sm:py-2.5 text-sm font-semibold text-white hover:bg-amber-700 sm:w-auto">
 												<Play class="h-4 w-4" /> Lanjutkan Kelas
 											</a>
 										{:else if item.can_start && item.tanggal <= today}
-											<button onclick={() => startSchedule(item)} class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400 sm:w-auto">
+											<button onclick={() => startSchedule(item)} class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 sm:py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400 sm:w-auto">
 												<Play class="h-4 w-4" /> Mulai Kelas
 											</button>
 										{:else}
@@ -371,7 +371,7 @@
 				{/each}
 			</div>
 		{:else if !showCreate}
-			<div class="rounded-2xl border border-neutral-200/80 bg-white p-12 text-center dark:border-white/[0.06] dark:bg-neutral-925/50">
+			<div class="rounded-2xl border border-neutral-200/80 bg-white p-8 text-center sm:p-12 dark:border-white/[0.06] dark:bg-neutral-925/50">
 				<BookOpen class="mx-auto h-8 w-8 text-neutral-400" />
 				<h2 class="mt-4 font-semibold text-neutral-900 dark:text-white">Tidak ada agenda {filterLabel()}</h2>
 				<p class="mx-auto mt-1 max-w-xl text-sm text-neutral-500">Pilih filter lain atau kelas lain. Jadwal rutin yang sudah diatur Admin Kelas akan muncul otomatis di sini.</p>
@@ -380,9 +380,9 @@
 	</div>
 
 	{#if action}
-		<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+		<div class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
 			<button class="absolute inset-0 bg-black/50" aria-label="Tutup dialog" onclick={closeAction}></button>
-			<div class="relative w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-neutral-925" role="dialog" aria-modal="true" aria-labelledby="action-title" tabindex="-1">
+			<div class="relative max-h-[90vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:max-w-md sm:rounded-2xl dark:bg-neutral-925" role="dialog" aria-modal="true" aria-labelledby="action-title" tabindex="-1">
 				<h2 id="action-title" class="text-lg font-semibold text-neutral-900 dark:text-white">{action.type === "reschedule" ? "Reschedule Pertemuan" : "Tetapkan Guru Badal"}</h2>
 				<p class="mt-1 text-sm text-neutral-500">{action.item.kelas_nama}</p>
 				<div class="mt-5 space-y-4">
