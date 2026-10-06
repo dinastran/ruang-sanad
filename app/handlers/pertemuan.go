@@ -76,6 +76,13 @@ func (h *PertemuanHandler) Mulai(c *fiber.Ctx) error {
 		h.store.Flash(c, "error", "Data tidak valid")
 		return h.inertiaService.Back(c, "/app/guru/kelas/"+c.Params("id")+"/pertemuan/mulai")
 	}
+	if req.JadwalID == 0 {
+		today := startOfTodayForHandler()
+		if err := h.jadwalService.EnsureRoutineOccurrencesForClass(kelasID, today, today); err != nil {
+			h.store.Flash(c, "error", "Gagal menyiapkan jadwal rutin otomatis")
+			return h.inertiaService.Back(c, "/app/guru/kelas/"+c.Params("id")+"/pertemuan/mulai")
+		}
+	}
 
 	var pertemuan *models.PertemuanResponse
 	if req.JadwalID != 0 {
@@ -123,6 +130,11 @@ func (h *PertemuanHandler) FormMulai(c *fiber.Ctx) error {
 	}
 	if active != nil {
 		return h.inertiaService.Redirect(c, "/app/guru/kelas/"+c.Params("id")+"/pertemuan/"+strconv.FormatInt(active.ID, 10)+"/selesai")
+	}
+	today := startOfTodayForHandler()
+	if err := h.jadwalService.EnsureRoutineOccurrencesForClass(kelasID, today, today); err != nil {
+		h.store.Flash(c, "error", "Gagal menyiapkan jadwal rutin otomatis")
+		return h.inertiaService.Redirect(c, "/app/guru/kelas/"+c.Params("id"))
 	}
 	nextPertemuanKe, err := h.pertemuanService.GetNextPertemuanLevelKe(kelasID)
 	if err != nil {
