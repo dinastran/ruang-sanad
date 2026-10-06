@@ -19,6 +19,71 @@ func NewJadwalPertemuanService(querier *queries.Querier) *JadwalPertemuanService
 	return &JadwalPertemuanService{querier: querier}
 }
 
+func (s *JadwalPertemuanService) EnsureRoutineOccurrences(start, end time.Time, kelasID *int64) error {
+	if end.Before(start) {
+		return fmt.Errorf("rentang jadwal rutin tidak valid")
+	}
+	loc := start.Location()
+	start = routineDate(start, loc)
+	end = routineDate(end, loc)
+
+	filter := sql.NullInt64{}
+	if kelasID != nil {
+		filter = sql.NullInt64{Int64: *kelasID, Valid: true}
+	}
+	rows, err := s.querier.ListRoutineSchedulesForRange(context.Background(), start, end, filter)
+	if err != nil {
+		return err
+	}
+
+	for _, row := range rows {
+		from := start
+		activeFrom := routineDate(row.BerlakuMulai, loc)
+		if activeFrom.After(from) {
+			from = activeFrom
+		}
+		to := end
+		if row.BerlakuSampai.Valid {
+			activeUntil := routineDate(row.BerlakuSampai.Time, loc)
+			if activeUntil.Before(to) {
+				to = activeUntil
+			}
+		}
+		if to.Before(from) {
+			continue
+		}
+
+		delta := (int(row.Hari) - isoWeekday(from) + 7) % 7
+		date := from.AddDate(0, 0, delta)
+		for !date.After(to) {
+			if _, err := s.querier.CreateRoutineOccurrence(context.Background(), row.ID, row.KelasID, date, row.JamMulai); err != nil {
+				return err
+			}
+			date = date.AddDate(0, 0, 7)
+		}
+	}
+	return nil
+}
+
+func (s *JadwalPertemuanService) EnsureRoutineOccurrencesForClass(kelasID int64, start, end time.Time) error {
+	return s.EnsureRoutineOccurrences(start, end, &kelasID)
+}
+
+func routineDate(value time.Time, loc *time.Location) time.Time {
+	parsed, err := time.ParseInLocation("2006-01-02", value.Format("2006-01-02"), loc)
+	if err != nil {
+		return value
+	}
+	return parsed
+}
+
+func isoWeekday(value time.Time) int {
+	if value.Weekday() == time.Sunday {
+		return 7
+	}
+	return int(value.Weekday())
+}
+
 func (s *JadwalPertemuanService) List(guruID *int64) ([]models.JadwalPertemuanResponse, error) {
 	filter := sql.NullInt64{}
 	if guruID != nil {
