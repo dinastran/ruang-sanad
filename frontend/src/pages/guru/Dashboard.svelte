@@ -57,9 +57,8 @@
 
 	function aksiSlot(s: GuruSlotKelas): { href: string; label: string } | null {
 		if (s.status === "dibadalkan") return null;
-		if (s.status === "berlangsung" && s.pertemuan_id && canEdit) return { href: `/app/guru/kelas/${s.kelas_id}/pertemuan/${s.pertemuan_id}/selesai`, label: "Selesaikan absen" };
-		if (s.status === "belum" && canEdit) return { href: `/app/guru/kelas/${s.kelas_id}/pertemuan/mulai`, label: "Mulai" };
-		return { href: `/app/guru/kelas/${s.kelas_id}`, label: "Lihat" };
+		const scope = s.tanggal < (beranda?.tanggal ?? "") ? "attention" : "today";
+		return { href: `/app/guru/jadwal-pertemuan?kelas_id=${s.kelas_id}&filter=${scope}`, label: "Buka Agenda" };
 	}
 
 	const statusLabel: Record<string, { label: string; cls: string }> = {
@@ -72,8 +71,8 @@
 	const agendaLabel: Record<string, string> = { pembinaan: "Pembinaan", rapat: "Rapat guru", kalam: "Kalam Bersanad" };
 
 	let kartu = $derived([
-		{ label: "Kelas hari ini", value: tugasHariIni.length, href: "#hari-ini", icon: CalendarClock, tone: "text-brand-600 dark:text-brand-400 bg-brand-400/10", alert: false },
-		{ label: "Absensi tertunda", value: tertunda.length, href: "#tertunda", icon: ClipboardCheck, tone: "text-red-600 dark:text-red-400 bg-red-500/10", alert: tertunda.length > 0 },
+		{ label: "Kelas hari ini", value: tugasHariIni.length, href: "/app/guru/jadwal-pertemuan?filter=today", icon: CalendarClock, tone: "text-brand-600 dark:text-brand-400 bg-brand-400/10", alert: false },
+		{ label: "Perlu tindakan", value: tertunda.length, href: "/app/guru/jadwal-pertemuan?filter=attention", icon: ClipboardCheck, tone: "text-red-600 dark:text-red-400 bg-red-500/10", alert: tertunda.length > 0 },
 		{ label: "Santri perlu disapa", value: riayah?.perlu_perhatian ?? 0, href: "/app/guru/riayah", icon: HeartHandshake, tone: "text-orange-600 dark:text-orange-400 bg-orange-500/10", alert: (riayah?.perlu_perhatian ?? 0) > 0 },
 		{ label: riayah?.rapor_periode ? `Rapor ${labelPeriode(riayah.rapor_periode).split(" ")[0]} belum dikirim` : "Rapor belum dikirim", value: raporBelum, href: "/app/guru/riayah", icon: FileText, tone: "text-sky-600 dark:text-sky-400 bg-sky-500/10", alert: false },
 	]);
@@ -136,7 +135,7 @@
 									</div>
 									<span class="rounded-full px-2 py-0.5 text-[11px] font-semibold {statusLabel[s.status].cls}">{statusLabel[s.status].label}</span>
 									{#if aksi}
-										<a href={aksi.href} use:inertia class="inline-flex min-h-10 items-center whitespace-nowrap rounded-xl px-3.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60 {aksi.label === 'Lihat' ? 'border border-neutral-200 text-neutral-700 hover:border-brand-400/40 dark:border-neutral-700 dark:text-neutral-300' : 'bg-brand-600 text-white hover:bg-brand-700'}">{aksi.label}</a>
+										<a href={aksi.href} use:inertia class="inline-flex min-h-10 items-center whitespace-nowrap rounded-xl border border-brand-400/30 px-3.5 text-sm font-semibold text-brand-700 hover:bg-brand-400/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60 dark:text-brand-300">{aksi.label}</a>
 									{/if}
 								</li>
 							{/each}
@@ -159,7 +158,7 @@
 										<p class="truncate text-sm font-medium text-neutral-900 dark:text-white">{s.nama_kelas}</p>
 										<p class="text-xs text-neutral-500">{s.jam || "–"}{s.keterangan ? ` · ${s.keterangan}` : ""}</p>
 									</div>
-									{#if aksi}<a href={aksi.href} use:inertia class="inline-flex min-h-10 items-center whitespace-nowrap rounded-xl border border-red-500/30 px-3.5 text-sm font-semibold text-red-700 hover:bg-red-500/10 dark:text-red-300">{aksi.label === "Mulai" ? "Isi absensi" : aksi.label}</a>{/if}
+									{#if aksi}<a href={aksi.href} use:inertia class="inline-flex min-h-10 items-center whitespace-nowrap rounded-xl border border-red-500/30 px-3.5 text-sm font-semibold text-red-700 hover:bg-red-500/10 dark:text-red-300">{aksi.label}</a>{/if}
 								</li>
 							{/each}
 						</ul>
