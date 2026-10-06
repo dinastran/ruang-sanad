@@ -127,9 +127,17 @@ func (q *Querier) CreateExtraSchedule(ctx context.Context, kelasID int64, tangga
 	row := q.Queries.db.QueryRowContext(ctx, `
 INSERT INTO jadwal_pertemuan
 (kelas_id, tanggal, jam_mulai, catatan, dibuat_oleh, is_tambahan)
-VALUES (?, ?, ?, ?, ?, 1)
+SELECT ?, ?, ?, ?, ?, 1
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM jadwal_pertemuan
+    WHERE kelas_id = ?
+      AND tanggal = ?
+      AND jam_mulai = ?
+      AND status IN ('dijadwalkan', 'diproses', 'dimulai')
+)
 RETURNING id
-`, kelasID, tanggal, jamMulai, catatan, userID)
+`, kelasID, tanggal, jamMulai, catatan, userID, kelasID, tanggal, jamMulai)
 	var id int64
 	if err := row.Scan(&id); err != nil {
 		return 0, err
