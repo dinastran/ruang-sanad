@@ -163,7 +163,7 @@ WHERE is_tambahan = 1
 func (q *Querier) CreateRoutineOccurrence(ctx context.Context, routineID, kelasID int64, tanggal time.Time, jamMulai string) (bool, error) {
 	adopted, err := q.Queries.db.ExecContext(ctx, `
 UPDATE jadwal_pertemuan
-SET jadwal_rutin_id = ?, tanggal_rutin = ?, is_otomatis = 1,
+SET jadwal_rutin_id = ?, tanggal_rutin = ?, is_otomatis = 1, is_tambahan = 0,
     jadwal_kelas_berubah = 0, updated_at = CURRENT_TIMESTAMP
 WHERE id = (
     SELECT id
