@@ -15,6 +15,7 @@ import (
 const (
 	PerubahanLevelKelas  = "level_kelas"
 	PerubahanJadwalKelas = "jadwal_kelas"
+	PerubahanJadwalRutin = "jadwal_rutin"
 	PerubahanLevelSantri = "level_santri"
 )
 
