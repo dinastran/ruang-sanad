@@ -175,13 +175,14 @@ func (s *JadwalPertemuanService) Create(userID int64, req models.BuatJadwalPerte
 	if tanggal.Before(startOfToday()) {
 		return 0, fmt.Errorf("tanggal jadwal tidak boleh di masa lalu")
 	}
-	return s.querier.CreateJadwalPertemuan(context.Background(), queries.CreateJadwalPertemuanParams{
-		KelasID:    req.KelasID,
-		Tanggal:    tanggal,
-		JamMulai:   req.JamMulai,
-		Catatan:    req.Catatan,
-		DibuatOleh: sql.NullInt64{Int64: userID, Valid: true},
-	})
+	return s.querier.CreateExtraSchedule(
+		context.Background(),
+		req.KelasID,
+		tanggal,
+		req.JamMulai,
+		req.Catatan,
+		sql.NullInt64{Int64: userID, Valid: true},
+	)
 }
 
 func (s *JadwalPertemuanService) Reschedule(id, kelasID int64, req models.RescheduleRequest) error {
