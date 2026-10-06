@@ -26,6 +26,9 @@ func (s *KoordinatorMonitoringService) List(filter models.ClassMonitoringFilter)
 	if err != nil {
 		return nil, err
 	}
+	if err := s.jadwalService.EnsureRoutineOccurrences(start, end, nil); err != nil {
+		return nil, err
+	}
 	rows, err := s.querier.ListClassMonitoringSchedules(context.Background(), queries.ListClassMonitoringSchedulesParams{
 		StartDate: start,
 		EndDate:   end,
