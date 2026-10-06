@@ -53,6 +53,28 @@ func TestKoordinatorMonitoringTetapMenandaiTerlambatPadaHariYangSama(t *testing.
 	require.EqualValues(t, 0, result.Summary.TidakTerlaksana)
 }
 
+func TestKoordinatorMonitoringMengecualikanSesiTambahanDariKPI(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	today := time.Now().In(wib).Format("2006-01-02")
+	_, err := f.service.Create(f.guruUtamaUser, models.BuatJadwalPertemuanRequest{
+		KelasID: f.kelasID,
+		Tanggal: today,
+		JamMulai: "23:59",
+		Catatan: "Sesi tambahan",
+	})
+	require.NoError(t, err)
+
+	service := NewKoordinatorMonitoringService(f.querier, f.service)
+	result, err := service.List(models.ClassMonitoringFilter{StartDate: today, EndDate: today})
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	require.True(t, result.Items[0].IsTambahan)
+	require.EqualValues(t, 1, result.Summary.Total)
+	require.EqualValues(t, 0, result.Summary.TotalJadwal)
+	require.EqualValues(t, 0, result.Summary.JatuhTempo)
+	require.Equal(t, float64(0), result.Summary.KepatuhanJadwal)
+}
+
 func TestKoordinatorMonitoringMengirimPengingatDanMencatatTindakLanjut(t *testing.T) {
 	f := setupJadwalPertemuanService(t)
 	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
