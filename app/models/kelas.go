@@ -39,6 +39,24 @@ type GantiJadwalKelasRequest struct {
 	Jadwal string `json:"jadwal"`
 }
 
+type JadwalRutinSlotRequest struct {
+	Hari      int64  `json:"hari"`
+	JamMulai  string `json:"jam_mulai"`
+}
+
+type SetJadwalRutinRequest struct {
+	Slots []JadwalRutinSlotRequest `json:"slots"`
+}
+
+type JadwalRutinResponse struct {
+	ID            int64  `json:"id"`
+	KelasID       int64  `json:"kelas_id"`
+	Hari          int64  `json:"hari"`
+	JamMulai      string `json:"jam_mulai"`
+	BerlakuMulai  string `json:"berlaku_mulai"`
+	IsAktif       bool   `json:"is_aktif"`
+}
+
 // GantiLevelSantriRequest moves selected santri to a class of another level.
 // Either KelasTujuanID is set, or BuatKelasBaru with Level to open a new class
 // that copies the origin class's kode, gender, frekuensi, jadwal, and angkatan.
