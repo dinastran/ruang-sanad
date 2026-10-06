@@ -22,6 +22,7 @@
 
 	let jamMulai = $state(new Date().toTimeString().substring(0, 5));
 	let catatan = $state("");
+	let confirmExtra = $state(false);
 	let isSubmitting = $state(false);
 	let errorMsg = $state("");
 
@@ -35,13 +36,17 @@
 			errorMsg = "Pilih jadwal yang akan dimulai";
 			return;
 		}
-		if (!hasDueSchedule && !jamMulai) return;
+		if (!hasDueSchedule && (!jamMulai || !confirmExtra)) {
+			errorMsg = "Konfirmasi bahwa ini pertemuan tambahan di luar jadwal rutin";
+			return;
+		}
 		isSubmitting = true;
 		errorMsg = "";
 		router.post("/app/guru/kelas/" + kelas.id + "/pertemuan/mulai", {
 			jadwal_id: selectedJadwalID,
 			jam_mulai: hasDueSchedule ? "" : jamMulai,
 			catatan: hasDueSchedule ? "" : catatan,
+			konfirmasi_tambahan: !hasDueSchedule && confirmExtra,
 		}, {
 			onError: (err) => {
 				errorMsg = Object.values(err).join(", ");
@@ -70,10 +75,10 @@
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 				</svg>
-				<span class="text-neutral-700 dark:text-neutral-300">{hasDueSchedule ? "Mulai Jadwal" : "Mulai Pertemuan"}</span>
+				<span class="text-neutral-700 dark:text-neutral-300">{hasDueSchedule ? "Mulai Jadwal" : "Pertemuan Tambahan"}</span>
 			</div>
 			<h1 class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white mb-2 tracking-tight">
-				{hasDueSchedule ? "Mulai Pertemuan Terjadwal" : "Mulai Pertemuan"}
+				{hasDueSchedule ? "Mulai Pertemuan Terjadwal" : "Pertemuan Tambahan"}
 			</h1>
 		</div>
 	</div>
@@ -135,6 +140,10 @@
 				{/if}
 			{:else}
 			<div class="space-y-4">
+				<div class="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+					<p class="text-sm font-semibold text-amber-800 dark:text-amber-300">Tidak ada jadwal yang jatuh tempo hari ini</p>
+					<p class="mt-1 text-xs leading-5 text-amber-700 dark:text-amber-400">Gunakan jalur ini hanya untuk kelas tambahan di luar pola rutin. Pertemuan ini tercatat sebagai sesi tambahan dan tidak menggantikan occurrence rutin.</p>
+				</div>
 				<div>
 					<label for="jam_mulai" class="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
 						<Clock class="w-4 h-4 inline mr-1" />
@@ -159,13 +168,17 @@
 						rows="3"
 					></textarea>
 				</div>
+				<label class="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200/80 bg-neutral-50 p-4 text-sm dark:border-white/[0.05] dark:bg-neutral-900/50">
+					<input type="checkbox" bind:checked={confirmExtra} class="mt-0.5 h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-400" />
+					<span class="text-neutral-700 dark:text-neutral-300">Saya memahami bahwa ini adalah <strong>pertemuan tambahan di luar jadwal rutin</strong>.</span>
+				</label>
 			</div>
 			{/if}
 
 			<div class="mt-6 pt-4 border-t border-neutral-200/80 dark:border-white/[0.04]">
 				<button
 					onclick={handleMulai}
-					disabled={!canEdit || isSubmitting || (hasDueSchedule ? !selectedJadwalID : !jamMulai)}
+					disabled={!canEdit || isSubmitting || (hasDueSchedule ? !selectedJadwalID : !jamMulai || !confirmExtra)}
 					class="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold transition-all dark:bg-brand-500 dark:hover:bg-brand-400 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-600/25 text-base"
 				>
 					{#if isSubmitting}
@@ -178,7 +191,7 @@
 						Mode lihat saja
 					{:else}
 						<Play class="w-5 h-5" />
-						{hasDueSchedule ? "Mulai Jadwal Ini" : "Mulai Pertemuan"}
+						{hasDueSchedule ? "Mulai Jadwal Ini" : "Mulai Pertemuan Tambahan"}
 					{/if}
 				</button>
 			</div>
