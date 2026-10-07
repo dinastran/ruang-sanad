@@ -52,6 +52,13 @@ SELECT CAST(COALESCE(MIN(pertemuan_ke), 0) AS INTEGER)
 FROM kelas_perubahan
 WHERE kelas_id = ? AND jenis = 'level_kelas' AND pertemuan_ke > 0;
 
+-- name: GetFirstPertemuanLevelKe :one
+SELECT pertemuan_level_ke
+FROM pertemuan
+WHERE kelas_id = ?
+ORDER BY pertemuan_ke ASC, id ASC
+LIMIT 1;
+
 -- name: ShiftPertemuanLevelKeThrough :exec
 UPDATE pertemuan
 SET pertemuan_level_ke = pertemuan_level_ke + sqlc.arg(delta)
