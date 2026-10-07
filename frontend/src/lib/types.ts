@@ -75,6 +75,35 @@ export interface PertemuanGuru {
 	status: string;
 }
 
+export interface RiwayatMengajarItem {
+	id: number;
+	kelas_id: number;
+	kelas_nama: string;
+	guru_nama: string;
+	pertemuan_ke: number;
+	pertemuan_level_ke: number;
+	level_nama: string;
+	tanggal: string;
+	jam_mulai: string;
+	jam_selesai: string;
+	materi: string;
+	catatan: string;
+	is_reschedule: boolean;
+	jadwal_semula: string;
+	alasan_reschedule: string;
+	is_badal: boolean;
+	guru_pengganti_id?: number;
+	alasan_badal: string;
+	status: string;
+}
+
+export interface RiwayatMengajarSummary {
+	total_dimulai: number;
+	selesai: number;
+	belum_selesai: number;
+	kelas_diajar: number;
+}
+
 export interface AbsensiGuru {
 	id: number;
 	pertemuan_id: number;
