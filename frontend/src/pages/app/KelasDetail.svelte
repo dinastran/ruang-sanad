@@ -936,7 +936,7 @@
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-neutral-200/80 dark:divide-white/[0.04]">
-							{#each santriRoster as s, i}
+							{#each santriRoster as s, i (s.id)}
 								<tr class="hover:bg-neutral-50/50 dark:hover:bg-white/[0.015] transition-colors">
 									<td class="pl-6 py-3.5">
 										<input type="checkbox" checked={selectedSantri.includes(s.id)} onchange={() => toggleSantri(s.id)} aria-label={`Pilih ${s.nama}`} class="h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-400 dark:border-neutral-600" />
@@ -1017,7 +1017,7 @@
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-neutral-200/80 dark:divide-white/[0.04]">
-							{#each santriKeluar as s, i}
+							{#each santriKeluar as s, i (s.id)}
 								<tr class="opacity-70 hover:opacity-100 hover:bg-neutral-50/50 dark:hover:bg-white/[0.015] transition-all">
 									<td class="px-6 py-3.5 text-sm text-neutral-500 dark:text-neutral-400 font-mono">{i + 1}</td>
 									<td class="px-6 py-3.5 text-sm font-mono text-neutral-700 dark:text-neutral-300">{s.id_mahasantri}</td>
