@@ -4,9 +4,9 @@
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import PenandaBadge from "@components/riayah/PenandaBadge.svelte";
 	import SapaWADialog from "@components/riayah/SapaWADialog.svelte";
-	import type { AppNotification, Flash, User, TilawahStatus, RiayahRingkasan, RiayahSantriItem, RiayahWATemplate, GuruBeranda, GuruSlotKelas } from "@lib/types";
+	import type { AppNotification, Flash, User, TilawahStatus, RiayahRingkasan, RiayahSantriItem, RiayahWATemplate, GuruBeranda, GuruSlotKelas, RiwayatMengajarSummary } from "@lib/types";
 	import { formatTanggal, labelPeriode } from "@lib/riayah";
-	import { CalendarClock, ClipboardCheck, HeartHandshake, FileText, CheckCircle, AlertCircle, BookMarked, BellRing, Award, Users, CalendarDays, MessageCircle, ChevronRight, Flame } from "lucide-svelte";
+	import { CalendarClock, ClipboardCheck, HeartHandshake, FileText, CheckCircle, AlertCircle, BookMarked, BellRing, Award, Users, CalendarDays, MessageCircle, ChevronRight, Flame, History } from "lucide-svelte";
 
 	interface Props {
 		user?: User;
@@ -16,12 +16,13 @@
 		riayah?: RiayahRingkasan | null;
 		riayah_teratas?: RiayahSantriItem[];
 		wa_templates?: RiayahWATemplate[];
+		riwayat_mengajar_30?: RiwayatMengajarSummary;
 		flash?: Flash;
 		success?: string;
 		error?: string;
 	}
 
-	let { user, beranda = null, tilawah, notifications = [], riayah = null, riayah_teratas = [], wa_templates = [], flash, success, error }: Props = $props();
+	let { user, beranda = null, tilawah, notifications = [], riayah = null, riayah_teratas = [], wa_templates = [], riwayat_mengajar_30 = { total_dimulai: 0, selesai: 0, belum_selesai: 0, kelas_diajar: 0 }, flash, success, error }: Props = $props();
 
 	// Hanya guru yang memulai/mengabsen pertemuan dari dashboard.
 	let canEdit = $derived(user?.role === "guru");
@@ -71,10 +72,11 @@
 	const agendaLabel: Record<string, string> = { pembinaan: "Pembinaan", rapat: "Rapat guru", kalam: "Kalam Bersanad" };
 
 	let kartu = $derived([
-		{ label: "Kelas hari ini", value: tugasHariIni.length, href: "/app/guru/jadwal-pertemuan?filter=today", icon: CalendarClock, tone: "text-brand-600 dark:text-brand-400 bg-brand-400/10", alert: false },
-		{ label: "Perlu tindakan", value: tertunda.length, href: "/app/guru/jadwal-pertemuan?filter=attention", icon: ClipboardCheck, tone: "text-red-600 dark:text-red-400 bg-red-500/10", alert: tertunda.length > 0 },
-		{ label: "Santri perlu disapa", value: riayah?.perlu_perhatian ?? 0, href: "/app/guru/riayah", icon: HeartHandshake, tone: "text-orange-600 dark:text-orange-400 bg-orange-500/10", alert: (riayah?.perlu_perhatian ?? 0) > 0 },
-		{ label: riayah?.rapor_periode ? `Rapor ${labelPeriode(riayah.rapor_periode).split(" ")[0]} belum dikirim` : "Rapor belum dikirim", value: raporBelum, href: "/app/guru/riayah", icon: FileText, tone: "text-sky-600 dark:text-sky-400 bg-sky-500/10", alert: false },
+		{ label: "Kelas hari ini", detail: "", value: tugasHariIni.length, href: "/app/guru/jadwal-pertemuan?filter=today", icon: CalendarClock, tone: "text-brand-600 dark:text-brand-400 bg-brand-400/10", alert: false },
+		{ label: "Perlu tindakan", detail: "", value: tertunda.length, href: "/app/guru/jadwal-pertemuan?filter=attention", icon: ClipboardCheck, tone: "text-red-600 dark:text-red-400 bg-red-500/10", alert: tertunda.length > 0 },
+		{ label: "Pertemuan 30 hari", detail: `${riwayat_mengajar_30.selesai} selesai`, value: riwayat_mengajar_30.total_dimulai, href: "/app/guru/riwayat-mengajar?range=30", icon: History, tone: "text-violet-600 dark:text-violet-400 bg-violet-500/10", alert: riwayat_mengajar_30.belum_selesai > 0 },
+		{ label: "Santri perlu disapa", detail: "", value: riayah?.perlu_perhatian ?? 0, href: "/app/guru/riayah", icon: HeartHandshake, tone: "text-orange-600 dark:text-orange-400 bg-orange-500/10", alert: (riayah?.perlu_perhatian ?? 0) > 0 },
+		{ label: riayah?.rapor_periode ? `Rapor ${labelPeriode(riayah.rapor_periode).split(" ")[0]} belum dikirim` : "Rapor belum dikirim", detail: "", value: raporBelum, href: "/app/guru/riayah", icon: FileText, tone: "text-sky-600 dark:text-sky-400 bg-sky-500/10", alert: false },
 	]);
 </script>
 
@@ -96,13 +98,14 @@
 			<div class="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-2xl p-4 text-sm font-medium" in:fly={{ y: 10, duration: 200 }}>{error || flash?.error}</div>
 		{/if}
 
-		<div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+		<div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
 			{#snippet isiKartu(k: (typeof kartu)[number])}
 				<div class="flex items-center gap-2.5">
 					<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl {k.tone}"><k.icon class="h-4 w-4" /></span>
 					<span class="text-2xl font-bold font-mono text-neutral-900 dark:text-white">{k.value}</span>
 				</div>
 				<p class="mt-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">{k.label}</p>
+				{#if k.detail}<p class="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-500">{k.detail}</p>{/if}
 			{/snippet}
 			{#each kartu as k (k.label)}
 				{@const cls = `rounded-2xl border bg-white dark:bg-neutral-925/50 p-4 transition-colors hover:border-brand-400/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 ${k.alert ? "border-red-500/25" : "border-neutral-200/80 dark:border-white/[0.06]"}`}
