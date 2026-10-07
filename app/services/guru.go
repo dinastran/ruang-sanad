@@ -344,6 +344,65 @@ func (s *GuruService) ListKelasSaya(guruID int64) ([]models.KelasGuruResponse, e
 	return s.listKelas(sql.NullInt64{Int64: guruID, Valid: true})
 }
 
+func (s *GuruService) ListRiwayatMengajar(guruID *int64, tanggalMulai, tanggalSelesai string) ([]models.RiwayatMengajarItem, models.RiwayatMengajarSummary, error) {
+	filter := sql.NullInt64{}
+	if guruID != nil {
+		filter = sql.NullInt64{Int64: *guruID, Valid: true}
+	}
+	rows, err := s.querier.ListRiwayatMengajar(context.Background(), queries.ListRiwayatMengajarParams{
+		GuruID:         filter,
+		TanggalMulai:   tanggalMulai,
+		TanggalSelesai: tanggalSelesai,
+	})
+	if err != nil {
+		return nil, models.RiwayatMengajarSummary{}, err
+	}
+
+	items := make([]models.RiwayatMengajarItem, 0, len(rows))
+	for _, row := range rows {
+		item := models.RiwayatMengajarItem{
+			ID:               row.ID,
+			KelasID:          row.KelasID,
+			KelasNama:        row.KelasNama,
+			GuruNama:         row.GuruNama,
+			PertemuanKe:      row.PertemuanKe,
+			PertemuanLevelKe: row.PertemuanLevelKe,
+			LevelNama:        row.LevelNama,
+			Tanggal:          row.Tanggal.Format("2006-01-02"),
+			JamMulai:         row.JamMulai,
+			JamSelesai:       row.JamSelesai,
+			Materi:           row.Materi,
+			Catatan:          row.Catatan,
+			IsReschedule:     row.IsReschedule == 1,
+			JadwalSemula:     row.JadwalSemula,
+			AlasanReschedule: row.AlasanReschedule,
+			IsBadal:          row.IsBadal == 1,
+			AlasanBadal:      row.AlasanBadal,
+			Status:           row.Status,
+		}
+		if row.GuruPenggantiID.Valid {
+			item.GuruPenggantiID = &row.GuruPenggantiID.Int64
+		}
+		items = append(items, item)
+	}
+	return items, summarizeRiwayatMengajar(items), nil
+}
+
+func summarizeRiwayatMengajar(items []models.RiwayatMengajarItem) models.RiwayatMengajarSummary {
+	summary := models.RiwayatMengajarSummary{TotalDimulai: int64(len(items))}
+	kelas := make(map[int64]struct{})
+	for _, item := range items {
+		kelas[item.KelasID] = struct{}{}
+		if item.Status == "selesai" {
+			summary.Selesai++
+		} else {
+			summary.BelumSelesai++
+		}
+	}
+	summary.KelasDiajar = int64(len(kelas))
+	return summary
+}
+
 func (s *GuruService) ListKelasForViewer(guruID *int64) ([]models.KelasGuruResponse, error) {
 	filter := sql.NullInt64{}
 	if guruID != nil {
