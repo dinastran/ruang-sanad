@@ -226,6 +226,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	guruWriteRole := middlewares.RoleRequired(store, userService, "guru")
 	koordinatorRole := middlewares.RoleRequired(store, userService, "koordinator_guru", "super_admin")
 	protected.Get("/guru", guruWorkflowRole, h.Guru.Dashboard)
+	protected.Get("/guru/riwayat-mengajar", guruWorkflowRole, h.Guru.RiwayatMengajar)
 	protected.Get("/guru/kelas", guruWorkflowRole, h.Guru.KelasSaya)
 	protected.Get("/guru/kelas/:id", guruWorkflowRole, h.Guru.DetailKelas)
 	protected.Get("/guru/kelas/:id/pertemuan/mulai", guruWorkflowRole, h.Pertemuan.FormMulai)
