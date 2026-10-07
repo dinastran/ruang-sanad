@@ -3,7 +3,6 @@ package queries
 import (
 	"context"
 	"database/sql"
-	"time"
 )
 
 const listRiwayatMengajar = `
@@ -33,7 +32,7 @@ LEFT JOIN guru g ON g.id = CASE
 	WHEN p.is_badal = 1 THEN p.guru_pengganti_id
 	ELSE k.guru_id
 END
-WHERE p.tanggal >= ? AND p.tanggal < ?
+WHERE date(p.tanggal) >= date(?) AND date(p.tanggal) <= date(?)
   AND (
 	? IS NULL
 	OR (p.is_badal = 1 AND p.guru_pengganti_id = ?)
@@ -44,8 +43,8 @@ ORDER BY p.tanggal DESC, p.id DESC
 
 type ListRiwayatMengajarParams struct {
 	GuruID         sql.NullInt64
-	TanggalMulai   time.Time
-	TanggalSelesai time.Time
+	TanggalMulai   string
+	TanggalSelesai string
 }
 
 type ListRiwayatMengajarRow struct {
