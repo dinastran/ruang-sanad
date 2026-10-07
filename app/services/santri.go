@@ -693,7 +693,7 @@ func (s *SantriService) UpdateByAdminKelas(id int64, req models.UpdateSantriAdmi
 		return err
 	}
 
-	if err := s.engine.WithQuerier(txQuerier).ProcessSantri(ctx, &santri); err != nil {
+	if err := s.engine.WithQuerier(txQuerier).ProcessSantriDenganGuru(ctx, &santri, req.GuruID); err != nil {
 		return err
 	}
 	if req.GuruID <= 0 {
@@ -706,11 +706,21 @@ func (s *SantriService) UpdateByAdminKelas(id int64, req models.UpdateSantriAdmi
 	if !updated.KelasID.Valid {
 		return tx.Commit()
 	}
-	if err := txQuerier.AssignGuru(ctx, queries.AssignGuruParams{
-		GuruID: sql.NullInt64{Int64: req.GuruID, Valid: true},
-		ID:     updated.KelasID.Int64,
-	}); err != nil {
+	kelas, err := txQuerier.GetKelasByID(ctx, updated.KelasID.Int64)
+	if err != nil {
 		return err
+	}
+	// The engine only places the santri in a class of this guru or one without a
+	// guru, so only the latter needs claiming. Never overwrite another guru.
+	if !kelas.GuruID.Valid {
+		if err := txQuerier.AssignGuru(ctx, queries.AssignGuruParams{
+			GuruID: sql.NullInt64{Int64: req.GuruID, Valid: true},
+			ID:     kelas.ID,
+		}); err != nil {
+			return err
+		}
+	} else if kelas.GuruID.Int64 != req.GuruID {
+		return errors.New("kelas santri dipegang guru lain")
 	}
 	return tx.Commit()
 }

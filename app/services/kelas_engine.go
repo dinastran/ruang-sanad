@@ -114,6 +114,15 @@ func (s *KelasEngineService) resolveLevelNama(ctx context.Context, levelKode str
 }
 
 func (s *KelasEngineService) ProcessSantri(ctx context.Context, santri *queries.Santri) error {
+	return s.ProcessSantriDenganGuru(ctx, santri, 0)
+}
+
+// ProcessSantriDenganGuru places a santri like ProcessSantri, but when guruID > 0
+// the guru is part of the placement key: the santri only joins a class with the
+// same kunci that belongs to that guru or has no guru yet. A class owned by a
+// different guru is never reused, so its guru is never overwritten; a new
+// sub-class is created for the chosen guru instead.
+func (s *KelasEngineService) ProcessSantriDenganGuru(ctx context.Context, santri *queries.Santri, guruID int64) error {
 	tipe := s.HitungTipe(santri.KelasKode)
 	frekuensi := s.HitungFrekuensi(santri.KelasKode)
 	isLengkap := s.HitungIsLengkap(santri.Nama, santri.AngkatanKelas, santri.Level, santri.Jadwal, santri.JenisKelamin)
@@ -125,7 +134,7 @@ func (s *KelasEngineService) ProcessSantri(ctx context.Context, santri *queries.
 		current, err := s.querier.GetKelasByID(ctx, santri.KelasID.Int64)
 		if err == nil {
 			oldClassExists = true
-			if current.IsAktif == 1 {
+			if current.IsAktif == 1 && guruCocok(current.GuruID, guruID) {
 				oldClassKey = current.KunciKelas
 			}
 		} else if !errors.Is(err, sql.ErrNoRows) {
@@ -140,7 +149,7 @@ func (s *KelasEngineService) ProcessSantri(ctx context.Context, santri *queries.
 			kelasID = santri.KelasID
 		}
 		if !kelasID.Valid {
-			assignedID, err := s.assignKeKelas(ctx, kunciKelas, santri.KelasKode, tipe, santri.JenisKelamin, santri.Level, levelNama, frekuensi, santri.Jadwal, santri.AngkatanKelas)
+			assignedID, err := s.assignKeKelas(ctx, kunciKelas, santri.KelasKode, tipe, santri.JenisKelamin, santri.Level, levelNama, frekuensi, santri.Jadwal, santri.AngkatanKelas, guruID)
 			if err != nil {
 				return fmt.Errorf("assign ke kelas: %w", err)
 			}
@@ -199,18 +208,34 @@ func (s *KelasEngineService) ProcessSantri(ctx context.Context, santri *queries.
 	return nil
 }
 
-func (s *KelasEngineService) assignKeKelas(ctx context.Context, kunciKelas, kelasKode, tipe, jenisKelamin, levelKode, levelNama, frekuensi, jadwal, angkatan string) (int64, error) {
+// guruCocok reports whether a class with kelasGuru can take a santri whose
+// chosen guru is guruID. guruID <= 0 means no guru was chosen.
+func guruCocok(kelasGuru sql.NullInt64, guruID int64) bool {
+	return guruID <= 0 || !kelasGuru.Valid || kelasGuru.Int64 == guruID
+}
+
+func (s *KelasEngineService) assignKeKelas(ctx context.Context, kunciKelas, kelasKode, tipe, jenisKelamin, levelKode, levelNama, frekuensi, jadwal, angkatan string, guruID int64) (int64, error) {
 	kelasList, err := s.querier.FindKelasByKunci(ctx, kunciKelas)
 	if err != nil {
 		return 0, err
 	}
 
-	for _, k := range kelasList {
-		if k.JumlahSantri < k.Kapasitas {
-			if err := s.querier.IncrementJumlahSantri(ctx, k.ID); err != nil {
-				return 0, err
+	// With a chosen guru, prefer that guru's own class before an unassigned one.
+	passes := []func(sql.NullInt64) bool{func(g sql.NullInt64) bool { return guruCocok(g, guruID) }}
+	if guruID > 0 {
+		passes = []func(sql.NullInt64) bool{
+			func(g sql.NullInt64) bool { return g.Valid && g.Int64 == guruID },
+			func(g sql.NullInt64) bool { return !g.Valid },
+		}
+	}
+	for _, cocok := range passes {
+		for _, k := range kelasList {
+			if cocok(k.GuruID) && k.JumlahSantri < k.Kapasitas {
+				if err := s.querier.IncrementJumlahSantri(ctx, k.ID); err != nil {
+					return 0, err
+				}
+				return k.ID, nil
 			}
-			return k.ID, nil
 		}
 	}
 
@@ -234,7 +259,7 @@ func (s *KelasEngineService) assignKeKelas(ctx context.Context, kunciKelas, kela
 		Jadwal:       jadwal,
 		SubIndex:     subIndex,
 		NamaKelas:    nama,
-		GuruID:       sql.NullInt64{Valid: false},
+		GuruID:       sql.NullInt64{Int64: guruID, Valid: guruID > 0},
 		Kapasitas:    DefaultKapasitas,
 		JumlahSantri: 1,
 		CreatedAt:    time.Now(),
