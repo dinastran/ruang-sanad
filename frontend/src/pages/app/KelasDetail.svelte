@@ -147,6 +147,8 @@
 	let pertemuanTerakhir = $state(kelas.pertemuan_terakhir);
 	let isPertemuanLoading = $state(false);
 	let isMateriIndividualLoading = $state(false);
+	let kapasitasBaru = $state(kelas.kapasitas);
+	let isKapasitasLoading = $state(false);
 
 	let pindahModal = $state<{ open: boolean; santriId: number; santriNama: string }>({ open: false, santriId: 0, santriNama: "" });
 	let pindahKelasId = $state<number | null>(null);
@@ -448,6 +450,25 @@
 		});
 	}
 
+	function simpanKapasitas() {
+		const value = Number(kapasitasBaru);
+		const minimum = Math.max(1, kelas.jumlah_santri);
+		if (!Number.isInteger(value) || value < minimum) return;
+
+		isKapasitasLoading = true;
+		router.put(withReturnTo(`/app/kelas/${kelas.id}/kapasitas`), { kapasitas: value }, {
+			preserveScroll: true,
+			onSuccess: (p) => {
+				const err = flashError(p);
+				if (err) { Toast(err, "error"); return; }
+				kapasitasBaru = value;
+				Toast("Kapasitas kelas berhasil diperbarui", "success");
+			},
+			onError: () => Toast("Gagal memperbarui kapasitas kelas", "error"),
+			onFinish: () => { isKapasitasLoading = false; },
+		});
+	}
+
 	function toggleMateriIndividual() {
 		isMateriIndividualLoading = true;
 		router.put(`/app/kelas/${kelas.id}/materi-individual?return_to=${encodeURIComponent(return_to)}`, { materi_individual: !kelas.materi_individual }, {
@@ -708,6 +729,29 @@
 							style="width: {Math.min(capacityPercent, 100)}%"
 						></div>
 					</div>
+					<div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+						<label class="flex-1 text-xs font-medium text-neutral-600 dark:text-neutral-400">
+							Kapasitas maksimal
+							<input
+								type="number"
+								min={Math.max(1, kelas.jumlah_santri)}
+								step="1"
+								bind:value={kapasitasBaru}
+								aria-label="Kapasitas maksimal kelas"
+								class="mt-1.5 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-mono text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white"
+							/>
+						</label>
+						<button
+							onclick={simpanKapasitas}
+							disabled={isKapasitasLoading || !Number.isInteger(Number(kapasitasBaru)) || Number(kapasitasBaru) < Math.max(1, kelas.jumlah_santri) || Number(kapasitasBaru) === kelas.kapasitas}
+							class="rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-400"
+						>
+							{isKapasitasLoading ? "Menyimpan..." : "Simpan kapasitas"}
+						</button>
+					</div>
+					<p class="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
+						Kelas baru tetap default 15 peserta. Kapasitas kelas ini dapat diubah, tetapi tidak boleh lebih kecil dari {kelas.jumlah_santri} santri aktif/cuti yang sedang memakai kursi.
+					</p>
 				</div>
 			</div>
 

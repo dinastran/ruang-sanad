@@ -158,6 +158,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/kelas/:id/pertemuan-terakhir", akRole, h.Kelas.SetPertemuanTerakhir)
 	protected.Put("/kelas/:id/santri/:santriId/status", akRole, h.Kelas.UbahStatusSantri)
 	protected.Put("/kelas/:id/status", akRole, h.Kelas.SetAktif)
+	protected.Put("/kelas/:id/kapasitas", akRole, h.Kelas.SetKapasitas)
 	protected.Put("/kelas/:id/materi-individual", akRole, h.Kelas.SetMateriIndividual)
 	protected.Put("/kelas/:id/level", akRole, h.Kelas.GantiLevel)
 	protected.Put("/kelas/:id/jadwal", akRole, h.Kelas.GantiJadwal)

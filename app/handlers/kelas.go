@@ -268,6 +268,26 @@ func (h *KelasHandler) SetAktif(c *fiber.Ctx) error {
 	return h.inertiaService.Redirect(c, kelasStatusReturnURL(c, c.Params("id")))
 }
 
+func (h *KelasHandler) SetKapasitas(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return h.inertiaService.Redirect(c, "/app/kelas")
+	}
+
+	var req models.SetKelasKapasitasRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data kapasitas tidak valid")
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	if err := h.kelasService.SetKapasitas(id, req.Kapasitas); err != nil {
+		h.store.Flash(c, "error", err.Error())
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+
+	h.store.Flash(c, "success", "Kapasitas kelas berhasil diperbarui")
+	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+}
+
 func (h *KelasHandler) SetMateriIndividual(c *fiber.Ctx) error {
 	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 	if err != nil {
