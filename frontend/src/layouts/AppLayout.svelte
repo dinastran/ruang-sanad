@@ -7,6 +7,7 @@
 		Users,
 		BookOpen,
 		Wallet,
+		HandCoins,
 		Upload,
 		Settings,
 		Shield,
@@ -70,6 +71,7 @@
 		{ href: "/app/kelas", label: "Kelas", group: "kelas", category: "Akademik", show: isAdminKelas, icon: BookOpen },
 		{ href: "/app/keuangan", label: "Tagihan", group: "keuangan", category: "Keuangan", show: canViewKeuangan, icon: Wallet },
 		{ href: "/app/keuangan/tagihan", label: "Daftar Tagihan", group: "tagihan", category: "Keuangan", show: canViewKeuangan, icon: Receipt },
+		{ href: "/app/keuangan/ujroh", label: "Ujroh Guru", group: "ujroh", category: "Keuangan", show: canViewKeuangan, icon: HandCoins },
 		{ href: "/app/laporan/keuangan", label: "Laporan Keuangan", group: "laporan-keuangan", category: "Keuangan", show: isKeuangan, icon: Receipt },
 		{ href: "/app/master", label: "Data Master", group: "master", category: "Administrasi", show: isAdminKelas, icon: Database },
 		{ href: "/app/produk-crm", label: "Produk & CRM", group: "produk-crm", category: "Administrasi", show: isAdminKelas, icon: Boxes },
@@ -112,6 +114,7 @@
 		if (path.startsWith("/app/kelas")) return "kelas";
 		if (path.startsWith("/app/laporan/keuangan")) return "laporan-keuangan";
 		if (path.startsWith("/app/keuangan/tagihan")) return "tagihan";
+		if (path.startsWith("/app/keuangan/ujroh")) return "ujroh";
 		if (path.startsWith("/app/keuangan")) return "keuangan";
 		if (path.startsWith("/app/produk-crm")) return "produk-crm";
 		if (path.startsWith("/app/master")) return "master";

@@ -657,3 +657,61 @@ export interface GuruBeranda {
 	kinerja: GuruKinerja | null;
 	agenda: { jenis: "pembinaan" | "rapat" | "kalam"; tanggal: string; judul: string }[];
 }
+
+// --- Ujroh Guru (Keuangan) ---
+
+export interface UjrohPertemuan {
+	pertemuan_id: number;
+	kelas_id: number;
+	kelas_nama: string;
+	tanggal: string;
+	pertemuan_ke: number;
+	is_badal: boolean;
+	tarif: number;
+}
+
+export interface UjrohGuru {
+	guru_id: number;
+	guru_nama: string;
+	guru_status: string;
+	tarif: number;
+	tarif_khusus: boolean;
+	jumlah_pertemuan: number;
+	jumlah_badal: number;
+	total: number;
+	dibayar: boolean;
+	dibayar_at: string;
+	dibayar_oleh: string;
+	catatan_bayar: string;
+	selisih: boolean;
+	live_jumlah: number;
+	live_total: number;
+	pertemuan: UjrohPertemuan[];
+}
+
+export interface UjrohRekap {
+	bulan: string;
+	terkunci: boolean;
+	dikunci_at: string;
+	dikunci_oleh: string;
+	dibuka_at: string;
+	dibuka_oleh: string;
+	guru: UjrohGuru[];
+	ringkasan: { total_ujroh: number; total_dibayar: number; total_belum: number; jumlah_guru: number; jumlah_pertemuan: number };
+	tanpa_guru: UjrohPertemuan[];
+	berlangsung: number;
+	guru_baru_selisih: UjrohGuru[];
+}
+
+export interface UjrohTarif {
+	tetap: number;
+	part_time: number;
+}
+
+export interface UjrohTarifGuru {
+	guru_id: number;
+	nama: string;
+	status: string;
+	is_aktif: boolean;
+	tarif_khusus: number | null;
+}
