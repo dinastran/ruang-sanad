@@ -273,9 +273,9 @@ func (q *Queries) GetFirstPertemuanLevelKe(ctx context.Context, kelasID int64) (
 
 const shiftPertemuanLevelKeThrough = `-- name: ShiftPertemuanLevelKeThrough :exec
 UPDATE pertemuan
-SET pertemuan_level_ke = pertemuan_level_ke + ?
-WHERE kelas_id = ?
-  AND pertemuan_ke <= ?
+SET pertemuan_level_ke = pertemuan_level_ke + ?1
+WHERE kelas_id = ?2
+  AND pertemuan_ke <= ?3
 `
 
 type ShiftPertemuanLevelKeThroughParams struct {
@@ -291,8 +291,8 @@ func (q *Queries) ShiftPertemuanLevelKeThrough(ctx context.Context, arg ShiftPer
 
 const shiftAllPertemuanLevelKe = `-- name: ShiftAllPertemuanLevelKe :exec
 UPDATE pertemuan
-SET pertemuan_level_ke = pertemuan_level_ke + ?
-WHERE kelas_id = ?
+SET pertemuan_level_ke = pertemuan_level_ke + ?1
+WHERE kelas_id = ?2
 `
 
 type ShiftAllPertemuanLevelKeParams struct {
@@ -307,8 +307,8 @@ func (q *Queries) ShiftAllPertemuanLevelKe(ctx context.Context, arg ShiftAllPert
 
 const offsetPertemuanKeForRebase = `-- name: OffsetPertemuanKeForRebase :exec
 UPDATE pertemuan
-SET pertemuan_ke = pertemuan_ke + ?
-WHERE kelas_id = ?
+SET pertemuan_ke = pertemuan_ke + ?1
+WHERE kelas_id = ?2
 `
 
 type OffsetPertemuanKeForRebaseParams struct {
@@ -323,8 +323,8 @@ func (q *Queries) OffsetPertemuanKeForRebase(ctx context.Context, arg OffsetPert
 
 const finalizePertemuanKeRebase = `-- name: FinalizePertemuanKeRebase :exec
 UPDATE pertemuan
-SET pertemuan_ke = pertemuan_ke - ? + ?
-WHERE kelas_id = ?
+SET pertemuan_ke = pertemuan_ke - ?1 + ?2
+WHERE kelas_id = ?3
 `
 
 type FinalizePertemuanKeRebaseParams struct {
@@ -340,12 +340,12 @@ func (q *Queries) FinalizePertemuanKeRebase(ctx context.Context, arg FinalizePer
 
 const rebaseKelasMeetingAnchors = `-- name: RebaseKelasMeetingAnchors :exec
 UPDATE kelas
-SET pertemuan_terakhir = ?,
+SET pertemuan_terakhir = ?1,
     level_pertemuan_awal = CASE
-        WHEN level_pertemuan_awal > 0 THEN level_pertemuan_awal + ?
+        WHEN level_pertemuan_awal > 0 THEN level_pertemuan_awal + ?2
         ELSE level_pertemuan_awal
     END
-WHERE id = ?
+WHERE id = ?3
 `
 
 type RebaseKelasMeetingAnchorsParams struct {
@@ -361,8 +361,8 @@ func (q *Queries) RebaseKelasMeetingAnchors(ctx context.Context, arg RebaseKelas
 
 const shiftLevelChangeBoundaries = `-- name: ShiftLevelChangeBoundaries :exec
 UPDATE kelas_perubahan
-SET pertemuan_ke = pertemuan_ke + ?
-WHERE kelas_id = ?
+SET pertemuan_ke = pertemuan_ke + ?1
+WHERE kelas_id = ?2
   AND jenis = 'level_kelas'
   AND pertemuan_ke > 0
 `
@@ -379,9 +379,9 @@ func (q *Queries) ShiftLevelChangeBoundaries(ctx context.Context, arg ShiftLevel
 
 const shiftSantriPertemuanAwalByKelas = `-- name: ShiftSantriPertemuanAwalByKelas :exec
 UPDATE santri
-SET pertemuan_awal = pertemuan_awal + ?,
+SET pertemuan_awal = pertemuan_awal + ?1,
     updated_at = CURRENT_TIMESTAMP
-WHERE kelas_id = ?
+WHERE kelas_id = ?2
   AND pertemuan_awal > 0
 `
 
@@ -402,16 +402,16 @@ SET pertemuan_ke = (
     FROM pertemuan p
     WHERE p.id = tagihan.pertemuan_id
 )
-WHERE kelas_id = ?
+WHERE kelas_id = ?1
   AND pertemuan_id IS NOT NULL
   AND EXISTS (
       SELECT 1 FROM pertemuan p
       WHERE p.id = tagihan.pertemuan_id
-        AND p.kelas_id = ?
+        AND p.kelas_id = ?1
   )
 `
 
 func (q *Queries) SyncTagihanPertemuanKeByKelas(ctx context.Context, kelasID int64) error {
-	_, err := q.db.ExecContext(ctx, syncTagihanPertemuanKeByKelas, kelasID, kelasID)
+	_, err := q.db.ExecContext(ctx, syncTagihanPertemuanKeByKelas, kelasID)
 	return err
 }
