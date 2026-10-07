@@ -31,6 +31,10 @@ type SetKelasMateriIndividualRequest struct {
 	MateriIndividual bool `json:"materi_individual"`
 }
 
+type SetKelasKapasitasRequest struct {
+	Kapasitas int64 `json:"kapasitas"`
+}
+
 type GantiLevelKelasRequest struct {
 	Level string `json:"level"`
 }
