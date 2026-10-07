@@ -264,7 +264,7 @@ func (s *KelasPerubahanService) KoreksiNomorPertemuan(kelasID, pertemuanTerakhir
 		return err
 	}
 	if _, err := q.GetActivePertemuanByKelas(ctx, kelasID); err == nil {
-		return fmt.Errorf("koreksi tidak dapat dilakukan saat ada pertemuan berlangsung")
+		return fmt.Errorf("koreksi tidak dapat dilakukan saat ada pertemuan yang sedang berlangsung")
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
