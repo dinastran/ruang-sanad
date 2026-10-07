@@ -69,10 +69,10 @@
 	}
 
 	function groupKelas(list: GuruKelas[]) {
-		const groups = new Map<string, { guruNama: string; kelas: GuruKelas[] }>();
+		const groups = new Map<string, { key: string; guruNama: string; kelas: GuruKelas[] }>();
 		for (const item of list) {
 			const key = String(item.guru_id ?? "belum-ditugaskan");
-			const group = groups.get(key) ?? { guruNama: item.guru_nama || "Belum ditugaskan", kelas: [] };
+			const group = groups.get(key) ?? { key, guruNama: item.guru_nama || "Belum ditugaskan", kelas: [] };
 			group.kelas.push(item);
 			groups.set(key, group);
 		}
@@ -177,7 +177,7 @@
 
 			{#if kelasPerGuru.length > 0}
 				<div class="space-y-7" in:fly={{ y: 20, duration: 600 }}>
-					{#each kelasPerGuru as group}
+					{#each kelasPerGuru as group (group.key)}
 						<section>
 							{#if isAllGuruView}
 								<div class="flex items-center gap-2 mb-3">
@@ -187,7 +187,7 @@
 								</div>
 							{/if}
 							<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-								{#each group.kelas as k}
+								{#each group.kelas as k (k.id)}
 					<a href={"/app/guru/kelas/" + k.id} use:inertia
 						class="group relative rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-5 transition-all hover:border-brand-400/30 hover:shadow-lg hover:shadow-brand-400/5"
 					>
