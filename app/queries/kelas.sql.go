@@ -446,6 +446,20 @@ func (q *Queries) SetKelasMateriIndividual(ctx context.Context, arg SetKelasMate
 	return err
 }
 
+const setKelasKapasitas = `-- name: SetKelasKapasitas :exec
+UPDATE kelas SET kapasitas = ? WHERE id = ?
+`
+
+type SetKelasKapasitasParams struct {
+	Kapasitas int64
+	ID        int64
+}
+
+func (q *Queries) SetKelasKapasitas(ctx context.Context, arg SetKelasKapasitasParams) error {
+	_, err := q.db.ExecContext(ctx, setKelasKapasitas, arg.Kapasitas, arg.ID)
+	return err
+}
+
 const updateKelasPertemuanTerakhir = `-- name: UpdateKelasPertemuanTerakhir :execresult
 UPDATE kelas
 SET pertemuan_terakhir = ?1,
