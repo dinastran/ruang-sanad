@@ -163,6 +163,31 @@ func (s *KelasService) SetAktif(kelasID int64, aktif bool) error {
 	})
 }
 
+func (s *KelasService) SetKapasitas(kelasID, kapasitas int64) error {
+	if kapasitas < 1 {
+		return fmt.Errorf("kapasitas minimal 1 peserta")
+	}
+
+	kelas, err := s.querier.GetKelasByID(context.Background(), kelasID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("kelas tidak ditemukan")
+		}
+		return err
+	}
+	if kapasitas < kelas.JumlahSantri {
+		return fmt.Errorf("kapasitas tidak boleh lebih kecil dari jumlah santri aktif/cuti saat ini (%d)", kelas.JumlahSantri)
+	}
+	if kapasitas == kelas.Kapasitas {
+		return nil
+	}
+
+	return s.querier.SetKelasKapasitas(context.Background(), queries.SetKelasKapasitasParams{
+		Kapasitas: kapasitas,
+		ID:        kelasID,
+	})
+}
+
 func (s *KelasService) SetMateriIndividual(kelasID int64, enabled bool) error {
 	var value int64
 	if enabled {
