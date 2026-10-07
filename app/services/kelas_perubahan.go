@@ -111,6 +111,10 @@ func (s *KelasPerubahanService) GantiJadwalKelas(kelasID int64, jadwal string, u
 	if kelas.Jadwal == jadwal {
 		return fmt.Errorf("jadwal baru sama dengan jadwal kelas saat ini")
 	}
+	state, err := q.GetKelasPerubahanState(ctx, kelasID)
+	if err != nil {
+		return err
+	}
 	if err := s.updateIdentitas(ctx, q, kelas, kelas.Level, jadwal, state.LevelPertemuanAwal); err != nil {
 		return err
 	}
@@ -257,10 +261,6 @@ func (s *KelasPerubahanService) KoreksiNomorPertemuan(kelasID, pertemuanTerakhir
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("kelas tidak ditemukan")
 		}
-		return err
-	}
-	state, err := q.GetKelasPerubahanState(ctx, kelasID)
-	if err != nil {
 		return err
 	}
 	if _, err := q.GetActivePertemuanByKelas(ctx, kelasID); err == nil {
