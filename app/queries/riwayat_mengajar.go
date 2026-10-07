@@ -29,15 +29,18 @@ SELECT
 	p.status
 FROM pertemuan p
 JOIN kelas k ON k.id = p.kelas_id
+LEFT JOIN guru actor_g ON actor_g.user_id = p.dibuat_oleh
 LEFT JOIN guru g ON g.id = CASE
-	WHEN p.is_badal = 1 THEN p.guru_pengganti_id
-	ELSE k.guru_id
+	WHEN p.is_badal = 1 AND p.guru_pengganti_id IS NOT NULL THEN p.guru_pengganti_id
+	ELSE COALESCE(actor_g.id, k.guru_id)
 END
 WHERE date(p.tanggal) >= date(?) AND date(p.tanggal) <= date(?)
   AND (
 	? IS NULL
-	OR (p.is_badal = 1 AND p.guru_pengganti_id = ?)
-	OR (p.is_badal = 0 AND k.guru_id = ?)
+	OR CASE
+		WHEN p.is_badal = 1 AND p.guru_pengganti_id IS NOT NULL THEN p.guru_pengganti_id
+		ELSE COALESCE(actor_g.id, k.guru_id)
+	END = ?
   )
 ORDER BY p.tanggal DESC, p.id DESC
 `
@@ -76,7 +79,6 @@ func (q *Queries) ListRiwayatMengajar(ctx context.Context, arg ListRiwayatMengaj
 		listRiwayatMengajar,
 		arg.TanggalMulai,
 		arg.TanggalSelesai,
-		arg.GuruID,
 		arg.GuruID,
 		arg.GuruID,
 	)
