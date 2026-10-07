@@ -73,6 +73,9 @@ UPDATE kelas SET is_aktif = ? WHERE id = ?;
 -- name: SetKelasMateriIndividual :exec
 UPDATE kelas SET materi_individual = ? WHERE id = ?;
 
+-- name: SetKelasKapasitas :exec
+UPDATE kelas SET kapasitas = ? WHERE id = ?;
+
 -- name: DeleteKelas :exec
 DELETE FROM kelas WHERE id = ?;
 
