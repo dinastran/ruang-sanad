@@ -34,7 +34,7 @@ LEFT JOIN guru g ON g.id = CASE
 	WHEN p.is_badal = 1 AND p.guru_pengganti_id IS NOT NULL THEN p.guru_pengganti_id
 	ELSE COALESCE(actor_g.id, k.guru_id)
 END
-WHERE date(p.tanggal) >= date(?) AND date(p.tanggal) <= date(?)
+WHERE substr(p.tanggal, 1, 10) >= substr(?, 1, 10) AND substr(p.tanggal, 1, 10) <= substr(?, 1, 10)
   AND (
 	? IS NULL
 	OR CASE
