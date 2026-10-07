@@ -39,6 +39,7 @@ type Handlers struct {
 	Notifications               *handlers.NotificationHandler
 	TSI                         *handlers.TSIHandler
 	Tagihan                     *handlers.TagihanHandler
+	Ujroh                       *handlers.UjrohHandler
 	ProductCRM                  *handlers.ProductCRMHandler
 	ProductOrders               *handlers.ProductOrderHandler
 }
@@ -194,6 +195,14 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/keuangan/tagihan/template/:id", kuRole, h.Tagihan.UpdateTemplate)
 	protected.Delete("/keuangan/tagihan/template/:id", kuRole, h.Tagihan.DeleteTemplate)
 	protected.Post("/keuangan/tagihan/sync", kuRole, h.Tagihan.Sync)
+	protected.Get("/keuangan/ujroh", kuReadRole, h.Ujroh.Index)
+	protected.Get("/keuangan/ujroh/export", kuReadRole, h.Ujroh.Export)
+	protected.Put("/keuangan/ujroh/tarif", kuRole, h.Ujroh.UpdateTarif)
+	protected.Put("/keuangan/ujroh/tarif-guru/:guruId", kuRole, h.Ujroh.UpdateTarifGuru)
+	protected.Post("/keuangan/ujroh/:bulan/kunci", kuRole, h.Ujroh.Kunci)
+	protected.Post("/keuangan/ujroh/:bulan/buka", superAdminRole, h.Ujroh.Buka)
+	protected.Put("/keuangan/ujroh/:bulan/guru/:guruId/bayar", kuRole, h.Ujroh.TandaiDibayar)
+	protected.Delete("/keuangan/ujroh/:bulan/guru/:guruId/bayar", kuRole, h.Ujroh.BatalDibayar)
 	protected.Put("/santri/:id/keuangan", kuRole, h.Santri.UpdateKeuangan)
 	protected.Get("/laporan/keuangan", kuRole, h.Laporan.Keuangan)
 

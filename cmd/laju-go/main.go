@@ -105,6 +105,7 @@ func main() {
 	// Billing must be available to the class engine so a frequency change can
 	// reconcile the santri-owned counter in the same transaction.
 	tagihanService := services.NewTagihanService(querier)
+	ujrohService := services.NewUjrohService(querier)
 
 	// Initialize master data via KelasEngineService
 	kelasEngine := services.NewKelasEngineService(querier).WithBilling(tagihanService)
@@ -173,6 +174,7 @@ func main() {
 	notificationHandler := handlers.NewNotificationHandler(notificationService, sessionStore, inertiaService)
 	tsiHandler := handlers.NewTSIHandler(tsiService, guruService, koordinatorService, sessionStore, inertiaService)
 	tagihanHandler := handlers.NewTagihanHandler(tagihanService, sessionStore, inertiaService)
+	ujrohHandler := handlers.NewUjrohHandler(ujrohService, sessionStore, inertiaService)
 	productCRMHandler := handlers.NewProductCRMHandler(productCRMService, masterService, sessionStore, inertiaService)
 	productOrderHandler := handlers.NewProductOrderHandler(productOrderService, productCRMService, sessionStore, inertiaService)
 
@@ -202,6 +204,7 @@ func main() {
 		Notifications:               notificationHandler,
 		TSI:                         tsiHandler,
 		Tagihan:                     tagihanHandler,
+		Ujroh:                       ujrohHandler,
 		ProductCRM:                  productCRMHandler,
 		ProductOrders:               productOrderHandler,
 	}
