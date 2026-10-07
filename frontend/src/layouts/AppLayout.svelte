@@ -28,6 +28,7 @@
 		Award,
 		Boxes,
 		HeartHandshake,
+		History,
 	} from "lucide-svelte";
 	import DarkModeToggle from "@components/DarkModeToggle.svelte";
 	import Logo from "@components/Logo.svelte";
@@ -76,6 +77,7 @@
 		{ href: "/admin/users", label: "Kelola User", group: "users", category: "Administrasi", show: isSuperAdmin, icon: Shield },
 		{ href: "/app/guru", label: "Dashboard", group: "guru-dashboard", category: "Guru", show: isGuruWorkflow, icon: GraduationCap },
 		{ href: "/app/guru/jadwal-pertemuan", label: "Agenda Mengajar", group: "guru-jadwal", category: "Guru", show: isGuruWorkflow, icon: CalendarClock },
+		{ href: "/app/guru/riwayat-mengajar", label: "Riwayat Mengajar", group: "guru-riwayat-mengajar", category: "Guru", show: isGuruWorkflow, icon: History },
 		{ href: "/app/guru/kelas", label: "Kelas Saya", group: "guru-kelas", category: "Guru", show: isGuruWorkflow, icon: ClipboardList },
 		{ href: "/app/guru/riayah", label: "Riayah Santri", group: "guru-riayah", category: "Guru", show: isGuruWorkflow, icon: HeartHandshake },
 		{ href: "/app/guru/tsi", label: "Nilai TSI Saya", group: "guru-tsi", category: "Guru", show: isGuru, icon: Award },
@@ -117,6 +119,7 @@
 		if (path.startsWith("/admin/users")) return "users";
 		if (path.startsWith("/app/profile")) return "profile";
 		if (path.startsWith("/app/guru/jadwal-pertemuan")) return "guru-jadwal";
+		if (path.startsWith("/app/guru/riwayat-mengajar")) return "guru-riwayat-mengajar";
 		if (path.startsWith("/app/guru/kelas")) return "guru-kelas";
 		if (path.startsWith("/app/guru/tsi")) return "guru-tsi";
 		if (path.startsWith("/app/guru/riayah") || path.startsWith("/app/guru/santri")) return "guru-riayah";

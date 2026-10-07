@@ -3,6 +3,7 @@ package handlers
 import (
 	"log/slog"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/models"
@@ -105,14 +106,26 @@ func (h *GuruHandler) Dashboard(c *fiber.Ctx) error {
 		}
 	}
 
+	historyEnd := services.HariIniRiayah()
+	historyStart := historyEnd.AddDate(0, 0, -29)
+	_, riwayat30, historyErr := h.guruService.ListRiwayatMengajar(
+		guruID,
+		historyStart.Format("2006-01-02"),
+		historyEnd.Format("2006-01-02"),
+	)
+	if historyErr != nil {
+		slog.Error("guru dashboard teaching history summary failed", "user_id", userID, "error", historyErr)
+	}
+
 	return h.inertiaService.Render(c, "guru/Dashboard", fiber.Map{
-		"user":           user,
-		"beranda":        dashboard,
-		"tilawah":        tilawah,
-		"notifications":  notifications,
-		"riayah":         riayah,
-		"riayah_teratas": riayahTeratas,
-		"wa_templates":   waTemplates,
+		"user":                user,
+		"beranda":             dashboard,
+		"tilawah":             tilawah,
+		"notifications":       notifications,
+		"riayah":              riayah,
+		"riayah_teratas":      riayahTeratas,
+		"wa_templates":        waTemplates,
+		"riwayat_mengajar_30": riwayat30,
 	})
 }
 
@@ -178,6 +191,67 @@ func (h *GuruHandler) KelasSaya(c *fiber.Ctx) error {
 		"kelas":         kelas,
 		"santri_search": santriSearch,
 	})
+}
+
+func (h *GuruHandler) RiwayatMengajar(c *fiber.Ctx) error {
+	sess, _ := h.store.Get(c)
+	user := sessionUser(sess)
+	userID := toInt64(sess.Get("user_id"))
+
+	guruID, err := viewerGuruIDForRequest(c, h.guruService, userID, user)
+	if err != nil {
+		h.store.Flash(c, "error", "Data guru tidak ditemukan")
+		return h.inertiaService.Redirect(c, "/app/guru")
+	}
+
+	rangeKey, startDate, endDate := resolveRiwayatMengajarRange(c)
+	items, summary, err := h.guruService.ListRiwayatMengajar(guruID, startDate, endDate)
+	if err != nil {
+		slog.Error("guru teaching history load failed", "user_id", userID, "error", err)
+		h.store.Flash(c, "error", "Gagal memuat riwayat mengajar")
+		return h.inertiaService.Redirect(c, "/app/guru")
+	}
+
+	return h.inertiaService.Render(c, "guru/RiwayatMengajar", fiber.Map{
+		"user":       user,
+		"items":      items,
+		"summary":    summary,
+		"range":      rangeKey,
+		"start_date": startDate,
+		"end_date":   endDate,
+	})
+}
+
+func resolveRiwayatMengajarRange(c *fiber.Ctx) (string, string, string) {
+	today := services.HariIniRiayah()
+	end := today
+	rangeKey := c.Query("range", "30")
+	days := 30
+
+	switch rangeKey {
+	case "7":
+		days = 7
+	case "14":
+		days = 14
+	case "30":
+		days = 30
+	case "custom":
+		startRaw := c.Query("start")
+		endRaw := c.Query("end")
+		start, startErr := time.Parse("2006-01-02", startRaw)
+		customEnd, endErr := time.Parse("2006-01-02", endRaw)
+		if startErr == nil && endErr == nil && !start.After(customEnd) {
+			return "custom", start.Format("2006-01-02"), customEnd.Format("2006-01-02")
+		}
+		rangeKey = "30"
+		days = 30
+	default:
+		rangeKey = "30"
+		days = 30
+	}
+
+	start := end.AddDate(0, 0, -(days - 1))
+	return rangeKey, start.Format("2006-01-02"), end.Format("2006-01-02")
 }
 
 func (h *GuruHandler) DetailKelas(c *fiber.Ctx) error {
