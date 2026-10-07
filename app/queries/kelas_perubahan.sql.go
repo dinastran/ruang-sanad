@@ -256,6 +256,21 @@ func (q *Queries) GetFirstLevelChangeBoundary(ctx context.Context, kelasID int64
 	return value, err
 }
 
+const getFirstPertemuanLevelKe = `-- name: GetFirstPertemuanLevelKe :one
+SELECT pertemuan_level_ke
+FROM pertemuan
+WHERE kelas_id = ?
+ORDER BY pertemuan_ke ASC, id ASC
+LIMIT 1
+`
+
+func (q *Queries) GetFirstPertemuanLevelKe(ctx context.Context, kelasID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getFirstPertemuanLevelKe, kelasID)
+	var pertemuanLevelKe int64
+	err := row.Scan(&pertemuanLevelKe)
+	return pertemuanLevelKe, err
+}
+
 const shiftPertemuanLevelKeThrough = `-- name: ShiftPertemuanLevelKeThrough :exec
 UPDATE pertemuan
 SET pertemuan_level_ke = pertemuan_level_ke + ?
