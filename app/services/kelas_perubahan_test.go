@@ -491,3 +491,37 @@ func TestKoreksiNomorPertemuanRejectsActiveMeeting(t *testing.T) {
 	require.NoError(t, f.db.QueryRow(`SELECT COUNT(*) FROM kelas_perubahan WHERE kelas_id = ? AND jenis = ?`, f.kelasID, PerubahanKoreksiPertemuan).Scan(&count))
 	require.Zero(t, count)
 }
+
+
+func TestKoreksiNomorPertemuanPreservesInheritedLevelNumbering(t *testing.T) {
+	f := setupKelasPerubahan(t)
+	_, err := f.db.Exec(`UPDATE kelas SET pertemuan_terakhir = 12, level_pertemuan_awal = 12 WHERE id = ?`, f.kelasID)
+	require.NoError(t, err)
+	f.buatPertemuan(t, "selesai")
+	f.buatPertemuan(t, "selesai")
+
+	require.NoError(t, f.service.KoreksiNomorPertemuan(
+		f.kelasID, 17, f.adminID, "Koreksi nomor global kelas lanjutan",
+	))
+
+	rows, err := f.db.Query(`SELECT pertemuan_ke, pertemuan_level_ke FROM pertemuan WHERE kelas_id = ? ORDER BY pertemuan_ke`, f.kelasID)
+	require.NoError(t, err)
+	defer rows.Close()
+	var global, level []int64
+	for rows.Next() {
+		var g, l int64
+		require.NoError(t, rows.Scan(&g, &l))
+		global = append(global, g)
+		level = append(level, l)
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, []int64{18, 19}, global)
+	require.Equal(t, []int64{1, 2}, level)
+
+	state, err := f.querier.GetKelasPerubahanState(context.Background(), f.kelasID)
+	require.NoError(t, err)
+	require.EqualValues(t, 17, state.LevelPertemuanAwal)
+	nextLevel, err := f.querier.GetNextPertemuanLevelKe(context.Background(), f.kelasID)
+	require.NoError(t, err)
+	require.EqualValues(t, 3, nextLevel)
+}
