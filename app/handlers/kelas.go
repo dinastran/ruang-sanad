@@ -79,6 +79,13 @@ func (h *KelasHandler) Show(c *fiber.Ctx) error {
 	}
 
 	hasPertemuan, _ := h.kelasService.HasPertemuan(id)
+	var koreksiPertemuan *models.KoreksiPertemuanState
+	if hasPertemuan {
+		state, stateErr := h.kelasService.GetKoreksiPertemuanState(id)
+		if stateErr == nil {
+			koreksiPertemuan = &state
+		}
+	}
 	guruList, _ := h.masterService.ListGuruAll()
 	kelasList, _ := h.kelasService.ListAll()
 	kelasLain := make([]models.KelasResponse, 0, len(kelasList))
@@ -122,6 +129,7 @@ func (h *KelasHandler) Show(c *fiber.Ctx) error {
 		"gurus":             guruList,
 		"kelas_lain":        kelasLain,
 		"has_pertemuan":     hasPertemuan,
+		"koreksi_pertemuan": koreksiPertemuan,
 		"levels":            levelList,
 		"jadwals":           jadwalList,
 		"jadwal_rutin":      jadwalRutin,
@@ -238,6 +246,25 @@ func (h *KelasHandler) SetPertemuanTerakhir(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 	}
 	h.store.Flash(c, "success", "Nomor pertemuan awal kelas tersimpan")
+	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+}
+
+func (h *KelasHandler) KoreksiPertemuan(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return h.inertiaService.Redirect(c, "/app/kelas")
+	}
+	var req models.KoreksiPertemuanRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data koreksi pertemuan tidak valid")
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	sess, _ := h.store.Get(c)
+	if err := h.kelasPerubahanService.KoreksiNomorPertemuan(id, req.PertemuanTerakhir, sessionUser(sess).ID, req.Alasan); err != nil {
+		h.store.Flash(c, "error", err.Error())
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	h.store.Flash(c, "success", "Nomor pertemuan berhasil dikoreksi")
 	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 }
 

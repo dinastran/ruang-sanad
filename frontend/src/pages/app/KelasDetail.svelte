@@ -86,10 +86,11 @@
 
 	interface KelasPerubahan {
 		id: number;
-		jenis: "level_kelas" | "jadwal_kelas" | "jadwal_rutin" | "level_santri";
+		jenis: "level_kelas" | "jadwal_kelas" | "jadwal_rutin" | "level_santri" | "koreksi_pertemuan";
 		nilai_lama: string;
 		nilai_baru: string;
 		pertemuan_ke: number;
+		alasan: string;
 		santri_nama: string;
 		kelas_asal_id: number | null;
 		kelas_asal_nama: string;
@@ -97,6 +98,13 @@
 		kelas_tujuan_nama: string;
 		dibuat_oleh_nama: string;
 		created_at: string;
+	}
+
+	interface KoreksiPertemuanState {
+		anchor_sebelum_sistem: number;
+		jumlah_pertemuan: number;
+		pertemuan_global_terakhir: number;
+		ada_pertemuan_berlangsung: boolean;
 	}
 
 	interface SantriStatusLog {
@@ -119,6 +127,7 @@
 		gurus: Guru[];
 		kelas_lain?: KelasResponse[];
 		has_pertemuan?: boolean;
+		koreksi_pertemuan?: KoreksiPertemuanState;
 		levels?: LevelOption[];
 		jadwals?: JadwalOption[];
 		jadwal_rutin?: JadwalRutin[];
@@ -130,7 +139,7 @@
 		error?: string;
 	}
 
-	let { user, kelas, santri = [], gurus = [], kelas_lain = [], has_pertemuan = false, levels = [], jadwals = [], jadwal_rutin = [], riwayat_perubahan = [], riwayat_status = [], return_to = "/app/kelas", flash, success, error }: Props = $props();
+	let { user, kelas, santri = [], gurus = [], kelas_lain = [], has_pertemuan = false, koreksi_pertemuan, levels = [], jadwals = [], jadwal_rutin = [], riwayat_perubahan = [], riwayat_status = [], return_to = "/app/kelas", flash, success, error }: Props = $props();
 
 	// Kelas handlers report results via the session flash (props.flash); a failed
 	// action still redirects, so Inertia calls onSuccess and we must inspect it.
@@ -144,8 +153,23 @@
 	let selectedGuruId = $state<number | null>(null);
 	let isAssignLoading = $state(false);
 	let showGuruDropdown = $state(false);
-	let pertemuanTerakhir = $state(kelas.pertemuan_terakhir);
+	let pertemuanTerakhir = $state(koreksi_pertemuan?.anchor_sebelum_sistem ?? kelas.pertemuan_terakhir);
 	let isPertemuanLoading = $state(false);
+	let koreksiModalOpen = $state(false);
+	let koreksiAnchor = $state(koreksi_pertemuan?.anchor_sebelum_sistem ?? 0);
+	let koreksiAlasan = $state("");
+	let isKoreksiLoading = $state(false);
+	let koreksiDelta = $derived(Number(koreksiAnchor) - (koreksi_pertemuan?.anchor_sebelum_sistem ?? 0));
+	let koreksiGlobalBaru = $derived((koreksi_pertemuan?.pertemuan_global_terakhir ?? 0) + koreksiDelta);
+	let koreksiFormValid = $derived(
+		!!koreksi_pertemuan &&
+		!koreksi_pertemuan.ada_pertemuan_berlangsung &&
+		Number.isInteger(Number(koreksiAnchor)) &&
+		Number(koreksiAnchor) >= 0 &&
+		koreksiDelta !== 0 &&
+		koreksiAlasan.trim().length > 0 &&
+		koreksiAlasan.trim().length <= 500
+	);
 	let isMateriIndividualLoading = $state(false);
 	let kapasitasBaru = $state(kelas.kapasitas);
 	let isKapasitasLoading = $state(false);
@@ -333,6 +357,7 @@
 		if (item.jenis === "level_kelas") return "Ganti level kelas";
 		if (item.jenis === "jadwal_kelas") return "Ganti jadwal kelas";
 		if (item.jenis === "jadwal_rutin") return "Jadwal rutin otomatis";
+		if (item.jenis === "koreksi_pertemuan") return "Koreksi nomor pertemuan";
 		return "Santri naik level";
 	}
 
@@ -447,6 +472,35 @@
 		router.put(`/app/kelas/${kelas.id}/pertemuan-terakhir?return_to=${encodeURIComponent(return_to)}`, { pertemuan_terakhir: pertemuanTerakhir }, {
 			preserveScroll: true,
 			onFinish: () => { isPertemuanLoading = false; },
+		});
+	}
+
+	function openKoreksiPertemuan() {
+		if (!koreksi_pertemuan || koreksi_pertemuan.ada_pertemuan_berlangsung) return;
+		koreksiAnchor = koreksi_pertemuan.anchor_sebelum_sistem;
+		koreksiAlasan = "";
+		koreksiModalOpen = true;
+	}
+
+	function submitKoreksiPertemuan() {
+		if (!koreksiFormValid) return;
+		const value = Number(koreksiAnchor);
+		isKoreksiLoading = true;
+		router.put(withReturnTo(`/app/kelas/${kelas.id}/koreksi-pertemuan`), {
+			pertemuan_terakhir: value,
+			alasan: koreksiAlasan.trim(),
+		}, {
+			preserveScroll: true,
+			preserveState: true,
+			onSuccess: (p) => {
+				const err = flashError(p);
+				if (err) { Toast(err, "error"); return; }
+				pertemuanTerakhir = value;
+				koreksiModalOpen = false;
+				Toast("Nomor pertemuan berhasil dikoreksi", "success");
+			},
+			onError: () => Toast("Gagal mengoreksi nomor pertemuan", "error"),
+			onFinish: () => { isKoreksiLoading = false; },
 		});
 	}
 
@@ -689,10 +743,20 @@
 							</div>
 							<div class="flex items-center gap-2">
 								<input type="number" min="0" bind:value={pertemuanTerakhir} disabled={has_pertemuan} aria-label="Pertemuan terakhir sebelum sistem" class="w-24 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-mono text-neutral-900 outline-none focus:border-brand-400 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white" />
-								<button onclick={simpanPertemuanTerakhir} disabled={has_pertemuan || isPertemuanLoading || pertemuanTerakhir < 0} class="rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-400">Simpan</button>
+								{#if has_pertemuan}
+									<button onclick={openKoreksiPertemuan} disabled={!koreksi_pertemuan || koreksi_pertemuan.ada_pertemuan_berlangsung} class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-400">Koreksi nomor</button>
+								{:else}
+									<button onclick={simpanPertemuanTerakhir} disabled={isPertemuanLoading || pertemuanTerakhir < 0} class="rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-400">Simpan</button>
+								{/if}
 							</div>
 						</div>
-						<p class="mt-3 text-xs text-amber-700 dark:text-amber-400">{has_pertemuan ? "Pengaturan terkunci karena kelas sudah memiliki pertemuan di aplikasi." : "Pengaturan ini akan terkunci setelah pertemuan pertama dicatat di aplikasi."}</p>
+						{#if has_pertemuan && koreksi_pertemuan?.ada_pertemuan_berlangsung}
+							<p class="mt-3 text-xs text-amber-700 dark:text-amber-400">Koreksi sementara diblokir karena ada pertemuan yang sedang berlangsung.</p>
+						{:else if has_pertemuan}
+							<p class="mt-3 text-xs text-amber-700 dark:text-amber-400">Anchor awal terkunci. Gunakan Koreksi nomor untuk menyesuaikan kondisi riil tanpa menghapus histori pertemuan.</p>
+						{:else}
+							<p class="mt-3 text-xs text-amber-700 dark:text-amber-400">Pengaturan ini akan terkunci setelah pertemuan pertama dicatat di aplikasi.</p>
+						{/if}
 					</div>
 				</div>
 
@@ -1020,7 +1084,7 @@
 		<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 overflow-hidden" in:fly={{ y: 20, duration: 600, delay: 250 }}>
 			<div class="flex items-center gap-2.5 px-6 py-4 border-b border-neutral-200/80 dark:border-white/[0.04]">
 				<History class="w-5 h-5 text-neutral-500" />
-				<h3 class="text-base font-semibold text-neutral-900 dark:text-white">Riwayat Perubahan Level & Jadwal</h3>
+				<h3 class="text-base font-semibold text-neutral-900 dark:text-white">Riwayat Perubahan Kelas</h3>
 			</div>
 			{#if riwayat_perubahan.length > 0}
 				<ul class="divide-y divide-neutral-200/80 dark:divide-white/[0.04]">
@@ -1039,6 +1103,9 @@
 								{#if item.jenis === "level_kelas" && item.pertemuan_ke > 0}
 									<p class="mt-0.5 text-xs text-neutral-500">Level lama selesai setelah {item.pertemuan_ke} pertemuan tercatat</p>
 								{/if}
+								{#if item.alasan}
+									<p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">Alasan: {item.alasan}</p>
+								{/if}
 								{#if item.jenis === "level_santri"}
 									<p class="mt-0.5 text-xs text-neutral-500">
 										{#if item.kelas_tujuan_id && item.kelas_tujuan_id !== kelas.id}
@@ -1054,11 +1121,58 @@
 					{/each}
 				</ul>
 			{:else}
-				<p class="px-6 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400">Belum ada perubahan level atau jadwal untuk kelas ini.</p>
+				<p class="px-6 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400">Belum ada riwayat perubahan kelas ini.</p>
 			{/if}
 		</div>
 	</div>
 </AppLayout>
+
+{#if koreksiModalOpen && koreksi_pertemuan}
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+		<button class="absolute inset-0 h-full w-full bg-neutral-900/50 backdrop-blur-sm" aria-label="Tutup modal koreksi" onclick={() => { koreksiModalOpen = false; }}></button>
+		<div class="relative w-full max-w-lg rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xl dark:border-white/[0.06] dark:bg-neutral-925" in:fly={{ y: 20, duration: 200 }}>
+			<h3 class="text-lg font-bold text-neutral-900 dark:text-white">Koreksi Nomor Pertemuan</h3>
+			<p class="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-400">Koreksi menggeser nomor pertemuan secara konsisten. Absensi, materi, dan record pertemuan tidak dihapus.</p>
+
+			<label class="mt-5 block">
+				<span class="text-xs font-semibold uppercase tracking-wider text-neutral-500">Pertemuan terakhir sebelum sistem yang benar</span>
+				<input type="number" min="0" step="1" bind:value={koreksiAnchor} class="mt-1.5 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 font-mono text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white" />
+			</label>
+
+			<div class="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-neutral-50 p-4 text-sm dark:bg-neutral-900/60">
+				<div>
+					<p class="text-xs text-neutral-500">Anchor</p>
+					<p class="mt-1 font-mono font-semibold text-neutral-900 dark:text-white">{koreksi_pertemuan.anchor_sebelum_sistem} → {Number(koreksiAnchor)}</p>
+				</div>
+				<div>
+					<p class="text-xs text-neutral-500">Pertemuan terdampak</p>
+					<p class="mt-1 font-mono font-semibold text-neutral-900 dark:text-white">{koreksi_pertemuan.jumlah_pertemuan}</p>
+				</div>
+				<div>
+					<p class="text-xs text-neutral-500">Nomor global terakhir</p>
+					<p class="mt-1 font-mono font-semibold text-neutral-900 dark:text-white">{koreksi_pertemuan.pertemuan_global_terakhir} → {koreksiGlobalBaru}</p>
+				</div>
+				<div>
+					<p class="text-xs text-neutral-500">Pertemuan berikutnya</p>
+					<p class="mt-1 font-mono font-semibold text-neutral-900 dark:text-white">Ke-{koreksiGlobalBaru + 1}</p>
+				</div>
+			</div>
+
+			<label class="mt-4 block">
+				<span class="text-xs font-semibold uppercase tracking-wider text-neutral-500">Alasan koreksi <span class="text-red-500">*</span></span>
+				<textarea bind:value={koreksiAlasan} maxlength="500" rows="3" placeholder="Contoh: nomor riil dari rekap admin sebelumnya adalah pertemuan ke-15" class="mt-1.5 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white"></textarea>
+				<p class="mt-1 text-right text-xs text-neutral-400">{koreksiAlasan.trim().length}/500</p>
+			</label>
+
+			<p class="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-5 text-amber-700 dark:text-amber-400">Snapshot nomor pertemuan pada tagihan yang terhubung akan disinkronkan. Nominal, status pembayaran, absensi, materi, dan identitas pertemuan tidak diubah.</p>
+
+			<div class="mt-5 flex gap-3">
+				<button onclick={() => { koreksiModalOpen = false; }} class="flex-1 rounded-xl border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800">Batal</button>
+				<button onclick={submitKoreksiPertemuan} disabled={!koreksiFormValid || isKoreksiLoading} class="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-400">{isKoreksiLoading ? "Mengoreksi..." : "Terapkan koreksi"}</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 {#if statusModal.open && statusModal.santri}
 	{@const current = statusModal.santri}

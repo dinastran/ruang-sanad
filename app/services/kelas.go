@@ -152,6 +152,30 @@ func (s *KelasService) HasPertemuan(kelasID int64) (bool, error) {
 	return count > 0, err
 }
 
+func (s *KelasService) GetKoreksiPertemuanState(kelasID int64) (models.KoreksiPertemuanState, error) {
+	ctx := context.Background()
+	kelas, err := s.querier.GetKelasByID(ctx, kelasID)
+	if err != nil {
+		return models.KoreksiPertemuanState{}, err
+	}
+	bounds, err := s.querier.GetPertemuanRebaseBounds(ctx, kelasID)
+	if err != nil {
+		return models.KoreksiPertemuanState{}, err
+	}
+	adaBerlangsung := false
+	if _, err := s.querier.GetActivePertemuanByKelas(ctx, kelasID); err == nil {
+		adaBerlangsung = true
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return models.KoreksiPertemuanState{}, err
+	}
+	return models.KoreksiPertemuanState{
+		AnchorSebelumSistem:     kelas.PertemuanTerakhir,
+		JumlahPertemuan:         bounds.Total,
+		PertemuanGlobalTerakhir: bounds.MaxPertemuanKe,
+		AdaPertemuanBerlangsung: adaBerlangsung,
+	}, nil
+}
+
 func (s *KelasService) SetAktif(kelasID int64, aktif bool) error {
 	var v int64
 	if aktif {

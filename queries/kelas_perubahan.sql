@@ -14,13 +14,13 @@ UPDATE santri SET level = ?, jadwal = ?, updated_at = ? WHERE kelas_id = ?;
 
 -- name: CreateKelasPerubahan :exec
 INSERT INTO kelas_perubahan (
-    kelas_id, santri_id, kelas_tujuan_id, jenis, nilai_lama, nilai_baru, pertemuan_ke, dibuat_oleh
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+    kelas_id, santri_id, kelas_tujuan_id, jenis, nilai_lama, nilai_baru, pertemuan_ke, alasan, dibuat_oleh
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: ListKelasPerubahanByKelas :many
 SELECT
     kp.id, kp.kelas_id, kp.santri_id, kp.kelas_tujuan_id, kp.jenis,
-    kp.nilai_lama, kp.nilai_baru, kp.pertemuan_ke, kp.created_at,
+    kp.nilai_lama, kp.nilai_baru, kp.pertemuan_ke, kp.alasan, kp.created_at,
     COALESCE(s.nama, '') AS santri_nama,
     COALESCE(ka.nama_kelas, '') AS kelas_asal_nama,
     COALESCE(kt.nama_kelas, '') AS kelas_tujuan_nama,
@@ -38,3 +38,82 @@ LIMIT 50;
 -- Kelas baru hasil naik level melanjutkan nomor internal kelas asal (untuk
 -- periode tagihan) sementara nomor per level tetap mulai dari 1.
 UPDATE kelas SET pertemuan_terakhir = ?, level_pertemuan_awal = ?, kapasitas = ? WHERE id = ?;
+
+-- name: GetPertemuanRebaseBounds :one
+SELECT
+    COUNT(*) AS total,
+    CAST(COALESCE(MIN(pertemuan_ke), 0) AS INTEGER) AS min_pertemuan_ke,
+    CAST(COALESCE(MAX(pertemuan_ke), 0) AS INTEGER) AS max_pertemuan_ke
+FROM pertemuan
+WHERE kelas_id = ?;
+
+-- name: GetFirstLevelChangeBoundary :one
+SELECT CAST(COALESCE(MIN(pertemuan_ke), 0) AS INTEGER)
+FROM kelas_perubahan
+WHERE kelas_id = ? AND jenis = 'level_kelas' AND pertemuan_ke > 0;
+
+-- name: GetFirstPertemuanLevelKe :one
+SELECT pertemuan_level_ke
+FROM pertemuan
+WHERE kelas_id = ?
+ORDER BY pertemuan_ke ASC, id ASC
+LIMIT 1;
+
+-- name: ShiftPertemuanLevelKeThrough :exec
+UPDATE pertemuan
+SET pertemuan_level_ke = pertemuan_level_ke + sqlc.arg(delta)
+WHERE kelas_id = sqlc.arg(kelas_id)
+  AND pertemuan_ke <= sqlc.arg(boundary);
+
+-- name: ShiftAllPertemuanLevelKe :exec
+UPDATE pertemuan
+SET pertemuan_level_ke = pertemuan_level_ke + sqlc.arg(delta)
+WHERE kelas_id = sqlc.arg(kelas_id);
+
+-- name: OffsetPertemuanKeForRebase :exec
+UPDATE pertemuan
+SET pertemuan_ke = pertemuan_ke + sqlc.arg(offset)
+WHERE kelas_id = sqlc.arg(kelas_id);
+
+-- name: FinalizePertemuanKeRebase :exec
+UPDATE pertemuan
+SET pertemuan_ke = pertemuan_ke - sqlc.arg(offset) + sqlc.arg(delta)
+WHERE kelas_id = sqlc.arg(kelas_id);
+
+-- name: RebaseKelasMeetingAnchors :exec
+UPDATE kelas
+SET pertemuan_terakhir = sqlc.arg(new_anchor),
+    level_pertemuan_awal = CASE
+        WHEN level_pertemuan_awal > 0 THEN level_pertemuan_awal + sqlc.arg(delta)
+        ELSE level_pertemuan_awal
+    END
+WHERE id = sqlc.arg(kelas_id);
+
+-- name: ShiftLevelChangeBoundaries :exec
+UPDATE kelas_perubahan
+SET pertemuan_ke = pertemuan_ke + sqlc.arg(delta)
+WHERE kelas_id = sqlc.arg(kelas_id)
+  AND jenis = 'level_kelas'
+  AND pertemuan_ke > 0;
+
+-- name: ShiftSantriPertemuanAwalByKelas :exec
+UPDATE santri
+SET pertemuan_awal = pertemuan_awal + sqlc.arg(delta),
+    updated_at = CURRENT_TIMESTAMP
+WHERE kelas_id = sqlc.arg(kelas_id)
+  AND pertemuan_awal > 0;
+
+-- name: SyncTagihanPertemuanKeByKelas :exec
+UPDATE tagihan
+SET pertemuan_ke = (
+    SELECT p.pertemuan_ke
+    FROM pertemuan p
+    WHERE p.id = tagihan.pertemuan_id
+)
+WHERE kelas_id = sqlc.arg(kelas_id)
+  AND pertemuan_id IS NOT NULL
+  AND EXISTS (
+      SELECT 1 FROM pertemuan p
+      WHERE p.id = tagihan.pertemuan_id
+        AND p.kelas_id = sqlc.arg(kelas_id)
+  );

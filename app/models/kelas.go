@@ -27,6 +27,18 @@ type SetPertemuanTerakhirRequest struct {
 	PertemuanTerakhir int64 `json:"pertemuan_terakhir"`
 }
 
+type KoreksiPertemuanRequest struct {
+	PertemuanTerakhir int64  `json:"pertemuan_terakhir"`
+	Alasan             string `json:"alasan"`
+}
+
+type KoreksiPertemuanState struct {
+	AnchorSebelumSistem      int64 `json:"anchor_sebelum_sistem"`
+	JumlahPertemuan          int64 `json:"jumlah_pertemuan"`
+	PertemuanGlobalTerakhir  int64 `json:"pertemuan_global_terakhir"`
+	AdaPertemuanBerlangsung  bool  `json:"ada_pertemuan_berlangsung"`
+}
+
 type SetKelasMateriIndividualRequest struct {
 	MateriIndividual bool `json:"materi_individual"`
 }
@@ -77,6 +89,7 @@ type KelasPerubahanResponse struct {
 	NilaiLama       string `json:"nilai_lama"`
 	NilaiBaru       string `json:"nilai_baru"`
 	PertemuanKe     int64  `json:"pertemuan_ke"`
+	Alasan           string `json:"alasan"`
 	SantriNama      string `json:"santri_nama"`
 	KelasAsalID     *int64 `json:"kelas_asal_id"`
 	KelasAsalNama   string `json:"kelas_asal_nama"`

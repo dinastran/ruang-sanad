@@ -372,3 +372,156 @@ func TestGantiLevelKelasLegacyKunciUsesSantriKelasKode(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, f.kelasID, santri.KelasID.Int64)
 }
+
+
+func TestKoreksiNomorPertemuanRebasesHistoryTagihanAndAudit(t *testing.T) {
+	f := setupKelasPerubahan(t)
+	require.NoError(t, NewKelasService(f.querier).SetPertemuanTerakhir(f.kelasID, 10))
+
+	var last queries.Pertemuan
+	for range 4 {
+		last = f.buatPertemuan(t, "selesai")
+	}
+	_, err := f.db.Exec(`
+		INSERT INTO tagihan (santri_id, kelas_id, pertemuan_id, bulan_ke, pertemuan_ke, nominal, tanggal_tagih, angkatan_kelas)
+		VALUES (?, ?, ?, 2, ?, 100000, '2026-09-30', '2026')
+	`, f.santri[0], f.kelasID, last.ID, last.PertemuanKe)
+	require.NoError(t, err)
+
+	require.NoError(t, f.service.KoreksiNomorPertemuan(
+		f.kelasID, 15, f.adminID, "Rekap manual menunjukkan kelas sudah sampai pertemuan 15 sebelum sistem",
+	))
+
+	kelas, err := f.querier.GetKelasByID(context.Background(), f.kelasID)
+	require.NoError(t, err)
+	require.EqualValues(t, 15, kelas.PertemuanTerakhir)
+
+	rows, err := f.db.Query(`SELECT pertemuan_ke, pertemuan_level_ke FROM pertemuan WHERE kelas_id = ? ORDER BY pertemuan_ke`, f.kelasID)
+	require.NoError(t, err)
+	defer rows.Close()
+	var global, level []int64
+	for rows.Next() {
+		var g, l int64
+		require.NoError(t, rows.Scan(&g, &l))
+		global = append(global, g)
+		level = append(level, l)
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, []int64{16, 17, 18, 19}, global)
+	require.Equal(t, []int64{16, 17, 18, 19}, level)
+
+	next, err := f.querier.GetNextPertemuanKe(context.Background(), f.kelasID)
+	require.NoError(t, err)
+	require.EqualValues(t, 20, next)
+
+	var tagihanPertemuan int64
+	require.NoError(t, f.db.QueryRow(`SELECT pertemuan_ke FROM tagihan WHERE pertemuan_id = ?`, last.ID).Scan(&tagihanPertemuan))
+	require.EqualValues(t, 19, tagihanPertemuan)
+
+	var jenis, lama, baru, alasan string
+	var auditPertemuan int64
+	require.NoError(t, f.db.QueryRow(`
+		SELECT jenis, nilai_lama, nilai_baru, alasan, pertemuan_ke
+		FROM kelas_perubahan
+		WHERE kelas_id = ? AND jenis = ?
+	`, f.kelasID, PerubahanKoreksiPertemuan).Scan(&jenis, &lama, &baru, &alasan, &auditPertemuan))
+	require.Equal(t, PerubahanKoreksiPertemuan, jenis)
+	require.Equal(t, "10", lama)
+	require.Equal(t, "15", baru)
+	require.Contains(t, alasan, "Rekap manual")
+	require.EqualValues(t, 19, auditPertemuan)
+}
+
+func TestKoreksiNomorPertemuanKeepsLaterLevelNumberingStable(t *testing.T) {
+	f := setupKelasPerubahan(t)
+	require.NoError(t, NewKelasService(f.querier).SetPertemuanTerakhir(f.kelasID, 10))
+	f.buatPertemuan(t, "selesai")
+	f.buatPertemuan(t, "selesai")
+	require.NoError(t, f.service.GantiLevelKelas(f.kelasID, "02", f.adminID))
+	f.buatPertemuan(t, "selesai")
+	f.buatPertemuan(t, "selesai")
+
+	require.NoError(t, f.service.KoreksiNomorPertemuan(
+		f.kelasID, 15, f.adminID, "Koreksi baseline lama berdasarkan arsip kelas",
+	))
+
+	rows, err := f.db.Query(`SELECT pertemuan_ke, pertemuan_level_ke FROM pertemuan WHERE kelas_id = ? ORDER BY pertemuan_ke`, f.kelasID)
+	require.NoError(t, err)
+	defer rows.Close()
+	var global, level []int64
+	for rows.Next() {
+		var g, l int64
+		require.NoError(t, rows.Scan(&g, &l))
+		global = append(global, g)
+		level = append(level, l)
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, []int64{16, 17, 18, 19}, global)
+	require.Equal(t, []int64{16, 17, 1, 2}, level)
+
+	state, err := f.querier.GetKelasPerubahanState(context.Background(), f.kelasID)
+	require.NoError(t, err)
+	require.EqualValues(t, 17, state.LevelPertemuanAwal)
+
+	boundary, err := f.querier.GetFirstLevelChangeBoundary(context.Background(), f.kelasID)
+	require.NoError(t, err)
+	require.EqualValues(t, 17, boundary)
+
+	nextLevel, err := f.querier.GetNextPertemuanLevelKe(context.Background(), f.kelasID)
+	require.NoError(t, err)
+	require.EqualValues(t, 3, nextLevel)
+}
+
+func TestKoreksiNomorPertemuanRejectsActiveMeeting(t *testing.T) {
+	f := setupKelasPerubahan(t)
+	require.NoError(t, NewKelasService(f.querier).SetPertemuanTerakhir(f.kelasID, 5))
+	active := f.buatPertemuan(t, "berlangsung")
+
+	err := f.service.KoreksiNomorPertemuan(f.kelasID, 8, f.adminID, "Penyesuaian nomor riil")
+	require.ErrorContains(t, err, "sedang berlangsung")
+
+	kelas, err := f.querier.GetKelasByID(context.Background(), f.kelasID)
+	require.NoError(t, err)
+	require.EqualValues(t, 5, kelas.PertemuanTerakhir)
+	stored, err := f.querier.GetPertemuanByID(context.Background(), active.ID)
+	require.NoError(t, err)
+	require.EqualValues(t, 6, stored.PertemuanKe)
+
+	var count int64
+	require.NoError(t, f.db.QueryRow(`SELECT COUNT(*) FROM kelas_perubahan WHERE kelas_id = ? AND jenis = ?`, f.kelasID, PerubahanKoreksiPertemuan).Scan(&count))
+	require.Zero(t, count)
+}
+
+
+func TestKoreksiNomorPertemuanPreservesInheritedLevelNumbering(t *testing.T) {
+	f := setupKelasPerubahan(t)
+	_, err := f.db.Exec(`UPDATE kelas SET pertemuan_terakhir = 12, level_pertemuan_awal = 12 WHERE id = ?`, f.kelasID)
+	require.NoError(t, err)
+	f.buatPertemuan(t, "selesai")
+	f.buatPertemuan(t, "selesai")
+
+	require.NoError(t, f.service.KoreksiNomorPertemuan(
+		f.kelasID, 17, f.adminID, "Koreksi nomor global kelas lanjutan",
+	))
+
+	rows, err := f.db.Query(`SELECT pertemuan_ke, pertemuan_level_ke FROM pertemuan WHERE kelas_id = ? ORDER BY pertemuan_ke`, f.kelasID)
+	require.NoError(t, err)
+	defer rows.Close()
+	var global, level []int64
+	for rows.Next() {
+		var g, l int64
+		require.NoError(t, rows.Scan(&g, &l))
+		global = append(global, g)
+		level = append(level, l)
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, []int64{18, 19}, global)
+	require.Equal(t, []int64{1, 2}, level)
+
+	state, err := f.querier.GetKelasPerubahanState(context.Background(), f.kelasID)
+	require.NoError(t, err)
+	require.EqualValues(t, 17, state.LevelPertemuanAwal)
+	nextLevel, err := f.querier.GetNextPertemuanLevelKe(context.Background(), f.kelasID)
+	require.NoError(t, err)
+	require.EqualValues(t, 3, nextLevel)
+}
