@@ -13,10 +13,11 @@ import (
 )
 
 const (
-	PerubahanLevelKelas  = "level_kelas"
-	PerubahanJadwalKelas = "jadwal_kelas"
-	PerubahanJadwalRutin = "jadwal_rutin"
-	PerubahanLevelSantri = "level_santri"
+	PerubahanLevelKelas       = "level_kelas"
+	PerubahanJadwalKelas      = "jadwal_kelas"
+	PerubahanJadwalRutin      = "jadwal_rutin"
+	PerubahanLevelSantri      = "level_santri"
+	PerubahanKoreksiPertemuan = "koreksi_pertemuan"
 )
 
 // KelasPerubahanService handles Admin Kelas changes to a class's level or
@@ -235,6 +236,133 @@ func (s *KelasPerubahanService) GantiLevelSantri(kelasAsalID int64, req models.G
 	return kelasTujuanID, nil
 }
 
+func (s *KelasPerubahanService) KoreksiNomorPertemuan(kelasID, pertemuanTerakhir, userID int64, alasan string) error {
+	if pertemuanTerakhir < 0 {
+		return fmt.Errorf("pertemuan terakhir tidak boleh negatif")
+	}
+	alasan = strings.TrimSpace(alasan)
+	if alasan == "" {
+		return fmt.Errorf("alasan koreksi wajib diisi")
+	}
+	if len([]rune(alasan)) > 500 {
+		return fmt.Errorf("alasan koreksi maksimal 500 karakter")
+	}
+
+	ctx := context.Background()
+	tx, err := s.querier.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := s.querier.WithTx(tx)
+
+	kelas, err := q.GetKelasByID(ctx, kelasID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("kelas tidak ditemukan")
+		}
+		return err
+	}
+	state, err := q.GetKelasPerubahanState(ctx, kelasID)
+	if err != nil {
+		return err
+	}
+	if _, err := q.GetActivePertemuanByKelas(ctx, kelasID); err == nil {
+		return fmt.Errorf("koreksi tidak dapat dilakukan saat ada pertemuan berlangsung")
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+
+	bounds, err := q.GetPertemuanRebaseBounds(ctx, kelasID)
+	if err != nil {
+		return err
+	}
+	if bounds.Total == 0 {
+		return fmt.Errorf("kelas belum memiliki pertemuan di aplikasi; gunakan pengaturan pertemuan terakhir sebelum sistem")
+	}
+
+	delta := pertemuanTerakhir - kelas.PertemuanTerakhir
+	if delta == 0 {
+		return fmt.Errorf("nomor pertemuan belum berubah")
+	}
+	if bounds.MinPertemuanKe+delta < 1 {
+		return fmt.Errorf("koreksi menghasilkan nomor pertemuan tidak valid")
+	}
+
+	firstLevelBoundary, err := q.GetFirstLevelChangeBoundary(ctx, kelasID)
+	if err != nil {
+		return err
+	}
+	// Nomor yang dilihat pengguna pada level pertama mengikuti anchor sebelum
+	// sistem. Setelah level berganti, pertemuan_level_ke sudah restart dari 1
+	// dan harus tetap stabil meski nomor global dikoreksi.
+	if firstLevelBoundary > 0 {
+		if err := q.ShiftPertemuanLevelKeThrough(ctx, queries.ShiftPertemuanLevelKeThroughParams{
+			Delta: delta, KelasID: kelasID, Boundary: firstLevelBoundary,
+		}); err != nil {
+			return err
+		}
+	} else if state.LevelPertemuanAwal == 0 {
+		if err := q.ShiftAllPertemuanLevelKe(ctx, queries.ShiftAllPertemuanLevelKeParams{
+			Delta: delta, KelasID: kelasID,
+		}); err != nil {
+			return err
+		}
+	}
+
+	absDelta := delta
+	if absDelta < 0 {
+		absDelta = -absDelta
+	}
+	offset := bounds.MaxPertemuanKe + absDelta + 1024
+	if offset <= bounds.MaxPertemuanKe {
+		return fmt.Errorf("nomor pertemuan terlalu besar untuk dikoreksi")
+	}
+	// Two-phase shift avoids UNIQUE(kelas_id, pertemuan_ke) collisions when
+	// adjacent meeting numbers are moved up or down.
+	if err := q.OffsetPertemuanKeForRebase(ctx, queries.OffsetPertemuanKeForRebaseParams{
+		Offset: offset, KelasID: kelasID,
+	}); err != nil {
+		return err
+	}
+	if err := q.FinalizePertemuanKeRebase(ctx, queries.FinalizePertemuanKeRebaseParams{
+		Offset: offset, Delta: delta, KelasID: kelasID,
+	}); err != nil {
+		return err
+	}
+	if err := q.RebaseKelasMeetingAnchors(ctx, queries.RebaseKelasMeetingAnchorsParams{
+		NewAnchor: pertemuanTerakhir, Delta: delta, KelasID: kelasID,
+	}); err != nil {
+		return err
+	}
+	if err := q.ShiftLevelChangeBoundaries(ctx, queries.ShiftLevelChangeBoundariesParams{
+		Delta: delta, KelasID: kelasID,
+	}); err != nil {
+		return err
+	}
+	if err := q.ShiftSantriPertemuanAwalByKelas(ctx, queries.ShiftSantriPertemuanAwalByKelasParams{
+		Delta: delta, KelasID: kelasID,
+	}); err != nil {
+		return err
+	}
+	if err := q.SyncTagihanPertemuanKeByKelas(ctx, kelasID); err != nil {
+		return err
+	}
+
+	if err := q.CreateKelasPerubahan(ctx, queries.CreateKelasPerubahanParams{
+		KelasID:     sql.NullInt64{Int64: kelasID, Valid: true},
+		Jenis:       PerubahanKoreksiPertemuan,
+		NilaiLama:   fmt.Sprintf("%d", kelas.PertemuanTerakhir),
+		NilaiBaru:   fmt.Sprintf("%d", pertemuanTerakhir),
+		PertemuanKe: bounds.MaxPertemuanKe + delta,
+		Alasan:      alasan,
+		DibuatOleh:  nullUserID(userID),
+	}); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *KelasPerubahanService) ListRiwayat(kelasID int64) ([]models.KelasPerubahanResponse, error) {
 	rows, err := s.querier.ListKelasPerubahanByKelas(context.Background(), sql.NullInt64{Int64: kelasID, Valid: true})
 	if err != nil {
@@ -248,6 +376,7 @@ func (s *KelasPerubahanService) ListRiwayat(kelasID int64) ([]models.KelasPeruba
 			NilaiLama:       r.NilaiLama,
 			NilaiBaru:       r.NilaiBaru,
 			PertemuanKe:     r.PertemuanKe,
+			Alasan:           r.Alasan,
 			SantriNama:      r.SantriNama,
 			KelasAsalID:     nullInt64Ptr(r.KelasID),
 			KelasAsalNama:   r.KelasAsalNama,
