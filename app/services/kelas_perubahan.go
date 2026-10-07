@@ -111,10 +111,6 @@ func (s *KelasPerubahanService) GantiJadwalKelas(kelasID int64, jadwal string, u
 	if kelas.Jadwal == jadwal {
 		return fmt.Errorf("jadwal baru sama dengan jadwal kelas saat ini")
 	}
-	state, err := q.GetKelasPerubahanState(ctx, kelasID)
-	if err != nil {
-		return err
-	}
 	if err := s.updateIdentitas(ctx, q, kelas, kelas.Level, jadwal, state.LevelPertemuanAwal); err != nil {
 		return err
 	}
@@ -289,21 +285,26 @@ func (s *KelasPerubahanService) KoreksiNomorPertemuan(kelasID, pertemuanTerakhir
 		return fmt.Errorf("koreksi menghasilkan nomor pertemuan tidak valid")
 	}
 
+	firstLevelKe, err := q.GetFirstPertemuanLevelKe(ctx, kelasID)
+	if err != nil {
+		return err
+	}
 	firstLevelBoundary, err := q.GetFirstLevelChangeBoundary(ctx, kelasID)
 	if err != nil {
 		return err
 	}
-	// Nomor yang dilihat pengguna pada level pertama mengikuti anchor sebelum
-	// sistem. Setelah level berganti, pertemuan_level_ke sudah restart dari 1
-	// dan harus tetap stabil meski nomor global dikoreksi.
-	if firstLevelBoundary > 0 {
-		if err := q.ShiftPertemuanLevelKeThrough(ctx, queries.ShiftPertemuanLevelKeThroughParams{
-			Delta: delta, KelasID: kelasID, Boundary: firstLevelBoundary,
-		}); err != nil {
-			return err
-		}
-	} else if state.LevelPertemuanAwal == 0 {
-		if err := q.ShiftAllPertemuanLevelKe(ctx, queries.ShiftAllPertemuanLevelKeParams{
+	// If the first digital meeting displayed the same number as its global
+	// pertemuan_ke, the visible numbering inherited the legacy anchor and must
+	// move with it. A class that already started a fresh level at 1 keeps all
+	// per-level snapshots stable while only its global numbering is rebased.
+	if firstLevelKe == bounds.MinPertemuanKe {
+		if firstLevelBoundary > 0 {
+			if err := q.ShiftPertemuanLevelKeThrough(ctx, queries.ShiftPertemuanLevelKeThroughParams{
+				Delta: delta, KelasID: kelasID, Boundary: firstLevelBoundary,
+			}); err != nil {
+				return err
+			}
+		} else if err := q.ShiftAllPertemuanLevelKe(ctx, queries.ShiftAllPertemuanLevelKeParams{
 			Delta: delta, KelasID: kelasID,
 		}); err != nil {
 			return err
