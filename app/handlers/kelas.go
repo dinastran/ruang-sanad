@@ -79,9 +79,12 @@ func (h *KelasHandler) Show(c *fiber.Ctx) error {
 	}
 
 	hasPertemuan, _ := h.kelasService.HasPertemuan(id)
-	koreksiPertemuan, err := h.kelasService.GetKoreksiPertemuanState(id)
-	if err != nil {
-		koreksiPertemuan = models.KoreksiPertemuanState{}
+	var koreksiPertemuan *models.KoreksiPertemuanState
+	if hasPertemuan {
+		state, stateErr := h.kelasService.GetKoreksiPertemuanState(id)
+		if stateErr == nil {
+			koreksiPertemuan = &state
+		}
 	}
 	guruList, _ := h.masterService.ListGuruAll()
 	kelasList, _ := h.kelasService.ListAll()
