@@ -131,6 +131,35 @@ type PertemuanResponse struct {
 	Status           string `json:"status"`
 }
 
+type RiwayatMengajarItem struct {
+	ID               int64  `json:"id"`
+	KelasID          int64  `json:"kelas_id"`
+	KelasNama        string `json:"kelas_nama"`
+	GuruNama         string `json:"guru_nama"`
+	PertemuanKe      int64  `json:"pertemuan_ke"`
+	PertemuanLevelKe int64  `json:"pertemuan_level_ke"`
+	LevelNama        string `json:"level_nama"`
+	Tanggal          string `json:"tanggal"`
+	JamMulai         string `json:"jam_mulai"`
+	JamSelesai       string `json:"jam_selesai"`
+	Materi           string `json:"materi"`
+	Catatan          string `json:"catatan"`
+	IsReschedule     bool   `json:"is_reschedule"`
+	JadwalSemula     string `json:"jadwal_semula"`
+	AlasanReschedule string `json:"alasan_reschedule"`
+	IsBadal          bool   `json:"is_badal"`
+	GuruPenggantiID  *int64 `json:"guru_pengganti_id,omitempty"`
+	AlasanBadal      string `json:"alasan_badal"`
+	Status           string `json:"status"`
+}
+
+type RiwayatMengajarSummary struct {
+	TotalDimulai  int64 `json:"total_dimulai"`
+	Selesai       int64 `json:"selesai"`
+	BelumSelesai  int64 `json:"belum_selesai"`
+	KelasDiajar   int64 `json:"kelas_diajar"`
+}
+
 type JadwalPertemuanResponse struct {
 	ID                 int64  `json:"id"`
 	KelasID            int64  `json:"kelas_id"`
