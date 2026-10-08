@@ -296,6 +296,16 @@ func TestGabungJadwal(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "Sabtu & Ahad, Jam 05.00", teks)
 
+	teks, slots, ok = gabungJadwal([]string{"Jumat, Jam 05.00", "Senin, Jam 05.00", "Rabu, Jam 05.00"})
+	require.True(t, ok)
+	require.Equal(t, "Senin & Rabu & Jumat, Jam 05.00", teks)
+	require.Len(t, slots, 3)
+
+	teks, slots, ok = gabungJadwal([]string{"Senin, Jam 05.00", "Rabu, Jam 05.00", "Jumat, Jam 19.00"})
+	require.True(t, ok)
+	require.Equal(t, "Senin, Jam 05.00 & Rabu, Jam 05.00 & Jumat, Jam 19.00", teks)
+	require.Equal(t, models.JadwalRutinSlotRequest{Hari: 5, JamMulai: "19:00"}, slots[2])
+
 	teks, _, ok = gabungJadwal([]string{"Senin, jam 20.30 WIB"})
 	require.True(t, ok)
 	require.Equal(t, "Senin, jam 20.30 WIB", teks)
