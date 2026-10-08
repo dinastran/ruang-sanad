@@ -505,103 +505,11 @@ func normalizeRapatStatus(s string) string {
 	}
 }
 
-// ============ Kunjungan Kelas ============
-
-func (s *KoordinatorService) ListKunjungan() ([]models.KunjunganResponse, error) {
-	rows, err := s.querier.ListKunjungan(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	out := make([]models.KunjunganResponse, 0, len(rows))
-	for _, r := range rows {
-		var kelasID *int64
-		if r.KelasID.Valid {
-			kelasID = &r.KelasID.Int64
-		}
-		out = append(out, models.KunjunganResponse{
-			ID:            r.ID,
-			GuruID:        r.GuruID,
-			GuruNama:      r.GuruNama,
-			KelasID:       kelasID,
-			KelasNama:     r.KelasNama,
-			TargetMulai:   nullDateStr(r.TargetMulai),
-			TargetSelesai: nullDateStr(r.TargetSelesai),
-			Tanggal:       nullDateStr(r.Tanggal),
-			Jam:           r.Jam,
-			Status:        r.Status,
-			Catatan:       r.Catatan,
-		})
-	}
-	return out, nil
-}
-
-func (s *KoordinatorService) CreateKunjungan(req models.KunjunganRequest) (int64, error) {
-	if err := validateKunjunganAbsensi(req); err != nil {
-		return 0, err
-	}
-	return s.querier.CreateKunjungan(context.Background(), queries.CreateKunjunganParams{
-		GuruID:        req.GuruID,
-		KelasID:       nullInt(req.KelasID),
-		TargetMulai:   parseNullableDate(req.TargetMulai),
-		TargetSelesai: parseNullableDate(req.TargetSelesai),
-		Tanggal:       parseNullableDate(req.Tanggal),
-		Jam:           req.Jam,
-		Status:        normalizeKunjunganStatus(req.Status),
-		Catatan:       req.Catatan,
-	})
-}
-
-func (s *KoordinatorService) UpdateKunjungan(id int64, req models.KunjunganRequest) error {
-	if err := validateKunjunganAbsensi(req); err != nil {
-		return err
-	}
-	return s.querier.UpdateKunjungan(context.Background(), queries.UpdateKunjunganParams{
-		GuruID:        req.GuruID,
-		KelasID:       nullInt(req.KelasID),
-		TargetMulai:   parseNullableDate(req.TargetMulai),
-		TargetSelesai: parseNullableDate(req.TargetSelesai),
-		Tanggal:       parseNullableDate(req.Tanggal),
-		Jam:           req.Jam,
-		Status:        normalizeKunjunganStatus(req.Status),
-		Catatan:       req.Catatan,
-		ID:            id,
-	})
-}
-
-func validateKunjunganAbsensi(req models.KunjunganRequest) error {
-	if normalizeKunjunganStatus(req.Status) != "terlaksana" {
-		return nil
-	}
-	if _, err := parseDateStrict(req.Tanggal); err != nil {
-		return fmt.Errorf("tanggal pelaksanaan wajib dan harus valid")
-	}
-	if strings.TrimSpace(req.Jam) == "" {
-		return fmt.Errorf("jam masuk wajib diisi untuk kunjungan terlaksana")
-	}
-	if strings.TrimSpace(req.Catatan) == "" {
-		return fmt.Errorf("keterangan kunjungan wajib diisi")
-	}
-	return nil
-}
-
-func (s *KoordinatorService) DeleteKunjungan(id int64) error {
-	return s.querier.DeleteKunjungan(context.Background(), id)
-}
-
 func nullInt(v int64) sql.NullInt64 {
 	if v <= 0 {
 		return sql.NullInt64{}
 	}
 	return sql.NullInt64{Int64: v, Valid: true}
-}
-
-func normalizeKunjunganStatus(s string) string {
-	switch s {
-	case "terlaksana", "ditunda", "batal", "dijadwalkan":
-		return s
-	default:
-		return "dijadwalkan"
-	}
 }
 
 // ============ Kalam Bersanad ============

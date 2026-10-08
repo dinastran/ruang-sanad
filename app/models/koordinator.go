@@ -123,33 +123,6 @@ type RapatResponse struct {
 	Status  string `json:"status"`
 }
 
-// ============ Kunjungan Kelas ============
-
-type KunjunganRequest struct {
-	GuruID        int64  `json:"guru_id"`
-	KelasID       int64  `json:"kelas_id"`
-	TargetMulai   string `json:"target_mulai"`
-	TargetSelesai string `json:"target_selesai"`
-	Tanggal       string `json:"tanggal"`
-	Jam           string `json:"jam"`
-	Status        string `json:"status"`
-	Catatan       string `json:"catatan"`
-}
-
-type KunjunganResponse struct {
-	ID            int64  `json:"id"`
-	GuruID        int64  `json:"guru_id"`
-	GuruNama      string `json:"guru_nama"`
-	KelasID       *int64 `json:"kelas_id,omitempty"`
-	KelasNama     string `json:"kelas_nama"`
-	TargetMulai   string `json:"target_mulai"`
-	TargetSelesai string `json:"target_selesai"`
-	Tanggal       string `json:"tanggal"`
-	Jam           string `json:"jam"`
-	Status        string `json:"status"`
-	Catatan       string `json:"catatan"`
-}
-
 // ============ Kalam Bersanad ============
 
 type KalamRequest struct {

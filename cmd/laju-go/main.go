@@ -170,6 +170,7 @@ func main() {
 	koordinatorGuruDirectoryHandler := handlers.NewKoordinatorGuruDirectoryHandler(guruService, koordinatorService, riayahService, sessionStore, inertiaService)
 	koordinatorMonitoringHandler := handlers.NewKoordinatorMonitoringHandler(koordinatorMonitoringService, koordinatorService, sessionStore, inertiaService)
 	koordinatorFeaturesHandler := handlers.NewKoordinatorFeaturesHandler(koordinatorService, guruService, riayahService, sessionStore, inertiaService)
+	kunjunganHandler := handlers.NewKunjunganHandler(services.NewKunjunganService(querier), koordinatorService, guruService, sessionStore, inertiaService)
 	koordinatorAttendanceExportHandler := handlers.NewKoordinatorAttendanceExportHandler(koordinatorService)
 	notificationHandler := handlers.NewNotificationHandler(notificationService, sessionStore, inertiaService)
 	tsiHandler := handlers.NewTSIHandler(tsiService, guruService, koordinatorService, sessionStore, inertiaService)
@@ -200,6 +201,7 @@ func main() {
 		KoordinatorGuruDirectory:    koordinatorGuruDirectoryHandler,
 		KoordinatorMonitoring:       koordinatorMonitoringHandler,
 		KoordinatorFeatures:         koordinatorFeaturesHandler,
+		Kunjungan:                   kunjunganHandler,
 		KoordinatorAttendanceExport: koordinatorAttendanceExportHandler,
 		Notifications:               notificationHandler,
 		TSI:                         tsiHandler,
