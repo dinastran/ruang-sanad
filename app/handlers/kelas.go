@@ -381,12 +381,21 @@ func (h *KelasHandler) GantiJadwal(c *fiber.Ctx) error {
 		h.store.Flash(c, "error", "Data jadwal tidak valid")
 		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 	}
+	jadwals := req.Jadwals
+	if len(jadwals) == 0 && req.Jadwal != "" {
+		jadwals = []string{req.Jadwal}
+	}
 	sess, _ := h.store.Get(c)
-	if err := h.kelasPerubahanService.GantiJadwalKelas(id, req.Jadwal, sessionUser(sess).ID); err != nil {
+	hasil, err := h.kelasPerubahanService.GantiJadwalKelas(id, jadwals, sessionUser(sess).ID)
+	if err != nil {
 		h.store.Flash(c, "error", err.Error())
 		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 	}
-	h.store.Flash(c, "success", "Jadwal kelas berhasil diganti")
+	if hasil.RutinDisinkron {
+		h.store.Flash(c, "success", "Jadwal kelas dan jadwal rutin otomatis berhasil diganti")
+	} else {
+		h.store.Flash(c, "success", "Jadwal kelas berhasil diganti; jadwal rutin otomatis belum terbaca dari teks master, atur manual")
+	}
 	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 }
 

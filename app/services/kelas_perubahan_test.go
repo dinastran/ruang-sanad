@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -184,9 +185,15 @@ func TestGantiJadwalKelasUpdatesClassAndFlagsScheduledSessions(t *testing.T) {
 	_, err := f.db.Exec(`INSERT INTO jadwal_pertemuan (kelas_id, tanggal, jam_mulai, status) VALUES (?, '2026-10-05', '20:30', 'dijadwalkan'), (?, '2026-09-01', '20:30', 'selesai')`, f.kelasID, f.kelasID)
 	require.NoError(t, err)
 
-	require.ErrorContains(t, f.service.GantiJadwalKelas(f.kelasID, "Jumat, jam 10.00 WIB", f.adminID), "tidak ditemukan")
-	require.ErrorContains(t, f.service.GantiJadwalKelas(f.kelasID, testJadwalLama, f.adminID), "sama")
-	require.NoError(t, f.service.GantiJadwalKelas(f.kelasID, testJadwalBaru, f.adminID))
+	_, err = f.service.GantiJadwalKelas(f.kelasID, []string{"Jumat, jam 10.00 WIB"}, f.adminID)
+	require.ErrorContains(t, err, "tidak ditemukan")
+	_, err = f.service.GantiJadwalKelas(f.kelasID, []string{testJadwalLama}, f.adminID)
+	require.ErrorContains(t, err, "sama")
+	_, err = f.service.GantiJadwalKelas(f.kelasID, nil, f.adminID)
+	require.ErrorContains(t, err, "minimal satu")
+	hasil, err := f.service.GantiJadwalKelas(f.kelasID, []string{testJadwalBaru}, f.adminID)
+	require.NoError(t, err)
+	require.True(t, hasil.RutinDisinkron)
 
 	kelas, err := f.querier.GetKelasByID(context.Background(), f.kelasID)
 	require.NoError(t, err)
@@ -204,11 +211,94 @@ func TestGantiJadwalKelasUpdatesClassAndFlagsScheduledSessions(t *testing.T) {
 	require.EqualValues(t, 1, flagged)
 	require.EqualValues(t, 0, untouched)
 
+	rutin, err := NewKelasService(f.querier).ListJadwalRutin(f.kelasID)
+	require.NoError(t, err)
+	require.Len(t, rutin, 1)
+	require.EqualValues(t, 3, rutin[0].Hari)
+	require.Equal(t, "19:00", rutin[0].JamMulai)
+
 	riwayat, err := f.service.ListRiwayat(f.kelasID)
 	require.NoError(t, err)
-	require.Len(t, riwayat, 1)
-	require.Equal(t, PerubahanJadwalKelas, riwayat[0].Jenis)
-	require.Equal(t, "Admin Kelas", riwayat[0].DibuatOlehNama)
+	jenis := make([]string, 0, len(riwayat))
+	for _, r := range riwayat {
+		jenis = append(jenis, r.Jenis)
+		require.Equal(t, "Admin Kelas", r.DibuatOlehNama)
+	}
+	require.ElementsMatch(t, []string{PerubahanJadwalKelas, PerubahanJadwalRutin}, jenis)
+}
+
+func TestGantiJadwalKelasMultiFrekuensi(t *testing.T) {
+	f := setupKelasPerubahan(t)
+	_, err := f.db.Exec(`INSERT INTO jadwal (nama) VALUES ('Senin, Jam 05.00'), ('Rabu, Jam 05.00'), ('Kamis, Jam 19.00')`)
+	require.NoError(t, err)
+	kelasService := NewKelasService(f.querier)
+
+	// Order of selection does not matter; days are written Senin..Ahad.
+	hasil, err := f.service.GantiJadwalKelas(f.kelasID, []string{"Rabu, Jam 05.00", "Senin, Jam 05.00", "Rabu, Jam 05.00"}, f.adminID)
+	require.NoError(t, err)
+	require.Equal(t, "Senin & Rabu, Jam 05.00", hasil.Jadwal)
+	require.True(t, hasil.RutinDisinkron)
+
+	kelas, err := f.querier.GetKelasByID(context.Background(), f.kelasID)
+	require.NoError(t, err)
+	require.Equal(t, "Senin & Rabu, Jam 05.00", kelas.Jadwal)
+	require.Contains(t, kelas.NamaKelas, "Senin & Rabu, Jam 05.00")
+	var santriJadwal string
+	require.NoError(t, f.db.QueryRow(`SELECT jadwal FROM santri WHERE id = ?`, f.santri[0]).Scan(&santriJadwal))
+	require.Equal(t, "Senin & Rabu, Jam 05.00", santriJadwal)
+
+	rutin, err := kelasService.ListJadwalRutin(f.kelasID)
+	require.NoError(t, err)
+	require.Len(t, rutin, 2)
+	require.EqualValues(t, 1, rutin[0].Hari)
+	require.Equal(t, "05:00", rutin[0].JamMulai)
+	require.EqualValues(t, 3, rutin[1].Hari)
+	require.Equal(t, "05:00", rutin[1].JamMulai)
+
+	_, err = f.service.GantiJadwalKelas(f.kelasID, []string{"Senin, Jam 05.00", "Rabu, Jam 05.00"}, f.adminID)
+	require.ErrorContains(t, err, "sama")
+
+	// Different times keep each entry whole.
+	hasil, err = f.service.GantiJadwalKelas(f.kelasID, []string{"Kamis, Jam 19.00", "Senin, Jam 05.00"}, f.adminID)
+	require.NoError(t, err)
+	require.Equal(t, "Senin, Jam 05.00 & Kamis, Jam 19.00", hasil.Jadwal)
+	rutin, err = kelasService.ListJadwalRutin(f.kelasID)
+	require.NoError(t, err)
+	slots := make([]string, 0, len(rutin))
+	for _, r := range rutin {
+		if r.BerlakuMulai > startOfToday().Format("2006-01-02") {
+			slots = append(slots, fmt.Sprintf("%d %s", r.Hari, r.JamMulai))
+		}
+	}
+	require.ElementsMatch(t, []string{"1 05:00", "4 19:00"}, slots)
+}
+
+func TestGantiJadwalKelasTanpaHariTerbacaTidakMengubahRutin(t *testing.T) {
+	f := setupKelasPerubahan(t)
+	_, err := f.db.Exec(`INSERT INTO jadwal (nama) VALUES ('Fleksibel')`)
+	require.NoError(t, err)
+
+	hasil, err := f.service.GantiJadwalKelas(f.kelasID, []string{"Fleksibel"}, f.adminID)
+	require.NoError(t, err)
+	require.False(t, hasil.RutinDisinkron)
+	rutin, err := NewKelasService(f.querier).ListJadwalRutin(f.kelasID)
+	require.NoError(t, err)
+	require.Empty(t, rutin)
+}
+
+func TestGabungJadwal(t *testing.T) {
+	teks, slots, ok := gabungJadwal([]string{"Kamis, Jam 05.00", "Selasa, Jam 05.00"})
+	require.True(t, ok)
+	require.Equal(t, "Selasa & Kamis, Jam 05.00", teks)
+	require.Equal(t, []models.JadwalRutinSlotRequest{{Hari: 2, JamMulai: "05:00"}, {Hari: 4, JamMulai: "05:00"}}, slots)
+
+	teks, _, ok = gabungJadwal([]string{"Ahad, Jam 05.00", "Sabtu, Jam 05.00"})
+	require.True(t, ok)
+	require.Equal(t, "Sabtu & Ahad, Jam 05.00", teks)
+
+	teks, _, ok = gabungJadwal([]string{"Senin, jam 20.30 WIB"})
+	require.True(t, ok)
+	require.Equal(t, "Senin, jam 20.30 WIB", teks)
 }
 
 func TestGantiLevelSantriToNewClass(t *testing.T) {

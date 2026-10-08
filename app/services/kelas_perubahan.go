@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -89,37 +90,69 @@ func (s *KelasPerubahanService) GantiLevelKelas(kelasID int64, levelKode string,
 	return tx.Commit()
 }
 
-// GantiJadwalKelas permanently replaces the class's routine schedule. Already
+// GantiJadwalKelasHasil reports what GantiJadwalKelas changed besides the
+// reference text.
+type GantiJadwalKelasHasil struct {
+	Jadwal string
+	// RutinDisinkron is false when a chosen master entry has no readable day
+	// and time, so the routine slots were left untouched.
+	RutinDisinkron bool
+}
+
+// GantiJadwalKelas permanently replaces the class's routine schedule with one
+// or more master jadwal entries (e.g. "Senin, Jam 05.00" + "Rabu, Jam 05.00"
+// for a 2x/pekan class), combined into a single reference text. The routine
+// slots used for automatic sessions follow the new days and times. Already
 // scheduled sessions are left as-is but flagged so guru/admin can reschedule.
-func (s *KelasPerubahanService) GantiJadwalKelas(kelasID int64, jadwal string, userID int64) error {
-	jadwal = strings.TrimSpace(jadwal)
+func (s *KelasPerubahanService) GantiJadwalKelas(kelasID int64, jadwals []string, userID int64) (GantiJadwalKelasHasil, error) {
+	entri := make([]string, 0, len(jadwals))
+	seen := make(map[string]bool, len(jadwals))
+	for _, j := range jadwals {
+		j = strings.TrimSpace(j)
+		if j != "" && !seen[j] {
+			seen[j] = true
+			entri = append(entri, j)
+		}
+	}
+	if len(entri) == 0 {
+		return GantiJadwalKelasHasil{}, fmt.Errorf("pilih minimal satu jadwal")
+	}
 	ctx := context.Background()
 	tx, err := s.querier.BeginTx(ctx)
 	if err != nil {
-		return err
+		return GantiJadwalKelasHasil{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := s.querier.WithTx(tx)
 
 	kelas, err := q.GetKelasByID(ctx, kelasID)
 	if err != nil {
-		return fmt.Errorf("kelas tidak ditemukan")
+		return GantiJadwalKelasHasil{}, fmt.Errorf("kelas tidak ditemukan")
 	}
-	if _, err := q.GetJadwalByNama(ctx, jadwal); err != nil {
-		return fmt.Errorf("jadwal tidak ditemukan di master data")
+	for _, j := range entri {
+		if _, err := q.GetJadwalByNama(ctx, j); err != nil {
+			return GantiJadwalKelasHasil{}, fmt.Errorf("jadwal %q tidak ditemukan di master data", j)
+		}
 	}
+	jadwal, slots, slotsOK := gabungJadwal(entri)
 	if kelas.Jadwal == jadwal {
-		return fmt.Errorf("jadwal baru sama dengan jadwal kelas saat ini")
+		return GantiJadwalKelasHasil{}, fmt.Errorf("jadwal baru sama dengan jadwal kelas saat ini")
 	}
 	state, err := q.GetKelasPerubahanState(ctx, kelasID)
 	if err != nil {
-		return err
+		return GantiJadwalKelasHasil{}, err
 	}
 	if err := s.updateIdentitas(ctx, q, kelas, kelas.Level, jadwal, state.LevelPertemuanAwal); err != nil {
-		return err
+		return GantiJadwalKelasHasil{}, err
+	}
+	var rutin jadwalRutinHasil
+	if slotsOK {
+		if rutin, err = terapkanJadwalRutin(ctx, q, kelasID, userID, slots); err != nil {
+			return GantiJadwalKelasHasil{}, err
+		}
 	}
 	if err := q.MarkJadwalPertemuanKelasBerubah(ctx, kelasID); err != nil {
-		return err
+		return GantiJadwalKelasHasil{}, err
 	}
 	if err := q.CreateKelasPerubahan(ctx, queries.CreateKelasPerubahanParams{
 		KelasID:    sql.NullInt64{Int64: kelasID, Valid: true},
@@ -128,13 +161,96 @@ func (s *KelasPerubahanService) GantiJadwalKelas(kelasID int64, jadwal string, u
 		NilaiBaru:  jadwal,
 		DibuatOleh: nullUserID(userID),
 	}); err != nil {
-		return err
+		return GantiJadwalKelasHasil{}, err
 	}
-	if err := notifyGuruKelas(ctx, q, kelas.GuruID, kelasID, userID, "Jadwal kelas berubah",
-		fmt.Sprintf("Jadwal rutin kelas %s diganti dari %s menjadi %s. Periksa kembali sesi yang sudah terjadwal.", kelas.NamaKelas, kelas.Jadwal, jadwal)); err != nil {
-		return err
+	pesan := fmt.Sprintf("Jadwal rutin kelas %s diganti dari %s menjadi %s.", kelas.NamaKelas, kelas.Jadwal, jadwal)
+	switch {
+	case rutin.Berubah && rutin.MulaiBesok:
+		pesan += " Jadwal otomatis mengikuti pola baru mulai besok; jadwal hari ini tidak diubah."
+	case rutin.Berubah:
+		pesan += " Jadwal otomatis mengikuti pola baru mulai hari ini."
+	case !slotsOK:
+		pesan += " Jadwal rutin otomatis belum ikut diubah; atur manual di halaman kelas."
 	}
-	return tx.Commit()
+	pesan += " Periksa kembali sesi yang sudah terjadwal."
+	if err := notifyGuruKelas(ctx, q, kelas.GuruID, kelasID, userID, "Jadwal kelas berubah", pesan); err != nil {
+		return GantiJadwalKelasHasil{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return GantiJadwalKelasHasil{}, err
+	}
+	return GantiJadwalKelasHasil{Jadwal: jadwal, RutinDisinkron: slotsOK}, nil
+}
+
+// gabungJadwal merges master jadwal entries into one reference text plus the
+// routine slots they describe. Entries sharing the same time text collapse to
+// "Senin & Rabu, Jam 05.00"; otherwise the full entries are joined with " & ".
+// Days are ordered Senin..Ahad. slotsOK is false when any entry lacks a
+// readable day or time.
+func gabungJadwal(entri []string) (string, []models.JadwalRutinSlotRequest, bool) {
+	type bagian struct {
+		teks, hari, jam string
+		urut            int64
+		slots           []models.JadwalRutinSlotRequest
+	}
+	list := make([]bagian, 0, len(entri))
+	slotsOK := true
+	for _, e := range entri {
+		b := bagian{teks: e, urut: 8}
+		if hari, jam, found := strings.Cut(e, ","); found {
+			b.hari, b.jam = strings.TrimSpace(hari), strings.TrimSpace(jam)
+		}
+		days, jamMulai := parseJadwalKelas(e)
+		if len(days) == 0 || jamMulai == "" {
+			slotsOK = false
+		}
+		for d := range days {
+			iso := isoHari(d)
+			b.urut = min(b.urut, iso)
+			b.slots = append(b.slots, models.JadwalRutinSlotRequest{Hari: iso, JamMulai: jamMulai})
+		}
+		list = append(list, b)
+	}
+	sort.SliceStable(list, func(i, j int) bool { return list[i].urut < list[j].urut })
+
+	if len(list) == 1 {
+		return list[0].teks, list[0].slots, slotsOK
+	}
+	samaJam := true
+	for _, b := range list {
+		if b.hari == "" || b.jam == "" || b.jam != list[0].jam {
+			samaJam = false
+			break
+		}
+	}
+	parts := make([]string, 0, len(list))
+	var slots []models.JadwalRutinSlotRequest
+	seen := map[models.JadwalRutinSlotRequest]bool{}
+	for _, b := range list {
+		if samaJam {
+			parts = append(parts, b.hari)
+		} else {
+			parts = append(parts, b.teks)
+		}
+		for _, sl := range b.slots {
+			if !seen[sl] {
+				seen[sl] = true
+				slots = append(slots, sl)
+			}
+		}
+	}
+	teks := strings.Join(parts, " & ")
+	if samaJam {
+		teks += ", " + list[0].jam
+	}
+	return teks, slots, slotsOK
+}
+
+func isoHari(d time.Weekday) int64 {
+	if d == time.Sunday {
+		return 7
+	}
+	return int64(d)
 }
 
 // GantiLevelSantri moves selected santri from kelasAsalID to a class of a
