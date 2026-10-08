@@ -274,24 +274,55 @@ func (s *KelasService) SetJadwalRutin(kelasID, userID int64, req models.SetJadwa
 	if err != nil {
 		return fmt.Errorf("kelas tidak ditemukan")
 	}
-	existing, err := q.ListRoutineSchedulesByClass(ctx, kelasID)
+	hasil, err := terapkanJadwalRutin(ctx, q, kelasID, userID, req.Slots)
 	if err != nil {
 		return err
 	}
+	if !hasil.Berubah {
+		return fmt.Errorf("jadwal rutin baru sama dengan jadwal saat ini")
+	}
+	if kelas.GuruID.Valid {
+		message := fmt.Sprintf("Jadwal rutin otomatis kelas %s diubah dari %s menjadi %s.", kelas.NamaKelas, hasil.Lama, hasil.Baru)
+		if hasil.MulaiBesok {
+			message += " Pola baru berlaku mulai besok; jadwal hari ini tidak diubah."
+		}
+		if err := notifyGuruKelas(ctx, q, kelas.GuruID, kelasID, userID, "Jadwal rutin otomatis berubah", message); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
 
-	normalized := make([]models.JadwalRutinSlotRequest, 0, len(req.Slots))
-	seen := make(map[string]struct{}, len(req.Slots))
-	for _, slot := range req.Slots {
+type jadwalRutinHasil struct {
+	Lama, Baru string
+	Berubah    bool
+	// MulaiBesok is true when an existing pattern was replaced, so the new
+	// slots only take effect tomorrow.
+	MulaiBesok bool
+}
+
+// terapkanJadwalRutin replaces a class's routine slots inside the caller's
+// transaction and logs the change. An unchanged pattern is a no-op
+// (Berubah=false) so callers decide whether that is an error.
+func terapkanJadwalRutin(ctx context.Context, q *queries.Querier, kelasID, userID int64, slots []models.JadwalRutinSlotRequest) (jadwalRutinHasil, error) {
+	existing, err := q.ListRoutineSchedulesByClass(ctx, kelasID)
+	if err != nil {
+		return jadwalRutinHasil{}, err
+	}
+
+	normalized := make([]models.JadwalRutinSlotRequest, 0, len(slots))
+	seen := make(map[string]struct{}, len(slots))
+	for _, slot := range slots {
 		if slot.Hari < 1 || slot.Hari > 7 {
-			return fmt.Errorf("hari jadwal rutin tidak valid")
+			return jadwalRutinHasil{}, fmt.Errorf("hari jadwal rutin tidak valid")
 		}
 		jam := strings.TrimSpace(slot.JamMulai)
 		if err := validateScheduleTime(jam); err != nil {
-			return err
+			return jadwalRutinHasil{}, err
 		}
 		key := fmt.Sprintf("%d|%s", slot.Hari, jam)
 		if _, ok := seen[key]; ok {
-			return fmt.Errorf("jadwal rutin %s pukul %s tercatat lebih dari sekali", routineDayName(slot.Hari), jam)
+			return jadwalRutinHasil{}, fmt.Errorf("jadwal rutin %s pukul %s tercatat lebih dari sekali", routineDayName(slot.Hari), jam)
 		}
 		seen[key] = struct{}{}
 		normalized = append(normalized, models.JadwalRutinSlotRequest{Hari: slot.Hari, JamMulai: jam})
@@ -301,18 +332,19 @@ func (s *KelasService) SetJadwalRutin(kelasID, userID int64, req models.SetJadwa
 	for _, row := range existing {
 		oldSlots = append(oldSlots, models.JadwalRutinSlotRequest{Hari: row.Hari, JamMulai: row.JamMulai})
 	}
-	oldSummary := formatRoutineSlots(oldSlots)
-	newSummary := formatRoutineSlots(normalized)
-	if oldSummary == newSummary {
-		return fmt.Errorf("jadwal rutin baru sama dengan jadwal saat ini")
+	hasil := jadwalRutinHasil{Lama: formatRoutineSlots(oldSlots), Baru: formatRoutineSlots(normalized)}
+	if hasil.Lama == hasil.Baru {
+		return hasil, nil
 	}
+	hasil.Berubah = true
 
 	today := startOfToday()
 	effectiveStart := today
 	if len(existing) > 0 {
+		hasil.MulaiBesok = true
 		effectiveStart = today.AddDate(0, 0, 1)
 		if err := q.DeleteFutureRoutineOccurrences(ctx, kelasID, today); err != nil {
-			return err
+			return hasil, err
 		}
 		pendingFuture := true
 		for _, row := range existing {
@@ -323,37 +355,28 @@ func (s *KelasService) SetJadwalRutin(kelasID, userID int64, req models.SetJadwa
 		}
 		if pendingFuture {
 			if err := q.DeleteFutureRoutineSchedules(ctx, kelasID, today); err != nil {
-				return err
+				return hasil, err
 			}
 		} else if err := q.CloseActiveRoutineSchedules(ctx, kelasID, today); err != nil {
-			return err
+			return hasil, err
 		}
 	}
 	for _, slot := range normalized {
 		if _, err := q.CreateRoutineSchedule(ctx, kelasID, slot.Hari, slot.JamMulai, effectiveStart, sql.NullInt64{Int64: userID, Valid: userID > 0}); err != nil {
-			return err
+			return hasil, err
 		}
 	}
 
 	if err := q.CreateKelasPerubahan(ctx, queries.CreateKelasPerubahanParams{
 		KelasID:    sql.NullInt64{Int64: kelasID, Valid: true},
 		Jenis:      PerubahanJadwalRutin,
-		NilaiLama:  oldSummary,
-		NilaiBaru:  newSummary,
+		NilaiLama:  hasil.Lama,
+		NilaiBaru:  hasil.Baru,
 		DibuatOleh: nullUserID(userID),
 	}); err != nil {
-		return err
+		return hasil, err
 	}
-	if kelas.GuruID.Valid {
-		message := fmt.Sprintf("Jadwal rutin otomatis kelas %s diubah dari %s menjadi %s.", kelas.NamaKelas, oldSummary, newSummary)
-		if len(existing) > 0 {
-			message += " Pola baru berlaku mulai besok; jadwal hari ini tidak diubah."
-		}
-		if err := notifyGuruKelas(ctx, q, kelas.GuruID, kelasID, userID, "Jadwal rutin otomatis berubah", message); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	return hasil, nil
 }
 
 func routineDayName(day int64) string {

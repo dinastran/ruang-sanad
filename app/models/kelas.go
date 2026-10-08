@@ -52,7 +52,8 @@ type GantiLevelKelasRequest struct {
 }
 
 type GantiJadwalKelasRequest struct {
-	Jadwal string `json:"jadwal"`
+	Jadwal  string   `json:"jadwal"`
+	Jadwals []string `json:"jadwals"`
 }
 
 type JadwalRutinSlotRequest struct {

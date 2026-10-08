@@ -222,19 +222,46 @@
 	}
 
 	// --- Ganti jadwal kelas ---
+	// Kelas 2x/pekan atau lebih memilih beberapa entri master; server
+	// menggabungkannya (mis. "Senin & Rabu, Jam 05.00") dan menyinkronkan
+	// jadwal rutin otomatis. Preview di bawah mengikuti aturan gabungJadwal.
 	let jadwalModalOpen = $state(false);
-	let jadwalBaru = $state("");
+	let jadwalDipilih = $state<string[]>([]);
 	let isJadwalLoading = $state(false);
 
+	const urutanHari: Record<string, number> = { senin: 1, selasa: 2, rabu: 3, kamis: 4, jumat: 5, "jum'at": 5, sabtu: 6, ahad: 7, minggu: 7 };
+
+	function urutJadwal(teks: string): number {
+		const hari = (teks.toLowerCase().match(/[a-z']+/g) || []).map((kata) => urutanHari[kata]).filter((n) => n !== undefined);
+		return hari.length > 0 ? Math.min(...hari) : 8;
+	}
+
+	function gabungJadwal(entri: string[]): string {
+		const list = [...entri].sort((a, b) => urutJadwal(a) - urutJadwal(b));
+		if (list.length <= 1) return list[0] ?? "";
+		const bagian = list.map((teks) => {
+			const idx = teks.indexOf(",");
+			return idx < 0 ? { teks, hari: "", jam: "" } : { teks, hari: teks.slice(0, idx).trim(), jam: teks.slice(idx + 1).trim() };
+		});
+		const samaJam = bagian.every((b) => b.hari && b.jam && b.jam === bagian[0].jam);
+		return samaJam ? `${bagian.map((b) => b.hari).join(" & ")}, ${bagian[0].jam}` : bagian.map((b) => b.teks).join(" & ");
+	}
+
+	let jadwalBaru = $derived(gabungJadwal(jadwalDipilih));
+
 	function openJadwalModal() {
-		jadwalBaru = "";
+		jadwalDipilih = [];
 		jadwalModalOpen = true;
+	}
+
+	function toggleJadwal(nama: string) {
+		jadwalDipilih = jadwalDipilih.includes(nama) ? jadwalDipilih.filter((j) => j !== nama) : [...jadwalDipilih, nama];
 	}
 
 	function submitGantiJadwal() {
 		if (!jadwalBaru || jadwalBaru === kelas.jadwal) return;
 		isJadwalLoading = true;
-		router.put(withReturnTo(`/app/kelas/${kelas.id}/jadwal`), { jadwal: jadwalBaru }, {
+		router.put(withReturnTo(`/app/kelas/${kelas.id}/jadwal`), { jadwals: jadwalDipilih }, {
 			preserveScroll: true,
 			preserveState: true,
 			onSuccess: (p) => {
@@ -1323,21 +1350,29 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
 		<button class="absolute inset-0 w-full h-full bg-neutral-900/50 backdrop-blur-sm" aria-label="Tutup modal" onclick={() => (jadwalModalOpen = false)}></button>
 		<div class="relative w-full max-w-md bg-white dark:bg-neutral-925 rounded-2xl shadow-xl border border-neutral-200/80 dark:border-white/[0.06] p-6" in:fly={{ y: 20, duration: 200 }}>
-			<h3 class="text-lg font-bold text-neutral-900 dark:text-white mb-1">Ganti Jadwal Referensi</h3>
-			<p class="text-sm text-neutral-600 dark:text-neutral-400 mb-4">Referensi jadwal master saat ini: <strong>{kelas.jadwal || "-"}</strong>. Ini bukan sumber occurrence otomatis. Gunakan bagian Jadwal rutin otomatis pada halaman kelas untuk mengatur hari dan jam aktual.</p>
-			<label for="jadwal-baru" class="block text-xs font-medium uppercase tracking-wider text-neutral-500 mb-1.5">Jadwal baru</label>
-			<select id="jadwal-baru" bind:value={jadwalBaru} class="w-full px-4 py-3 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700/80 focus:ring-2 focus:ring-brand-400/20 focus:border-brand-400 text-neutral-900 dark:text-white outline-none text-sm">
-				<option value="" disabled>Pilih jadwal dari master</option>
-				{#each jadwals as j}
-					<option value={j.nama} disabled={j.nama === kelas.jadwal}>{j.nama}{j.nama === kelas.jadwal ? " (saat ini)" : ""}</option>
+			<h3 class="text-lg font-bold text-neutral-900 dark:text-white mb-1">Ganti Jadwal Kelas</h3>
+			<p class="text-sm text-neutral-600 dark:text-neutral-400 mb-4">Jadwal saat ini: <strong>{kelas.jadwal || "-"}</strong>. Untuk kelas 2x/pekan atau lebih, centang satu entri master per hari.</p>
+			<span class="block text-xs font-medium uppercase tracking-wider text-neutral-500 mb-1.5">Jadwal baru</span>
+			<div class="max-h-60 overflow-y-auto rounded-xl border border-neutral-300 dark:border-neutral-700/80 divide-y divide-neutral-200/80 dark:divide-white/[0.05]">
+				{#each jadwals as j (j.id)}
+					<label class="flex items-center gap-3 px-4 py-2.5 text-sm text-neutral-900 dark:text-white cursor-pointer hover:bg-neutral-100/80 dark:hover:bg-neutral-800/50">
+						<input type="checkbox" checked={jadwalDipilih.includes(j.nama)} onchange={() => toggleJadwal(j.nama)} class="h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-400/20 dark:border-neutral-600" />
+						<span class="flex-1">{j.nama}</span>
+						{#if j.nama === kelas.jadwal}<span class="text-xs text-neutral-500">saat ini</span>{/if}
+					</label>
+				{:else}
+					<p class="px-4 py-3 text-sm text-neutral-500">Belum ada jadwal di master.</p>
 				{/each}
-			</select>
+			</div>
+			{#if jadwalBaru}
+				<p class="mt-3 text-sm text-neutral-600 dark:text-neutral-400">Akan disimpan sebagai: <strong class="text-neutral-900 dark:text-white">{jadwalBaru}</strong>{#if jadwalBaru === kelas.jadwal} <span class="text-amber-700 dark:text-amber-400">(sama dengan saat ini)</span>{/if}</p>
+			{/if}
 			<p class="mt-2 text-xs text-neutral-500">Jadwal belum ada? Tambahkan dulu di <a href="/app/master" use:inertia class="font-medium text-brand-600 hover:underline dark:text-brand-400">Master Data</a>.</p>
-			<p class="mt-3 rounded-xl bg-amber-500/5 border border-amber-500/15 p-3 text-xs text-amber-700 dark:text-amber-400">Sesi yang sudah dijadwalkan tidak diubah otomatis, tetapi diberi tanda "Jadwal kelas berubah" agar bisa dijadwalkan ulang. Guru kelas mendapat notifikasi.</p>
+			<p class="mt-3 rounded-xl bg-amber-500/5 border border-amber-500/15 p-3 text-xs text-amber-700 dark:text-amber-400">Jadwal rutin otomatis ikut diganti sesuai hari dan jam yang dipilih{jadwal_rutin.length > 0 ? " (berlaku mulai besok)" : ""}. Sesi yang sudah dijadwalkan manual tidak diubah, tetapi diberi tanda "Jadwal kelas berubah" agar bisa dijadwalkan ulang. Guru kelas mendapat notifikasi.</p>
 			<div class="mt-5 flex items-center gap-3">
 				<button onclick={() => (jadwalModalOpen = false)} class="flex-1 px-4 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-700/80 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">Batal</button>
 				<button onclick={submitGantiJadwal} disabled={!jadwalBaru || jadwalBaru === kelas.jadwal || isJadwalLoading} class="flex-1 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold transition-all dark:bg-brand-500 dark:hover:bg-brand-400 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
-					{isJadwalLoading ? "Menyimpan..." : "Ganti referensi"}
+					{isJadwalLoading ? "Menyimpan..." : "Ganti jadwal"}
 				</button>
 			</div>
 		</div>
