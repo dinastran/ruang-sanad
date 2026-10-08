@@ -35,6 +35,7 @@ type Handlers struct {
 	KoordinatorGuruDirectory    *handlers.KoordinatorGuruDirectoryHandler
 	KoordinatorMonitoring       *handlers.KoordinatorMonitoringHandler
 	KoordinatorFeatures         *handlers.KoordinatorFeaturesHandler
+	Kunjungan                   *handlers.KunjunganHandler
 	KoordinatorAttendanceExport *handlers.KoordinatorAttendanceExportHandler
 	Notifications               *handlers.NotificationHandler
 	TSI                         *handlers.TSIHandler
@@ -261,6 +262,9 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Post("/guru/tilawah", guruWriteRole, h.Guru.TilawahCheckin)
 	protected.Delete("/guru/tilawah", guruWriteRole, h.Guru.TilawahUncheck)
 	protected.Get("/guru/tsi", guruPersonalReadRole, h.TSI.Saya)
+	protected.Get("/guru/kunjungan", guruPersonalReadRole, h.Kunjungan.GuruIndex)
+	protected.Get("/guru/kunjungan/:id", guruPersonalReadRole, h.Kunjungan.GuruShow)
+	protected.Post("/guru/kunjungan/:id/tanggapan", guruWriteRole, h.Kunjungan.GuruTanggapan)
 
 	// Riayah santri — koordinator guru hanya membaca.
 	riayahReadRole := middlewares.RoleRequired(store, userService, "guru", "admin_kelas", "super_admin", "koordinator_guru")
@@ -312,10 +316,16 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Get("/koordinator-guru/riwayat-absensi", koordinatorRole, h.KoordinatorFeatures.RiwayatAbsensi)
 
 	// Koordinator Guru — kunjungan kelas
-	protected.Get("/koordinator-guru/kunjungan", koordinatorRole, h.KoordinatorFeatures.KunjunganList)
-	protected.Post("/koordinator-guru/kunjungan", koordinatorRole, h.KoordinatorFeatures.KunjunganCreate)
-	protected.Put("/koordinator-guru/kunjungan/:id", koordinatorRole, h.KoordinatorFeatures.KunjunganUpdate)
-	protected.Delete("/koordinator-guru/kunjungan/:id", koordinatorRole, h.KoordinatorFeatures.KunjunganDelete)
+	protected.Get("/koordinator-guru/kunjungan", koordinatorRole, h.Kunjungan.Index)
+	protected.Post("/koordinator-guru/kunjungan", koordinatorRole, h.Kunjungan.Create)
+	protected.Get("/koordinator-guru/kunjungan/:id", koordinatorRole, h.Kunjungan.Show)
+	protected.Put("/koordinator-guru/kunjungan/:id", koordinatorRole, h.Kunjungan.Update)
+	protected.Delete("/koordinator-guru/kunjungan/:id", koordinatorRole, h.Kunjungan.Delete)
+	protected.Post("/koordinator-guru/kunjungan/:id/kirim", koordinatorRole, h.Kunjungan.Kirim)
+	protected.Post("/koordinator-guru/kunjungan/:id/buka-kunci", koordinatorRole, h.Kunjungan.BukaKunci)
+	protected.Post("/koordinator-guru/kunjungan/:id/tindak-lanjut", koordinatorRole, h.Kunjungan.TambahTindakLanjut)
+	protected.Put("/koordinator-guru/kunjungan/:id/tindak-lanjut/:tid", koordinatorRole, h.Kunjungan.StatusTindakLanjut)
+	protected.Delete("/koordinator-guru/kunjungan/:id/tindak-lanjut/:tid", koordinatorRole, h.Kunjungan.HapusTindakLanjut)
 
 	// Koordinator Guru — Kalam Bersanad
 	protected.Get("/koordinator-guru/kalam", koordinatorRole, h.KoordinatorFeatures.KalamList)

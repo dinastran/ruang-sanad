@@ -233,6 +233,33 @@ export interface Rapat {
 	status: string;
 }
 
+export interface KunjunganNilaiAspek {
+	kode: string;
+	label: string;
+	nilai: number;
+	predikat: string;
+}
+
+export type KunjunganStatusKirim = "draft" | "terkirim" | "dibaca" | "ditanggapi";
+
+export interface TindakLanjut {
+	id: number;
+	kunjungan_id: number;
+	jenis: "apresiasi" | "monitoring" | "koordinasi" | "coaching" | "pembinaan";
+	jenis_label: string;
+	internal: boolean;
+	catatan: string;
+	target_tanggal: string;
+	status: "terbuka" | "selesai";
+	selesai_at: string;
+	terlambat: boolean;
+	kunjungan_berikutnya_id?: number;
+	guru_id?: number;
+	guru_nama?: string;
+	kelas_nama?: string;
+	kunjungan_tanggal?: string;
+}
+
 export interface Kunjungan {
 	id: number;
 	guru_id: number;
@@ -245,6 +272,41 @@ export interface Kunjungan {
 	jam: string;
 	status: string;
 	catatan: string;
+	nilai_kedisiplinan: number;
+	nilai_materi: number;
+	nilai_metode: number;
+	nilai_interaksi: number;
+	aspek: KunjunganNilaiAspek[];
+	nilai_lengkap: boolean;
+	nilai_rata_rata: number;
+	predikat: string;
+	status_kirim: KunjunganStatusKirim;
+	dikirim_at: string;
+	dibaca_at: string;
+	tanggapan_guru: string;
+	tanggapan_at: string;
+	wa_link: string;
+	tindak_lanjut: TindakLanjut[];
+}
+
+export interface KunjunganRekapGuru {
+	guru_id: number;
+	guru_nama: string;
+	jumlah_kunjungan: number;
+	tanggal_terakhir: string;
+	nilai_terakhir: number;
+	predikat_terakhir: string;
+	nilai_sebelumnya: number;
+	tren: "naik" | "turun" | "tetap" | "";
+	rata_rata_aspek: { kode: string; label: string; rata_rata: number }[];
+	tindak_lanjut_terbuka: number;
+}
+
+export interface KunjunganDashboard {
+	kunjungan: Kunjungan[];
+	rekap: KunjunganRekapGuru[];
+	tindak_lanjut_terbuka: TindakLanjut[];
+	belum_ditanggapi: Kunjungan[];
 }
 
 export interface Kalam {

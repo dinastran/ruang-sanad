@@ -180,28 +180,6 @@ SELECT COUNT(*) FROM tilawah_harian WHERE guru_id = ? AND tanggal >= ? AND tangg
 -- name: ListTilawahByGuruRange :many
 SELECT tanggal FROM tilawah_harian WHERE guru_id = ? AND tanggal >= ? AND tanggal <= ? ORDER BY tanggal ASC;
 
--- ============ Kunjungan Kelas ============
-
--- name: CreateKunjungan :one
-INSERT INTO kunjungan_kelas (guru_id, kelas_id, target_mulai, target_selesai, tanggal, jam, status, catatan)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id;
-
--- name: ListKunjungan :many
-SELECT kk.*, g.nama AS guru_nama, COALESCE(k.nama_kelas, '') AS kelas_nama
-FROM kunjungan_kelas kk
-JOIN guru g ON g.id = kk.guru_id
-LEFT JOIN kelas k ON k.id = kk.kelas_id
-ORDER BY COALESCE(kk.tanggal, kk.target_mulai) DESC;
-
--- name: GetKunjungan :one
-SELECT * FROM kunjungan_kelas WHERE id = ?;
-
--- name: UpdateKunjungan :exec
-UPDATE kunjungan_kelas SET guru_id = ?, kelas_id = ?, target_mulai = ?, target_selesai = ?, tanggal = ?, jam = ?, status = ?, catatan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
-
--- name: DeleteKunjungan :exec
-DELETE FROM kunjungan_kelas WHERE id = ?;
-
 -- ============ Kalam Bersanad ============
 
 -- name: CreateKalam :one

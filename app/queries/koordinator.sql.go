@@ -7,7 +7,6 @@ package queries
 
 import (
 	"context"
-	"database/sql"
 	"time"
 )
 
@@ -170,40 +169,6 @@ func (q *Queries) CreateKalam(ctx context.Context, arg CreateKalamParams) (int64
 	return id, err
 }
 
-const createKunjungan = `-- name: CreateKunjungan :one
-
-INSERT INTO kunjungan_kelas (guru_id, kelas_id, target_mulai, target_selesai, tanggal, jam, status, catatan)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
-`
-
-type CreateKunjunganParams struct {
-	GuruID        int64
-	KelasID       sql.NullInt64
-	TargetMulai   sql.NullTime
-	TargetSelesai sql.NullTime
-	Tanggal       sql.NullTime
-	Jam           string
-	Status        string
-	Catatan       string
-}
-
-// ============ Kunjungan Kelas ============
-func (q *Queries) CreateKunjungan(ctx context.Context, arg CreateKunjunganParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, createKunjungan,
-		arg.GuruID,
-		arg.KelasID,
-		arg.TargetMulai,
-		arg.TargetSelesai,
-		arg.Tanggal,
-		arg.Jam,
-		arg.Status,
-		arg.Catatan,
-	)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
 const createPembinaan = `-- name: CreatePembinaan :one
 
 INSERT INTO pembinaan (tanggal, bulan, pekan_ke, topik, keterangan, status)
@@ -309,15 +274,6 @@ func (q *Queries) DeleteKalam(ctx context.Context, id int64) error {
 	return err
 }
 
-const deleteKunjungan = `-- name: DeleteKunjungan :exec
-DELETE FROM kunjungan_kelas WHERE id = ?
-`
-
-func (q *Queries) DeleteKunjungan(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteKunjungan, id)
-	return err
-}
-
 const deletePembinaan = `-- name: DeletePembinaan :exec
 DELETE FROM pembinaan WHERE id = ?
 `
@@ -412,29 +368,6 @@ func (q *Queries) GetKalam(ctx context.Context, id int64) (KalamBersanad, error)
 		&i.Topik,
 		&i.Kitab,
 		&i.Keterangan,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getKunjungan = `-- name: GetKunjungan :one
-SELECT id, guru_id, kelas_id, target_mulai, target_selesai, tanggal, jam, status, catatan, created_at, updated_at FROM kunjungan_kelas WHERE id = ?
-`
-
-func (q *Queries) GetKunjungan(ctx context.Context, id int64) (KunjunganKela, error) {
-	row := q.db.QueryRowContext(ctx, getKunjungan, id)
-	var i KunjunganKela
-	err := row.Scan(
-		&i.ID,
-		&i.GuruID,
-		&i.KelasID,
-		&i.TargetMulai,
-		&i.TargetSelesai,
-		&i.Tanggal,
-		&i.Jam,
-		&i.Status,
-		&i.Catatan,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -788,67 +721,6 @@ func (q *Queries) ListKelasAktifSimple(ctx context.Context) ([]ListKelasAktifSim
 	for rows.Next() {
 		var i ListKelasAktifSimpleRow
 		if err := rows.Scan(&i.ID, &i.NamaKelas); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listKunjungan = `-- name: ListKunjungan :many
-SELECT kk.id, kk.guru_id, kk.kelas_id, kk.target_mulai, kk.target_selesai, kk.tanggal, kk.jam, kk.status, kk.catatan, kk.created_at, kk.updated_at, g.nama AS guru_nama, COALESCE(k.nama_kelas, '') AS kelas_nama
-FROM kunjungan_kelas kk
-JOIN guru g ON g.id = kk.guru_id
-LEFT JOIN kelas k ON k.id = kk.kelas_id
-ORDER BY COALESCE(kk.tanggal, kk.target_mulai) DESC
-`
-
-type ListKunjunganRow struct {
-	ID            int64
-	GuruID        int64
-	KelasID       sql.NullInt64
-	TargetMulai   sql.NullTime
-	TargetSelesai sql.NullTime
-	Tanggal       sql.NullTime
-	Jam           string
-	Status        string
-	Catatan       string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	GuruNama      string
-	KelasNama     string
-}
-
-func (q *Queries) ListKunjungan(ctx context.Context) ([]ListKunjunganRow, error) {
-	rows, err := q.db.QueryContext(ctx, listKunjungan)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListKunjunganRow
-	for rows.Next() {
-		var i ListKunjunganRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.GuruID,
-			&i.KelasID,
-			&i.TargetMulai,
-			&i.TargetSelesai,
-			&i.Tanggal,
-			&i.Jam,
-			&i.Status,
-			&i.Catatan,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.GuruNama,
-			&i.KelasNama,
-		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1218,37 +1090,6 @@ func (q *Queries) UpdateKalam(ctx context.Context, arg UpdateKalamParams) error 
 		arg.Topik,
 		arg.Kitab,
 		arg.Keterangan,
-		arg.ID,
-	)
-	return err
-}
-
-const updateKunjungan = `-- name: UpdateKunjungan :exec
-UPDATE kunjungan_kelas SET guru_id = ?, kelas_id = ?, target_mulai = ?, target_selesai = ?, tanggal = ?, jam = ?, status = ?, catatan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-`
-
-type UpdateKunjunganParams struct {
-	GuruID        int64
-	KelasID       sql.NullInt64
-	TargetMulai   sql.NullTime
-	TargetSelesai sql.NullTime
-	Tanggal       sql.NullTime
-	Jam           string
-	Status        string
-	Catatan       string
-	ID            int64
-}
-
-func (q *Queries) UpdateKunjungan(ctx context.Context, arg UpdateKunjunganParams) error {
-	_, err := q.db.ExecContext(ctx, updateKunjungan,
-		arg.GuruID,
-		arg.KelasID,
-		arg.TargetMulai,
-		arg.TargetSelesai,
-		arg.Tanggal,
-		arg.Jam,
-		arg.Status,
-		arg.Catatan,
 		arg.ID,
 	)
 	return err

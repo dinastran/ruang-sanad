@@ -170,17 +170,40 @@ type KodeKela struct {
 }
 
 type KunjunganKela struct {
-	ID            int64
-	GuruID        int64
-	KelasID       sql.NullInt64
-	TargetMulai   sql.NullTime
-	TargetSelesai sql.NullTime
-	Tanggal       sql.NullTime
-	Jam           string
-	Status        string
-	Catatan       string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID                int64
+	GuruID            int64
+	KelasID           sql.NullInt64
+	TargetMulai       sql.NullTime
+	TargetSelesai     sql.NullTime
+	Tanggal           sql.NullTime
+	Jam               string
+	Status            string
+	Catatan           string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	NilaiKedisiplinan sql.NullInt64
+	NilaiMateri       sql.NullInt64
+	NilaiMetode       sql.NullInt64
+	NilaiInteraksi    sql.NullInt64
+	DikirimAt         sql.NullTime
+	DikirimOleh       sql.NullInt64
+	DibacaAt          sql.NullTime
+	TanggapanGuru     string
+	TanggapanAt       sql.NullTime
+}
+
+type KunjunganTindakLanjut struct {
+	ID                    int64
+	KunjunganID           int64
+	Jenis                 string
+	Catatan               string
+	TargetTanggal         sql.NullTime
+	Status                string
+	SelesaiAt             sql.NullTime
+	KunjunganBerikutnyaID sql.NullInt64
+	DibuatOleh            sql.NullInt64
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 }
 
 type Level struct {

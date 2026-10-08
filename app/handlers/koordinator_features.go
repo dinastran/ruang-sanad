@@ -11,7 +11,7 @@ import (
 )
 
 // KoordinatorFeaturesHandler serves the koordinator domain pages: pembinaan,
-// rapat, kunjungan kelas, Kalam Bersanad, kompetensi, WA templates.
+// rapat, Kalam Bersanad, kompetensi, WA templates.
 type KoordinatorFeaturesHandler struct {
 	svc            *services.KoordinatorService
 	guruService    *services.GuruService
@@ -198,58 +198,6 @@ func (h *KoordinatorFeaturesHandler) RiwayatAbsensi(c *fiber.Ctx) error {
 	}
 	guru, _ := h.svc.ListGuruSimple()
 	return h.inertiaService.Render(c, "koordinator/RiwayatAbsensi", fiber.Map{"user": sessionUser(sess), "riwayat": riwayat, "guruList": guru})
-}
-
-// ============ Kunjungan Kelas ============
-
-func (h *KoordinatorFeaturesHandler) KunjunganList(c *fiber.Ctx) error {
-	sess, _ := h.store.Get(c)
-	list, err := h.svc.ListKunjungan()
-	if err != nil {
-		h.store.Flash(c, "error", "Gagal memuat kunjungan")
-		return h.inertiaService.Redirect(c, "/app/koordinator-guru")
-	}
-	guru, _ := h.svc.ListGuruSimple()
-	kelas, _ := h.svc.ListKelasSimple()
-	return h.inertiaService.Render(c, "koordinator/Kunjungan", fiber.Map{"user": sessionUser(sess), "kunjungan": list, "guruList": guru, "kelasList": kelas})
-}
-
-func (h *KoordinatorFeaturesHandler) KunjunganCreate(c *fiber.Ctx) error {
-	var req models.KunjunganRequest
-	if err := c.BodyParser(&req); err != nil || req.GuruID < 1 {
-		h.store.Flash(c, "error", "Data tidak valid")
-		return h.inertiaService.Redirect(c, "/app/koordinator-guru/kunjungan")
-	}
-	if _, err := h.svc.CreateKunjungan(req); err != nil {
-		h.store.Flash(c, "error", err.Error())
-		return h.inertiaService.Redirect(c, "/app/koordinator-guru/kunjungan")
-	}
-	h.store.Flash(c, "success", "Kunjungan dijadwalkan")
-	return h.inertiaService.Redirect(c, "/app/koordinator-guru/kunjungan")
-}
-
-func (h *KoordinatorFeaturesHandler) KunjunganUpdate(c *fiber.Ctx) error {
-	id := h.idParam(c, "id")
-	var req models.KunjunganRequest
-	if err := c.BodyParser(&req); err != nil || req.GuruID < 1 {
-		h.store.Flash(c, "error", "Data tidak valid")
-		return h.inertiaService.Redirect(c, "/app/koordinator-guru/kunjungan")
-	}
-	if err := h.svc.UpdateKunjungan(id, req); err != nil {
-		h.store.Flash(c, "error", err.Error())
-		return h.inertiaService.Redirect(c, "/app/koordinator-guru/kunjungan")
-	}
-	h.store.Flash(c, "success", "Kunjungan diperbarui")
-	return h.inertiaService.Redirect(c, "/app/koordinator-guru/kunjungan")
-}
-
-func (h *KoordinatorFeaturesHandler) KunjunganDelete(c *fiber.Ctx) error {
-	if err := h.svc.DeleteKunjungan(h.idParam(c, "id")); err != nil {
-		h.store.Flash(c, "error", "Gagal menghapus")
-		return h.inertiaService.Redirect(c, "/app/koordinator-guru/kunjungan")
-	}
-	h.store.Flash(c, "success", "Kunjungan dihapus")
-	return h.inertiaService.Redirect(c, "/app/koordinator-guru/kunjungan")
 }
 
 // ============ Kalam Bersanad ============
