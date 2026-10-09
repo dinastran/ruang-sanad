@@ -341,6 +341,7 @@ export interface TilawahStatus {
 export interface KelasSimple {
 	id: number;
 	nama_kelas: string;
+	guru_id: number; // 0 = belum ada guru
 }
 
 export interface MonitoringKelasSummary {

@@ -88,6 +88,7 @@ func (s *KoordinatorService) ListGuruSimple() ([]models.GuruRingkas, error) {
 type KelasSimple struct {
 	ID        int64  `json:"id"`
 	NamaKelas string `json:"nama_kelas"`
+	GuruID    int64  `json:"guru_id"` // 0 = belum ada guru
 }
 
 func (s *KoordinatorService) ListKelasSimple() ([]KelasSimple, error) {
@@ -97,7 +98,7 @@ func (s *KoordinatorService) ListKelasSimple() ([]KelasSimple, error) {
 	}
 	out := make([]KelasSimple, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, KelasSimple{ID: r.ID, NamaKelas: r.NamaKelas})
+		out = append(out, KelasSimple{ID: r.ID, NamaKelas: r.NamaKelas, GuruID: r.GuruID.Int64})
 	}
 	return out, nil
 }

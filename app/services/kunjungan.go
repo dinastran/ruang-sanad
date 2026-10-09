@@ -208,6 +208,9 @@ func (s *KunjunganService) Create(req models.KunjunganRequest) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	if err := s.pastikanKelasGuru(req.GuruID, req.KelasID); err != nil {
+		return 0, err
+	}
 	return s.querier.CreateKunjungan(context.Background(), queries.CreateKunjunganParams{
 		GuruID:            req.GuruID,
 		KelasID:           nullInt(req.KelasID),
@@ -228,6 +231,17 @@ func (s *KunjunganService) Update(id int64, req models.KunjunganRequest) error {
 	req, err := normalizeKunjunganRequest(req)
 	if err != nil {
 		return err
+	}
+	// A visit keeps its recorded class even if the class later moved to
+	// another guru; only a changed guru/class pair is checked again.
+	lama, err := s.querier.GetKunjungan(context.Background(), id)
+	if err != nil {
+		return fmt.Errorf("kunjungan tidak ditemukan")
+	}
+	if req.GuruID != lama.GuruID || req.KelasID != lama.KelasID.Int64 {
+		if err := s.pastikanKelasGuru(req.GuruID, req.KelasID); err != nil {
+			return err
+		}
 	}
 	n, err := s.querier.UpdateKunjungan(context.Background(), queries.UpdateKunjunganParams{
 		GuruID:            req.GuruID,
@@ -260,6 +274,22 @@ func (s *KunjunganService) Delete(id int64) error {
 	}
 	if n == 0 {
 		return s.alasanTerkunci(id)
+	}
+	return nil
+}
+
+// pastikanKelasGuru requires the chosen class to be an active class taught by
+// the chosen guru. No class (0) is allowed.
+func (s *KunjunganService) pastikanKelasGuru(guruID, kelasID int64) error {
+	if kelasID == 0 {
+		return nil
+	}
+	kelas, err := s.querier.GetKelasPengampu(context.Background(), kelasID)
+	if err != nil {
+		return fmt.Errorf("kelas tidak ditemukan")
+	}
+	if kelas.IsAktif != 1 || !kelas.GuruID.Valid || kelas.GuruID.Int64 != guruID {
+		return fmt.Errorf("kelas yang dipilih bukan kelas aktif guru ini")
 	}
 	return nil
 }

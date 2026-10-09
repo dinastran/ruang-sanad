@@ -44,6 +44,14 @@
 	const empty = () => ({ guru_id: 0, kelas_id: 0, target_mulai: "", target_selesai: "", tanggal: "", jam: "", status: "dijadwalkan", catatan: "" });
 	let form = $state(empty());
 
+	// Kelas mengikuti guru terpilih: hanya kelas aktif yang diampu guru itu.
+	let kelasGuru = $derived(kelasList.filter((k) => form.guru_id > 0 && k.guru_id === form.guru_id));
+
+	function pilihGuru() {
+		const daftar = kelasList.filter((k) => k.guru_id === form.guru_id);
+		form.kelas_id = daftar.length === 1 ? daftar[0].id : 0;
+	}
+
 	function openCreate() { form = empty(); showForm = true; }
 	function submit() {
 		saving = true;
@@ -206,8 +214,10 @@
 				</div>
 				<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="p-5 space-y-4">
 					<div class="grid sm:grid-cols-2 gap-4">
-						<label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Guru<select bind:value={form.guru_id} required class={`${inputClass} mt-1.5`}><option value={0} disabled>Pilih guru...</option>{#each guruList as g (g.id)}<option value={g.id}>{g.nama}</option>{/each}</select></label>
-						<label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Kelas<select bind:value={form.kelas_id} class={`${inputClass} mt-1.5`}><option value={0}>—</option>{#each kelasList as k (k.id)}<option value={k.id}>{k.nama_kelas}</option>{/each}</select></label>
+						<label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Guru<select bind:value={form.guru_id} onchange={pilihGuru} required class={`${inputClass} mt-1.5`}><option value={0} disabled>Pilih guru...</option>{#each guruList as g (g.id)}<option value={g.id}>{g.nama}</option>{/each}</select></label>
+						<label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Kelas<select bind:value={form.kelas_id} disabled={!form.guru_id} class={`${inputClass} mt-1.5 disabled:opacity-60`}><option value={0}>{form.guru_id ? "—" : "Pilih guru dulu"}</option>{#each kelasGuru as k (k.id)}<option value={k.id}>{k.nama_kelas}</option>{/each}</select>
+							{#if form.guru_id && kelasGuru.length === 0}<span class="mt-1 block text-xs font-normal text-amber-700 dark:text-amber-400">Guru ini belum punya kelas aktif. Kunjungan tetap bisa disimpan tanpa kelas.</span>{/if}
+						</label>
 						<label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Target mulai<input type="date" bind:value={form.target_mulai} class={`${inputClass} mt-1.5`} /></label>
 						<label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Target selesai<input type="date" bind:value={form.target_selesai} class={`${inputClass} mt-1.5`} /></label>
 						<label class="text-sm font-medium text-neutral-700 dark:text-neutral-300 sm:col-span-2">Status<select bind:value={form.status} class={`${inputClass} mt-1.5`}><option value="dijadwalkan">Dijadwalkan</option><option value="terlaksana">Terlaksana</option></select></label>

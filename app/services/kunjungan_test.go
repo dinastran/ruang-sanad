@@ -228,3 +228,45 @@ func TestKunjunganHapusMonitoringMenghapusJadwalYangBelumDipakai(t *testing.T) {
 	require.NoError(t, err)
 	require.ErrorContains(t, f.service.TambahTindakLanjut(jadwal, models.TindakLanjutRequest{Jenis: TindakLanjutApresiasi}, f.adminID), "terlaksana")
 }
+
+func insertKelasGuru(t *testing.T, db *sql.DB, nama string, guruID int64, aktif int) int64 {
+	t.Helper()
+	_, err := db.Exec(`INSERT INTO kelas (kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi, jadwal, sub_index, nama_kelas, guru_id, kapasitas, jumlah_santri, is_aktif)
+		VALUES (?, '2026', 'Private', 'L', '01', '1x/pekan', 'Senin, jam 20.30 WIB', 1, ?, ?, 15, 0, ?)`, "kunci-"+nama, nama, guruID, aktif)
+	require.NoError(t, err)
+	id, err := lastID(db)
+	require.NoError(t, err)
+	return id
+}
+
+func TestKunjunganKelasHarusKelasAktifGuru(t *testing.T) {
+	f := setupKunjungan(t)
+	lainUser := insertTestUser(t, f.db, "lain2@example.com", "Guru Lain")
+	lainGuru := insertTestGuru(t, f.db, "Guru Lain", lainUser)
+	milikGuru := insertKelasGuru(t, f.db, "Kelas Ahmad", f.guruID, 1)
+	milikLain := insertKelasGuru(t, f.db, "Kelas Lain", lainGuru, 1)
+	nonaktif := insertKelasGuru(t, f.db, "Kelas Lama", f.guruID, 0)
+
+	_, err := f.service.Create(models.KunjunganRequest{GuruID: f.guruID, KelasID: milikLain})
+	require.ErrorContains(t, err, "bukan kelas aktif guru ini")
+	_, err = f.service.Create(models.KunjunganRequest{GuruID: f.guruID, KelasID: nonaktif})
+	require.ErrorContains(t, err, "bukan kelas aktif guru ini")
+	_, err = f.service.Create(models.KunjunganRequest{GuruID: f.guruID})
+	require.NoError(t, err, "kunjungan tanpa kelas tetap boleh")
+
+	id, err := f.service.Create(models.KunjunganRequest{GuruID: f.guruID, KelasID: milikGuru})
+	require.NoError(t, err)
+
+	// Kelas pindah ke guru lain setelah kunjungan dibuat: kunjungan lama tetap
+	// bisa diedit selama pasangan guru-kelasnya tidak diubah.
+	_, err = f.db.Exec(`UPDATE kelas SET guru_id = ? WHERE id = ?`, lainGuru, milikGuru)
+	require.NoError(t, err)
+	require.NoError(t, f.service.Update(id, f.terlaksanaKelas(milikGuru, 3, 3, 3, 3)))
+	require.ErrorContains(t, f.service.Update(id, f.terlaksanaKelas(milikLain, 3, 3, 3, 3)), "bukan kelas aktif guru ini")
+}
+
+func (f kunjunganFixture) terlaksanaKelas(kelasID int64, nilai ...int64) models.KunjunganRequest {
+	req := f.terlaksana(nilai...)
+	req.KelasID = kelasID
+	return req
+}
