@@ -16,7 +16,7 @@ SELECT COUNT(*) FROM kelas WHERE is_aktif = 1;
 SELECT COUNT(*) FROM santri WHERE status = 'aktif';
 
 -- name: ListKelasAktifSimple :many
-SELECT id, nama_kelas FROM kelas WHERE is_aktif = 1 ORDER BY nama_kelas ASC;
+SELECT id, nama_kelas, guru_id FROM kelas WHERE is_aktif = 1 ORDER BY nama_kelas ASC;
 
 -- name: ListGuruBelumAbsenPekanIni :many
 SELECT DISTINCT g.id, g.nama, g.no_wa

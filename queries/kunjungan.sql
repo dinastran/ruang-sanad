@@ -115,3 +115,6 @@ WHERE kunjungan_berikutnya_id = ? AND status = 'terbuka';
 
 -- name: DeleteTindakLanjut :exec
 DELETE FROM kunjungan_tindak_lanjut WHERE id = ?;
+
+-- name: GetKelasPengampu :one
+SELECT guru_id, is_aktif FROM kelas WHERE id = ?;

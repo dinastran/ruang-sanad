@@ -7,6 +7,7 @@ package queries
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -703,12 +704,13 @@ func (q *Queries) ListKalam(ctx context.Context) ([]ListKalamRow, error) {
 }
 
 const listKelasAktifSimple = `-- name: ListKelasAktifSimple :many
-SELECT id, nama_kelas FROM kelas WHERE is_aktif = 1 ORDER BY nama_kelas ASC
+SELECT id, nama_kelas, guru_id FROM kelas WHERE is_aktif = 1 ORDER BY nama_kelas ASC
 `
 
 type ListKelasAktifSimpleRow struct {
 	ID        int64
 	NamaKelas string
+	GuruID    sql.NullInt64
 }
 
 func (q *Queries) ListKelasAktifSimple(ctx context.Context) ([]ListKelasAktifSimpleRow, error) {
@@ -720,7 +722,7 @@ func (q *Queries) ListKelasAktifSimple(ctx context.Context) ([]ListKelasAktifSim
 	var items []ListKelasAktifSimpleRow
 	for rows.Next() {
 		var i ListKelasAktifSimpleRow
-		if err := rows.Scan(&i.ID, &i.NamaKelas); err != nil {
+		if err := rows.Scan(&i.ID, &i.NamaKelas, &i.GuruID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

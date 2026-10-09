@@ -114,6 +114,22 @@ func (q *Queries) DeleteTindakLanjut(ctx context.Context, id int64) error {
 	return err
 }
 
+const getKelasPengampu = `-- name: GetKelasPengampu :one
+SELECT guru_id, is_aktif FROM kelas WHERE id = ?
+`
+
+type GetKelasPengampuRow struct {
+	GuruID  sql.NullInt64
+	IsAktif int64
+}
+
+func (q *Queries) GetKelasPengampu(ctx context.Context, id int64) (GetKelasPengampuRow, error) {
+	row := q.db.QueryRowContext(ctx, getKelasPengampu, id)
+	var i GetKelasPengampuRow
+	err := row.Scan(&i.GuruID, &i.IsAktif)
+	return i, err
+}
+
 const getKunjungan = `-- name: GetKunjungan :one
 SELECT kk.id, kk.guru_id, kk.kelas_id, kk.target_mulai, kk.target_selesai, kk.tanggal, kk.jam,
        kk.status, kk.catatan, kk.nilai_kedisiplinan, kk.nilai_materi, kk.nilai_metode,
