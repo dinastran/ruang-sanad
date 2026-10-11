@@ -518,7 +518,7 @@
 				<h2 id="analytics-title" class="text-sm font-semibold text-neutral-900 dark:text-white">Analisis pelaksanaan</h2>
 				<p class="mt-1 text-xs text-neutral-500">Frekuensi masalah per pekan dan performa jadwal per guru pada filter aktif.</p>
 			</div>
-			<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+			<div class="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
 				<div class="rounded-xl border border-neutral-200/80 bg-white p-5 dark:border-white/[0.06] dark:bg-neutral-925/50">
 					<div class="flex items-center justify-between gap-3">
 						<h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Frekuensi per pekan</h3>
@@ -543,7 +543,7 @@
 					{/if}
 				</div>
 
-				<div class="rounded-xl border border-neutral-200/80 bg-white dark:border-white/[0.06] dark:bg-neutral-925/50">
+				<div class="min-w-0 overflow-hidden rounded-xl border border-neutral-200/80 bg-white dark:border-white/[0.06] dark:bg-neutral-925/50">
 					<div class="border-b border-neutral-200/70 px-5 py-4 dark:border-white/[0.05]">
 						<h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Performa per guru</h3>
 						<p class="mt-1 text-xs text-neutral-500">Diurutkan dari kepatuhan terendah agar masalah lebih cepat terlihat. Badal dinilai pada guru PIC kelas.</p>
