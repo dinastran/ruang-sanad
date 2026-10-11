@@ -13,14 +13,16 @@ import (
 type KoordinatorMonitoringHandler struct {
 	monitoringService  *services.KoordinatorMonitoringService
 	koordinatorService *services.KoordinatorService
+	pertemuanService   *services.PertemuanService
 	store              *session.Store
 	inertiaService     *services.InertiaService
 }
 
-func NewKoordinatorMonitoringHandler(monitoringService *services.KoordinatorMonitoringService, koordinatorService *services.KoordinatorService, store *session.Store, inertiaService *services.InertiaService) *KoordinatorMonitoringHandler {
+func NewKoordinatorMonitoringHandler(monitoringService *services.KoordinatorMonitoringService, koordinatorService *services.KoordinatorService, pertemuanService *services.PertemuanService, store *session.Store, inertiaService *services.InertiaService) *KoordinatorMonitoringHandler {
 	return &KoordinatorMonitoringHandler{
 		monitoringService:  monitoringService,
 		koordinatorService: koordinatorService,
+		pertemuanService:   pertemuanService,
 		store:              store,
 		inertiaService:     inertiaService,
 	}
@@ -43,12 +45,17 @@ func (h *KoordinatorMonitoringHandler) Index(c *fiber.Ctx) error {
 	}
 	guru, _ := h.koordinatorService.ListGuruSimple()
 	kelas, _ := h.koordinatorService.ListKelasSimple()
+	belumDitutup, err := h.pertemuanService.ListBelumDitutup(nil, time.Now())
+	if err != nil {
+		belumDitutup = []models.PertemuanBelumDitutup{}
+	}
 	return h.inertiaService.Render(c, "koordinator/MonitoringKelas", fiber.Map{
-		"user":       user,
-		"monitoring": monitoring,
-		"guru":       guru,
-		"kelas":      kelas,
-		"filters":    filter,
+		"user":          user,
+		"monitoring":    monitoring,
+		"belum_ditutup": belumDitutup,
+		"guru":          guru,
+		"kelas":         kelas,
+		"filters":       filter,
 	})
 }
 

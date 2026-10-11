@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"strconv"
 	"time"
 
@@ -11,18 +12,20 @@ import (
 )
 
 type JadwalPertemuanHandler struct {
-	guruService    *services.GuruService
-	jadwalService  *services.JadwalPertemuanService
-	store          *session.Store
-	inertiaService *services.InertiaService
+	guruService      *services.GuruService
+	jadwalService    *services.JadwalPertemuanService
+	pertemuanService *services.PertemuanService
+	store            *session.Store
+	inertiaService   *services.InertiaService
 }
 
-func NewJadwalPertemuanHandler(guruService *services.GuruService, jadwalService *services.JadwalPertemuanService, store *session.Store, inertiaService *services.InertiaService) *JadwalPertemuanHandler {
+func NewJadwalPertemuanHandler(guruService *services.GuruService, jadwalService *services.JadwalPertemuanService, pertemuanService *services.PertemuanService, store *session.Store, inertiaService *services.InertiaService) *JadwalPertemuanHandler {
 	return &JadwalPertemuanHandler{
-		guruService:    guruService,
-		jadwalService:  jadwalService,
-		store:          store,
-		inertiaService: inertiaService,
+		guruService:      guruService,
+		jadwalService:    jadwalService,
+		pertemuanService: pertemuanService,
+		store:            store,
+		inertiaService:   inertiaService,
 	}
 }
 
@@ -55,10 +58,15 @@ func (h *JadwalPertemuanHandler) Index(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, "/app/guru")
 	}
 	guruList, _ := h.guruService.ListDirectory()
+	belumDitutup, err := h.pertemuanService.ListBelumDitutup(guruID, time.Now())
+	if err != nil {
+		belumDitutup = []models.PertemuanBelumDitutup{}
+	}
 
 	return h.inertiaService.Render(c, "guru/JadwalPertemuan", fiber.Map{
 		"user":              user,
 		"jadwal":            jadwal,
+		"belum_ditutup":     belumDitutup,
 		"kelas":             kelas,
 		"guruList":          guruList,
 		"selected_kelas_id": c.QueryInt("kelas_id"),
@@ -150,6 +158,9 @@ func (h *JadwalPertemuanHandler) Start(c *fiber.Ctx) error {
 
 	pertemuan, err := h.jadwalService.Start(id, kelasID, userID, privileged)
 	if err != nil {
+		if errors.Is(err, services.ErrPertemuanBerlangsung) {
+			return redirectPertemuanBelumDitutup(c, h.store, h.inertiaService, h.pertemuanService, kelasID, userID, privileged, "/app/guru/jadwal-pertemuan")
+		}
 		h.store.Flash(c, "error", "Gagal memulai pertemuan: "+err.Error())
 		return h.inertiaService.Back(c, "/app/guru/jadwal-pertemuan")
 	}

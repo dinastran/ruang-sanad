@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { inertia, router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
-	import type { Flash, GuruDirectory, GuruKelas, JadwalPertemuanGuru, User } from "@lib/types";
+	import PertemuanBelumDitutupList from "@components/PertemuanBelumDitutup.svelte";
+	import type { Flash, GuruDirectory, GuruKelas, JadwalPertemuanGuru, PertemuanBelumDitutup, User } from "@lib/types";
 	import {
 		AlertTriangle, ArrowLeft, Ban, BookOpen, CalendarClock, CalendarDays,
 		MoreHorizontal, Play, Plus, RotateCcw, UserRoundCheck
@@ -15,12 +16,13 @@
 		kelas?: GuruKelas[];
 		guruList?: GuruDirectory[];
 		selected_kelas_id?: number;
+		belum_ditutup?: PertemuanBelumDitutup[];
 		success?: string;
 		error?: string;
 		flash?: Flash;
 	}
 
-	let { user, jadwal = [], kelas = [], guruList = [], selected_kelas_id = 0, success, error, flash }: Props = $props();
+	let { user, jadwal = [], kelas = [], guruList = [], selected_kelas_id = 0, belum_ditutup = [], success, error, flash }: Props = $props();
 
 	const now = new Date();
 	const today = localDate(now);
@@ -226,6 +228,7 @@
 	<div class="mx-auto max-w-6xl space-y-5 px-3 py-5 sm:space-y-6 sm:px-6 sm:py-8">
 		{#if success || flash?.success}<div class="rounded-xl border border-green-500/20 bg-green-500/10 p-4 text-sm font-medium text-green-700 dark:text-green-400">{success || flash?.success}</div>{/if}
 		{#if error || flash?.error}<div class="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm font-medium text-red-600 dark:text-red-400">{error || flash?.error}</div>{/if}
+		<PertemuanBelumDitutupList items={belum_ditutup} showGuru={user?.role !== "guru"} />
 
 		<div class="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
 			<button onclick={() => (agendaFilter = "attention")} class="min-h-[102px] rounded-2xl border p-3 text-left transition-all sm:min-h-0 sm:p-4 {agendaFilter === 'attention' ? 'border-red-500/35 bg-red-500/5 ring-1 ring-red-500/10' : 'border-neutral-200/80 bg-white hover:border-red-500/25 dark:border-white/[0.06] dark:bg-neutral-925/50'}">

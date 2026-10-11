@@ -242,8 +242,11 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Get("/guru/kelas/:id/pertemuan/mulai", guruWorkflowRole, h.Pertemuan.FormMulai)
 	protected.Post("/guru/kelas/:id/pertemuan/mulai", guruWorkflowRole, h.Pertemuan.Mulai)
 	protected.Get("/guru/kelas/:id/pertemuan/:pid", guruWorkflowRole, h.Pertemuan.Detail)
-	protected.Get("/guru/kelas/:id/pertemuan/:pid/selesai", guruWorkflowRole, h.Pertemuan.FormSelesai)
-	protected.Post("/guru/kelas/:id/pertemuan/:pid/selesai", guruWorkflowRole, h.Pertemuan.Selesai)
+	// Koordinator Guru may also close or cancel a meeting a guru forgot to close.
+	pertemuanCloseRole := middlewares.RoleRequired(store, userService, "guru", "admin_kelas", "super_admin", "koordinator_guru")
+	protected.Get("/guru/kelas/:id/pertemuan/:pid/selesai", pertemuanCloseRole, h.Pertemuan.FormSelesai)
+	protected.Post("/guru/kelas/:id/pertemuan/:pid/selesai", pertemuanCloseRole, h.Pertemuan.Selesai)
+	protected.Post("/guru/kelas/:id/pertemuan/:pid/batal", pertemuanCloseRole, h.Pertemuan.Batal)
 	protected.Get("/guru/jadwal-pertemuan", guruWorkflowRole, h.JadwalPertemuan.Index)
 	protected.Post("/guru/jadwal-pertemuan", guruWorkflowRole, h.JadwalPertemuan.Create)
 	protected.Post("/guru/kelas/:id/jadwal-pertemuan/:jid/reschedule", guruWorkflowRole, h.JadwalPertemuan.Reschedule)

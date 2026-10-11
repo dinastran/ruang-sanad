@@ -121,6 +121,7 @@ func main() {
 	productCRMService := services.NewProductCRMService(querier)
 	productOrderService := services.NewProductOrderService(querier)
 	pertemuanService := services.NewPertemuanService(querier, tagihanService)
+	startPengingatPertemuanLupa(pertemuanService)
 	jadwalPertemuanService := services.NewJadwalPertemuanService(querier)
 	notificationService := services.NewNotificationService(querier)
 	riayahService := services.NewRiayahService(querier)
@@ -163,12 +164,12 @@ func main() {
 	dashboardHandler := handlers.NewDashboardHandler(santriService, laporanService, kelasService, sessionStore, inertiaService)
 	guruHandler := handlers.NewGuruHandler(guruService, pertemuanService, riayahService, sessionStore, inertiaService, notificationService).WithRiayahSantri(riayahSantriService).WithBeranda(services.NewGuruBerandaService(querier, tsiService))
 	pertemuanHandler := handlers.NewPertemuanHandler(guruService, pertemuanService, jadwalPertemuanService, sessionStore, inertiaService)
-	jadwalPertemuanHandler := handlers.NewJadwalPertemuanHandler(guruService, jadwalPertemuanService, sessionStore, inertiaService)
+	jadwalPertemuanHandler := handlers.NewJadwalPertemuanHandler(guruService, jadwalPertemuanService, pertemuanService, sessionStore, inertiaService)
 	riayahHandler := handlers.NewRiayahHandler(guruService, riayahService, sessionStore, inertiaService)
 	riayahSantriHandler := handlers.NewRiayahSantriHandler(guruService, riayahSantriService, sessionStore, inertiaService)
 	koordinatorGuruHandler := handlers.NewKoordinatorGuruHandler(koordinatorService, sessionStore, inertiaService)
 	koordinatorGuruDirectoryHandler := handlers.NewKoordinatorGuruDirectoryHandler(guruService, koordinatorService, riayahService, sessionStore, inertiaService)
-	koordinatorMonitoringHandler := handlers.NewKoordinatorMonitoringHandler(koordinatorMonitoringService, koordinatorService, sessionStore, inertiaService)
+	koordinatorMonitoringHandler := handlers.NewKoordinatorMonitoringHandler(koordinatorMonitoringService, koordinatorService, pertemuanService, sessionStore, inertiaService)
 	koordinatorFeaturesHandler := handlers.NewKoordinatorFeaturesHandler(koordinatorService, guruService, riayahService, sessionStore, inertiaService)
 	kunjunganHandler := handlers.NewKunjunganHandler(services.NewKunjunganService(querier), koordinatorService, guruService, sessionStore, inertiaService)
 	koordinatorAttendanceExportHandler := handlers.NewKoordinatorAttendanceExportHandler(koordinatorService)
@@ -412,6 +413,23 @@ func logDatabaseOptimizations(db *sql.DB) {
 		"wal_autocheckpoint", walAutocheckpoint,
 		"busy_timeout_ms", busyTimeout,
 	)
+}
+
+// startPengingatPertemuanLupa reminds gurus every 15 minutes about meetings
+// left berlangsung longer than services.BatasLupaDitutup.
+func startPengingatPertemuanLupa(pertemuanService *services.PertemuanService) {
+	go func() {
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+		for {
+			if n, err := pertemuanService.KirimPengingatLupaDitutup(time.Now()); err != nil {
+				slog.Error("pengingat pertemuan lupa ditutup gagal", "error", err)
+			} else if n > 0 {
+				slog.Info("pengingat pertemuan lupa ditutup terkirim", "jumlah", n)
+			}
+			<-ticker.C
+		}
+	}()
 }
 
 // startBackgroundCleanup runs periodic cleanup of expired sessions and password reset tokens
