@@ -778,3 +778,16 @@ export interface UjrohTarifGuru {
 	is_aktif: boolean;
 	tarif_khusus: number | null;
 }
+
+export interface PertemuanBelumDitutup {
+	id: number;
+	kelas_id: number;
+	kelas_nama: string;
+	guru_nama: string;
+	guru_pengganti_nama: string;
+	pertemuan_ke: number;
+	tanggal: string;
+	jam_mulai: string;
+	durasi_jam: number;
+	lupa: boolean;
+}

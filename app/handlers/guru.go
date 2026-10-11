@@ -117,8 +117,15 @@ func (h *GuruHandler) Dashboard(c *fiber.Ctx) error {
 		slog.Error("guru dashboard teaching history summary failed", "user_id", userID, "error", historyErr)
 	}
 
+	belumDitutup := []models.PertemuanBelumDitutup{}
+	if h.pertemuanService != nil {
+		if list, err := h.pertemuanService.ListBelumDitutup(guruID, time.Now()); err == nil {
+			belumDitutup = list
+		}
+	}
 	return h.inertiaService.Render(c, "guru/Dashboard", fiber.Map{
 		"user":                user,
+		"belum_ditutup":       belumDitutup,
 		"beranda":             dashboard,
 		"tilawah":             tilawah,
 		"notifications":       notifications,

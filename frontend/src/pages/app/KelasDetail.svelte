@@ -86,7 +86,7 @@
 
 	interface KelasPerubahan {
 		id: number;
-		jenis: "level_kelas" | "jadwal_kelas" | "jadwal_rutin" | "level_santri" | "koreksi_pertemuan";
+		jenis: "level_kelas" | "jadwal_kelas" | "jadwal_rutin" | "level_santri" | "koreksi_pertemuan" | "batal_pertemuan";
 		nilai_lama: string;
 		nilai_baru: string;
 		pertemuan_ke: number;
@@ -385,6 +385,7 @@
 		if (item.jenis === "jadwal_kelas") return "Ganti jadwal kelas";
 		if (item.jenis === "jadwal_rutin") return "Jadwal rutin otomatis";
 		if (item.jenis === "koreksi_pertemuan") return "Koreksi nomor pertemuan";
+		if (item.jenis === "batal_pertemuan") return "Pertemuan dibatalkan";
 		return "Santri naik level";
 	}
 

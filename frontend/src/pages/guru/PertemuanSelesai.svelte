@@ -2,6 +2,7 @@
 	import { inertia, router } from "@inertiajs/svelte";
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
+	import BatalPertemuanDialog from "@components/BatalPertemuanDialog.svelte";
 	import type { Flash, User, GuruKelas, PertemuanGuru, SantriGuru } from "@lib/types";
 	import { nomorPertemuan } from "@lib/pertemuan";
 	import { BookOpen, Clock, Calendar, CheckSquare } from "lucide-svelte";
@@ -19,9 +20,11 @@
 	}
 
 	let { user, kelas, pertemuan, santri = [], can_manage_class = true, batas_materi_terakhir = {}, success, error, flash }: Props = $props();
-	let canEdit = $derived(user?.role === "guru" || user?.role === "admin_kelas" || user?.role === "super_admin");
-	let backHref = $derived(can_manage_class ? "/app/guru/kelas/" + (kelas?.id || pertemuan.kelas_id) : "/app/guru/jadwal-pertemuan");
-	let backLabel = $derived(can_manage_class ? (kelas?.nama_kelas || "Kelas") : "Jadwal Pertemuan");
+	let isKoordinator = $derived(user?.role === "koordinator_guru");
+	let canEdit = $derived(user?.role === "guru" || user?.role === "admin_kelas" || user?.role === "super_admin" || isKoordinator);
+	let backHref = $derived(isKoordinator ? "/app/koordinator-guru/monitoring-kelas" : can_manage_class ? "/app/guru/kelas/" + (kelas?.id || pertemuan.kelas_id) : "/app/guru/jadwal-pertemuan");
+	let backLabel = $derived(isKoordinator ? "Monitoring Kelas" : can_manage_class ? (kelas?.nama_kelas || "Kelas") : "Jadwal Pertemuan");
+	let batalOpen = $state(false);
 
 	let materi = $state("");
 	let catatan = $state("");
@@ -86,11 +89,15 @@
 	}
 </script>
 
-<AppLayout {user} group="guru-kelas">
+{#if batalOpen}
+	<BatalPertemuanDialog kelasId={kelas?.id || pertemuan.kelas_id} pertemuanId={pertemuan.id} label={`${kelas?.nama_kelas || "Kelas"} · mulai ${pertemuan.tanggal} pukul ${pertemuan.jam_mulai}`} onclose={() => (batalOpen = false)} />
+{/if}
+
+<AppLayout {user} group={isKoordinator ? "koordinator-monitoring" : "guru-kelas"}>
 	<div class="pt-8 pb-10 border-b border-neutral-200/80 dark:border-white/[0.04]">
 		<div class="max-w-4xl mx-auto px-4 sm:px-6">
 			<div class="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400 mb-4">
-				<a href={can_manage_class ? "/app/guru/kelas" : "/app/guru/jadwal-pertemuan"} use:inertia class="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">{can_manage_class ? "Kelas Saya" : "Jadwal"}</a>
+				<a href={isKoordinator ? "/app/koordinator-guru" : can_manage_class ? "/app/guru/kelas" : "/app/guru/jadwal-pertemuan"} use:inertia class="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">{isKoordinator ? "Koordinator Guru" : can_manage_class ? "Kelas Saya" : "Jadwal"}</a>
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 				</svg>
@@ -100,9 +107,14 @@
 				</svg>
 				<span class="text-neutral-700 dark:text-neutral-300">Pertemuan {nomorPertemuan(pertemuan)}</span>
 			</div>
-			<h1 class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white mb-2 tracking-tight">
-				Selesai Pertemuan
-			</h1>
+			<div class="flex flex-wrap items-end justify-between gap-3">
+				<h1 class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white mb-2 tracking-tight">
+					Selesai Pertemuan
+				</h1>
+				{#if canEdit}
+					<button type="button" onclick={() => (batalOpen = true)} class="mb-2 rounded-xl border border-neutral-300 px-3.5 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800">Batalkan pertemuan</button>
+				{/if}
+			</div>
 		</div>
 	</div>
 

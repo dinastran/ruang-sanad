@@ -99,3 +99,22 @@ type KelasPerubahanResponse struct {
 	DibuatOlehNama  string `json:"dibuat_oleh_nama"`
 	CreatedAt       string `json:"created_at"`
 }
+
+// PertemuanBelumDitutup is a meeting still marked berlangsung. Lupa is true
+// once it has been running longer than the lupa-ditutup threshold.
+type PertemuanBelumDitutup struct {
+	ID                int64  `json:"id"`
+	KelasID           int64  `json:"kelas_id"`
+	KelasNama         string `json:"kelas_nama"`
+	GuruNama          string `json:"guru_nama"`
+	GuruPenggantiNama string `json:"guru_pengganti_nama"`
+	PertemuanKe       int64  `json:"pertemuan_ke"`
+	Tanggal           string `json:"tanggal"`
+	JamMulai          string `json:"jam_mulai"`
+	DurasiJam         int64  `json:"durasi_jam"`
+	Lupa              bool   `json:"lupa"`
+}
+
+type BatalkanPertemuanRequest struct {
+	Alasan string `json:"alasan"`
+}

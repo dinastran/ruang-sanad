@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -46,7 +47,8 @@ func (h *PertemuanHandler) ensureMeetingAccess(c *fiber.Ctx, kelasID, pertemuanI
 	user := sessionUser(sess)
 	userID := toInt64(sess.Get("user_id"))
 	role := requestRole(c, user)
-	privileged := role == models.RoleSuperAdmin || role == models.RoleAdminKelas
+	// Koordinator Guru may close a forgotten meeting on the guru's behalf.
+	privileged := role == models.RoleSuperAdmin || role == models.RoleAdminKelas || role == models.RoleKoordinator
 	if err := h.pertemuanService.EnsureCanAccessPertemuan(pertemuanID, kelasID, userID, privileged); err != nil {
 		return 0, err
 	}
@@ -94,12 +96,13 @@ func (h *PertemuanHandler) Mulai(c *fiber.Ctx) error {
 		pertemuan, err = h.pertemuanService.MulaiPertemuan(kelasID, userID, req)
 	}
 	if err != nil {
-		h.store.Flash(c, "error", "Gagal memulai pertemuan: "+err.Error())
 		if errors.Is(err, services.ErrPertemuanBerlangsung) {
-			if active, activeErr := h.pertemuanService.GetActivePertemuan(kelasID); activeErr == nil && active != nil {
-				return h.inertiaService.Redirect(c, "/app/guru/kelas/"+c.Params("id")+"/pertemuan/"+strconv.FormatInt(active.ID, 10)+"/selesai")
-			}
+			sess, _ := h.store.Get(c)
+			role := requestRole(c, sessionUser(sess))
+			privileged := role == models.RoleSuperAdmin || role == models.RoleAdminKelas
+			return redirectPertemuanBelumDitutup(c, h.store, h.inertiaService, h.pertemuanService, kelasID, userID, privileged, "/app/guru/kelas/"+c.Params("id")+"/pertemuan/mulai")
 		}
+		h.store.Flash(c, "error", "Gagal memulai pertemuan: "+err.Error())
 		return h.inertiaService.Back(c, "/app/guru/kelas/"+c.Params("id")+"/pertemuan/mulai")
 	}
 
@@ -178,10 +181,62 @@ func (h *PertemuanHandler) Selesai(c *fiber.Ctx) error {
 	}
 
 	h.store.Flash(c, "success", "Pertemuan selesai dan absensi tersimpan")
+	if h.isKoordinator(c) {
+		return h.inertiaService.Redirect(c, "/app/koordinator-guru/monitoring-kelas")
+	}
 	if !canManageClass {
 		return h.inertiaService.Redirect(c, "/app/guru/jadwal-pertemuan")
 	}
 	return h.inertiaService.Redirect(c, "/app/guru/kelas/"+c.Params("id"))
+}
+
+// Batal cancels a meeting that was started by mistake (still berlangsung, no
+// attendance yet).
+func (h *PertemuanHandler) Batal(c *fiber.Ctx) error {
+	kelasID, _ := strconv.ParseInt(c.Params("id"), 10, 64)
+	pertemuanID, _ := strconv.ParseInt(c.Params("pid"), 10, 64)
+	fallback := "/app/guru/jadwal-pertemuan"
+	if h.isKoordinator(c) {
+		fallback = "/app/koordinator-guru/monitoring-kelas"
+	}
+	userID, err := h.ensureMeetingAccess(c, kelasID, pertemuanID)
+	if err != nil {
+		h.store.Flash(c, "error", err.Error())
+		return h.inertiaService.Redirect(c, fallback)
+	}
+	var req models.BatalkanPertemuanRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data tidak valid")
+		return h.inertiaService.Back(c, fallback)
+	}
+	if err := h.pertemuanService.BatalkanPertemuan(pertemuanID, kelasID, userID, req.Alasan); err != nil {
+		h.store.Flash(c, "error", "Gagal membatalkan pertemuan: "+err.Error())
+		return h.inertiaService.Back(c, fallback)
+	}
+	h.store.Flash(c, "success", "Pertemuan dibatalkan. Kelas bisa memulai pertemuan baru.")
+	return h.inertiaService.Redirect(c, fallback)
+}
+
+func (h *PertemuanHandler) isKoordinator(c *fiber.Ctx) bool {
+	sess, _ := h.store.Get(c)
+	return requestRole(c, sessionUser(sess)) == models.RoleKoordinator
+}
+
+// redirectPertemuanBelumDitutup handles a start attempt blocked by an open
+// meeting: it explains which meeting blocks the class and opens its closing
+// form when the user may access it.
+func redirectPertemuanBelumDitutup(c *fiber.Ctx, store *session.Store, inertia *services.InertiaService, pertemuanService *services.PertemuanService, kelasID, userID int64, privileged bool, fallback string) error {
+	active, err := pertemuanService.GetActivePertemuan(kelasID)
+	if err != nil || active == nil {
+		store.Flash(c, "error", "Gagal memulai pertemuan: "+services.ErrPertemuanBerlangsung.Error())
+		return inertia.Back(c, fallback)
+	}
+	if pertemuanService.EnsureCanAccessPertemuan(active.ID, kelasID, userID, privileged) != nil {
+		store.Flash(c, "error", fmt.Sprintf("Kelas ini masih punya pertemuan %s pukul %s yang belum ditutup oleh guru lain. Hubungi Admin Kelas atau Koordinator Guru untuk menutupnya.", active.Tanggal, active.JamMulai))
+		return inertia.Back(c, fallback)
+	}
+	store.Flash(c, "error", fmt.Sprintf("Pertemuan %s pukul %s belum ditutup. Selesaikan dengan mengisi absensi di bawah, atau batalkan bila tidak jadi berlangsung. Setelah itu pertemuan baru bisa dimulai.", active.Tanggal, active.JamMulai))
+	return inertia.Redirect(c, fmt.Sprintf("/app/guru/kelas/%d/pertemuan/%d/selesai", kelasID, active.ID))
 }
 
 func (h *PertemuanHandler) FormSelesai(c *fiber.Ctx) error {

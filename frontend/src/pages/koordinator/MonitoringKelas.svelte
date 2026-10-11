@@ -2,6 +2,7 @@
 	import { tick } from "svelte";
 	import { inertia, router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
+	import PertemuanBelumDitutupList from "@components/PertemuanBelumDitutup.svelte";
 	import type {
 		Flash,
 		GuruRingkas,
@@ -10,6 +11,7 @@
 		MonitoringKelasFilters,
 		MonitoringKelasItem,
 		User,
+		PertemuanBelumDitutup,
 	} from "@lib/types";
 	import {
 		AlertTriangle,
@@ -64,9 +66,10 @@
 		guru?: GuruRingkas[];
 		kelas?: KelasSimple[];
 		filters?: MonitoringKelasFilters;
+		belum_ditutup?: PertemuanBelumDitutup[];
 	}
 
-	let { user, flash, error, monitoring, guru = [], kelas = [], filters }: Props = $props();
+	let { user, flash, error, monitoring, guru = [], kelas = [], filters, belum_ditutup = [] }: Props = $props();
 
 	const emptySummary = {
 		total: 0,
@@ -413,6 +416,7 @@
 		{#if error || flash?.error}
 			<div role="alert" class="rounded-xl border border-error/20 bg-error/10 p-4 text-sm font-medium text-red-700 dark:text-red-400">{error || flash?.error}</div>
 		{/if}
+		<PertemuanBelumDitutupList items={belum_ditutup} showGuru />
 
 
 		<section aria-labelledby="kpi-title">

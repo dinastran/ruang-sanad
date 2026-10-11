@@ -2,9 +2,10 @@
 	import { inertia, router } from "@inertiajs/svelte";
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
+	import PertemuanBelumDitutupList from "@components/PertemuanBelumDitutup.svelte";
 	import PenandaBadge from "@components/riayah/PenandaBadge.svelte";
 	import SapaWADialog from "@components/riayah/SapaWADialog.svelte";
-	import type { AppNotification, Flash, User, TilawahStatus, RiayahRingkasan, RiayahSantriItem, RiayahWATemplate, GuruBeranda, GuruSlotKelas, RiwayatMengajarSummary } from "@lib/types";
+	import type { AppNotification, Flash, User, TilawahStatus, RiayahRingkasan, RiayahSantriItem, RiayahWATemplate, GuruBeranda, GuruSlotKelas, RiwayatMengajarSummary, PertemuanBelumDitutup } from "@lib/types";
 	import { formatTanggal, labelPeriode } from "@lib/riayah";
 	import { CalendarClock, ClipboardCheck, HeartHandshake, FileText, CheckCircle, AlertCircle, BookMarked, BellRing, Award, Users, CalendarDays, MessageCircle, ChevronRight, Flame, History } from "lucide-svelte";
 
@@ -20,9 +21,10 @@
 		flash?: Flash;
 		success?: string;
 		error?: string;
+		belum_ditutup?: PertemuanBelumDitutup[];
 	}
 
-	let { user, beranda = null, tilawah, notifications = [], riayah = null, riayah_teratas = [], wa_templates = [], riwayat_mengajar_30 = { total_dimulai: 0, selesai: 0, belum_selesai: 0, kelas_diajar: 0 }, flash, success, error }: Props = $props();
+	let { user, beranda = null, tilawah, notifications = [], riayah = null, riayah_teratas = [], wa_templates = [], riwayat_mengajar_30 = { total_dimulai: 0, selesai: 0, belum_selesai: 0, kelas_diajar: 0 }, belum_ditutup = [], flash, success, error }: Props = $props();
 
 	// Hanya guru yang memulai/mengabsen pertemuan dari dashboard.
 	let canEdit = $derived(user?.role === "guru");
@@ -97,6 +99,7 @@
 		{#if error || flash?.error}
 			<div class="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-2xl p-4 text-sm font-medium" in:fly={{ y: 10, duration: 200 }}>{error || flash?.error}</div>
 		{/if}
+		<PertemuanBelumDitutupList items={belum_ditutup} showGuru={user?.role !== "guru"} />
 
 		<div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
 			{#snippet isiKartu(k: (typeof kartu)[number])}
