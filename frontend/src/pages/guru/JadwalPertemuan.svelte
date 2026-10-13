@@ -59,12 +59,15 @@
 	let alasan = $state("");
 
 	let availableGuru = $derived(guruList.filter((guru) => guru.is_aktif && guru.user_id && guru.id !== action?.item.guru_utama_id));
-	let attentionItems = $derived(jadwal.filter((item) => needsAttention(item)));
-	let todayItems = $derived(jadwal.filter((item) => item.tanggal === today));
-	let weekItems = $derived(jadwal.filter((item) => item.tanggal >= today && item.tanggal <= weekEnd));
+	// Kartu ringkasan dan daftar memakai filter kelas yang sama, supaya angka
+	// "Perlu tindakan" tidak menunjuk agenda kelas lain yang tidak tampil.
+	let byClass = $derived(kelasFilter ? jadwal.filter((item) => item.kelas_id === kelasFilter) : jadwal);
+	let attentionItems = $derived(byClass.filter((item) => needsAttention(item)));
+	let todayItems = $derived(byClass.filter((item) => item.tanggal === today));
+	let weekItems = $derived(byClass.filter((item) => item.tanggal >= today && item.tanggal <= weekEnd));
+	let attentionLainKelas = $derived(kelasFilter ? jadwal.filter((item) => item.kelas_id !== kelasFilter && needsAttention(item)).length : 0);
 
 	let visibleItems = $derived.by(() => {
-		const byClass = kelasFilter ? jadwal.filter((item) => item.kelas_id === kelasFilter) : jadwal;
 		switch (agendaFilter) {
 			case "attention":
 				return byClass.filter((item) => needsAttention(item));
@@ -255,7 +258,7 @@
 			<button onclick={() => (agendaFilter = "all")} class="min-h-[102px] rounded-2xl border p-3 text-left transition-all sm:min-h-0 sm:p-4 {agendaFilter === 'all' ? 'border-neutral-500/35 bg-neutral-500/5 ring-1 ring-neutral-500/10' : 'border-neutral-200/80 bg-white hover:border-neutral-400/40 dark:border-white/[0.06] dark:bg-neutral-925/50'}">
 				<div class="flex items-center justify-between gap-2">
 					<span class="flex h-8 w-8 items-center justify-center rounded-xl sm:h-9 sm:w-9 bg-neutral-500/10 text-neutral-600 dark:text-neutral-400"><BookOpen class="h-4 w-4" /></span>
-					<span class="font-mono text-xl font-bold text-neutral-900 sm:text-2xl dark:text-white">{jadwal.length}</span>
+					<span class="font-mono text-xl font-bold text-neutral-900 sm:text-2xl dark:text-white">{byClass.length}</span>
 				</div>
 				<p class="mt-2 text-[11px] font-semibold leading-tight text-neutral-700 sm:text-xs dark:text-neutral-300">Semua agenda</p>
 			</button>
@@ -274,6 +277,12 @@
 				</select>
 			</label>
 		</div>
+		{#if attentionLainKelas > 0}
+			<div class="flex flex-col gap-2 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between dark:text-amber-300">
+				<span>{attentionLainKelas} agenda perlu tindakan ada di kelas lain.</span>
+				<button type="button" onclick={() => { kelasFilter = 0; agendaFilter = "attention"; }} class="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1.5 text-sm font-semibold hover:bg-amber-500/10">Tampilkan semua kelas</button>
+			</div>
+		{/if}
 
 		{#if showCreate}
 			<section class="rounded-2xl border border-neutral-300 bg-neutral-50/70 p-4 sm:p-6 dark:border-neutral-700 dark:bg-neutral-900/40">
