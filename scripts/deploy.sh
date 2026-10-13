@@ -3,6 +3,15 @@
 # Laju Go - One-Click Deploy Script
 # Builds locally, uploads only required artifacts, deploys to server.
 # No build tools needed on the server — no Go, no Node, no npm.
+#
+# Uploads use rsync, so only new/changed files are sent. The binary is uploaded
+# under a temporary name while the old one keeps serving, then swapped in right
+# before the restart (downtime is just the restart). If the new binary fails to
+# start, the previous one is restored automatically.
+#
+# Usage:
+#   ./scripts/deploy.sh            # deploy
+#   ./scripts/deploy.sh --dry-run  # build + show what would change, touch nothing on the server
 
 set -e
 
@@ -17,6 +26,14 @@ NC='\033[0m' # No Color
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+DRY_RUN=0
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run|-n) DRY_RUN=1 ;;
+        *) echo -e "${RED}Unknown option: $arg${NC}"; exit 1 ;;
+    esac
+done
 
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║     Laju Go - One-Click Deploy        ║${NC}"
@@ -38,6 +55,9 @@ source "$PROJECT_ROOT/.deploy"
 # Set defaults
 APP_NAME=${APP_NAME:-laju-go}
 SERVICE_NAME=${SERVICE_NAME:-$APP_NAME}
+# Old hashed Vite chunks are kept this many days so open tabs can still navigate
+# after a deploy. Chunks referenced by the current manifest are never removed.
+ASSET_RETENTION_DAYS=${ASSET_RETENTION_DAYS:-7}
 
 # Validate required variables
 if [ -z "$SERVER_USER" ] || [ -z "$SERVER_HOST" ] || [ -z "$SERVER_PATH" ]; then
@@ -46,16 +66,62 @@ if [ -z "$SERVER_USER" ] || [ -z "$SERVER_HOST" ] || [ -z "$SERVER_PATH" ]; then
     exit 1
 fi
 
+REMOTE="$SERVER_USER@$SERVER_HOST"
+
 echo -e "${GREEN}App:      ${YELLOW}$APP_NAME${NC}"
-echo -e "${GREEN}Server:   ${YELLOW}$SERVER_USER@$SERVER_HOST${NC}"
+echo -e "${GREEN}Server:   ${YELLOW}$REMOTE${NC}"
 echo -e "${GREEN}Path:     ${YELLOW}$SERVER_PATH${NC}"
+if [ "$DRY_RUN" = 1 ]; then
+    echo -e "${GREEN}Mode:     ${YELLOW}DRY RUN (server tidak diubah)${NC}"
+fi
 echo ""
+
+# rsync without owner/group so files stay owned by the remote user (like scp did).
+RSYNC_OPTS=(-rlptz --partial)
+if [ "$DRY_RUN" = 1 ]; then
+    RSYNC_OPTS+=(--dry-run --itemize-changes)
+fi
+
+# Removes files in <dist>/assets older than N days that no manifest references.
+# Args: <dist dir> <days> <dry-run 0|1> <manifest>...
+# Shared by the local and remote cleanup (remote runs it via `bash -s`).
+PRUNE_SCRIPT='
+dir="$1"; days="$2"; dry="$3"; shift 3
+[ -d "$dir/assets" ] || exit 0
+keep=$(mktemp)
+for m in "$@"; do
+    [ -f "$m" ] && grep -oE "\"assets/[^\"]+\"" "$m" | tr -d "\"" >> "$keep"
+done
+if [ ! -s "$keep" ]; then
+    echo "  ! manifest tidak ditemukan, cleanup dilewati"
+    rm -f "$keep"
+    exit 0
+fi
+count=0
+while IFS= read -r f; do
+    rel="${f#"$dir"/}"
+    grep -qxF "$rel" "$keep" && continue
+    [ "$dry" = 1 ] || rm -f "$f"
+    count=$((count + 1))
+done < <(find "$dir/assets" -type f -mtime +"$days")
+rm -f "$keep"
+if [ "$dry" = 1 ]; then
+    echo "  $count chunk lama (> $days hari) akan dihapus"
+else
+    echo "  $count chunk lama (> $days hari) dihapus"
+fi
+'
 
 # Test SSH connection
 echo -e "${BLUE}Testing SSH connection...${NC}"
-if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$SERVER_USER@$SERVER_HOST" "echo OK" > /dev/null 2>&1; then
+if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$REMOTE" "echo OK" > /dev/null 2>&1; then
     echo -e "${RED}Error: Cannot connect to server via SSH${NC}"
     echo "Please check your SSH credentials and server accessibility."
+    exit 1
+fi
+if ! ssh "$REMOTE" "command -v rsync" > /dev/null 2>&1; then
+    echo -e "${RED}Error: rsync is not installed on the server${NC}"
+    echo "Install it first:  ssh $REMOTE 'sudo apt-get install -y rsync'"
     exit 1
 fi
 echo -e "${GREEN}✓ SSH connection successful${NC}"
@@ -79,7 +145,7 @@ echo ""
 # Detect first vs update deploy by checking if service exists
 echo -e "${BLUE}Checking deployment status...${NC}"
 IS_FIRST=false
-if ssh "$SERVER_USER@$SERVER_HOST" "systemctl is-active $SERVICE_NAME" > /dev/null 2>&1; then
+if ssh "$REMOTE" "systemctl is-active $SERVICE_NAME" > /dev/null 2>&1; then
     echo -e "${GREEN}→ Existing deployment detected${NC}"
 else
     echo -e "${YELLOW}→ No existing deployment found${NC}"
@@ -87,28 +153,58 @@ else
 fi
 echo ""
 
-# Upload artifacts — only what's needed at runtime
-echo -e "${BLUE}Uploading artifacts...${NC}"
+# Clean up old local chunks so dist/ doesn't grow forever
+echo -e "${BLUE}Cleaning old local chunks...${NC}"
+bash -c "$PRUNE_SCRIPT" _ "$PROJECT_ROOT/dist" "$ASSET_RETENTION_DAYS" "$DRY_RUN" \
+    "$PROJECT_ROOT/dist/.vite/manifest.json"
+echo ""
 
-# On updates, stop the running service first — otherwise scp can't overwrite the
-# in-use binary ("Text file busy" / dest open Failure).
-if [ "$IS_FIRST" = false ]; then
-    ssh "$SERVER_USER@$SERVER_HOST" "sudo systemctl stop $SERVICE_NAME" || true
+# Upload artifacts — only what changed. The service keeps running meanwhile.
+echo -e "${BLUE}Uploading artifacts (only changed files)...${NC}"
+
+if [ "$DRY_RUN" = 0 ]; then
+    # Create remote directory if needed (uses sudo because /opt is root-owned, then
+    # hands ownership to the deploy user so uploads work without sudo).
+    ssh "$REMOTE" "sudo mkdir -p $SERVER_PATH && sudo chown $SERVER_USER:$SERVER_USER $SERVER_PATH"
+    # Remember the manifest the running binary uses, so its chunks survive cleanup.
+    ssh "$REMOTE" "[ -f $SERVER_PATH/dist/.vite/manifest.json ] && cp $SERVER_PATH/dist/.vite/manifest.json $SERVER_PATH/dist/.vite/manifest.prev.json || true"
 fi
 
-# Create remote directory if needed (uses sudo because /opt is root-owned, then
-# hands ownership to the deploy user so scp uploads work without sudo).
-ssh "$SERVER_USER@$SERVER_HOST" "sudo mkdir -p $SERVER_PATH && sudo chown $SERVER_USER:$SERVER_USER $SERVER_PATH"
+# Binary goes to a temporary name; it is swapped in just before the restart.
+echo -e "${YELLOW}Binary...${NC}"
+rsync "${RSYNC_OPTS[@]}" --stats "$APP_NAME" "$REMOTE:$SERVER_PATH/$APP_NAME.new" | grep -E '^(Total transferred file size|Total bytes sent)' || true
 
-# Upload binary, frontend assets, and migrations.
-# Keep old hashed Vite chunks so clients running a previously loaded entry bundle
-# can finish navigation after a deploy. The new manifest is copied with the build.
-scp "$APP_NAME" "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/"
-ssh "$SERVER_USER@$SERVER_HOST" "mkdir -p $SERVER_PATH/dist && rm -rf $SERVER_PATH/migrations $SERVER_PATH/public"
-scp -r dist/. "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/dist/"
-scp -r migrations "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/migrations"
-scp -r public "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/public"
-ssh "$SERVER_USER@$SERVER_HOST" "chmod +x $SERVER_PATH/$APP_NAME"
+# dist/: no --delete, old hashed chunks are kept (cleaned up below by age).
+echo -e "${YELLOW}dist/...${NC}"
+DIST_ITEMS=$(rsync "${RSYNC_OPTS[@]}" --itemize-changes "$PROJECT_ROOT/dist/" "$REMOTE:$SERVER_PATH/dist/")
+# "<f+++" = new file, "<f.s" = size changed; "<f..t" = same content, only the timestamp is synced.
+DIST_SENT=$(grep -cE '^[<>]f(\+|.s)' <<< "$DIST_ITEMS" || true)
+echo "  $DIST_SENT file dikirim (baru/berubah)"
+
+# public/ and migrations/ are mirrored exactly (previously rm -rf + scp).
+echo -e "${YELLOW}public/ + migrations/...${NC}"
+for d in public migrations; do
+    rsync "${RSYNC_OPTS[@]}" --delete --itemize-changes "$PROJECT_ROOT/$d/" "$REMOTE:$SERVER_PATH/$d/" \
+        | grep -E '^([<>]f(\+|.s)|\*deleting)' | sed "s|^|  $d: |" || true
+done
+
+echo -e "${YELLOW}Cleaning old server chunks...${NC}"
+ssh "$REMOTE" "bash -s -- '$SERVER_PATH/dist' '$ASSET_RETENTION_DAYS' '$DRY_RUN' '$SERVER_PATH/dist/.vite/manifest.json' '$SERVER_PATH/dist/.vite/manifest.prev.json'" <<< "$PRUNE_SCRIPT"
+
+if [ "$DRY_RUN" = 1 ]; then
+    echo ""
+    echo -e "${GREEN}Dry run selesai — tidak ada yang diubah di server.${NC}"
+    exit 0
+fi
+
+# Swap binaries. Renaming over a running executable is safe on Linux: the running
+# process keeps the old inode until it is restarted.
+ssh "$REMOTE" "
+    cd $SERVER_PATH
+    chmod +x $APP_NAME.new
+    [ -f $APP_NAME ] && mv -f $APP_NAME $APP_NAME.prev
+    mv -f $APP_NAME.new $APP_NAME
+"
 echo -e "${GREEN}✓ Binary + assets uploaded${NC}"
 
 echo ""
@@ -117,7 +213,22 @@ echo ""
 if [ "$IS_FIRST" = true ]; then
     "$SCRIPT_DIR/first-deploy.sh"
 else
-    "$SCRIPT_DIR/update-deploy.sh"
+    if ! "$SCRIPT_DIR/update-deploy.sh"; then
+        echo ""
+        echo -e "${RED}New version failed to start — rolling back to the previous binary...${NC}"
+        ssh "$REMOTE" "
+            cd $SERVER_PATH
+            [ -f $APP_NAME.prev ] && mv -f $APP_NAME.prev $APP_NAME
+            sudo systemctl restart $SERVICE_NAME
+        "
+        sleep 2
+        if ssh "$REMOTE" "systemctl is-active $SERVICE_NAME" > /dev/null 2>&1; then
+            echo -e "${YELLOW}✓ Rolled back — previous version is running again${NC}"
+        else
+            echo -e "${RED}✗ Rollback failed — check: ssh $REMOTE 'sudo journalctl -u $SERVICE_NAME -n 50'${NC}"
+        fi
+        exit 1
+    fi
 fi
 
 # Final status
@@ -127,12 +238,12 @@ echo -e "${BLUE}║        Deployment Status             ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
 echo ""
 
-if ssh "$SERVER_USER@$SERVER_HOST" "systemctl is-active $SERVICE_NAME" &>/dev/null; then
+if ssh "$REMOTE" "systemctl is-active $SERVICE_NAME" &>/dev/null; then
     echo -e "${GREEN}✓ Service $SERVICE_NAME is running${NC}"
 else
     echo -e "${RED}✗ Service $SERVICE_NAME is not running${NC}"
 fi
-if ssh "$SERVER_USER@$SERVER_HOST" "systemctl is-enabled $SERVICE_NAME" &>/dev/null; then
+if ssh "$REMOTE" "systemctl is-enabled $SERVICE_NAME" &>/dev/null; then
     echo -e "${GREEN}✓ Service enabled (auto-start on boot)${NC}"
 else
     echo -e "${YELLOW}! Service not enabled${NC}"
@@ -140,8 +251,8 @@ fi
 
 echo ""
 echo -e "${CYAN}Useful commands:${NC}"
-echo "  View logs:     ssh $SERVER_USER@$SERVER_HOST 'sudo journalctl -u $SERVICE_NAME -f'"
-echo "  Check status:  ssh $SERVER_USER@$SERVER_HOST 'systemctl status $SERVICE_NAME'"
-echo "  Restart:       ssh $SERVER_USER@$SERVER_HOST 'sudo systemctl restart $SERVICE_NAME'"
+echo "  View logs:     ssh $REMOTE 'sudo journalctl -u $SERVICE_NAME -f'"
+echo "  Check status:  ssh $REMOTE 'systemctl status $SERVICE_NAME'"
+echo "  Restart:       ssh $REMOTE 'sudo systemctl restart $SERVICE_NAME'"
 echo ""
 echo -e "${GREEN}Deployment complete!${NC}"
