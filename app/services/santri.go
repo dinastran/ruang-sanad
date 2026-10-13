@@ -392,11 +392,42 @@ func (s *SantriService) List(params models.SantriListParams) (*models.SantriList
 	for i := range list {
 		santriList[i] = s.santriResponse(list[i], duplicates)
 	}
+	if err := fillKelasNama(ctx, s.querier, santriList); err != nil {
+		return nil, err
+	}
 
 	return &models.SantriListResponse{
 		Data:  santriList,
 		Total: total,
 	}, nil
+}
+
+// fillKelasNama sets KelasNama for santri placed in a class.
+func fillKelasNama(ctx context.Context, q *queries.Querier, list []models.SantriResponse) error {
+	adaKelas := false
+	for _, santri := range list {
+		if santri.KelasID != nil {
+			adaKelas = true
+			break
+		}
+	}
+	if !adaKelas {
+		return nil
+	}
+	kelasList, err := q.ListKelasAll(ctx)
+	if err != nil {
+		return err
+	}
+	nama := make(map[int64]string, len(kelasList))
+	for _, k := range kelasList {
+		nama[k.ID] = k.NamaKelas
+	}
+	for i := range list {
+		if list[i].KelasID != nil {
+			list[i].KelasNama = nama[*list[i].KelasID]
+		}
+	}
+	return nil
 }
 
 func (s *SantriService) UpdateByCS(id int64, req models.UpdateSantriCSRequest) error {

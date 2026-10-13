@@ -186,6 +186,7 @@ func main() {
 		App:                         handlers.NewAppHandler(userService, sessionStore, inertiaService),
 		Upload:                      uploadHandler,
 		Santri:                      santriHandler,
+		SantriStatus:                handlers.NewSantriStatusHandler(santriStatusService, sessionStore, inertiaService),
 		SantriAnalytics:             santriAnalyticsHandler,
 		Kelas:                       kelasHandler,
 		Master:                      masterHandler,

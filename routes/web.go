@@ -19,6 +19,7 @@ type Handlers struct {
 	Upload                      *handlers.UploadHandler
 	PasswordReset               *handlers.PasswordResetHandler
 	Santri                      *handlers.SantriHandler
+	SantriStatus                *handlers.SantriStatusHandler
 	SantriAnalytics             *handlers.SantriAnalyticsHandler
 	Kelas                       *handlers.KelasHandler
 	Master                      *handlers.MasterHandler
@@ -154,6 +155,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Post("/santri/:id/voice-note", akRole, middlewares.UploadRateLimit.Limit(), h.Santri.UploadVoiceNote)
 	protected.Get("/santri/:id/voice-note/audio", akRole, h.Santri.ServeVoiceNote)
 	protected.Post("/santri/:id/pindah", akRole, h.Santri.PindahKelas)
+	protected.Put("/santri/:id/status", akRole, h.SantriStatus.Update)
 	protected.Get("/kelas", akRole, h.Kelas.Index)
 	protected.Get("/kelas/:id", akRole, h.Kelas.Show)
 	protected.Put("/kelas/:id/guru", akRole, h.Kelas.AssignGuru)

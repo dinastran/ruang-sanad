@@ -23,9 +23,10 @@ const (
 )
 
 var (
-	ErrStatusSantriTidakValid   = errors.New("status harus aktif, cuti, atau nonaktif")
-	ErrStatusSantriTerkunci     = errors.New("santri berstatus Tidak Lanjut diatur oleh Keuangan")
-	ErrStatusSantriBukanDiKelas = errors.New("santri tidak terdaftar di kelas ini")
+	ErrStatusSantriTidakValid     = errors.New("status harus aktif, cuti, atau nonaktif")
+	ErrStatusSantriTerkunci       = errors.New("santri berstatus Tidak Lanjut diatur oleh Keuangan")
+	ErrStatusSantriBukanDiKelas   = errors.New("santri tidak terdaftar di kelas ini")
+	ErrStatusSantriTidakDitemukan = errors.New("santri tidak ditemukan")
 	// SelesaiPertemuan requires attendance for exactly the aktif santri, so the
 	// roster must not change while a meeting is in progress.
 	ErrRosterPertemuanBerlangsung = errors.New("kelas sedang ada pertemuan berlangsung; coba lagi setelah guru menyelesaikan pertemuan")
@@ -116,6 +117,19 @@ func (s *SantriStatusService) validasi(req models.UpdateSantriStatusRequest) (st
 // UbahStatus changes a santri's status from the class detail page. Only
 // aktif/cuti/nonaktif are allowed; tidak_lanjut stays under Keuangan's control.
 func (s *SantriStatusService) UbahStatus(kelasID, santriID, actorID int64, req models.UpdateSantriStatusRequest) error {
+	return s.ubahStatus(santriID, &kelasID, actorID, req)
+}
+
+// UbahStatusSantri changes a santri's status from the Data Santri list, where
+// the santri may belong to any class or none. Class rules (meeting in
+// progress, capacity) apply only when the santri has a class.
+func (s *SantriStatusService) UbahStatusSantri(santriID, actorID int64, req models.UpdateSantriStatusRequest) error {
+	return s.ubahStatus(santriID, nil, actorID, req)
+}
+
+// ubahStatus applies a status change. When kelasID is non-nil the santri must
+// currently belong to that class.
+func (s *SantriStatusService) ubahStatus(santriID int64, kelasID *int64, actorID int64, req models.UpdateSantriStatusRequest) error {
 	baru, err := s.validasi(req)
 	if err != nil {
 		return err
@@ -132,11 +146,14 @@ func (s *SantriStatusService) UbahStatus(kelasID, santriID, actorID int64, req m
 	santri, err := q.GetSantriByID(ctx, santriID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			if kelasID == nil {
+				return ErrStatusSantriTidakDitemukan
+			}
 			return ErrStatusSantriBukanDiKelas
 		}
 		return err
 	}
-	if !santri.KelasID.Valid || santri.KelasID.Int64 != kelasID {
+	if kelasID != nil && (!santri.KelasID.Valid || santri.KelasID.Int64 != *kelasID) {
 		return ErrStatusSantriBukanDiKelas
 	}
 	if santri.Status == StatusSantriTidakLanjut {
@@ -160,8 +177,8 @@ func (s *SantriStatusService) UbahStatus(kelasID, santriID, actorID int64, req m
 	}
 
 	// Nonaktif released the seat; taking it back needs room in the class.
-	if santri.Status == StatusSantriNonaktif && baru.status != StatusSantriNonaktif {
-		kelas, err := q.GetKelasByID(ctx, kelasID)
+	if santri.Status == StatusSantriNonaktif && baru.status != StatusSantriNonaktif && santri.KelasID.Valid {
+		kelas, err := q.GetKelasByID(ctx, santri.KelasID.Int64)
 		if err != nil {
 			return err
 		}
