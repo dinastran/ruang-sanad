@@ -101,6 +101,7 @@ type SantriResponse struct {
 	Frekuensi              string  `json:"frekuensi"`
 	IsLengkap              bool    `json:"is_lengkap"`
 	KelasID                *int64  `json:"kelas_id"`
+	KelasNama              string  `json:"kelas_nama,omitempty"`
 	Status                 string  `json:"status"`
 	StatusAlasan           string  `json:"status_alasan"`
 	CutiMulai              string  `json:"cuti_mulai"`

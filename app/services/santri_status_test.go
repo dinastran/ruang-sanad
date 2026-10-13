@@ -285,3 +285,47 @@ func TestPindahkanKelasDitolakSaatPertemuanBerlangsung(t *testing.T) {
 	require.ErrorIs(t, err, ErrRosterPertemuanBerlangsung)
 	require.Equal(t, f.kelasID, f.santriRow(t).KelasID.Int64)
 }
+
+func TestUbahStatusSantriDariDataSantriMengikutiAturanKelas(t *testing.T) {
+	f := setupSantriStatus(t, 2)
+	_, err := f.db.Exec(`INSERT INTO pertemuan (kelas_id, pertemuan_ke, tanggal, status) VALUES (?, 1, '2026-09-22', 'berlangsung')`, f.kelasID)
+	require.NoError(t, err)
+	require.ErrorIs(t, f.service.UbahStatusSantri(f.santriID, f.adminID, models.UpdateSantriStatusRequest{Status: "nonaktif", Alasan: "x"}), ErrRosterPertemuanBerlangsung)
+	_, err = f.db.Exec(`UPDATE pertemuan SET status = 'selesai'`)
+	require.NoError(t, err)
+
+	require.NoError(t, f.service.UbahStatusSantri(f.santriID, f.adminID, models.UpdateSantriStatusRequest{Status: "nonaktif", Alasan: "Mengundurkan diri"}))
+	require.Equal(t, "nonaktif", f.santriRow(t).Status)
+
+	f.insertSantri(t, "Budi", "aktif")
+	f.insertSantri(t, "Umar", "aktif")
+	require.ErrorContains(t, f.service.UbahStatusSantri(f.santriID, f.adminID, models.UpdateSantriStatusRequest{Status: "aktif"}), "penuh")
+
+	var kelasLog sql.NullInt64
+	require.NoError(t, f.db.QueryRow(`SELECT kelas_id FROM santri_status_log WHERE santri_id = ? ORDER BY id DESC LIMIT 1`, f.santriID).Scan(&kelasLog))
+	require.Equal(t, f.kelasID, kelasLog.Int64)
+}
+
+func TestUbahStatusSantriTanpaKelas(t *testing.T) {
+	f := setupSantriStatus(t, 20)
+	_, err := f.db.Exec(`UPDATE santri SET kelas_id = NULL WHERE id = ?`, f.santriID)
+	require.NoError(t, err)
+
+	require.NoError(t, f.service.UbahStatusSantri(f.santriID, f.adminID, models.UpdateSantriStatusRequest{Status: "nonaktif", Alasan: "Belum siap"}))
+	require.NoError(t, f.service.UbahStatusSantri(f.santriID, f.adminID, cutiReq("2026-09-22", "2026-09-30")))
+	s := f.santriRow(t)
+	require.Equal(t, "cuti", s.Status)
+	require.Equal(t, "2026-09-30", s.CutiSelesai)
+
+	var total int
+	var kelasLog sql.NullInt64
+	require.NoError(t, f.db.QueryRow(`SELECT COUNT(*), MAX(kelas_id) FROM santri_status_log WHERE santri_id = ?`, f.santriID).Scan(&total, &kelasLog))
+	require.Equal(t, 2, total)
+	require.False(t, kelasLog.Valid)
+
+	require.ErrorIs(t, f.service.UbahStatusSantri(f.santriID+99, f.adminID, models.UpdateSantriStatusRequest{Status: "aktif"}), ErrStatusSantriTidakDitemukan)
+
+	_, err = f.db.Exec(`UPDATE santri SET status = 'tidak_lanjut' WHERE id = ?`, f.santriID)
+	require.NoError(t, err)
+	require.ErrorIs(t, f.service.UbahStatusSantri(f.santriID, f.adminID, models.UpdateSantriStatusRequest{Status: "aktif"}), ErrStatusSantriTerkunci)
+}

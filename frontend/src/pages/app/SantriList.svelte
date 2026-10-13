@@ -6,8 +6,9 @@
 	import GenderBadge from "@components/GenderBadge.svelte";
 	import DataTable from "@components/DataTable.svelte";
 	import FilterPanel from "@components/FilterPanel.svelte";
+	import SantriStatusModal from "@components/SantriStatusModal.svelte";
 	import type { Flash, User } from "@lib/types";
-	import { Search, Plus, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-svelte";
+	import { Search, Plus, ChevronLeft, ChevronRight, AlertTriangle, UserCog } from "lucide-svelte";
 
 	interface MasterItem {
 		id: number;
@@ -34,7 +35,12 @@
 		tipe: string;
 		frekuensi: string;
 		is_lengkap: boolean;
+		kelas_id: number | null;
+		kelas_nama?: string;
 		status: string;
+		status_alasan: string;
+		cuti_mulai: string;
+		cuti_selesai: string;
 	}
 
 	interface Props {
@@ -69,6 +75,20 @@
 
 	// admin_kelas can view Data Santri but not create/edit — only cs & super_admin can.
 	let canEdit = $derived(user?.role === "cs" || user?.role === "super_admin");
+	// Status santri (aktif/cuti/nonaktif) is managed by Admin Kelas.
+	let canUbahStatus = $derived(user?.role === "admin_kelas" || user?.role === "super_admin");
+	let statusSantri = $state<SantriItem | null>(null);
+
+	function statusAction(s: SantriItem): string {
+		const returnTo = window.location.pathname + window.location.search;
+		return `/app/santri/${s.id}/status?return_to=${encodeURIComponent(returnTo)}`;
+	}
+
+	function formatTanggal(iso: string): string {
+		if (!iso) return "";
+		const [y, m, d] = iso.split("-").map(Number);
+		return new Date(y, m - 1, d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+	}
 
 	let searchQuery = $state("");
 	let totalPages = $derived(Math.max(1, Math.ceil(total / limit)));
@@ -256,13 +276,17 @@
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Angkatan Kelas</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Level</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Tipe</th>
+						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Kelas</th>
 						<th class="px-4 py-3 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Status</th>
+						{#if canUbahStatus}
+							<th class="px-4 py-3 text-right text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Aksi</th>
+						{/if}
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-neutral-200/80 dark:divide-white/[0.04]">
 					{#if santri.length === 0}
 						<tr>
-							<td colspan="10" class="px-4 py-12 text-center text-neutral-500 dark:text-neutral-400">
+							<td colspan={canUbahStatus ? 12 : 11} class="px-4 py-12 text-center text-neutral-500 dark:text-neutral-400">
 								Tidak ada data santri
 							</td>
 						</tr>
@@ -289,7 +313,39 @@
 								<td class="px-4 py-3 text-neutral-700 dark:text-neutral-300">{s.angkatan_kelas || '-'}</td>
 								<td class="px-4 py-3 text-neutral-700 dark:text-neutral-300">{s.level || '-'}</td>
 								<td class="px-4 py-3 text-neutral-700 dark:text-neutral-300">{s.tipe || '-'}</td>
-								<td class="px-4 py-3"><StatusBadge status={s.status} /></td>
+								<td class="px-4 py-3 text-neutral-700 dark:text-neutral-300 whitespace-nowrap">
+									{#if s.kelas_id}
+										{s.kelas_nama || "-"}
+									{:else}
+										<span class="text-neutral-400 dark:text-neutral-500">Belum ada kelas</span>
+									{/if}
+								</td>
+								<td class="px-4 py-3">
+									<StatusBadge status={s.status} />
+									{#if s.status === "cuti" && s.cuti_selesai}
+										<p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400 whitespace-nowrap" title={s.status_alasan}>s.d. {formatTanggal(s.cuti_selesai)}</p>
+									{:else if s.status === "aktif" && s.cuti_mulai}
+										<p class="mt-1 text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap" title={s.status_alasan}>Cuti mulai {formatTanggal(s.cuti_mulai)}</p>
+									{/if}
+								</td>
+								{#if canUbahStatus}
+									<td class="px-4 py-3 text-right">
+										{#if s.status === "tidak_lanjut"}
+											<span class="text-xs text-neutral-400 dark:text-neutral-500 whitespace-nowrap" title="Status Tidak Lanjut diatur oleh Keuangan">Diatur Keuangan</span>
+										{:else}
+											<button
+												type="button"
+												onclick={(e) => { e.stopPropagation(); statusSantri = s; }}
+												onkeydown={(e) => e.stopPropagation()}
+												class="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700/80 px-2.5 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors whitespace-nowrap"
+												aria-label="Ubah status {s.nama}"
+											>
+												<UserCog class="h-3.5 w-3.5" />
+												Ubah Status
+											</button>
+										{/if}
+									</td>
+								{/if}
 							</tr>
 						{/each}
 					{/if}
@@ -332,3 +388,7 @@
 		{/if}
 	</div>
 </AppLayout>
+
+{#if statusSantri}
+	<SantriStatusModal santri={statusSantri} action={statusAction(statusSantri)} onclose={() => (statusSantri = null)} />
+{/if}
