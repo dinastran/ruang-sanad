@@ -385,12 +385,16 @@ export interface MonitoringKelasSummary {
 	dibatalkan: number;
 	perlu_tindakan: number;
 	total_jadwal: number;
-	jatuh_tempo: number;
+	dinilai: number;
+	terlaksana: number;
 	terlaksana_sesuai_jadwal: number;
 	reschedule: number;
 	badal: number;
 	tidak_terlaksana: number;
-	kepatuhan_jadwal: number;
+	belum_final: number;
+	jadwal_dibatalkan: number;
+	keterlaksanaan_jadwal: number;
+	ketepatan_jadwal: number;
 }
 
 export interface MonitoringKelasAttendance {
@@ -434,6 +438,7 @@ export interface MonitoringKelasItem {
 	status: "belum_mulai" | "berlangsung" | "selesai" | "dibatalkan" | "terlambat" | "tidak_terlaksana";
 	schedule_status: string;
 	jatuh_tempo: boolean;
+	kpi_status: "terlaksana" | "tidak_terlaksana" | "belum_final" | "dibatalkan" | "akan_datang" | "di_luar_kpi";
 	is_reschedule: boolean;
 	jadwal_semula: string;
 	alasan_reschedule: string;
@@ -462,6 +467,24 @@ export interface MonitoringKelasItem {
 export interface MonitoringKelasData {
 	summary: MonitoringKelasSummary;
 	items: MonitoringKelasItem[];
+	dipindah: MonitoringKelasDipindah[];
+}
+
+export interface MonitoringKelasDipindah {
+	schedule_id: number;
+	kelas_id: number;
+	nama_kelas: string;
+	jadwal_semula: string;
+	tanggal_semula: string;
+	jam_semula: string;
+	tanggal_baru: string;
+	jam_baru: string;
+	alasan_reschedule: string;
+	schedule_status: string;
+	guru_utama_id?: number;
+	guru_utama_nama: string;
+	guru_pengganti_id?: number;
+	guru_pengganti_nama: string;
 }
 
 export interface MonitoringKelasFilters {

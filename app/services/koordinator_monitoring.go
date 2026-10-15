@@ -53,10 +53,13 @@ func (s *KoordinatorMonitoringService) List(filter models.ClassMonitoringFilter)
 	for _, row := range rows {
 		item := mapClassMonitoringItem(row, now)
 		item.IsTambahan = extraScheduleIDs[item.ScheduleID]
+		item.KpiStatus = monitoringKpiStatus(item)
 		items = append(items, item)
 	}
 	for _, row := range unscheduled {
-		items = append(items, mapUnscheduledMonitoringItem(row))
+		item := mapUnscheduledMonitoringItem(row)
+		item.KpiStatus = monitoringKpiStatus(item)
+		items = append(items, item)
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Tanggal != items[j].Tanggal {
@@ -68,13 +71,22 @@ func (s *KoordinatorMonitoringService) List(filter models.ClassMonitoringFilter)
 		return items[i].NamaKelas < items[j].NamaKelas
 	})
 
-	response := &models.ClassMonitoringResponse{Items: make([]models.ClassMonitoringItem, 0, len(items))}
+	response := &models.ClassMonitoringResponse{
+		Items:    make([]models.ClassMonitoringItem, 0, len(items)),
+		Dipindah: []models.ClassMonitoringMoved{},
+	}
 	for _, item := range items {
 		if filter.GuruID > 0 && !monitoringMatchesGuru(item, filter.GuruID) {
 			continue
 		}
 		if filter.KelasID > 0 && item.KelasID != filter.KelasID {
 			continue
+		}
+		// KPI dihitung sebelum filter status agar memfilter status tidak
+		// mengubah nilai. Dengan filter guru, KPI hanya untuk kelas yang
+		// guru tersebut PIC-nya (badal dinilai pada guru PIC kelas).
+		if filter.GuruID == 0 || (item.GuruUtamaID != nil && *item.GuruUtamaID == filter.GuruID) {
+			updateMonitoringKpi(&response.Summary, item)
 		}
 		if filter.Status != "" && item.Status != filter.Status {
 			continue
@@ -85,8 +97,30 @@ func (s *KoordinatorMonitoringService) List(filter models.ClassMonitoringFilter)
 		response.Items = append(response.Items, item)
 		updateMonitoringSummary(&response.Summary, item)
 	}
-	if response.Summary.JatuhTempo > 0 {
-		response.Summary.KepatuhanJadwal = float64(response.Summary.TerlaksanaSesuaiJadwal) / float64(response.Summary.JatuhTempo) * 100
+	// Penanda "Dipindah" bersifat informasi; disembunyikan saat memfilter status.
+	if filter.Status == "" {
+		moved, err := s.querier.ListMovedMonitoringSchedules(context.Background(), queries.ListMovedMonitoringSchedulesParams{
+			StartDate: start,
+			EndDate:   end,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range moved {
+			item := mapMovedMonitoringItem(row)
+			if filter.KelasID > 0 && item.KelasID != filter.KelasID {
+				continue
+			}
+			if filter.GuruID > 0 && !movedMatchesGuru(item, filter.GuruID) {
+				continue
+			}
+			response.Dipindah = append(response.Dipindah, item)
+		}
+	}
+	if response.Summary.Dinilai > 0 {
+		dinilai := float64(response.Summary.Dinilai)
+		response.Summary.KeterlaksanaanJadwal = float64(response.Summary.Terlaksana) / dinilai * 100
+		response.Summary.KetepatanJadwal = float64(response.Summary.TerlaksanaSesuaiJadwal) / dinilai * 100
 	}
 	return response, nil
 }
@@ -442,6 +476,35 @@ func monitoringDateRange(startValue, endValue string) (time.Time, time.Time, err
 	return start, end, nil
 }
 
+func mapMovedMonitoringItem(row queries.ListMovedMonitoringSchedulesRow) models.ClassMonitoringMoved {
+	semula := strings.TrimSpace(row.JadwalSemula)
+	tanggalSemula, jamSemula := semula, ""
+	if len(semula) >= 10 {
+		tanggalSemula = semula[:10]
+		jamSemula = strings.TrimSpace(semula[10:])
+	}
+	return models.ClassMonitoringMoved{
+		ScheduleID:        row.ScheduleID,
+		KelasID:           row.KelasID,
+		NamaKelas:         row.NamaKelas,
+		JadwalSemula:      semula,
+		TanggalSemula:     tanggalSemula,
+		JamSemula:         jamSemula,
+		TanggalBaru:       row.Tanggal.Format("2006-01-02"),
+		JamBaru:           row.JamMulai,
+		AlasanReschedule:  row.AlasanReschedule,
+		ScheduleStatus:    row.ScheduleStatus,
+		GuruUtamaID:       nullInt64Ptr(row.GuruUtamaID),
+		GuruUtamaNama:     row.GuruUtamaNama,
+		GuruPenggantiID:   nullInt64Ptr(row.GuruPenggantiID),
+		GuruPenggantiNama: row.GuruPenggantiNama,
+	}
+}
+
+func movedMatchesGuru(item models.ClassMonitoringMoved, guruID int64) bool {
+	return (item.GuruUtamaID != nil && *item.GuruUtamaID == guruID) || (item.GuruPenggantiID != nil && *item.GuruPenggantiID == guruID)
+}
+
 func monitoringMatchesGuru(item models.ClassMonitoringItem, guruID int64) bool {
 	return (item.GuruUtamaID != nil && *item.GuruUtamaID == guruID) || (item.GuruPenggantiID != nil && *item.GuruPenggantiID == guruID)
 }
@@ -463,24 +526,54 @@ func updateMonitoringSummary(summary *models.ClassMonitoringSummary, item models
 	if item.NeedsAction {
 		summary.PerluTindakan++
 	}
+}
 
+func updateMonitoringKpi(summary *models.ClassMonitoringSummary, item models.ClassMonitoringItem) {
 	if item.TanpaJadwal || item.IsTambahan {
 		return
 	}
 	summary.TotalJadwal++
-	if item.JatuhTempo {
-		summary.JatuhTempo++
+	switch item.KpiStatus {
+	case "terlaksana", "tidak_terlaksana":
+		summary.Dinilai++
+		if item.KpiStatus == "terlaksana" {
+			summary.Terlaksana++
+			if !item.IsReschedule && item.GuruPenggantiID == nil {
+				summary.TerlaksanaSesuaiJadwal++
+			}
+		} else {
+			summary.TidakTerlaksana++
+		}
+		if item.IsReschedule {
+			summary.Reschedule++
+		}
+		if item.GuruPenggantiID != nil {
+			summary.Badal++
+		}
+	case "belum_final":
+		summary.BelumFinal++
+	case "dibatalkan":
+		summary.JadwalDibatalkan++
 	}
-	if item.IsReschedule {
-		summary.Reschedule++
+}
+
+// monitoringKpiStatus classifies an item for the KPI. Only final outcomes are
+// scored: a session still running, or today's class that has not started yet,
+// is "belum_final" until it is closed or the day ends.
+func monitoringKpiStatus(item models.ClassMonitoringItem) string {
+	if item.TanpaJadwal || item.IsTambahan {
+		return "di_luar_kpi"
 	}
-	if item.GuruPenggantiID != nil {
-		summary.Badal++
-	}
-	if item.Status == "tidak_terlaksana" {
-		summary.TidakTerlaksana++
-	}
-	if item.Status == "selesai" && !item.IsReschedule && item.GuruPenggantiID == nil {
-		summary.TerlaksanaSesuaiJadwal++
+	switch item.Status {
+	case "selesai":
+		return "terlaksana"
+	case "tidak_terlaksana":
+		return "tidak_terlaksana"
+	case "dibatalkan":
+		return "dibatalkan"
+	case "berlangsung", "terlambat":
+		return "belum_final"
+	default:
+		return "akan_datang"
 	}
 }

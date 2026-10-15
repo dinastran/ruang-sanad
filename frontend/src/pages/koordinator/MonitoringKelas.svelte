@@ -3,6 +3,7 @@
 	import { inertia, router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import PertemuanBelumDitutupList from "@components/PertemuanBelumDitutup.svelte";
+	import { formatJadwalSemula, formatTanggalJam } from "@lib/utils/jadwal";
 	import type {
 		Flash,
 		GuruRingkas,
@@ -10,6 +11,7 @@
 		MonitoringKelasData,
 		MonitoringKelasFilters,
 		MonitoringKelasItem,
+		MonitoringKelasDipindah,
 		User,
 		PertemuanBelumDitutup,
 	} from "@lib/types";
@@ -39,14 +41,17 @@
 	type TeacherPerformance = {
 		guruID: number | null;
 		nama: string;
-		jadwal: number;
-		jatuhTempo: number;
+		dinilai: number;
+		terlaksana: number;
 		sesuai: number;
 		reschedule: number;
 		badal: number;
 		tidakTerlaksana: number;
+		belumFinal: number;
+		dibatalkan: number;
 		perubahan: number;
-		kepatuhan: number;
+		keterlaksanaan: number;
+		ketepatan: number;
 	};
 	type WeeklyAnalysis = {
 		index: number;
@@ -79,12 +84,16 @@
 		dibatalkan: 0,
 		perlu_tindakan: 0,
 		total_jadwal: 0,
-		jatuh_tempo: 0,
+		dinilai: 0,
+		terlaksana: 0,
 		terlaksana_sesuai_jadwal: 0,
 		reschedule: 0,
 		badal: 0,
 		tidak_terlaksana: 0,
-		kepatuhan_jadwal: 0,
+		belum_final: 0,
+		jadwal_dibatalkan: 0,
+		keterlaksanaan_jadwal: 0,
+		ketepatan_jadwal: 0,
 	};
 	const inputClass = "mt-1.5 w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-white";
 	const statusLabel: Record<string, string> = {
@@ -120,7 +129,21 @@
 	}
 
 	const initial = initialFilters();
-	let data = $derived(monitoring ?? { summary: emptySummary, items: [] });
+	let data = $derived(monitoring ?? { summary: emptySummary, items: [], dipindah: [] });
+	type ListEntry = { kind: "sesi"; key: string; sortKey: string; item: MonitoringKelasItem } | { kind: "dipindah"; key: string; sortKey: string; moved: MonitoringKelasDipindah };
+	// Penanda "Dipindah" disisipkan pada tanggal & jam asalnya di antara sesi.
+	let listEntries = $derived(
+		[
+			...data.items.map((item): ListEntry => ({ kind: "sesi", key: item.tanpa_jadwal ? `p-${item.pertemuan_id}` : `j-${item.schedule_id}`, sortKey: `${item.tanggal} ${item.jam_mulai}`, item })),
+			...(data.dipindah ?? []).map((moved): ListEntry => ({ kind: "dipindah", key: `m-${moved.schedule_id}`, sortKey: `${moved.tanggal_semula} ${moved.jam_semula}`, moved })),
+		].sort((a, b) => a.sortKey.localeCompare(b.sortKey)),
+	);
+
+	function lihatJadwalBaru(moved: MonitoringKelasDipindah) {
+		startDate = moved.tanggal_baru;
+		endDate = moved.tanggal_baru;
+		runFilter();
+	}
 	let startDate = $state(initial.startDate);
 	let endDate = $state(initial.endDate);
 	let guruID = $state(initial.guruID);
@@ -215,46 +238,66 @@
 		return item.status === "selesai" && !item.is_reschedule && !isBadal(item);
 	}
 
+	// Mengikuti aturan KPI backend (kpi_status): hanya jadwal yang sudah final
+	// yang dinilai. Dibatalkan dan belum final ditampilkan, tetapi tidak
+	// menurunkan nilai. Badal tetap dinilai pada guru PIC kelas.
 	function buildTeacherPerformance(items: MonitoringKelasItem[]): TeacherPerformance[] {
 		const grouped = new Map<string, TeacherPerformance>();
 		for (const item of items) {
-			if (item.tanpa_jadwal || item.is_tambahan) continue;
+			if (item.kpi_status === "di_luar_kpi") continue;
 			const key = item.guru_utama_id ? String(item.guru_utama_id) : `nama:${item.guru_utama_nama || "belum-ditetapkan"}`;
 			let row = grouped.get(key);
 			if (!row) {
 				row = {
 					guruID: item.guru_utama_id ?? null,
 					nama: item.guru_utama_nama || "Belum ditetapkan",
-					jadwal: 0,
-					jatuhTempo: 0,
+					dinilai: 0,
+					terlaksana: 0,
 					sesuai: 0,
 					reschedule: 0,
 					badal: 0,
 					tidakTerlaksana: 0,
+					belumFinal: 0,
+					dibatalkan: 0,
 					perubahan: 0,
-					kepatuhan: 0,
+					keterlaksanaan: 0,
+					ketepatan: 0,
 				};
 				grouped.set(key, row);
 			}
-			row.jadwal++;
-			if (item.jatuh_tempo) row.jatuhTempo++;
+			if (item.is_reschedule || isBadal(item)) row.perubahan++;
+			if (item.kpi_status === "belum_final") row.belumFinal++;
+			if (item.kpi_status === "dibatalkan") row.dibatalkan++;
+			if (item.kpi_status !== "terlaksana" && item.kpi_status !== "tidak_terlaksana") continue;
+			row.dinilai++;
+			if (item.kpi_status === "terlaksana") row.terlaksana++;
+			else row.tidakTerlaksana++;
 			if (isSesuaiJadwal(item)) row.sesuai++;
 			if (item.is_reschedule) row.reschedule++;
 			if (isBadal(item)) row.badal++;
-			if (item.status === "tidak_terlaksana") row.tidakTerlaksana++;
-			if (item.is_reschedule || isBadal(item)) row.perubahan++;
 		}
 		return Array.from(grouped.values())
-			.map((row) => ({ ...row, kepatuhan: row.jatuhTempo > 0 ? (row.sesuai / row.jatuhTempo) * 100 : 0 }))
+			.map((row) => ({
+				...row,
+				keterlaksanaan: row.dinilai > 0 ? (row.terlaksana / row.dinilai) * 100 : 0,
+				ketepatan: row.dinilai > 0 ? (row.sesuai / row.dinilai) * 100 : 0,
+			}))
 			.sort((a, b) => {
-				if (a.jatuhTempo === 0 && b.jatuhTempo > 0) return 1;
-				if (b.jatuhTempo === 0 && a.jatuhTempo > 0) return -1;
-				return a.kepatuhan - b.kepatuhan || b.jadwal - a.jadwal || a.nama.localeCompare(b.nama);
+				if (a.dinilai === 0 && b.dinilai > 0) return 1;
+				if (b.dinilai === 0 && a.dinilai > 0) return -1;
+				return a.keterlaksanaan - b.keterlaksanaan || a.ketepatan - b.ketepatan || b.dinilai - a.dinilai || a.nama.localeCompare(b.nama);
 			});
 	}
 
+	function percentClass(value: number): string {
+		if (value >= 90) return "text-emerald-600 dark:text-emerald-400";
+		if (value >= 75) return "text-amber-600 dark:text-amber-400";
+		return "text-red-600 dark:text-red-400";
+	}
+
 	function buildWeeklyAnalysis(items: MonitoringKelasItem[], selectedStart: string): WeeklyAnalysis[] {
-		const scheduled = items.filter((item) => !item.tanpa_jadwal && !item.is_tambahan && item.tanggal);
+		// Sama dengan aturan KPI: hanya jadwal yang sudah final yang dihitung.
+		const scheduled = items.filter((item) => (item.kpi_status === "terlaksana" || item.kpi_status === "tidak_terlaksana") && item.tanggal);
 		if (scheduled.length === 0) return [];
 		const sortedDates = scheduled.map((item) => item.tanggal.slice(0, 10)).sort();
 		const baseValue = selectedStart || sortedDates[0];
@@ -281,7 +324,11 @@
 		return Array.from(grouped.values()).sort((a, b) => a.index - b.index);
 	}
 
-	let teacherPerformance = $derived(buildTeacherPerformance(data.items));
+	// Dengan filter guru, daftar juga memuat kelas tempat guru itu menjadi badal;
+	// baris tabel dibatasi ke guru terpilih agar sama dengan kartu KPI (dinilai pada PIC).
+	let teacherPerformance = $derived(
+		buildTeacherPerformance(data.items).filter((row) => !filters?.GuruID || row.guruID === filters.GuruID),
+	);
 	let weeklyAnalysis = $derived(buildWeeklyAnalysis(data.items, startDate));
 	let weeklyMax = $derived(Math.max(1, ...weeklyAnalysis.flatMap((week) => [week.sesuai, week.reschedule, week.badal, week.tidakTerlaksana])));
 	let missedItems = $derived(data.items.filter((item) => item.status === "tidak_terlaksana"));
@@ -423,17 +470,18 @@
 			<div class="mb-3 flex flex-wrap items-end justify-between gap-3">
 				<div>
 					<h2 id="kpi-title" class="text-sm font-semibold text-neutral-900 dark:text-white">KPI pelaksanaan kelas</h2>
-					<p class="mt-1 text-xs text-neutral-500">Hanya jadwal resmi yang masuk perhitungan KPI. Sesi spontan dan sesi tambahan tetap tercatat sebagai monitoring operasional, tetapi tidak masuk denominator KPI.</p>
+					<p class="mt-1 text-xs text-neutral-500">Hanya jadwal resmi yang sudah final (terlaksana atau tidak terlaksana) yang dinilai. Jadwal dibatalkan, sesi yang belum ditutup, kelas hari ini yang belum dimulai, sesi spontan, dan sesi tambahan tidak menurunkan KPI.</p>
 				</div>
-				<p class="text-xs text-neutral-500">{data.summary.jatuh_tempo} jadwal sudah jatuh tempo</p>
+				<p class="text-xs text-neutral-500">{data.summary.total_jadwal} jadwal · {data.summary.belum_final} belum final · {data.summary.jadwal_dibatalkan} dibatalkan</p>
 			</div>
-			<div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-				<div class="rounded-xl border border-neutral-200/80 bg-white p-4 dark:border-white/[0.06] dark:bg-neutral-925/50"><CalendarClock class="h-4 w-4 text-neutral-500" /><p class="mt-3 text-2xl font-bold text-neutral-900 dark:text-white">{data.summary.total_jadwal}</p><p class="text-xs text-neutral-500">Total jadwal</p></div>
+			<div class="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+				<div class="rounded-xl border border-neutral-200/80 bg-white p-4 dark:border-white/[0.06] dark:bg-neutral-925/50"><CalendarClock class="h-4 w-4 text-neutral-500" /><p class="mt-3 text-2xl font-bold text-neutral-900 dark:text-white">{data.summary.dinilai}</p><p class="text-xs text-neutral-500">Jadwal dinilai</p></div>
 				<div class="rounded-xl border border-success/20 bg-success/5 p-4"><CheckCircle2 class="h-4 w-4 text-emerald-600 dark:text-emerald-400" /><p class="mt-3 text-2xl font-bold text-emerald-700 dark:text-emerald-300">{data.summary.terlaksana_sesuai_jadwal}</p><p class="text-xs font-medium text-emerald-700 dark:text-emerald-300">Sesuai jadwal</p></div>
 				<div class="rounded-xl border border-warning/20 bg-warning/5 p-4"><RotateCcw class="h-4 w-4 text-amber-600 dark:text-amber-400" /><p class="mt-3 text-2xl font-bold text-neutral-900 dark:text-white">{data.summary.reschedule}</p><p class="text-xs text-neutral-500">Reschedule</p></div>
 				<div class="rounded-xl border border-info/20 bg-info/5 p-4"><UserRoundCheck class="h-4 w-4 text-blue-600 dark:text-blue-400" /><p class="mt-3 text-2xl font-bold text-neutral-900 dark:text-white">{data.summary.badal}</p><p class="text-xs text-neutral-500">Badal</p></div>
 				<div class="rounded-xl border border-error/25 bg-error/5 p-4"><Ban class="h-4 w-4 text-red-600 dark:text-red-400" /><p class="mt-3 text-2xl font-bold text-red-700 dark:text-red-300">{data.summary.tidak_terlaksana}</p><p class="text-xs font-medium text-red-700 dark:text-red-300">Tidak terlaksana</p></div>
-				<div class="rounded-xl border border-brand-400/25 bg-brand-400/10 p-4"><CheckCircle2 class="h-4 w-4 text-brand-600 dark:text-brand-400" /><p class="mt-3 text-2xl font-bold text-brand-700 dark:text-brand-300">{formatPercent(data.summary.kepatuhan_jadwal)}</p><p class="text-xs font-medium text-brand-700 dark:text-brand-300">Kepatuhan jadwal</p></div>
+				<div class="rounded-xl border border-brand-400/25 bg-brand-400/10 p-4" title="Jadwal terlaksana (termasuk reschedule dan badal) dibagi jadwal dinilai"><CheckCircle2 class="h-4 w-4 text-brand-600 dark:text-brand-400" /><p class="mt-3 text-2xl font-bold text-brand-700 dark:text-brand-300">{data.summary.dinilai ? formatPercent(data.summary.keterlaksanaan_jadwal) : "-"}</p><p class="text-xs font-medium text-brand-700 dark:text-brand-300">Keterlaksanaan</p></div>
+				<div class="rounded-xl border border-brand-400/25 bg-brand-400/10 p-4" title="Jadwal terlaksana sesuai jadwal asli tanpa badal dibagi jadwal dinilai"><Clock3 class="h-4 w-4 text-brand-600 dark:text-brand-400" /><p class="mt-3 text-2xl font-bold text-brand-700 dark:text-brand-300">{data.summary.dinilai ? formatPercent(data.summary.ketepatan_jadwal) : "-"}</p><p class="text-xs font-medium text-brand-700 dark:text-brand-300">Ketepatan jadwal</p></div>
 			</div>
 		</section>
 
@@ -530,7 +578,7 @@
 						<div class="mt-5 space-y-5">
 							{#each weeklyAnalysis as week}
 								<div>
-									<div class="mb-2 flex items-center justify-between gap-3"><p class="text-sm font-semibold text-neutral-800 dark:text-neutral-200">{week.label}</p><span class="text-xs text-neutral-500">{week.total} jadwal</span></div>
+									<div class="mb-2 flex items-center justify-between gap-3"><p class="text-sm font-semibold text-neutral-800 dark:text-neutral-200">{week.label}</p><span class="text-xs text-neutral-500">{week.total} jadwal dinilai</span></div>
 									<div class="space-y-2">
 										<div class="grid grid-cols-[112px_minmax(0,1fr)_28px] items-center gap-2 text-xs"><span class="text-neutral-500">Sesuai jadwal</span><div class="h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800"><div class="h-full rounded-full bg-emerald-500" style={"width: " + ((week.sesuai / weeklyMax) * 100) + "%"}></div></div><span class="text-right font-mono text-neutral-600 dark:text-neutral-300">{week.sesuai}</span></div>
 										<div class="grid grid-cols-[112px_minmax(0,1fr)_28px] items-center gap-2 text-xs"><span class="text-neutral-500">Reschedule</span><div class="h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800"><div class="h-full rounded-full bg-amber-500" style={"width: " + ((week.reschedule / weeklyMax) * 100) + "%"}></div></div><span class="text-right font-mono text-neutral-600 dark:text-neutral-300">{week.reschedule}</span></div>
@@ -546,24 +594,27 @@
 				<div class="min-w-0 overflow-hidden rounded-xl border border-neutral-200/80 bg-white dark:border-white/[0.06] dark:bg-neutral-925/50">
 					<div class="border-b border-neutral-200/70 px-5 py-4 dark:border-white/[0.05]">
 						<h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Performa per guru</h3>
-						<p class="mt-1 text-xs text-neutral-500">Diurutkan dari kepatuhan terendah agar masalah lebih cepat terlihat. Badal dinilai pada guru PIC kelas.</p>
+						<p class="mt-1 text-xs text-neutral-500">Diurutkan dari keterlaksanaan terendah. Hanya jadwal yang sudah final yang dinilai; badal dinilai pada guru PIC kelas. Keterlaksanaan = terlaksana (termasuk reschedule/badal) ÷ dinilai. Ketepatan = sesuai jadwal asli ÷ dinilai.</p>
 					</div>
 					{#if teacherPerformance.length === 0}
 						<p class="p-5 text-sm text-neutral-500">Belum ada data guru untuk periode ini.</p>
 					{:else}
 						<div class="max-h-[420px] overflow-auto">
-							<table class="min-w-[720px] w-full text-sm">
-								<thead class="sticky top-0 bg-neutral-50 text-xs text-neutral-500 dark:bg-neutral-900"><tr><th class="px-4 py-3 text-left font-semibold">Guru</th><th class="px-3 py-3 text-right font-semibold">Jadwal</th><th class="px-3 py-3 text-right font-semibold">Sesuai</th><th class="px-3 py-3 text-right font-semibold">Reschedule</th><th class="px-3 py-3 text-right font-semibold">Badal</th><th class="px-3 py-3 text-right font-semibold">Tidak terlaksana</th><th class="px-4 py-3 text-right font-semibold">Kepatuhan</th></tr></thead>
+							<table class="min-w-[860px] w-full text-sm">
+								<thead class="sticky top-0 bg-neutral-50 text-xs text-neutral-500 dark:bg-neutral-900"><tr><th class="px-4 py-3 text-left font-semibold">Guru</th><th class="px-3 py-3 text-right font-semibold" title="Jadwal yang sudah final: terlaksana atau tidak terlaksana">Dinilai</th><th class="px-3 py-3 text-right font-semibold">Sesuai</th><th class="px-3 py-3 text-right font-semibold">Reschedule</th><th class="px-3 py-3 text-right font-semibold">Badal</th><th class="px-3 py-3 text-right font-semibold">Tidak terlaksana</th><th class="px-3 py-3 text-right font-semibold" title="Sesi belum ditutup atau kelas hari ini yang belum dimulai. Belum dinilai.">Belum final</th><th class="px-3 py-3 text-right font-semibold" title="Jadwal dibatalkan. Tidak dinilai.">Dibatalkan</th><th class="px-3 py-3 text-right font-semibold">Keterlaksanaan</th><th class="px-4 py-3 text-right font-semibold">Ketepatan</th></tr></thead>
 								<tbody class="divide-y divide-neutral-100 dark:divide-white/[0.04]">
-									{#each teacherPerformance as item}
+									{#each teacherPerformance as item (item.guruID ?? item.nama)}
 										<tr class="hover:bg-neutral-50/70 dark:hover:bg-white/[0.02]">
 											<td class="px-4 py-3 font-medium text-neutral-800 dark:text-neutral-200">{#if item.guruID}<button type="button" onclick={() => filterByGuru(item.guruID)} class="text-left hover:text-brand-600 dark:hover:text-brand-400">{item.nama}</button>{:else}{item.nama}{/if}</td>
-											<td class="px-3 py-3 text-right font-mono text-neutral-600 dark:text-neutral-300">{item.jadwal}</td>
+											<td class="px-3 py-3 text-right font-mono text-neutral-600 dark:text-neutral-300">{item.dinilai}</td>
 											<td class="px-3 py-3 text-right font-mono text-neutral-600 dark:text-neutral-300">{item.sesuai}</td>
 											<td class="px-3 py-3 text-right font-mono text-neutral-600 dark:text-neutral-300">{item.reschedule}</td>
 											<td class="px-3 py-3 text-right font-mono text-neutral-600 dark:text-neutral-300">{item.badal}</td>
 											<td class="px-3 py-3 text-right font-mono {item.tidakTerlaksana > 0 ? 'font-semibold text-red-600 dark:text-red-400' : 'text-neutral-600 dark:text-neutral-300'}">{item.tidakTerlaksana}</td>
-											<td class="px-4 py-3 text-right">{#if item.jatuhTempo > 0}<span class="font-semibold {item.kepatuhan >= 90 ? 'text-emerald-600 dark:text-emerald-400' : item.kepatuhan >= 75 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}">{formatPercent(item.kepatuhan)}</span>{:else}<span class="text-neutral-400">-</span>{/if}</td>
+											<td class="px-3 py-3 text-right font-mono {item.belumFinal > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-neutral-400'}">{item.belumFinal}</td>
+											<td class="px-3 py-3 text-right font-mono text-neutral-400">{item.dibatalkan}</td>
+											<td class="px-3 py-3 text-right">{#if item.dinilai > 0}<span class="font-semibold {percentClass(item.keterlaksanaan)}">{formatPercent(item.keterlaksanaan)}</span>{:else}<span class="text-neutral-400">-</span>{/if}</td>
+											<td class="px-4 py-3 text-right">{#if item.dinilai > 0}<span class="font-semibold {percentClass(item.ketepatan)}">{formatPercent(item.ketepatan)}</span>{:else}<span class="text-neutral-400">-</span>{/if}</td>
 										</tr>
 									{/each}
 								</tbody>
@@ -586,7 +637,7 @@
 						<div class="animate-pulse rounded-xl border border-neutral-200/80 bg-white p-5 dark:border-white/[0.06] dark:bg-neutral-925/50"><div class="h-4 w-1/3 rounded bg-neutral-200 dark:bg-neutral-800"></div><div class="mt-3 h-3 w-2/3 rounded bg-neutral-100 dark:bg-neutral-800/70"></div><div class="mt-5 h-9 rounded bg-neutral-100 dark:bg-neutral-800/70"></div></div>
 					{/each}
 				</div>
-			{:else if data.items.length === 0}
+			{:else if listEntries.length === 0}
 				<div class="rounded-xl border border-dashed border-neutral-300 bg-white p-10 text-center dark:border-neutral-700 dark:bg-neutral-925/40">
 					<CalendarClock class="mx-auto h-8 w-8 text-neutral-400" />
 					<h3 class="mt-3 font-semibold text-neutral-900 dark:text-white">Tidak ada sesi pada rentang ini</h3>
@@ -594,7 +645,25 @@
 				</div>
 			{:else}
 				<div class="space-y-3">
-					{#each data.items as item (item.tanpa_jadwal ? `p-${item.pertemuan_id}` : `j-${item.schedule_id}`)}
+					{#each listEntries as entry (entry.key)}
+						{#if entry.kind === "dipindah"}
+							{@const moved = entry.moved}
+							<article class="rounded-xl border border-dashed border-amber-500/40 bg-amber-500/[0.04] px-4 py-3 sm:px-5" aria-label={`${moved.nama_kelas} dipindah`}>
+								<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+									<div class="min-w-0">
+										<div class="flex flex-wrap items-center gap-2">
+											<h3 class="min-w-0 break-words text-sm font-semibold text-neutral-900 dark:text-white">{moved.nama_kelas}</h3>
+											<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400"><RotateCcw class="h-3.5 w-3.5" /> Dipindah</span>
+											{#if moved.schedule_status === "dibatalkan"}<span class="shrink-0 rounded-full bg-neutral-200/70 px-2.5 py-1 text-xs font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">Jadwal baru dibatalkan</span>{/if}
+										</div>
+										<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Jadwal {formatTanggalJam(moved.tanggal_semula, moved.jam_semula)} dipindah ke <span class="font-medium text-neutral-800 dark:text-neutral-200">{formatTanggalJam(moved.tanggal_baru, moved.jam_baru)}</span></p>
+										<p class="mt-0.5 text-xs text-neutral-500">{moved.guru_utama_nama || "Belum ada guru"}{#if moved.guru_pengganti_nama} · badal {moved.guru_pengganti_nama}{/if}{#if moved.alasan_reschedule} · Alasan: {moved.alasan_reschedule}{/if}</p>
+									</div>
+									<button type="button" onclick={() => lihatJadwalBaru(moved)} class="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-700 hover:border-brand-400/40 hover:text-brand-700 dark:border-neutral-700 dark:text-neutral-300 dark:hover:text-brand-300"><CalendarClock class="h-3.5 w-3.5" /> Lihat jadwal baru</button>
+								</div>
+							</article>
+						{:else}
+						{@const item = entry.item}
 						<article class="overflow-hidden rounded-xl border bg-white dark:bg-neutral-925/50 {item.needs_action ? 'border-error/35' : 'border-neutral-200/80 dark:border-white/[0.06]'}">
 							<div class="p-4 sm:p-5">
 								<div class="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(440px,0.9fr)] xl:items-start">
@@ -602,8 +671,10 @@
 										<div class="flex flex-wrap items-center gap-2">
 											<h3 class="min-w-0 max-w-full break-words text-base font-semibold leading-6 text-neutral-900 dark:text-white" title={item.nama_kelas}>{displayClassName(item)}</h3>
 											<span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold {statusClass(item.status)}">{statusLabel[item.status] ?? item.status}</span>
+											{#if item.is_reschedule}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400" title={item.alasan_reschedule ? `Alasan: ${item.alasan_reschedule}` : "Jadwal ini dipindah dari jadwal asalnya"}><RotateCcw class="h-3.5 w-3.5" /> Reschedule{#if item.jadwal_semula} · dari {formatJadwalSemula(item.jadwal_semula)}{/if}</span>{/if}
+											{#if item.guru_pengganti_id}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary-500/10 px-2.5 py-1 text-xs font-semibold text-secondary-700 dark:text-secondary-300" title={item.alasan_badal ? `Alasan: ${item.alasan_badal}` : "Kelas diajar guru pengganti"}><UserRoundCheck class="h-3.5 w-3.5" /> Badal · {item.guru_pengganti_nama}</span>{/if}
 											{#if item.tanpa_jadwal}<span class="shrink-0 rounded-full bg-neutral-200/70 px-2.5 py-1 text-xs font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300" title="Guru memulai sesi langsung tanpa jadwal pertemuan yang dibuat sebelumnya">Sesi spontan</span>{/if}
-											{#if item.is_tambahan}<span class="shrink-0 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-400" title="Sesi tambahan di luar pola jadwal rutin. Tidak masuk denominator KPI kepatuhan.">Sesi tambahan</span>{/if}
+											{#if item.is_tambahan}<span class="shrink-0 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-400" title="Sesi tambahan di luar pola jadwal rutin. Tidak masuk perhitungan KPI.">Sesi tambahan</span>{/if}
 											{#if item.needs_action}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-error/10 px-2.5 py-1 text-xs font-semibold text-red-700 dark:text-red-400"><AlertTriangle class="h-3.5 w-3.5" /> Perlu tindakan</span>{/if}
 										</div>
 
@@ -695,7 +766,7 @@
 											<div><p class="text-xs text-neutral-500">Materi</p><p class="mt-0.5 whitespace-pre-wrap">{item.materi || "Belum dicatat"}</p></div>
 											<div><p class="text-xs text-neutral-500">Catatan jadwal</p><p class="mt-0.5 whitespace-pre-wrap">{item.schedule_note || "Tidak ada"}</p></div>
 											<div><p class="text-xs text-neutral-500">Catatan pertemuan</p><p class="mt-0.5 whitespace-pre-wrap">{item.meeting_note || "Tidak ada"}</p></div>
-											{#if item.is_reschedule}<div><p class="text-xs text-neutral-500">Perubahan jadwal</p><p class="mt-0.5">Dari {item.jadwal_semula || "jadwal sebelumnya"}{#if item.alasan_reschedule}: {item.alasan_reschedule}{/if}</p></div>{/if}
+											{#if item.is_reschedule}<div><p class="text-xs text-neutral-500">Perubahan jadwal</p><p class="mt-0.5">Dari {item.jadwal_semula ? formatJadwalSemula(item.jadwal_semula) : "jadwal sebelumnya"}{#if item.alasan_reschedule}: {item.alasan_reschedule}{/if}</p></div>{/if}
 											{#if item.guru_pengganti_id}<div><p class="text-xs text-neutral-500">Guru pengganti</p><p class="mt-0.5">{item.guru_pengganti_nama}{#if item.alasan_badal}: {item.alasan_badal}{/if}</p></div>{/if}
 										</div>
 									</section>
@@ -728,6 +799,7 @@
 								</div>
 							</details>
 						</article>
+						{/if}
 					{/each}
 				</div>
 			{/if}
