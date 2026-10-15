@@ -111,7 +111,7 @@ func (q *Queries) CreateJadwalPertemuan(ctx context.Context, arg CreateJadwalPer
 }
 
 const getJadwalPertemuanByID = `-- name: GetJadwalPertemuanByID :one
-SELECT id, kelas_id, tanggal, jam_mulai, catatan, is_reschedule, jadwal_semula, alasan_reschedule, guru_pengganti_id, alasan_badal, status, pertemuan_id, dibuat_oleh, created_at, updated_at, jadwal_kelas_berubah FROM jadwal_pertemuan WHERE id = ? AND kelas_id = ?
+SELECT id, kelas_id, tanggal, jam_mulai, catatan, is_reschedule, jadwal_semula, alasan_reschedule, guru_pengganti_id, alasan_badal, status, pertemuan_id, dibuat_oleh, created_at, updated_at, jadwal_kelas_berubah, jadwal_rutin_id, tanggal_rutin, is_otomatis, is_tambahan FROM jadwal_pertemuan WHERE id = ? AND kelas_id = ?
 `
 
 type GetJadwalPertemuanByIDParams struct {
@@ -139,12 +139,16 @@ func (q *Queries) GetJadwalPertemuanByID(ctx context.Context, arg GetJadwalPerte
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.JadwalKelasBerubah,
+		&i.JadwalRutinID,
+		&i.TanggalRutin,
+		&i.IsOtomatis,
+		&i.IsTambahan,
 	)
 	return i, err
 }
 
 const listDueJadwalPertemuanByKelas = `-- name: ListDueJadwalPertemuanByKelas :many
-SELECT jp.id, jp.kelas_id, jp.tanggal, jp.jam_mulai, jp.catatan, jp.is_reschedule, jp.jadwal_semula, jp.alasan_reschedule, jp.guru_pengganti_id, jp.alasan_badal, jp.status, jp.pertemuan_id, jp.dibuat_oleh, jp.created_at, jp.updated_at, jp.jadwal_kelas_berubah, COALESCE(gb.nama, '') AS guru_pengganti_nama
+SELECT jp.id, jp.kelas_id, jp.tanggal, jp.jam_mulai, jp.catatan, jp.is_reschedule, jp.jadwal_semula, jp.alasan_reschedule, jp.guru_pengganti_id, jp.alasan_badal, jp.status, jp.pertemuan_id, jp.dibuat_oleh, jp.created_at, jp.updated_at, jp.jadwal_kelas_berubah, jp.jadwal_rutin_id, jp.tanggal_rutin, jp.is_otomatis, jp.is_tambahan, COALESCE(gb.nama, '') AS guru_pengganti_nama
 FROM jadwal_pertemuan jp
 LEFT JOIN guru gb ON gb.id = jp.guru_pengganti_id
 WHERE jp.kelas_id = ? AND jp.status = 'dijadwalkan' AND jp.tanggal <= ?
@@ -173,6 +177,10 @@ type ListDueJadwalPertemuanByKelasRow struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	JadwalKelasBerubah int64
+	JadwalRutinID      sql.NullInt64
+	TanggalRutin       sql.NullTime
+	IsOtomatis         int64
+	IsTambahan         int64
 	GuruPenggantiNama  string
 }
 
@@ -202,6 +210,10 @@ func (q *Queries) ListDueJadwalPertemuanByKelas(ctx context.Context, arg ListDue
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.JadwalKelasBerubah,
+			&i.JadwalRutinID,
+			&i.TanggalRutin,
+			&i.IsOtomatis,
+			&i.IsTambahan,
 			&i.GuruPenggantiNama,
 		); err != nil {
 			return nil, err
@@ -219,7 +231,7 @@ func (q *Queries) ListDueJadwalPertemuanByKelas(ctx context.Context, arg ListDue
 
 const listJadwalPertemuanForGuru = `-- name: ListJadwalPertemuanForGuru :many
 SELECT
-    jp.id, jp.kelas_id, jp.tanggal, jp.jam_mulai, jp.catatan, jp.is_reschedule, jp.jadwal_semula, jp.alasan_reschedule, jp.guru_pengganti_id, jp.alasan_badal, jp.status, jp.pertemuan_id, jp.dibuat_oleh, jp.created_at, jp.updated_at, jp.jadwal_kelas_berubah,
+    jp.id, jp.kelas_id, jp.tanggal, jp.jam_mulai, jp.catatan, jp.is_reschedule, jp.jadwal_semula, jp.alasan_reschedule, jp.guru_pengganti_id, jp.alasan_badal, jp.status, jp.pertemuan_id, jp.dibuat_oleh, jp.created_at, jp.updated_at, jp.jadwal_kelas_berubah, jp.jadwal_rutin_id, jp.tanggal_rutin, jp.is_otomatis, jp.is_tambahan,
     k.nama_kelas,
     k.guru_id AS guru_utama_id,
     COALESCE(gu.nama, '') AS guru_utama_nama,
@@ -254,6 +266,10 @@ type ListJadwalPertemuanForGuruRow struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	JadwalKelasBerubah int64
+	JadwalRutinID      sql.NullInt64
+	TanggalRutin       sql.NullTime
+	IsOtomatis         int64
+	IsTambahan         int64
 	NamaKelas          string
 	GuruUtamaID        sql.NullInt64
 	GuruUtamaNama      string
@@ -286,6 +302,10 @@ func (q *Queries) ListJadwalPertemuanForGuru(ctx context.Context, guruID interfa
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.JadwalKelasBerubah,
+			&i.JadwalRutinID,
+			&i.TanggalRutin,
+			&i.IsOtomatis,
+			&i.IsTambahan,
 			&i.NamaKelas,
 			&i.GuruUtamaID,
 			&i.GuruUtamaNama,

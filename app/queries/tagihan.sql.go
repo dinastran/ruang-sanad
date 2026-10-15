@@ -178,7 +178,7 @@ func (q *Queries) GetTagihanByID(ctx context.Context, id int64) (GetTagihanByIDR
 }
 
 const listPertemuanSelesai = `-- name: ListPertemuanSelesai :many
-SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke FROM pertemuan WHERE status = 'selesai' ORDER BY tanggal, id
+SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke, pengingat_lupa_at FROM pertemuan WHERE status = 'selesai' ORDER BY tanggal, id
 `
 
 func (q *Queries) ListPertemuanSelesai(ctx context.Context) ([]Pertemuan, error) {
@@ -211,6 +211,7 @@ func (q *Queries) ListPertemuanSelesai(ctx context.Context) ([]Pertemuan, error)
 			&i.UpdatedAt,
 			&i.LevelNama,
 			&i.PertemuanLevelKe,
+			&i.PengingatLupaAt,
 		); err != nil {
 			return nil, err
 		}

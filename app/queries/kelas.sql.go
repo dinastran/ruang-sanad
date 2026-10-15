@@ -432,20 +432,6 @@ func (q *Queries) SetKelasAktif(ctx context.Context, arg SetKelasAktifParams) er
 	return err
 }
 
-const setKelasMateriIndividual = `-- name: SetKelasMateriIndividual :exec
-UPDATE kelas SET materi_individual = ? WHERE id = ?
-`
-
-type SetKelasMateriIndividualParams struct {
-	MateriIndividual int64
-	ID               int64
-}
-
-func (q *Queries) SetKelasMateriIndividual(ctx context.Context, arg SetKelasMateriIndividualParams) error {
-	_, err := q.db.ExecContext(ctx, setKelasMateriIndividual, arg.MateriIndividual, arg.ID)
-	return err
-}
-
 const setKelasKapasitas = `-- name: SetKelasKapasitas :exec
 UPDATE kelas SET kapasitas = ? WHERE id = ?
 `
@@ -457,6 +443,20 @@ type SetKelasKapasitasParams struct {
 
 func (q *Queries) SetKelasKapasitas(ctx context.Context, arg SetKelasKapasitasParams) error {
 	_, err := q.db.ExecContext(ctx, setKelasKapasitas, arg.Kapasitas, arg.ID)
+	return err
+}
+
+const setKelasMateriIndividual = `-- name: SetKelasMateriIndividual :exec
+UPDATE kelas SET materi_individual = ? WHERE id = ?
+`
+
+type SetKelasMateriIndividualParams struct {
+	MateriIndividual int64
+	ID               int64
+}
+
+func (q *Queries) SetKelasMateriIndividual(ctx context.Context, arg SetKelasMateriIndividualParams) error {
+	_, err := q.db.ExecContext(ctx, setKelasMateriIndividual, arg.MateriIndividual, arg.ID)
 	return err
 }
 

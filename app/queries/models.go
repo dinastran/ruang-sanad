@@ -108,6 +108,10 @@ type JadwalPertemuan struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	JadwalKelasBerubah int64
+	JadwalRutinID      sql.NullInt64
+	TanggalRutin       sql.NullTime
+	IsOtomatis         int64
+	IsTambahan         int64
 }
 
 type KalamBersanad struct {
@@ -148,6 +152,19 @@ type Kela struct {
 	LevelPertemuanAwal int64
 }
 
+type KelasJadwalRutin struct {
+	ID            int64
+	KelasID       int64
+	Hari          int64
+	JamMulai      string
+	BerlakuMulai  time.Time
+	BerlakuSampai sql.NullTime
+	IsAktif       int64
+	DibuatOleh    sql.NullInt64
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
 type KelasPerubahan struct {
 	ID            int64
 	KelasID       sql.NullInt64
@@ -159,6 +176,7 @@ type KelasPerubahan struct {
 	PertemuanKe   int64
 	DibuatOleh    sql.NullInt64
 	CreatedAt     time.Time
+	Alasan        string
 }
 
 type KodeKela struct {
@@ -296,6 +314,32 @@ type Pertemuan struct {
 	UpdatedAt        time.Time
 	LevelNama        string
 	PertemuanLevelKe int64
+	PengingatLupaAt  sql.NullTime
+}
+
+type ProductOrder struct {
+	ID             int64
+	OrderNo        sql.NullString
+	Tanggal        time.Time
+	NamaPembeli    string
+	NoWa           string
+	Sumber         string
+	Status         string
+	Catatan        string
+	DicatatOleh    sql.NullInt64
+	DibatalkanAt   sql.NullTime
+	DibatalkanOleh sql.NullInt64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type ProductOrderItem struct {
+	ID            int64
+	OrderID       int64
+	ProdukID      int64
+	ProdukBatchID sql.NullInt64
+	Qty           int64
+	CreatedAt     time.Time
 }
 
 type Produk struct {
@@ -397,6 +441,31 @@ type Santri struct {
 	CutiSelesai           string
 }
 
+type SantriAdminNote struct {
+	ID              int64
+	SantriID        int64
+	AuthorUserID    sql.NullInt64
+	UpdatedByUserID sql.NullInt64
+	Catatan         string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type SantriBillingMeeting struct {
+	ID          int64
+	SantriID    int64
+	PertemuanID int64
+	Frekuensi   string
+	CreatedAt   time.Time
+}
+
+type SantriBillingProgress struct {
+	SantriID        int64
+	MeetingCount    int64
+	LastBilledMonth int64
+	UpdatedAt       time.Time
+}
+
 type SantriStatusLog struct {
 	ID          int64
 	SantriID    int64
@@ -475,6 +544,24 @@ type Tagihan struct {
 	AngkatanKelas string
 }
 
+type TagihanFollowUpLog struct {
+	ID           int64
+	TagihanID    int64
+	TemplateID   sql.NullInt64
+	TemplateNama string
+	MessageBody  string
+	DikirimOleh  sql.NullInt64
+	CreatedAt    time.Time
+}
+
+type TagihanNominalOverride struct {
+	TagihanID int64
+	Nominal   int64
+	UpdatedBy sql.NullInt64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type TilawahHarian struct {
 	ID        int64
 	GuruID    int64
@@ -536,6 +623,58 @@ type TsiPeriode struct {
 	Status    string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type UjrohBulan struct {
+	Bulan       string
+	DikunciAt   sql.NullTime
+	DikunciOleh sql.NullInt64
+	DibukaAt    sql.NullTime
+	DibukaOleh  sql.NullInt64
+	CreatedAt   time.Time
+}
+
+type UjrohGuru struct {
+	ID              int64
+	Bulan           string
+	GuruID          int64
+	GuruNama        string
+	GuruStatus      string
+	Tarif           int64
+	JumlahPertemuan int64
+	JumlahBadal     int64
+	Total           int64
+	DibayarAt       sql.NullTime
+	DibayarOleh     sql.NullInt64
+	CatatanBayar    string
+	CreatedAt       time.Time
+}
+
+type UjrohPertemuan struct {
+	ID          int64
+	Bulan       string
+	GuruID      int64
+	PertemuanID int64
+	KelasID     int64
+	KelasNama   string
+	Tanggal     string
+	PertemuanKe int64
+	IsBadal     int64
+	Tarif       int64
+}
+
+type UjrohTarif struct {
+	Status     string
+	Nominal    int64
+	DiubahOleh sql.NullInt64
+	UpdatedAt  time.Time
+}
+
+type UjrohTarifGuru struct {
+	GuruID     int64
+	Nominal    int64
+	DiubahOleh sql.NullInt64
+	UpdatedAt  time.Time
 }
 
 type User struct {
