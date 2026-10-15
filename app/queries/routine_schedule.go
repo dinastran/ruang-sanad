@@ -186,7 +186,13 @@ WHERE id = (
     ORDER BY id
     LIMIT 1
 )
-`, routineID, tanggal, kelasID, tanggal, jamMulai)
+AND NOT EXISTS (
+    SELECT 1
+    FROM jadwal_pertemuan
+    WHERE jadwal_rutin_id = ?
+      AND tanggal_rutin = ?
+)
+`, routineID, tanggal, kelasID, tanggal, jamMulai, routineID, tanggal)
 	if err != nil {
 		return false, err
 	}
