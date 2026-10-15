@@ -27,9 +27,10 @@ func TestKoordinatorMonitoringMenandaiJadwalTerlewat(t *testing.T) {
 	require.EqualValues(t, 0, result.Summary.BelumMulai)
 	require.EqualValues(t, 1, result.Summary.PerluTindakan)
 	require.EqualValues(t, 1, result.Summary.TotalJadwal)
-	require.EqualValues(t, 1, result.Summary.JatuhTempo)
+	require.EqualValues(t, 1, result.Summary.Dinilai)
 	require.EqualValues(t, 1, result.Summary.TidakTerlaksana)
-	require.Equal(t, float64(0), result.Summary.KepatuhanJadwal)
+	require.Equal(t, float64(0), result.Summary.KeterlaksanaanJadwal)
+	require.Equal(t, float64(0), result.Summary.KetepatanJadwal)
 }
 
 func TestKoordinatorMonitoringTetapMenandaiTerlambatPadaHariYangSama(t *testing.T) {
@@ -51,16 +52,19 @@ func TestKoordinatorMonitoringTetapMenandaiTerlambatPadaHariYangSama(t *testing.
 	require.True(t, result.Items[0].JatuhTempo)
 	require.EqualValues(t, 1, result.Summary.BelumMulai)
 	require.EqualValues(t, 0, result.Summary.TidakTerlaksana)
+	require.Equal(t, "belum_final", result.Items[0].KpiStatus)
+	require.EqualValues(t, 1, result.Summary.BelumFinal)
+	require.EqualValues(t, 0, result.Summary.Dinilai)
 }
 
 func TestKoordinatorMonitoringMengecualikanSesiTambahanDariKPI(t *testing.T) {
 	f := setupJadwalPertemuanService(t)
 	today := time.Now().In(wib).Format("2006-01-02")
 	_, err := f.service.Create(f.guruUtamaUser, models.BuatJadwalPertemuanRequest{
-		KelasID: f.kelasID,
-		Tanggal: today,
+		KelasID:  f.kelasID,
+		Tanggal:  today,
 		JamMulai: "23:59",
-		Catatan: "Sesi tambahan",
+		Catatan:  "Sesi tambahan",
 	})
 	require.NoError(t, err)
 
@@ -71,8 +75,8 @@ func TestKoordinatorMonitoringMengecualikanSesiTambahanDariKPI(t *testing.T) {
 	require.True(t, result.Items[0].IsTambahan)
 	require.EqualValues(t, 1, result.Summary.Total)
 	require.EqualValues(t, 0, result.Summary.TotalJadwal)
-	require.EqualValues(t, 0, result.Summary.JatuhTempo)
-	require.Equal(t, float64(0), result.Summary.KepatuhanJadwal)
+	require.EqualValues(t, 0, result.Summary.Dinilai)
+	require.Equal(t, "di_luar_kpi", result.Items[0].KpiStatus)
 }
 
 func TestKoordinatorMonitoringMengirimPengingatDanMencatatTindakLanjut(t *testing.T) {
@@ -121,4 +125,99 @@ func TestKoordinatorMonitoringMemvalidasiRentangDanJenisPengingat(t *testing.T) 
 	require.NoError(t, err)
 	err = service.SendReminder(f.guruLainUser, scheduleID, f.kelasID, models.MonitoringReminderRequest{Kind: "tidak_valid"})
 	require.EqualError(t, err, "jenis pengingat tidak valid")
+}
+
+func TestKoordinatorMonitoringKPIHanyaMenilaiJadwalFinal(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	day := time.Now().In(wib).AddDate(0, 0, -2).Format("2006-01-02")
+	insert := func(jam, status string, isReschedule int, badal any) {
+		t.Helper()
+		_, err := f.db.Exec(`INSERT INTO jadwal_pertemuan (kelas_id, tanggal, jam_mulai, status, is_reschedule, guru_pengganti_id) VALUES (?, ?, ?, ?, ?, ?)`, f.kelasID, day, jam, status, isReschedule, badal)
+		require.NoError(t, err)
+	}
+	insert("07:00", "selesai", 0, nil)           // tepat jadwal
+	insert("08:00", "selesai", 1, nil)           // terlaksana lewat reschedule
+	insert("09:00", "selesai", 0, f.guruBadalID) // terlaksana lewat badal
+	insert("10:00", "dijadwalkan", 0, nil)       // tidak terlaksana
+	insert("11:00", "dibatalkan", 0, nil)        // libur: tidak dinilai
+	insert("12:00", "dimulai", 0, nil)           // belum ditutup: belum final
+
+	service := NewKoordinatorMonitoringService(f.querier, f.service)
+	result, err := service.List(models.ClassMonitoringFilter{StartDate: day, EndDate: day})
+	require.NoError(t, err)
+
+	s := result.Summary
+	require.EqualValues(t, 6, s.TotalJadwal)
+	require.EqualValues(t, 4, s.Dinilai)
+	require.EqualValues(t, 3, s.Terlaksana)
+	require.EqualValues(t, 1, s.TerlaksanaSesuaiJadwal)
+	require.EqualValues(t, 1, s.Reschedule)
+	require.EqualValues(t, 1, s.Badal)
+	require.EqualValues(t, 1, s.TidakTerlaksana)
+	require.EqualValues(t, 1, s.JadwalDibatalkan)
+	require.EqualValues(t, 1, s.BelumFinal)
+	require.Equal(t, float64(75), s.KeterlaksanaanJadwal)
+	require.Equal(t, float64(25), s.KetepatanJadwal)
+}
+
+func TestKoordinatorMonitoringKPITidakBerubahOlehFilterStatusDanBadal(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	day := time.Now().In(wib).AddDate(0, 0, -2).Format("2006-01-02")
+	_, err := f.db.Exec(`INSERT INTO jadwal_pertemuan (kelas_id, tanggal, jam_mulai, status) VALUES (?, ?, '07:00', 'selesai')`, f.kelasID, day)
+	require.NoError(t, err)
+	_, err = f.db.Exec(`INSERT INTO jadwal_pertemuan (kelas_id, tanggal, jam_mulai, status, guru_pengganti_id) VALUES (?, ?, '08:00', 'dijadwalkan', ?)`, f.kelasID, day, f.guruBadalID)
+	require.NoError(t, err)
+	service := NewKoordinatorMonitoringService(f.querier, f.service)
+
+	// Filter status hanya mempersempit daftar, bukan KPI.
+	result, err := service.List(models.ClassMonitoringFilter{StartDate: day, EndDate: day, Status: "selesai"})
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	require.EqualValues(t, 2, result.Summary.Dinilai)
+	require.Equal(t, float64(50), result.Summary.KeterlaksanaanJadwal)
+
+	// Guru badal melihat kelas yang ia badali, tapi KPI-nya tetap milik guru PIC.
+	result, err = service.List(models.ClassMonitoringFilter{StartDate: day, EndDate: day, GuruID: f.guruBadalID})
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	require.EqualValues(t, 0, result.Summary.Dinilai)
+}
+
+func TestKoordinatorMonitoringMenandaiTanggalAsalJadwalYangDipindah(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	asal := time.Now().In(wib).AddDate(0, 0, 1).Format("2006-01-02")
+	baru := time.Now().In(wib).AddDate(0, 0, 3).Format("2006-01-02")
+	res, err := f.db.Exec(`INSERT INTO jadwal_pertemuan (kelas_id, tanggal, jam_mulai, status) VALUES (?, ?, '08:00', 'dijadwalkan')`, f.kelasID, asal)
+	require.NoError(t, err)
+	id, err := res.LastInsertId()
+	require.NoError(t, err)
+	require.NoError(t, f.service.Reschedule(id, f.kelasID, models.RescheduleRequest{TanggalBaru: baru, JamBaru: "19:30", Alasan: "Guru sakit"}))
+
+	service := NewKoordinatorMonitoringService(f.querier, f.service)
+
+	// Tanggal asal: tidak ada sesi, hanya penanda "Dipindah", dan tidak masuk KPI.
+	result, err := service.List(models.ClassMonitoringFilter{StartDate: asal, EndDate: asal})
+	require.NoError(t, err)
+	require.Empty(t, result.Items)
+	require.Len(t, result.Dipindah, 1)
+	moved := result.Dipindah[0]
+	require.Equal(t, asal, moved.TanggalSemula)
+	require.Equal(t, "08:00", moved.JamSemula)
+	require.Equal(t, baru, moved.TanggalBaru)
+	require.Equal(t, "19:30", moved.JamBaru)
+	require.Equal(t, "Guru sakit", moved.AlasanReschedule)
+	require.EqualValues(t, 0, result.Summary.TotalJadwal)
+
+	// Tanggal baru: sesi berlabel reschedule dengan jadwal asal.
+	result, err = service.List(models.ClassMonitoringFilter{StartDate: baru, EndDate: baru})
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	require.True(t, result.Items[0].IsReschedule)
+	require.Equal(t, asal+" 08:00", result.Items[0].JadwalSemula)
+	require.Empty(t, result.Dipindah)
+
+	// Filter status menyembunyikan penanda.
+	result, err = service.List(models.ClassMonitoringFilter{StartDate: asal, EndDate: asal, Status: "selesai"})
+	require.NoError(t, err)
+	require.Empty(t, result.Dipindah)
 }

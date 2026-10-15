@@ -48,6 +48,33 @@ WHERE substr(jp.tanggal, 1, 10) >= substr(sqlc.arg(start_date), 1, 10)
   AND substr(jp.tanggal, 1, 10) <= substr(sqlc.arg(end_date), 1, 10)
 ORDER BY jp.tanggal, jp.jam_mulai, k.nama_kelas, jp.id;
 
+-- name: ListMovedMonitoringSchedules :many
+-- Jadwal yang di-reschedule keluar dari tanggal asalnya, untuk penanda
+-- "Dipindah" pada tanggal asal. Tidak masuk KPI.
+SELECT
+    jp.id AS schedule_id,
+    jp.kelas_id,
+    k.nama_kelas,
+    jp.tanggal,
+    jp.jam_mulai,
+    jp.jadwal_semula,
+    jp.alasan_reschedule,
+    jp.status AS schedule_status,
+    k.guru_id AS guru_utama_id,
+    COALESCE(gu.nama, '') AS guru_utama_nama,
+    jp.guru_pengganti_id,
+    COALESCE(gb.nama, '') AS guru_pengganti_nama
+FROM jadwal_pertemuan jp
+JOIN kelas k ON k.id = jp.kelas_id
+LEFT JOIN guru gu ON gu.id = k.guru_id
+LEFT JOIN guru gb ON gb.id = jp.guru_pengganti_id
+WHERE jp.is_reschedule = 1
+  AND length(jp.jadwal_semula) >= 10
+  AND substr(jp.jadwal_semula, 1, 10) >= substr(sqlc.arg(start_date), 1, 10)
+  AND substr(jp.jadwal_semula, 1, 10) <= substr(sqlc.arg(end_date), 1, 10)
+  AND substr(jp.jadwal_semula, 1, 10) <> substr(jp.tanggal, 1, 10)
+ORDER BY jp.jadwal_semula, k.nama_kelas, jp.id;
+
 -- name: ListUnscheduledMonitoringMeetings :many
 -- Pertemuan yang dimulai langsung oleh guru tanpa jadwal_pertemuan terkait.
 SELECT

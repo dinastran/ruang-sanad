@@ -416,6 +416,90 @@ func (q *Queries) ListMonitoringAttendanceByMeeting(ctx context.Context, arg Lis
 	return items, nil
 }
 
+const listMovedMonitoringSchedules = `-- name: ListMovedMonitoringSchedules :many
+SELECT
+    jp.id AS schedule_id,
+    jp.kelas_id,
+    k.nama_kelas,
+    jp.tanggal,
+    jp.jam_mulai,
+    jp.jadwal_semula,
+    jp.alasan_reschedule,
+    jp.status AS schedule_status,
+    k.guru_id AS guru_utama_id,
+    COALESCE(gu.nama, '') AS guru_utama_nama,
+    jp.guru_pengganti_id,
+    COALESCE(gb.nama, '') AS guru_pengganti_nama
+FROM jadwal_pertemuan jp
+JOIN kelas k ON k.id = jp.kelas_id
+LEFT JOIN guru gu ON gu.id = k.guru_id
+LEFT JOIN guru gb ON gb.id = jp.guru_pengganti_id
+WHERE jp.is_reschedule = 1
+  AND length(jp.jadwal_semula) >= 10
+  AND substr(jp.jadwal_semula, 1, 10) >= substr(?1, 1, 10)
+  AND substr(jp.jadwal_semula, 1, 10) <= substr(?2, 1, 10)
+  AND substr(jp.jadwal_semula, 1, 10) <> substr(jp.tanggal, 1, 10)
+ORDER BY jp.jadwal_semula, k.nama_kelas, jp.id
+`
+
+type ListMovedMonitoringSchedulesParams struct {
+	StartDate interface{}
+	EndDate   interface{}
+}
+
+type ListMovedMonitoringSchedulesRow struct {
+	ScheduleID        int64
+	KelasID           int64
+	NamaKelas         string
+	Tanggal           time.Time
+	JamMulai          string
+	JadwalSemula      string
+	AlasanReschedule  string
+	ScheduleStatus    string
+	GuruUtamaID       sql.NullInt64
+	GuruUtamaNama     string
+	GuruPenggantiID   sql.NullInt64
+	GuruPenggantiNama string
+}
+
+// Jadwal yang di-reschedule keluar dari tanggal asalnya, untuk penanda
+// "Dipindah" pada tanggal asal. Tidak masuk KPI.
+func (q *Queries) ListMovedMonitoringSchedules(ctx context.Context, arg ListMovedMonitoringSchedulesParams) ([]ListMovedMonitoringSchedulesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMovedMonitoringSchedules, arg.StartDate, arg.EndDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMovedMonitoringSchedulesRow
+	for rows.Next() {
+		var i ListMovedMonitoringSchedulesRow
+		if err := rows.Scan(
+			&i.ScheduleID,
+			&i.KelasID,
+			&i.NamaKelas,
+			&i.Tanggal,
+			&i.JamMulai,
+			&i.JadwalSemula,
+			&i.AlasanReschedule,
+			&i.ScheduleStatus,
+			&i.GuruUtamaID,
+			&i.GuruUtamaNama,
+			&i.GuruPenggantiID,
+			&i.GuruPenggantiNama,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listNotificationsForUser = `-- name: ListNotificationsForUser :many
 SELECT id, type, title, message, action_url, read_at, created_at
 FROM notifications
