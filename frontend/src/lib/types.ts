@@ -176,12 +176,45 @@ export interface GuruRingkas {
 }
 
 export interface KoordinatorDashboard {
+	tanggal: string;
 	total_guru: number;
 	guru_tetap: number;
 	guru_part_time: number;
 	total_kelas: number;
 	total_santri: number;
-	guru_belum_absen: GuruRingkas[];
+	tindak_lanjut: DashboardTindakLanjut[];
+	todo: DashboardTodo[];
+	agenda: DashboardAgenda[];
+	tsi_bulan: string;
+	tsi_belum_final: number;
+}
+
+export interface DashboardTindakLanjut {
+	id: number;
+	kunjungan_id: number;
+	jenis: string;
+	catatan: string;
+	guru_nama: string;
+	target_tanggal: string;
+	terlambat: boolean;
+}
+
+export interface DashboardTodo {
+	id: number;
+	judul: string;
+	deadline: string;
+	pic: string;
+	status: string;
+	terlambat: boolean;
+}
+
+export interface DashboardAgenda {
+	jenis: "pembinaan" | "rapat" | "kunjungan";
+	id: number;
+	tanggal: string;
+	jam: string;
+	judul: string;
+	href: string;
 }
 
 export interface Kompetensi {
@@ -790,4 +823,13 @@ export interface PertemuanBelumDitutup {
 	jam_mulai: string;
 	durasi_jam: number;
 	lupa: boolean;
+}
+
+export interface GuruHapusInfo {
+	guru_id: number;
+	nama: string;
+	is_aktif: boolean;
+	bisa_dihapus: boolean;
+	kelas_aktif: string[];
+	riwayat: { label: string; jumlah: number }[];
 }

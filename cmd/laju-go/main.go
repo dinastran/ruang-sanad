@@ -167,7 +167,7 @@ func main() {
 	jadwalPertemuanHandler := handlers.NewJadwalPertemuanHandler(guruService, jadwalPertemuanService, pertemuanService, sessionStore, inertiaService)
 	riayahHandler := handlers.NewRiayahHandler(guruService, riayahService, sessionStore, inertiaService)
 	riayahSantriHandler := handlers.NewRiayahSantriHandler(guruService, riayahSantriService, sessionStore, inertiaService)
-	koordinatorGuruHandler := handlers.NewKoordinatorGuruHandler(koordinatorService, sessionStore, inertiaService)
+	koordinatorGuruHandler := handlers.NewKoordinatorGuruHandler(koordinatorService, koordinatorMonitoringService, pertemuanService, sessionStore, inertiaService)
 	koordinatorGuruDirectoryHandler := handlers.NewKoordinatorGuruDirectoryHandler(guruService, koordinatorService, riayahService, sessionStore, inertiaService)
 	koordinatorMonitoringHandler := handlers.NewKoordinatorMonitoringHandler(koordinatorMonitoringService, koordinatorService, pertemuanService, sessionStore, inertiaService)
 	koordinatorFeaturesHandler := handlers.NewKoordinatorFeaturesHandler(koordinatorService, guruService, riayahService, sessionStore, inertiaService)

@@ -233,3 +233,59 @@ UPDATE wa_template SET nama = ?, target_type = ?, body = ?, is_aktif = ?, update
 
 -- name: DeleteWaTemplate :exec
 DELETE FROM wa_template WHERE id = ?;
+
+-- ============ Dashboard harian ============
+
+-- name: ListDashboardTindakLanjut :many
+SELECT tl.id, tl.kunjungan_id, tl.jenis, tl.catatan, tl.target_tanggal, g.nama AS guru_nama
+FROM kunjungan_tindak_lanjut tl
+JOIN kunjungan_kelas kk ON kk.id = tl.kunjungan_id
+JOIN guru g ON g.id = kk.guru_id
+WHERE tl.status = 'terbuka'
+  AND tl.target_tanggal IS NOT NULL
+  AND substr(tl.target_tanggal, 1, 10) <= substr(sqlc.arg(until_date), 1, 10)
+ORDER BY substr(tl.target_tanggal, 1, 10) ASC, tl.id ASC;
+
+-- name: ListDashboardTodo :many
+SELECT id, judul, deadline, pic, status
+FROM todo_koordinator
+WHERE status IN ('belum', 'proses')
+  AND deadline IS NOT NULL
+  AND substr(deadline, 1, 10) <= substr(sqlc.arg(until_date), 1, 10)
+ORDER BY substr(deadline, 1, 10) ASC, id ASC;
+
+-- name: ListDashboardPembinaan :many
+SELECT id, tanggal, topik
+FROM pembinaan
+WHERE status = 'dijadwalkan'
+  AND substr(tanggal, 1, 10) >= substr(sqlc.arg(start_date), 1, 10)
+  AND substr(tanggal, 1, 10) <= substr(sqlc.arg(end_date), 1, 10)
+ORDER BY substr(tanggal, 1, 10) ASC, id ASC;
+
+-- name: ListDashboardRapat :many
+SELECT id, tanggal, judul
+FROM rapat_guru
+WHERE status = 'dijadwalkan'
+  AND substr(tanggal, 1, 10) >= substr(sqlc.arg(start_date), 1, 10)
+  AND substr(tanggal, 1, 10) <= substr(sqlc.arg(end_date), 1, 10)
+ORDER BY substr(tanggal, 1, 10) ASC, id ASC;
+
+-- name: ListDashboardKunjungan :many
+SELECT kk.id, kk.tanggal, kk.jam, g.nama AS guru_nama, COALESCE(k.nama_kelas, '') AS nama_kelas
+FROM kunjungan_kelas kk
+JOIN guru g ON g.id = kk.guru_id
+LEFT JOIN kelas k ON k.id = kk.kelas_id
+WHERE kk.status = 'dijadwalkan'
+  AND kk.tanggal IS NOT NULL
+  AND substr(kk.tanggal, 1, 10) >= substr(sqlc.arg(start_date), 1, 10)
+  AND substr(kk.tanggal, 1, 10) <= substr(sqlc.arg(end_date), 1, 10)
+ORDER BY substr(kk.tanggal, 1, 10) ASC, kk.jam ASC, kk.id ASC;
+
+-- name: CountGuruTsiBelumFinal :one
+SELECT COUNT(*)
+FROM guru g
+WHERE g.is_aktif = 1
+  AND NOT EXISTS (
+    SELECT 1 FROM tsi_periode tp
+    WHERE tp.guru_id = g.id AND tp.bulan = sqlc.arg(bulan) AND tp.status = 'final'
+  );

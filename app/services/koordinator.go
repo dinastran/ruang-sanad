@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -44,31 +45,113 @@ func nullDateStr(t sql.NullTime) string {
 
 // ============ Dashboard ============
 
-func (s *KoordinatorService) GetDashboard() (*models.KoordinatorDashboardResponse, error) {
+// DashboardAgendaHari is how far ahead the dashboard agenda looks.
+const DashboardAgendaHari = 7
+
+func (s *KoordinatorService) GetDashboard(now time.Time) (*models.KoordinatorDashboardResponse, error) {
 	ctx := context.Background()
+	now = now.In(wib)
+	today := now.Format("2006-01-02")
+	until := now.AddDate(0, 0, DashboardAgendaHari).Format("2006-01-02")
+
 	total, _ := s.querier.CountGuruAktifTotal(ctx)
 	tetap, _ := s.querier.CountGuruByStatusAktif(ctx, "tetap")
 	partTime, _ := s.querier.CountGuruByStatusAktif(ctx, "part_time")
 	totalKelas, _ := s.querier.CountKelasAktifTotal(ctx)
 	totalSantri, _ := s.querier.CountSantriAktifTotal(ctx)
 
-	belumRows, err := s.querier.ListGuruBelumAbsenPekanIni(ctx)
+	resp := &models.KoordinatorDashboardResponse{
+		Tanggal:      today,
+		TotalGuru:    total,
+		GuruTetap:    tetap,
+		GuruPartTime: partTime,
+		TotalKelas:   totalKelas,
+		TotalSantri:  totalSantri,
+		TindakLanjut: []models.DashboardTindakLanjut{},
+		Todo:         []models.DashboardTodo{},
+		Agenda:       []models.DashboardAgenda{},
+		TsiBulan:     now.Format("2006-01"),
+	}
+
+	tlRows, err := s.querier.ListDashboardTindakLanjut(ctx, today)
 	if err != nil {
 		return nil, err
 	}
-	belum := make([]models.GuruRingkas, 0, len(belumRows))
-	for _, b := range belumRows {
-		belum = append(belum, models.GuruRingkas{ID: b.ID, Nama: b.Nama, NoWa: b.NoWa})
+	for _, r := range tlRows {
+		target := nullDateStr(r.TargetTanggal)
+		resp.TindakLanjut = append(resp.TindakLanjut, models.DashboardTindakLanjut{
+			ID: r.ID, KunjunganID: r.KunjunganID, Jenis: r.Jenis, Catatan: r.Catatan,
+			GuruNama: r.GuruNama, TargetTanggal: target, Terlambat: target < today,
+		})
 	}
 
-	return &models.KoordinatorDashboardResponse{
-		TotalGuru:      total,
-		GuruTetap:      tetap,
-		GuruPartTime:   partTime,
-		TotalKelas:     totalKelas,
-		TotalSantri:    totalSantri,
-		GuruBelumAbsen: belum,
-	}, nil
+	todoRows, err := s.querier.ListDashboardTodo(ctx, today)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range todoRows {
+		deadline := nullDateStr(r.Deadline)
+		resp.Todo = append(resp.Todo, models.DashboardTodo{
+			ID: r.ID, Judul: r.Judul, Deadline: deadline, Pic: r.Pic, Status: r.Status, Terlambat: deadline < today,
+		})
+	}
+
+	pembinaan, err := s.querier.ListDashboardPembinaan(ctx, queries.ListDashboardPembinaanParams{StartDate: today, EndDate: until})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range pembinaan {
+		judul := "Pembinaan guru"
+		if t := strings.TrimSpace(r.Topik); t != "" {
+			judul += " · " + t
+		}
+		resp.Agenda = append(resp.Agenda, models.DashboardAgenda{
+			Jenis: "pembinaan", ID: r.ID, Tanggal: r.Tanggal.Format("2006-01-02"), Judul: judul,
+			Href: "/app/koordinator-guru/pembinaan",
+		})
+	}
+
+	rapat, err := s.querier.ListDashboardRapat(ctx, queries.ListDashboardRapatParams{StartDate: today, EndDate: until})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rapat {
+		judul := strings.TrimSpace(r.Judul)
+		if judul == "" {
+			judul = "Rapat guru"
+		}
+		resp.Agenda = append(resp.Agenda, models.DashboardAgenda{
+			Jenis: "rapat", ID: r.ID, Tanggal: r.Tanggal.Format("2006-01-02"), Judul: judul,
+			Href: "/app/koordinator-guru/rapat",
+		})
+	}
+
+	kunjungan, err := s.querier.ListDashboardKunjungan(ctx, queries.ListDashboardKunjunganParams{StartDate: today, EndDate: until})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range kunjungan {
+		judul := "Kunjungan kelas · " + r.GuruNama
+		if r.NamaKelas != "" {
+			judul += " (" + r.NamaKelas + ")"
+		}
+		resp.Agenda = append(resp.Agenda, models.DashboardAgenda{
+			Jenis: "kunjungan", ID: r.ID, Tanggal: nullDateStr(r.Tanggal), Jam: r.Jam, Judul: judul,
+			Href: fmt.Sprintf("/app/koordinator-guru/kunjungan/%d", r.ID),
+		})
+	}
+	sort.SliceStable(resp.Agenda, func(i, j int) bool {
+		if resp.Agenda[i].Tanggal != resp.Agenda[j].Tanggal {
+			return resp.Agenda[i].Tanggal < resp.Agenda[j].Tanggal
+		}
+		return resp.Agenda[i].Jam < resp.Agenda[j].Jam
+	})
+
+	resp.TsiBelumFinal, err = s.querier.CountGuruTsiBelumFinal(ctx, resp.TsiBulan)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 // ListGuruSimple returns active guru for dropdowns (id, nama).

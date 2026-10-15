@@ -577,3 +577,31 @@ func TestStartTerjadwalDanSpontanBersamaanHanyaMembuatSatuPertemuan(t *testing.T
 	require.EqualValues(t, 1, total)
 	require.EqualValues(t, 1, active)
 }
+
+func TestJadwalRutinTidakMengadopsiJadwalManualJikaOccurrenceSudahAda(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	kelasService := NewKelasService(f.querier)
+	today := startOfToday()
+
+	require.NoError(t, kelasService.SetJadwalRutin(f.kelasID, f.guruUtamaUser, models.SetJadwalRutinRequest{
+		Slots: []models.JadwalRutinSlotRequest{{Hari: int64(isoWeekday(today)), JamMulai: "08:00"}},
+	}))
+	require.NoError(t, f.service.EnsureRoutineOccurrencesForClass(f.kelasID, today, today))
+
+	// Occurrence rutin dipindah ke hari lain, lalu slot aslinya diisi jadwal manual.
+	_, err := f.db.Exec(
+		`UPDATE jadwal_pertemuan SET tanggal = ?, is_reschedule = 1 WHERE kelas_id = ? AND jadwal_rutin_id IS NOT NULL`,
+		today.AddDate(0, 0, 1), f.kelasID,
+	)
+	require.NoError(t, err)
+	_, err = f.querier.CreateExtraSchedule(context.Background(), f.kelasID, today, "08:00", "", sql.NullInt64{})
+	require.NoError(t, err)
+
+	require.NoError(t, f.service.EnsureRoutineOccurrencesForClass(f.kelasID, today, today))
+
+	var total int64
+	require.NoError(t, f.db.QueryRow(
+		`SELECT COUNT(*) FROM jadwal_pertemuan WHERE kelas_id = ?`, f.kelasID,
+	).Scan(&total))
+	require.EqualValues(t, 2, total)
+}

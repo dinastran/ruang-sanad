@@ -33,6 +33,23 @@ func (q *Queries) CountGuruByStatusAktif(ctx context.Context, status string) (in
 	return count, err
 }
 
+const countGuruTsiBelumFinal = `-- name: CountGuruTsiBelumFinal :one
+SELECT COUNT(*)
+FROM guru g
+WHERE g.is_aktif = 1
+  AND NOT EXISTS (
+    SELECT 1 FROM tsi_periode tp
+    WHERE tp.guru_id = g.id AND tp.bulan = ?1 AND tp.status = 'final'
+  )
+`
+
+func (q *Queries) CountGuruTsiBelumFinal(ctx context.Context, bulan string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countGuruTsiBelumFinal, bulan)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countKalamShareByGuruRange = `-- name: CountKalamShareByGuruRange :one
 SELECT COUNT(*) FROM kalam_share_log ksl
 JOIN kalam_bersanad kb ON kb.id = ksl.kalam_id
@@ -432,6 +449,244 @@ func (q *Queries) GetWaTemplate(ctx context.Context, id int64) (WaTemplate, erro
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listDashboardKunjungan = `-- name: ListDashboardKunjungan :many
+SELECT kk.id, kk.tanggal, kk.jam, g.nama AS guru_nama, COALESCE(k.nama_kelas, '') AS nama_kelas
+FROM kunjungan_kelas kk
+JOIN guru g ON g.id = kk.guru_id
+LEFT JOIN kelas k ON k.id = kk.kelas_id
+WHERE kk.status = 'dijadwalkan'
+  AND kk.tanggal IS NOT NULL
+  AND substr(kk.tanggal, 1, 10) >= substr(?1, 1, 10)
+  AND substr(kk.tanggal, 1, 10) <= substr(?2, 1, 10)
+ORDER BY substr(kk.tanggal, 1, 10) ASC, kk.jam ASC, kk.id ASC
+`
+
+type ListDashboardKunjunganParams struct {
+	StartDate interface{}
+	EndDate   interface{}
+}
+
+type ListDashboardKunjunganRow struct {
+	ID        int64
+	Tanggal   sql.NullTime
+	Jam       string
+	GuruNama  string
+	NamaKelas string
+}
+
+func (q *Queries) ListDashboardKunjungan(ctx context.Context, arg ListDashboardKunjunganParams) ([]ListDashboardKunjunganRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDashboardKunjungan, arg.StartDate, arg.EndDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDashboardKunjunganRow
+	for rows.Next() {
+		var i ListDashboardKunjunganRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tanggal,
+			&i.Jam,
+			&i.GuruNama,
+			&i.NamaKelas,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDashboardPembinaan = `-- name: ListDashboardPembinaan :many
+SELECT id, tanggal, topik
+FROM pembinaan
+WHERE status = 'dijadwalkan'
+  AND substr(tanggal, 1, 10) >= substr(?1, 1, 10)
+  AND substr(tanggal, 1, 10) <= substr(?2, 1, 10)
+ORDER BY substr(tanggal, 1, 10) ASC, id ASC
+`
+
+type ListDashboardPembinaanParams struct {
+	StartDate interface{}
+	EndDate   interface{}
+}
+
+type ListDashboardPembinaanRow struct {
+	ID      int64
+	Tanggal time.Time
+	Topik   string
+}
+
+func (q *Queries) ListDashboardPembinaan(ctx context.Context, arg ListDashboardPembinaanParams) ([]ListDashboardPembinaanRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDashboardPembinaan, arg.StartDate, arg.EndDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDashboardPembinaanRow
+	for rows.Next() {
+		var i ListDashboardPembinaanRow
+		if err := rows.Scan(&i.ID, &i.Tanggal, &i.Topik); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDashboardRapat = `-- name: ListDashboardRapat :many
+SELECT id, tanggal, judul
+FROM rapat_guru
+WHERE status = 'dijadwalkan'
+  AND substr(tanggal, 1, 10) >= substr(?1, 1, 10)
+  AND substr(tanggal, 1, 10) <= substr(?2, 1, 10)
+ORDER BY substr(tanggal, 1, 10) ASC, id ASC
+`
+
+type ListDashboardRapatParams struct {
+	StartDate interface{}
+	EndDate   interface{}
+}
+
+type ListDashboardRapatRow struct {
+	ID      int64
+	Tanggal time.Time
+	Judul   string
+}
+
+func (q *Queries) ListDashboardRapat(ctx context.Context, arg ListDashboardRapatParams) ([]ListDashboardRapatRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDashboardRapat, arg.StartDate, arg.EndDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDashboardRapatRow
+	for rows.Next() {
+		var i ListDashboardRapatRow
+		if err := rows.Scan(&i.ID, &i.Tanggal, &i.Judul); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDashboardTindakLanjut = `-- name: ListDashboardTindakLanjut :many
+
+SELECT tl.id, tl.kunjungan_id, tl.jenis, tl.catatan, tl.target_tanggal, g.nama AS guru_nama
+FROM kunjungan_tindak_lanjut tl
+JOIN kunjungan_kelas kk ON kk.id = tl.kunjungan_id
+JOIN guru g ON g.id = kk.guru_id
+WHERE tl.status = 'terbuka'
+  AND tl.target_tanggal IS NOT NULL
+  AND substr(tl.target_tanggal, 1, 10) <= substr(?1, 1, 10)
+ORDER BY substr(tl.target_tanggal, 1, 10) ASC, tl.id ASC
+`
+
+type ListDashboardTindakLanjutRow struct {
+	ID            int64
+	KunjunganID   int64
+	Jenis         string
+	Catatan       string
+	TargetTanggal sql.NullTime
+	GuruNama      string
+}
+
+// ============ Dashboard harian ============
+func (q *Queries) ListDashboardTindakLanjut(ctx context.Context, untilDate interface{}) ([]ListDashboardTindakLanjutRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDashboardTindakLanjut, untilDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDashboardTindakLanjutRow
+	for rows.Next() {
+		var i ListDashboardTindakLanjutRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.KunjunganID,
+			&i.Jenis,
+			&i.Catatan,
+			&i.TargetTanggal,
+			&i.GuruNama,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDashboardTodo = `-- name: ListDashboardTodo :many
+SELECT id, judul, deadline, pic, status
+FROM todo_koordinator
+WHERE status IN ('belum', 'proses')
+  AND deadline IS NOT NULL
+  AND substr(deadline, 1, 10) <= substr(?1, 1, 10)
+ORDER BY substr(deadline, 1, 10) ASC, id ASC
+`
+
+type ListDashboardTodoRow struct {
+	ID       int64
+	Judul    string
+	Deadline sql.NullTime
+	Pic      string
+	Status   string
+}
+
+func (q *Queries) ListDashboardTodo(ctx context.Context, untilDate interface{}) ([]ListDashboardTodoRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDashboardTodo, untilDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDashboardTodoRow
+	for rows.Next() {
+		var i ListDashboardTodoRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Judul,
+			&i.Deadline,
+			&i.Pic,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listGuruAktifSimple = `-- name: ListGuruAktifSimple :many

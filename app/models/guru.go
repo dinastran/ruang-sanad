@@ -255,3 +255,19 @@ type RiayahInput struct {
 	TargetID   int64  `json:"target_id"`
 	Catatan    string `json:"catatan"`
 }
+
+// GuruHapusInfo tells the koordinator whether a guru can be deleted, and if
+// not, which data still depends on them.
+type GuruHapusInfo struct {
+	GuruID      int64             `json:"guru_id"`
+	Nama        string            `json:"nama"`
+	IsAktif     bool              `json:"is_aktif"`
+	BisaDihapus bool              `json:"bisa_dihapus"`
+	KelasAktif  []string          `json:"kelas_aktif"`
+	Riwayat     []GuruRiwayatItem `json:"riwayat"`
+}
+
+type GuruRiwayatItem struct {
+	Label  string `json:"label"`
+	Jumlah int64  `json:"jumlah"`
+}

@@ -8,13 +8,52 @@ type GuruRingkas struct {
 	NoWa string `json:"no_wa"`
 }
 
+// KoordinatorDashboardResponse holds the daily overview for koordinator guru.
+// Kelas hari ini dan pertemuan belum ditutup diambil dari service monitoring
+// dan pertemuan, bukan dari sini.
 type KoordinatorDashboardResponse struct {
-	TotalGuru      int64         `json:"total_guru"`
-	GuruTetap      int64         `json:"guru_tetap"`
-	GuruPartTime   int64         `json:"guru_part_time"`
-	TotalKelas     int64         `json:"total_kelas"`
-	TotalSantri    int64         `json:"total_santri"`
-	GuruBelumAbsen []GuruRingkas `json:"guru_belum_absen"`
+	Tanggal       string                  `json:"tanggal"`
+	TotalGuru     int64                   `json:"total_guru"`
+	GuruTetap     int64                   `json:"guru_tetap"`
+	GuruPartTime  int64                   `json:"guru_part_time"`
+	TotalKelas    int64                   `json:"total_kelas"`
+	TotalSantri   int64                   `json:"total_santri"`
+	TindakLanjut  []DashboardTindakLanjut `json:"tindak_lanjut"`
+	Todo          []DashboardTodo         `json:"todo"`
+	Agenda        []DashboardAgenda       `json:"agenda"`
+	TsiBulan      string                  `json:"tsi_bulan"`
+	TsiBelumFinal int64                   `json:"tsi_belum_final"`
+}
+
+// DashboardTindakLanjut is an open kunjungan follow-up due today or earlier.
+type DashboardTindakLanjut struct {
+	ID            int64  `json:"id"`
+	KunjunganID   int64  `json:"kunjungan_id"`
+	Jenis         string `json:"jenis"`
+	Catatan       string `json:"catatan"`
+	GuruNama      string `json:"guru_nama"`
+	TargetTanggal string `json:"target_tanggal"`
+	Terlambat     bool   `json:"terlambat"`
+}
+
+// DashboardTodo is an unfinished koordinator to-do due today or earlier.
+type DashboardTodo struct {
+	ID        int64  `json:"id"`
+	Judul     string `json:"judul"`
+	Deadline  string `json:"deadline"`
+	Pic       string `json:"pic"`
+	Status    string `json:"status"`
+	Terlambat bool   `json:"terlambat"`
+}
+
+// DashboardAgenda is a scheduled pembinaan, rapat, or kunjungan kelas.
+type DashboardAgenda struct {
+	Jenis   string `json:"jenis"` // pembinaan/rapat/kunjungan
+	ID      int64  `json:"id"`
+	Tanggal string `json:"tanggal"`
+	Jam     string `json:"jam"`
+	Judul   string `json:"judul"`
+	Href    string `json:"href"`
 }
 
 // ============ Kompetensi ============

@@ -50,7 +50,7 @@ WHERE kelas_id = ?;
 -- name: GetFirstLevelChangeBoundary :one
 SELECT CAST(COALESCE(MIN(pertemuan_ke), 0) AS INTEGER)
 FROM kelas_perubahan
-WHERE kelas_id = ? AND jenis = 'level_kelas' AND pertemuan_ke > 0;
+WHERE kelas_id = CAST(sqlc.arg(kelas_id) AS INTEGER) AND jenis = 'level_kelas' AND pertemuan_ke > 0;
 
 -- name: GetFirstPertemuanLevelKe :one
 SELECT pertemuan_level_ke
@@ -92,7 +92,7 @@ WHERE id = sqlc.arg(kelas_id);
 -- name: ShiftLevelChangeBoundaries :exec
 UPDATE kelas_perubahan
 SET pertemuan_ke = pertemuan_ke + sqlc.arg(delta)
-WHERE kelas_id = sqlc.arg(kelas_id)
+WHERE kelas_id = CAST(sqlc.arg(kelas_id) AS INTEGER)
   AND jenis = 'level_kelas'
   AND pertemuan_ke > 0;
 
@@ -100,7 +100,7 @@ WHERE kelas_id = sqlc.arg(kelas_id)
 UPDATE santri
 SET pertemuan_awal = pertemuan_awal + sqlc.arg(delta),
     updated_at = CURRENT_TIMESTAMP
-WHERE kelas_id = sqlc.arg(kelas_id)
+WHERE kelas_id = CAST(sqlc.arg(kelas_id) AS INTEGER)
   AND pertemuan_awal > 0;
 
 -- name: SyncTagihanPertemuanKeByKelas :exec
@@ -110,8 +110,8 @@ SET pertemuan_ke = (
     FROM pertemuan p
     WHERE p.id = tagihan.pertemuan_id
 )
-WHERE kelas_id = sqlc.arg(kelas_id)
-  AND pertemuan_id IS NOT NULL
+WHERE tagihan.kelas_id = CAST(sqlc.arg(kelas_id) AS INTEGER)
+  AND tagihan.pertemuan_id IS NOT NULL
   AND EXISTS (
       SELECT 1 FROM pertemuan p
       WHERE p.id = tagihan.pertemuan_id
