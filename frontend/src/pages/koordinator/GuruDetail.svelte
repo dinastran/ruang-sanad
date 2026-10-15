@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { inertia, router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
+	import HapusGuruDialog from "@components/HapusGuruDialog.svelte";
 	import type { GuruDirectory, Kompetensi, LinkableUser, Riayah, User } from "@lib/types";
-	import { ArrowLeft, BookOpen, Save, Users, Link2, Unlink, Info, Award, NotebookPen } from "lucide-svelte";
+	import { ArrowLeft, BookOpen, Save, Users, Link2, Unlink, Info, Award, NotebookPen, Trash2 } from "lucide-svelte";
 
 	interface Props { user?: User; guru: GuruDirectory; linkableUsers?: LinkableUser[]; canLink?: boolean; kompetensi?: Kompetensi; riayah?: Riayah[]; success?: string; error?: string; }
 	let { user, guru, linkableUsers = [], canLink = false, kompetensi, riayah = [], success, error }: Props = $props();
@@ -37,6 +38,7 @@
 	}
 	let form = $state({ nama: guru.nama, gelar: guru.gelar, jenis_kelamin: guru.jenis_kelamin, status: guru.status, no_wa: guru.no_wa, email: guru.email, tanggal_gabung: guru.tanggal_gabung, foto: guru.foto, is_aktif: guru.is_aktif });
 	let saving = $state(false);
+	let showHapus = $state(false);
 	const inputClass = "w-full px-3.5 py-2.5 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700 text-sm text-neutral-900 dark:text-white outline-none focus:border-brand-400";
 	function save() { saving = true; router.put(`/app/koordinator-guru/guru/${guru.id}`, form, { preserveScroll: true, onFinish: () => saving = false }); }
 
@@ -113,5 +115,17 @@
 			</div>
 			<div class="p-5 sm:p-6"><h3 class="text-sm font-semibold text-neutral-900 dark:text-white mb-3">Riwayat Catatan</h3><div class="space-y-3">{#each riayah as r (r.id)}<article class="relative border-l-2 border-brand-400/40 pl-4 py-1"><p class="text-sm text-neutral-800 dark:text-neutral-200 whitespace-pre-wrap">{r.catatan}</p><p class="mt-2 text-xs text-neutral-500">Dicatat {formatRiayahDate(r.created_at)}{#if r.penulis_nama} · oleh {r.penulis_nama}{/if}</p></article>{:else}<p class="rounded-xl bg-neutral-100/60 dark:bg-neutral-800/40 p-4 text-sm text-neutral-500">Belum ada catatan riayah untuk guru ini.</p>{/each}</div></div>
 		</section>
+
+		<section class="rounded-2xl border border-red-500/20 bg-red-500/[0.03] p-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+			<div>
+				<h2 class="font-semibold text-neutral-900 dark:text-white">Hapus atau nonaktifkan guru</h2>
+				<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Guru tanpa riwayat bisa dihapus permanen. Guru yang sudah punya riwayat cukup dinonaktifkan agar datanya tetap tersimpan.</p>
+			</div>
+			<button type="button" onclick={() => (showHapus = true)} class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-red-500/30 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-500/10 dark:text-red-400"><Trash2 class="h-4 w-4" /> Hapus guru</button>
+		</section>
 	</div>
+
+	{#if showHapus}
+		<HapusGuruDialog guruId={guru.id} guruNama={guru.nama} onclose={() => (showHapus = false)} />
+	{/if}
 </AppLayout>

@@ -2,8 +2,9 @@
 	import { inertia, router } from "@inertiajs/svelte";
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
+	import HapusGuruDialog from "@components/HapusGuruDialog.svelte";
 	import type { GuruDirectory, User } from "@lib/types";
-	import { Search, Users, ArrowRight, BookOpen, UserRoundCheck, Plus, X } from "lucide-svelte";
+	import { Search, Users, ArrowRight, BookOpen, UserRoundCheck, Plus, X, Trash2 } from "lucide-svelte";
 
 	interface Props {
 		user?: User;
@@ -21,6 +22,7 @@
 		return matchesSearch && matchesStatus;
 	}));
 
+	let hapusTarget = $state<GuruDirectory | null>(null);
 	let showCreate = $state(false);
 	let saving = $state(false);
 	const emptyForm = () => ({ nama: "", gelar: "", jenis_kelamin: "L", status: "tetap", no_wa: "", email: "", tanggal_gabung: "", foto: "", is_aktif: true });
@@ -77,19 +79,26 @@
 
 		<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
 			{#each filtered as guru (guru.id)}
-				<a href={`/app/koordinator-guru/guru/${guru.id}`} use:inertia class="group rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-5 hover:border-brand-400/40 hover:shadow-soft transition-all">
+				<div class="relative">
+				<a href={`/app/koordinator-guru/guru/${guru.id}`} use:inertia class="group block h-full rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-5 hover:border-brand-400/40 hover:shadow-soft transition-all">
 					<div class="flex items-start gap-3">
 						{#if guru.foto}<img src={guru.foto} alt={guru.nama} class="w-11 h-11 rounded-xl object-cover shrink-0" />{:else}<div class="w-11 h-11 rounded-xl bg-secondary-500/10 text-secondary-600 dark:text-secondary-300 flex items-center justify-center font-bold shrink-0">{guru.nama.charAt(0).toUpperCase()}</div>{/if}
 						<div class="min-w-0 flex-1"><h2 class="font-semibold text-neutral-900 dark:text-white truncate">{guru.nama}{guru.gelar ? `, ${guru.gelar}` : ""}</h2><p class="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">{guru.status === "tetap" ? "Guru Tetap" : "Guru Part Time"}</p></div>
 						<span class="w-2.5 h-2.5 rounded-full {guru.is_aktif ? 'bg-green-500' : 'bg-neutral-400'}" title={guru.is_aktif ? "Aktif" : "Nonaktif"}></span>
 					</div>
-					<div class="mt-5 pt-4 border-t border-neutral-200/80 dark:border-white/[0.04] flex items-center gap-4 text-xs text-neutral-500 dark:text-neutral-400"><span class="inline-flex items-center gap-1"><BookOpen class="w-3.5 h-3.5" /> {guru.total_kelas} kelas</span><span class="inline-flex items-center gap-1"><UserRoundCheck class="w-3.5 h-3.5" /> {guru.total_santri} santri</span><ArrowRight class="ml-auto w-4 h-4 group-hover:text-brand-500 group-hover:translate-x-0.5 transition-all" /></div>
+					<div class="mt-5 pt-4 pr-10 border-t border-neutral-200/80 dark:border-white/[0.04] flex items-center gap-4 text-xs text-neutral-500 dark:text-neutral-400"><span class="inline-flex items-center gap-1"><BookOpen class="w-3.5 h-3.5" /> {guru.total_kelas} kelas</span><span class="inline-flex items-center gap-1"><UserRoundCheck class="w-3.5 h-3.5" /> {guru.total_santri} santri</span><ArrowRight class="ml-auto w-4 h-4 group-hover:text-brand-500 group-hover:translate-x-0.5 transition-all" /></div>
 				</a>
+				<button type="button" onclick={() => (hapusTarget = guru)} aria-label={`Hapus ${guru.nama}`} title="Hapus guru" class="absolute bottom-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"><Trash2 class="h-4 w-4" /></button>
+				</div>
 			{:else}
 				<div class="md:col-span-2 xl:col-span-3 rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-700 p-12 text-center text-sm text-neutral-500">Tidak ada guru yang sesuai.</div>
 			{/each}
 		</div>
 	</div>
+
+	{#if hapusTarget}
+		<HapusGuruDialog guruId={hapusTarget.id} guruNama={hapusTarget.nama} onclose={() => (hapusTarget = null)} />
+	{/if}
 
 	{#if showCreate}
 		<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onclick={() => (showCreate = false)} transition:fly={{ duration: 150 }}>

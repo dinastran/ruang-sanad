@@ -824,3 +824,12 @@ export interface PertemuanBelumDitutup {
 	durasi_jam: number;
 	lupa: boolean;
 }
+
+export interface GuruHapusInfo {
+	guru_id: number;
+	nama: string;
+	is_aktif: boolean;
+	bisa_dihapus: boolean;
+	kelas_aktif: string[];
+	riwayat: { label: string; jumlah: number }[];
+}
