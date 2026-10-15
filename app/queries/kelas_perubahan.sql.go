@@ -44,6 +44,51 @@ func (q *Queries) CreateKelasPerubahan(ctx context.Context, arg CreateKelasPerub
 	return err
 }
 
+const finalizePertemuanKeRebase = `-- name: FinalizePertemuanKeRebase :exec
+UPDATE pertemuan
+SET pertemuan_ke = pertemuan_ke - ?1 + ?2
+WHERE kelas_id = ?3
+`
+
+type FinalizePertemuanKeRebaseParams struct {
+	Offset  int64
+	Delta   int64
+	KelasID int64
+}
+
+func (q *Queries) FinalizePertemuanKeRebase(ctx context.Context, arg FinalizePertemuanKeRebaseParams) error {
+	_, err := q.db.ExecContext(ctx, finalizePertemuanKeRebase, arg.Offset, arg.Delta, arg.KelasID)
+	return err
+}
+
+const getFirstLevelChangeBoundary = `-- name: GetFirstLevelChangeBoundary :one
+SELECT CAST(COALESCE(MIN(pertemuan_ke), 0) AS INTEGER)
+FROM kelas_perubahan
+WHERE kelas_id = CAST(?1 AS INTEGER) AND jenis = 'level_kelas' AND pertemuan_ke > 0
+`
+
+func (q *Queries) GetFirstLevelChangeBoundary(ctx context.Context, kelasID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getFirstLevelChangeBoundary, kelasID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const getFirstPertemuanLevelKe = `-- name: GetFirstPertemuanLevelKe :one
+SELECT pertemuan_level_ke
+FROM pertemuan
+WHERE kelas_id = ?
+ORDER BY pertemuan_ke ASC, id ASC
+LIMIT 1
+`
+
+func (q *Queries) GetFirstPertemuanLevelKe(ctx context.Context, kelasID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getFirstPertemuanLevelKe, kelasID)
+	var pertemuan_level_ke int64
+	err := row.Scan(&pertemuan_level_ke)
+	return pertemuan_level_ke, err
+}
+
 const getKelasPerubahanState = `-- name: GetKelasPerubahanState :one
 SELECT id, kunci_kelas, level, jadwal, sub_index, level_pertemuan_awal
 FROM kelas WHERE id = ?
@@ -69,6 +114,28 @@ func (q *Queries) GetKelasPerubahanState(ctx context.Context, id int64) (GetKela
 		&i.SubIndex,
 		&i.LevelPertemuanAwal,
 	)
+	return i, err
+}
+
+const getPertemuanRebaseBounds = `-- name: GetPertemuanRebaseBounds :one
+SELECT
+    COUNT(*) AS total,
+    CAST(COALESCE(MIN(pertemuan_ke), 0) AS INTEGER) AS min_pertemuan_ke,
+    CAST(COALESCE(MAX(pertemuan_ke), 0) AS INTEGER) AS max_pertemuan_ke
+FROM pertemuan
+WHERE kelas_id = ?
+`
+
+type GetPertemuanRebaseBoundsRow struct {
+	Total          int64
+	MinPertemuanKe int64
+	MaxPertemuanKe int64
+}
+
+func (q *Queries) GetPertemuanRebaseBounds(ctx context.Context, kelasID int64) (GetPertemuanRebaseBoundsRow, error) {
+	row := q.db.QueryRowContext(ctx, getPertemuanRebaseBounds, kelasID)
+	var i GetPertemuanRebaseBoundsRow
+	err := row.Scan(&i.Total, &i.MinPertemuanKe, &i.MaxPertemuanKe)
 	return i, err
 }
 
@@ -145,6 +212,43 @@ func (q *Queries) ListKelasPerubahanByKelas(ctx context.Context, kelasID sql.Nul
 	return items, nil
 }
 
+const offsetPertemuanKeForRebase = `-- name: OffsetPertemuanKeForRebase :exec
+UPDATE pertemuan
+SET pertemuan_ke = pertemuan_ke + ?1
+WHERE kelas_id = ?2
+`
+
+type OffsetPertemuanKeForRebaseParams struct {
+	Offset  int64
+	KelasID int64
+}
+
+func (q *Queries) OffsetPertemuanKeForRebase(ctx context.Context, arg OffsetPertemuanKeForRebaseParams) error {
+	_, err := q.db.ExecContext(ctx, offsetPertemuanKeForRebase, arg.Offset, arg.KelasID)
+	return err
+}
+
+const rebaseKelasMeetingAnchors = `-- name: RebaseKelasMeetingAnchors :exec
+UPDATE kelas
+SET pertemuan_terakhir = ?1,
+    level_pertemuan_awal = CASE
+        WHEN level_pertemuan_awal > 0 THEN level_pertemuan_awal + ?2
+        ELSE level_pertemuan_awal
+    END
+WHERE id = ?3
+`
+
+type RebaseKelasMeetingAnchorsParams struct {
+	NewAnchor int64
+	Delta     int64
+	KelasID   int64
+}
+
+func (q *Queries) RebaseKelasMeetingAnchors(ctx context.Context, arg RebaseKelasMeetingAnchorsParams) error {
+	_, err := q.db.ExecContext(ctx, rebaseKelasMeetingAnchors, arg.NewAnchor, arg.Delta, arg.KelasID)
+	return err
+}
+
 const setKelasAwalPertemuan = `-- name: SetKelasAwalPertemuan :exec
 UPDATE kelas SET pertemuan_terakhir = ?, level_pertemuan_awal = ?, kapasitas = ? WHERE id = ?
 `
@@ -168,6 +272,76 @@ func (q *Queries) SetKelasAwalPertemuan(ctx context.Context, arg SetKelasAwalPer
 	return err
 }
 
+const shiftAllPertemuanLevelKe = `-- name: ShiftAllPertemuanLevelKe :exec
+UPDATE pertemuan
+SET pertemuan_level_ke = pertemuan_level_ke + ?1
+WHERE kelas_id = ?2
+`
+
+type ShiftAllPertemuanLevelKeParams struct {
+	Delta   int64
+	KelasID int64
+}
+
+func (q *Queries) ShiftAllPertemuanLevelKe(ctx context.Context, arg ShiftAllPertemuanLevelKeParams) error {
+	_, err := q.db.ExecContext(ctx, shiftAllPertemuanLevelKe, arg.Delta, arg.KelasID)
+	return err
+}
+
+const shiftLevelChangeBoundaries = `-- name: ShiftLevelChangeBoundaries :exec
+UPDATE kelas_perubahan
+SET pertemuan_ke = pertemuan_ke + ?1
+WHERE kelas_id = CAST(?2 AS INTEGER)
+  AND jenis = 'level_kelas'
+  AND pertemuan_ke > 0
+`
+
+type ShiftLevelChangeBoundariesParams struct {
+	Delta   int64
+	KelasID int64
+}
+
+func (q *Queries) ShiftLevelChangeBoundaries(ctx context.Context, arg ShiftLevelChangeBoundariesParams) error {
+	_, err := q.db.ExecContext(ctx, shiftLevelChangeBoundaries, arg.Delta, arg.KelasID)
+	return err
+}
+
+const shiftPertemuanLevelKeThrough = `-- name: ShiftPertemuanLevelKeThrough :exec
+UPDATE pertemuan
+SET pertemuan_level_ke = pertemuan_level_ke + ?1
+WHERE kelas_id = ?2
+  AND pertemuan_ke <= ?3
+`
+
+type ShiftPertemuanLevelKeThroughParams struct {
+	Delta    int64
+	KelasID  int64
+	Boundary int64
+}
+
+func (q *Queries) ShiftPertemuanLevelKeThrough(ctx context.Context, arg ShiftPertemuanLevelKeThroughParams) error {
+	_, err := q.db.ExecContext(ctx, shiftPertemuanLevelKeThrough, arg.Delta, arg.KelasID, arg.Boundary)
+	return err
+}
+
+const shiftSantriPertemuanAwalByKelas = `-- name: ShiftSantriPertemuanAwalByKelas :exec
+UPDATE santri
+SET pertemuan_awal = pertemuan_awal + ?1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE kelas_id = CAST(?2 AS INTEGER)
+  AND pertemuan_awal > 0
+`
+
+type ShiftSantriPertemuanAwalByKelasParams struct {
+	Delta   int64
+	KelasID int64
+}
+
+func (q *Queries) ShiftSantriPertemuanAwalByKelas(ctx context.Context, arg ShiftSantriPertemuanAwalByKelasParams) error {
+	_, err := q.db.ExecContext(ctx, shiftSantriPertemuanAwalByKelas, arg.Delta, arg.KelasID)
+	return err
+}
+
 const syncSantriLevelJadwalByKelas = `-- name: SyncSantriLevelJadwalByKelas :exec
 UPDATE santri SET level = ?, jadwal = ?, updated_at = ? WHERE kelas_id = ?
 `
@@ -186,6 +360,27 @@ func (q *Queries) SyncSantriLevelJadwalByKelas(ctx context.Context, arg SyncSant
 		arg.UpdatedAt,
 		arg.KelasID,
 	)
+	return err
+}
+
+const syncTagihanPertemuanKeByKelas = `-- name: SyncTagihanPertemuanKeByKelas :exec
+UPDATE tagihan
+SET pertemuan_ke = (
+    SELECT p.pertemuan_ke
+    FROM pertemuan p
+    WHERE p.id = tagihan.pertemuan_id
+)
+WHERE tagihan.kelas_id = CAST(?1 AS INTEGER)
+  AND tagihan.pertemuan_id IS NOT NULL
+  AND EXISTS (
+      SELECT 1 FROM pertemuan p
+      WHERE p.id = tagihan.pertemuan_id
+        AND p.kelas_id = ?1
+  )
+`
+
+func (q *Queries) SyncTagihanPertemuanKeByKelas(ctx context.Context, kelasID int64) error {
+	_, err := q.db.ExecContext(ctx, syncTagihanPertemuanKeByKelas, kelasID)
 	return err
 }
 
@@ -217,201 +412,5 @@ func (q *Queries) UpdateKelasIdentitas(ctx context.Context, arg UpdateKelasIdent
 		arg.LevelPertemuanAwal,
 		arg.ID,
 	)
-	return err
-}
-
-
-const getPertemuanRebaseBounds = `-- name: GetPertemuanRebaseBounds :one
-SELECT
-    COUNT(*) AS total,
-    CAST(COALESCE(MIN(pertemuan_ke), 0) AS INTEGER) AS min_pertemuan_ke,
-    CAST(COALESCE(MAX(pertemuan_ke), 0) AS INTEGER) AS max_pertemuan_ke
-FROM pertemuan
-WHERE kelas_id = ?
-`
-
-type GetPertemuanRebaseBoundsRow struct {
-	Total            int64
-	MinPertemuanKe   int64
-	MaxPertemuanKe   int64
-}
-
-func (q *Queries) GetPertemuanRebaseBounds(ctx context.Context, kelasID int64) (GetPertemuanRebaseBoundsRow, error) {
-	row := q.db.QueryRowContext(ctx, getPertemuanRebaseBounds, kelasID)
-	var i GetPertemuanRebaseBoundsRow
-	err := row.Scan(&i.Total, &i.MinPertemuanKe, &i.MaxPertemuanKe)
-	return i, err
-}
-
-const getFirstLevelChangeBoundary = `-- name: GetFirstLevelChangeBoundary :one
-SELECT CAST(COALESCE(MIN(pertemuan_ke), 0) AS INTEGER)
-FROM kelas_perubahan
-WHERE kelas_id = ? AND jenis = 'level_kelas' AND pertemuan_ke > 0
-`
-
-func (q *Queries) GetFirstLevelChangeBoundary(ctx context.Context, kelasID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getFirstLevelChangeBoundary, kelasID)
-	var value int64
-	err := row.Scan(&value)
-	return value, err
-}
-
-const getFirstPertemuanLevelKe = `-- name: GetFirstPertemuanLevelKe :one
-SELECT pertemuan_level_ke
-FROM pertemuan
-WHERE kelas_id = ?
-ORDER BY pertemuan_ke ASC, id ASC
-LIMIT 1
-`
-
-func (q *Queries) GetFirstPertemuanLevelKe(ctx context.Context, kelasID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getFirstPertemuanLevelKe, kelasID)
-	var pertemuanLevelKe int64
-	err := row.Scan(&pertemuanLevelKe)
-	return pertemuanLevelKe, err
-}
-
-const shiftPertemuanLevelKeThrough = `-- name: ShiftPertemuanLevelKeThrough :exec
-UPDATE pertemuan
-SET pertemuan_level_ke = pertemuan_level_ke + ?1
-WHERE kelas_id = ?2
-  AND pertemuan_ke <= ?3
-`
-
-type ShiftPertemuanLevelKeThroughParams struct {
-	Delta    int64
-	KelasID  int64
-	Boundary int64
-}
-
-func (q *Queries) ShiftPertemuanLevelKeThrough(ctx context.Context, arg ShiftPertemuanLevelKeThroughParams) error {
-	_, err := q.db.ExecContext(ctx, shiftPertemuanLevelKeThrough, arg.Delta, arg.KelasID, arg.Boundary)
-	return err
-}
-
-const shiftAllPertemuanLevelKe = `-- name: ShiftAllPertemuanLevelKe :exec
-UPDATE pertemuan
-SET pertemuan_level_ke = pertemuan_level_ke + ?1
-WHERE kelas_id = ?2
-`
-
-type ShiftAllPertemuanLevelKeParams struct {
-	Delta   int64
-	KelasID int64
-}
-
-func (q *Queries) ShiftAllPertemuanLevelKe(ctx context.Context, arg ShiftAllPertemuanLevelKeParams) error {
-	_, err := q.db.ExecContext(ctx, shiftAllPertemuanLevelKe, arg.Delta, arg.KelasID)
-	return err
-}
-
-const offsetPertemuanKeForRebase = `-- name: OffsetPertemuanKeForRebase :exec
-UPDATE pertemuan
-SET pertemuan_ke = pertemuan_ke + ?1
-WHERE kelas_id = ?2
-`
-
-type OffsetPertemuanKeForRebaseParams struct {
-	Offset  int64
-	KelasID int64
-}
-
-func (q *Queries) OffsetPertemuanKeForRebase(ctx context.Context, arg OffsetPertemuanKeForRebaseParams) error {
-	_, err := q.db.ExecContext(ctx, offsetPertemuanKeForRebase, arg.Offset, arg.KelasID)
-	return err
-}
-
-const finalizePertemuanKeRebase = `-- name: FinalizePertemuanKeRebase :exec
-UPDATE pertemuan
-SET pertemuan_ke = pertemuan_ke - ?1 + ?2
-WHERE kelas_id = ?3
-`
-
-type FinalizePertemuanKeRebaseParams struct {
-	Offset  int64
-	Delta   int64
-	KelasID int64
-}
-
-func (q *Queries) FinalizePertemuanKeRebase(ctx context.Context, arg FinalizePertemuanKeRebaseParams) error {
-	_, err := q.db.ExecContext(ctx, finalizePertemuanKeRebase, arg.Offset, arg.Delta, arg.KelasID)
-	return err
-}
-
-const rebaseKelasMeetingAnchors = `-- name: RebaseKelasMeetingAnchors :exec
-UPDATE kelas
-SET pertemuan_terakhir = ?1,
-    level_pertemuan_awal = CASE
-        WHEN level_pertemuan_awal > 0 THEN level_pertemuan_awal + ?2
-        ELSE level_pertemuan_awal
-    END
-WHERE id = ?3
-`
-
-type RebaseKelasMeetingAnchorsParams struct {
-	NewAnchor int64
-	Delta     int64
-	KelasID   int64
-}
-
-func (q *Queries) RebaseKelasMeetingAnchors(ctx context.Context, arg RebaseKelasMeetingAnchorsParams) error {
-	_, err := q.db.ExecContext(ctx, rebaseKelasMeetingAnchors, arg.NewAnchor, arg.Delta, arg.KelasID)
-	return err
-}
-
-const shiftLevelChangeBoundaries = `-- name: ShiftLevelChangeBoundaries :exec
-UPDATE kelas_perubahan
-SET pertemuan_ke = pertemuan_ke + ?1
-WHERE kelas_id = ?2
-  AND jenis = 'level_kelas'
-  AND pertemuan_ke > 0
-`
-
-type ShiftLevelChangeBoundariesParams struct {
-	Delta   int64
-	KelasID int64
-}
-
-func (q *Queries) ShiftLevelChangeBoundaries(ctx context.Context, arg ShiftLevelChangeBoundariesParams) error {
-	_, err := q.db.ExecContext(ctx, shiftLevelChangeBoundaries, arg.Delta, arg.KelasID)
-	return err
-}
-
-const shiftSantriPertemuanAwalByKelas = `-- name: ShiftSantriPertemuanAwalByKelas :exec
-UPDATE santri
-SET pertemuan_awal = pertemuan_awal + ?1,
-    updated_at = CURRENT_TIMESTAMP
-WHERE kelas_id = ?2
-  AND pertemuan_awal > 0
-`
-
-type ShiftSantriPertemuanAwalByKelasParams struct {
-	Delta   int64
-	KelasID int64
-}
-
-func (q *Queries) ShiftSantriPertemuanAwalByKelas(ctx context.Context, arg ShiftSantriPertemuanAwalByKelasParams) error {
-	_, err := q.db.ExecContext(ctx, shiftSantriPertemuanAwalByKelas, arg.Delta, arg.KelasID)
-	return err
-}
-
-const syncTagihanPertemuanKeByKelas = `-- name: SyncTagihanPertemuanKeByKelas :exec
-UPDATE tagihan
-SET pertemuan_ke = (
-    SELECT p.pertemuan_ke
-    FROM pertemuan p
-    WHERE p.id = tagihan.pertemuan_id
-)
-WHERE kelas_id = ?1
-  AND pertemuan_id IS NOT NULL
-  AND EXISTS (
-      SELECT 1 FROM pertemuan p
-      WHERE p.id = tagihan.pertemuan_id
-        AND p.kelas_id = ?1
-  )
-`
-
-func (q *Queries) SyncTagihanPertemuanKeByKelas(ctx context.Context, kelasID int64) error {
-	_, err := q.db.ExecContext(ctx, syncTagihanPertemuanKeByKelas, kelasID)
 	return err
 }

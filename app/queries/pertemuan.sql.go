@@ -162,7 +162,7 @@ func (q *Queries) CreatePertemuan(ctx context.Context, arg CreatePertemuanParams
 }
 
 const getActivePertemuanByKelas = `-- name: GetActivePertemuanByKelas :one
-SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke FROM pertemuan
+SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke, pengingat_lupa_at FROM pertemuan
 WHERE kelas_id = ? AND status = 'berlangsung'
 ORDER BY id DESC
 LIMIT 1
@@ -192,12 +192,13 @@ func (q *Queries) GetActivePertemuanByKelas(ctx context.Context, kelasID int64) 
 		&i.UpdatedAt,
 		&i.LevelNama,
 		&i.PertemuanLevelKe,
+		&i.PengingatLupaAt,
 	)
 	return i, err
 }
 
 const getLastPertemuanByKelas = `-- name: GetLastPertemuanByKelas :one
-SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke FROM pertemuan
+SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke, pengingat_lupa_at FROM pertemuan
 WHERE kelas_id = ? AND status = 'selesai'
 ORDER BY pertemuan_ke DESC
 LIMIT 1
@@ -227,6 +228,7 @@ func (q *Queries) GetLastPertemuanByKelas(ctx context.Context, kelasID int64) (P
 		&i.UpdatedAt,
 		&i.LevelNama,
 		&i.PertemuanLevelKe,
+		&i.PengingatLupaAt,
 	)
 	return i, err
 }
@@ -259,7 +261,7 @@ func (q *Queries) GetNextPertemuanLevelKe(ctx context.Context, id int64) (int64,
 }
 
 const getPertemuanByID = `-- name: GetPertemuanByID :one
-SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke FROM pertemuan WHERE id = ?
+SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke, pengingat_lupa_at FROM pertemuan WHERE id = ?
 `
 
 func (q *Queries) GetPertemuanByID(ctx context.Context, id int64) (Pertemuan, error) {
@@ -286,12 +288,13 @@ func (q *Queries) GetPertemuanByID(ctx context.Context, id int64) (Pertemuan, er
 		&i.UpdatedAt,
 		&i.LevelNama,
 		&i.PertemuanLevelKe,
+		&i.PengingatLupaAt,
 	)
 	return i, err
 }
 
 const listRiwayatPertemuanByKelas = `-- name: ListRiwayatPertemuanByKelas :many
-SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke FROM pertemuan
+SELECT id, kelas_id, pertemuan_ke, tanggal, jam_mulai, jam_selesai, materi, catatan, is_reschedule, jadwal_semula, alasan_reschedule, is_badal, guru_pengganti_id, alasan_badal, status, dibuat_oleh, created_at, updated_at, level_nama, pertemuan_level_ke, pengingat_lupa_at FROM pertemuan
 WHERE kelas_id = ? AND status = 'selesai'
 ORDER BY pertemuan_ke DESC
 `
@@ -326,6 +329,7 @@ func (q *Queries) ListRiwayatPertemuanByKelas(ctx context.Context, kelasID int64
 			&i.UpdatedAt,
 			&i.LevelNama,
 			&i.PertemuanLevelKe,
+			&i.PengingatLupaAt,
 		); err != nil {
 			return nil, err
 		}
