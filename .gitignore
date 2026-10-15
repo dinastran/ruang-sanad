@@ -52,3 +52,10 @@ dist
 .llm-wiki/outputs/
 .llm-wiki/meta/
 /wiki
+
+# State lokal tool AI (claude-flow, swarm, agentdb, ruvector): ditulis ulang
+# otomatis oleh daemon, bukan bagian dari kode aplikasi
+.claude-flow/
+.swarm/
+agentdb.rvf.lock
+ruvector.db
