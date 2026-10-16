@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"strconv"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/models"
@@ -20,26 +19,6 @@ func NewTagihanHandler(tagihan *services.TagihanService, store *session.Store, i
 	return &TagihanHandler{tagihan: tagihan, store: store, inertiaService: inertiaService}
 }
 
-func (h *TagihanHandler) Dashboard(c *fiber.Ctx) error {
-	sess, _ := h.store.Get(c)
-	now := time.Now()
-	dari := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	sampai := dari.AddDate(0, 1, 0).Add(-time.Nanosecond)
-	ringkasan, err := h.tagihan.RingkasanPeriode(dari, sampai)
-	if err != nil {
-		return err
-	}
-	belum, err := h.tagihan.List(models.TagihanFilter{Status: "belum_bayar", TanggalDari: dari.Format("2006-01-02"), TanggalSampai: sampai.Format("2006-01-02")})
-	if err != nil {
-		return err
-	}
-	lunas, err := h.tagihan.List(models.TagihanFilter{Status: "lunas", TanggalDari: dari.Format("2006-01-02"), TanggalSampai: sampai.Format("2006-01-02")})
-	if err != nil {
-		return err
-	}
-	return h.inertiaService.Render(c, "keuangan/Dashboard", fiber.Map{"user": sessionUser(sess), "ringkasan": ringkasan, "belumBayar": belum, "lunas": lunas, "periode": dari.Format("January 2006")})
-}
-
 func (h *TagihanHandler) List(c *fiber.Ctx) error {
 	sess, _ := h.store.Get(c)
 	tagihan, err := h.tagihan.List(tagihanFilter(c))
@@ -50,7 +29,11 @@ func (h *TagihanHandler) List(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return h.inertiaService.Render(c, "keuangan/Tagihan", fiber.Map{"user": sessionUser(sess), "tagihan": tagihan, "templates": templates, "filter": fiber.Map{"status": c.Query("status"), "search": c.Query("search"), "tanggal_dari": c.Query("tanggal_dari"), "tanggal_sampai": c.Query("tanggal_sampai"), "kelas_id": c.Query("kelas_id"), "angkatan_kelas": c.Query("angkatan_kelas"), "guru_id": c.Query("guru_id"), "frekuensi": c.Query("frekuensi"), "level": c.Query("level"), "gender": c.Query("gender"), "bulan_ke": c.Query("bulan_ke")}})
+	batalMassal, err := h.tagihan.ListBatalMassal(20)
+	if err != nil {
+		return err
+	}
+	return h.inertiaService.Render(c, "keuangan/Tagihan", fiber.Map{"user": sessionUser(sess), "tagihan": tagihan, "templates": templates, "batal_massal": batalMassal, "filter": fiber.Map{"status": c.Query("status"), "search": c.Query("search"), "tanggal_dari": c.Query("tanggal_dari"), "tanggal_sampai": c.Query("tanggal_sampai"), "kelas_id": c.Query("kelas_id"), "angkatan_kelas": c.Query("angkatan_kelas"), "guru_id": c.Query("guru_id"), "frekuensi": c.Query("frekuensi"), "level": c.Query("level"), "gender": c.Query("gender"), "bulan_ke": c.Query("bulan_ke")}})
 }
 
 func (h *TagihanHandler) Detail(c *fiber.Ctx) error {

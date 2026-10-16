@@ -1,14 +1,17 @@
 <script lang="ts">
 	import { inertia, router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
-	import type { Tagihan, User, WaTemplate } from "@lib/types";
+	import type { Flash, Tagihan, TagihanBatalBatch, User, WaTemplate } from "@lib/types";
 	import { getCSRFToken } from "@lib/utils/csrf";
-	import { Check, Eye, MessageCircle, RefreshCw, Search, X, Pencil, RotateCcw, Settings2, Plus, Trash2 } from "lucide-svelte";
+	import FollowUpTagihanDialog from "@components/keuangan/FollowUpTagihanDialog.svelte";
+	import { Check, Eye, History, MessageCircle, RefreshCw, Search, X, Pencil, RotateCcw, Settings2, Plus, Trash2, Ban } from "lucide-svelte";
 
 	interface Props {
 		user?: User;
 		tagihan?: Tagihan[];
 		templates?: WaTemplate[];
+		batal_massal?: TagihanBatalBatch[];
+		flash?: Flash;
 		filter?: {
 			status?: string;
 			search?: string;
@@ -52,13 +55,28 @@
 	let nominalValue = $state(0);
 
 	let followUpTarget = $state<Tagihan | null>(null);
-	let followUpTemplateID = $state("");
-	let followUpMessage = $state("");
-	let sendingFollowUp = $state(false);
 
 	let showTemplateManager = $state(false);
 	let templateEditID = $state<number | null>(null);
 	let templateForm = $state({ nama: "", body: "", is_aktif: true });
+
+	// Pembatalan massal memakai filter yang sudah diterapkan (URL), bukan isian
+	// form yang belum di-submit, supaya yang dibatalkan = yang tampil di tabel.
+	let batalMassalHistory = $derived(props.batal_massal ?? []);
+	let appliedFilter = $derived(props.filter ?? {});
+	let hasDateRange = $derived(Boolean(appliedFilter.tanggal_dari && appliedFilter.tanggal_sampai));
+	let showBatalMassal = $state(false);
+	let batalPreview = $state<{ jumlah: number; total_nominal: number; dilewati_lunas: number; dilewati_batal: number } | null>(null);
+	let batalPreviewError = $state("");
+	let loadingBatalPreview = $state(false);
+	let batalAlasan = $state("Tagihan kedaluwarsa");
+	let batalKonfirmasi = $state("");
+	let submittingBatal = $state(false);
+	let batalSubmitError = $state("");
+	let showBatalHistory = $state(false);
+	let canSubmitBatal = $derived(
+		!!batalPreview && batalPreview.jumlah > 0 && batalAlasan.trim() !== "" && batalKonfirmasi.trim() === String(batalPreview.jumlah) && !submittingBatal,
+	);
 
 	const rupiah = (n: number) =>
 		new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
@@ -113,6 +131,63 @@
 		}
 	}
 
+	async function openBatalMassal() {
+		if (!canManage || !hasDateRange) return;
+		showBatalMassal = true;
+		batalPreview = null;
+		batalPreviewError = "";
+		batalSubmitError = "";
+		batalKonfirmasi = "";
+		batalAlasan = "Tagihan kedaluwarsa";
+		loadingBatalPreview = true;
+		try {
+			const response = await fetch("/app/keuangan/tagihan/batal-massal/preview", {
+				method: "POST",
+				headers: { "Content-Type": "application/json", "X-XSRF-TOKEN": getCSRFToken() },
+				body: JSON.stringify({ filter: appliedFilter }),
+			});
+			const data = await response.json();
+			if (!response.ok) {
+				batalPreviewError = data.error ?? "Gagal menghitung tagihan";
+				return;
+			}
+			batalPreview = data;
+		} catch {
+			batalPreviewError = "Gagal menghubungi server";
+		} finally {
+			loadingBatalPreview = false;
+		}
+	}
+
+	function submitBatalMassal() {
+		if (!canSubmitBatal || !batalPreview) return;
+		submittingBatal = true;
+		batalSubmitError = "";
+		router.post(
+			"/app/keuangan/tagihan/batal-massal",
+			{ filter: appliedFilter, alasan: batalAlasan.trim(), konfirmasi: batalPreview.jumlah },
+			{
+				preserveScroll: true,
+				onSuccess: (page) => {
+					const responseFlash = page.props.flash as Flash | undefined;
+					if (responseFlash?.error) {
+						batalSubmitError = responseFlash.error;
+						return;
+					}
+					showBatalMassal = false;
+					showBatalHistory = true;
+				},
+				onFinish: () => (submittingBatal = false),
+			},
+		);
+	}
+
+	function pulihkanBatch(b: TagihanBatalBatch) {
+		if (!canManage || b.dipulihkan_at) return;
+		if (!confirm(`Pulihkan ${b.jumlah} tagihan dari batch ini ke status belum bayar?`)) return;
+		router.post(`/app/keuangan/tagihan/batal-massal/${b.id}/pulihkan`, {}, { preserveScroll: true });
+	}
+
 	function sync() {
 		if (canManage) router.post("/app/keuangan/tagihan/sync");
 	}
@@ -135,70 +210,6 @@
 		if (!canManage || !t.nominal_override) return;
 		if (!confirm(`Kembalikan nominal tagihan ${t.santri_nama} agar mengikuti Data Santri?`)) return;
 		router.delete(`/app/keuangan/tagihan/${t.id}/nominal`);
-	}
-
-	function renderTemplate(body: string, t: Tagihan): string {
-		const values: Record<string, string> = {
-			"{nama}": t.santri_nama || "",
-			"{id_mahasantri}": t.id_mahasantri || "",
-			"{bulan_ke}": String(t.bulan_ke ?? ""),
-			"{pertemuan_ke}": String(t.pertemuan_ke ?? ""),
-			"{nominal}": new Intl.NumberFormat("id-ID").format(t.nominal || 0),
-			"{tanggal_tagih}": t.tanggal_tagih || "",
-			"{jatuh_tempo}": t.jatuh_tempo || "-",
-			"{kelas}": t.kelas_nama || "-",
-			"{guru}": t.guru_nama || "-",
-			"{angkatan}": t.angkatan || "-",
-			"{angkatan_kelas}": t.angkatan_kelas || "-",
-			"{frekuensi}": t.frekuensi || "-",
-		};
-		let result = body;
-		for (const [key, value] of Object.entries(values)) result = result.split(key).join(value);
-		return result;
-	}
-
-	function openFollowUp(t: Tagihan) {
-		followUpTarget = t;
-		const first = activeTemplates[0];
-		followUpTemplateID = first ? String(first.id) : "";
-		followUpMessage = first ? renderTemplate(first.body, t) : "";
-	}
-
-	function chooseFollowUpTemplate() {
-		if (!followUpTarget) return;
-		const current = templates.find((t) => String(t.id) === followUpTemplateID);
-		followUpMessage = current ? renderTemplate(current.body, followUpTarget) : "";
-	}
-
-	async function sendFollowUp() {
-		if (!followUpTarget || !followUpMessage.trim()) return;
-		sendingFollowUp = true;
-		const popup = window.open("", "_blank");
-		try {
-			const response = await fetch(`/app/keuangan/tagihan/${followUpTarget.id}/follow-up`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"X-XSRF-TOKEN": getCSRFToken(),
-				},
-				body: JSON.stringify({
-					template_id: Number(followUpTemplateID || 0),
-					message: followUpMessage,
-				}),
-			});
-			const data = await response.json();
-			if (!response.ok) {
-				popup?.close();
-				alert(data.error ?? data.message ?? "Gagal membuat tautan WhatsApp");
-				return;
-			}
-			if (popup) popup.location.href = data.url;
-			else window.location.href = data.url;
-			followUpTarget = null;
-			router.reload({ only: ["tagihan"] });
-		} finally {
-			sendingFollowUp = false;
-		}
 	}
 
 	function newTemplate() {
@@ -252,9 +263,21 @@
 					<button onclick={sync} class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-brand-500/30 text-brand-700 dark:text-brand-300 font-semibold text-sm">
 						<RefreshCw size="16" /> Sinkronkan tagihan
 					</button>
+					<button onclick={() => (showBatalHistory = true)} class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 font-semibold text-sm">
+						<History size="16" /> Riwayat batal massal
+					</button>
+					<button onclick={openBatalMassal} disabled={!hasDateRange} title={hasDateRange ? "Batalkan semua tagihan belum bayar sesuai filter" : "Isi tanggal tagih dari & sampai lalu Terapkan filter"} class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-error/30 text-error font-semibold text-sm hover:bg-error/10 disabled:opacity-40 disabled:hover:bg-transparent">
+						<Ban size="16" /> Batalkan massal
+					</button>
 				</div>
 			{/if}
 		</header>
+
+		{#if props.flash?.success}<div class="rounded-xl border border-success/20 bg-success/10 p-4 text-sm font-medium text-success">{props.flash.success}</div>{/if}
+		{#if props.flash?.error}<div class="rounded-xl border border-error/20 bg-error/10 p-4 text-sm font-medium text-error">{props.flash.error}</div>{/if}
+		{#if canManage && !hasDateRange}
+			<p class="-mt-2 text-xs text-neutral-500">Untuk membatalkan massal, isi <span class="font-semibold">tanggal tagih dari & sampai</span>, lalu klik Terapkan.</p>
+		{/if}
 
 		<form onsubmit={(e) => { e.preventDefault(); applyFilter(); }} class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-925">
 			<div class="lg:col-span-2 relative"><Search size="16" class="absolute top-3 left-3 text-neutral-400" /><input bind:value={search} placeholder="Nama atau ID mahasantri" class="w-full pl-9 pr-3 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-sm outline-none" /></div>
@@ -301,7 +324,7 @@
 										<button onclick={() => openNominal(t)} title="Edit nominal tagihan" class="p-2 text-indigo-600 hover:bg-indigo-500/10 rounded-lg"><Pencil size="17" /></button>
 										{#if t.nominal_override}<button onclick={() => resetNominal(t)} title="Kembali ikuti nominal Data Santri" class="p-2 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg"><RotateCcw size="17" /></button>{/if}
 									{/if}
-									<button onclick={() => openFollowUp(t)} disabled={!t.no_wa || activeTemplates.length === 0} title={t.no_wa ? "Follow-up WhatsApp" : "Nomor WA belum diisi"} class="p-2 text-brand-600 hover:bg-brand-500/10 rounded-lg disabled:opacity-30"><MessageCircle size="17" /></button>
+									<button onclick={() => (followUpTarget = t)} disabled={!t.no_wa || activeTemplates.length === 0} title={t.no_wa ? "Follow-up WhatsApp" : "Nomor WA belum diisi"} class="p-2 text-brand-600 hover:bg-brand-500/10 rounded-lg disabled:opacity-30"><MessageCircle size="17" /></button>
 									{#if canManage && t.status !== "lunas" && t.status !== "batal"}<button onclick={() => batal(t)} title="Batalkan" class="p-2 text-error hover:bg-error/10 rounded-lg"><X size="17" /></button>{/if}
 								</div>
 							</td>
@@ -340,20 +363,82 @@
 	{/if}
 
 	{#if followUpTarget}
+		<FollowUpTagihanDialog target={followUpTarget} {templates} onclose={() => (followUpTarget = null)} onsent={() => router.reload({ only: ["tagihan"] })} />
+	{/if}
+
+	{#if showBatalMassal}
 		<div class="fixed inset-0 z-50 bg-neutral-950/55 flex items-center justify-center p-4">
-			<section class="w-full max-w-xl rounded-2xl bg-white dark:bg-neutral-925 p-6 shadow-xl">
-				<div class="flex justify-between gap-4"><div><h2 class="text-xl font-bold text-neutral-900 dark:text-white">Follow-up WhatsApp</h2><p class="text-sm text-neutral-500 mt-1">{followUpTarget.santri_nama} · {rupiah(followUpTarget.nominal)}</p></div><button onclick={() => followUpTarget = null} class="text-neutral-500"><X /></button></div>
-				<div class="mt-5 space-y-4">
-					<label class="block text-sm font-medium">Template
-						<select bind:value={followUpTemplateID} onchange={chooseFollowUpTemplate} class="mt-1 w-full px-3 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800">
-							{#each activeTemplates as template}<option value={String(template.id)}>{template.nama}</option>{/each}
-						</select>
-					</label>
-					<label class="block text-sm font-medium">Pesan
-						<textarea bind:value={followUpMessage} rows="9" class="mt-1 w-full px-3 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800"></textarea>
-					</label>
-					<p class="text-xs text-neutral-500">Pesan boleh diedit untuk pengiriman ini tanpa mengubah template utama.</p>
-					<button onclick={sendFollowUp} disabled={sendingFollowUp || !followUpMessage.trim()} class="w-full py-2.5 rounded-xl bg-brand-600 text-white font-semibold disabled:opacity-50">{sendingFollowUp ? "Menyiapkan WhatsApp..." : "Buka WhatsApp & Catat FU"}</button>
+			<section class="w-full max-w-lg rounded-2xl bg-white dark:bg-neutral-925 p-6 shadow-xl">
+				<div class="flex justify-between gap-4">
+					<div>
+						<h2 class="text-xl font-bold text-neutral-900 dark:text-white">Batalkan tagihan massal</h2>
+						<p class="text-sm text-neutral-500 mt-1">Tanggal tagih {appliedFilter.tanggal_dari} s/d {appliedFilter.tanggal_sampai}, mengikuti semua filter yang sudah diterapkan.</p>
+					</div>
+					<button onclick={() => (showBatalMassal = false)} class="text-neutral-500"><X /></button>
+				</div>
+
+				{#if loadingBatalPreview}
+					<p class="mt-6 text-sm text-neutral-500">Menghitung tagihan…</p>
+				{:else if batalPreviewError}
+					<p class="mt-6 rounded-xl bg-error/10 p-4 text-sm text-error">{batalPreviewError}</p>
+				{:else if batalPreview}
+					<div class="mt-5 rounded-xl border border-error/20 bg-error/5 p-4">
+						<p class="text-2xl font-bold text-neutral-900 dark:text-white">{batalPreview.jumlah.toLocaleString("id-ID")} tagihan</p>
+						<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-300">Total {rupiah(batalPreview.total_nominal)} akan diubah menjadi <span class="font-semibold">batal</span>.</p>
+						{#if batalPreview.dilewati_lunas || batalPreview.dilewati_batal}
+							<p class="mt-2 text-xs text-neutral-500">Dilewati: {batalPreview.dilewati_lunas} lunas · {batalPreview.dilewati_batal} sudah batal.</p>
+						{/if}
+					</div>
+					{#if batalPreview.jumlah > 0}
+						<div class="mt-5 space-y-4">
+							<label class="block text-sm font-medium">Alasan pembatalan
+								<input bind:value={batalAlasan} required class="mt-1 w-full px-3 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800" />
+							</label>
+							<label class="block text-sm font-medium">Ketik <span class="font-mono font-bold">{batalPreview.jumlah}</span> untuk konfirmasi
+								<input bind:value={batalKonfirmasi} inputmode="numeric" autocomplete="off" class="mt-1 w-full px-3 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 font-mono" />
+							</label>
+							<p class="text-xs text-neutral-500">Aksi ini tercatat di Riwayat batal massal dan bisa dipulihkan sekaligus.</p>
+							{#if batalSubmitError}<p class="rounded-xl bg-error/10 p-3 text-sm text-error">{batalSubmitError}</p>{/if}
+						</div>
+					{/if}
+				{/if}
+
+				<div class="mt-6 flex justify-end gap-2">
+					<button onclick={() => (showBatalMassal = false)} class="px-4 py-2.5 rounded-xl text-sm font-semibold">Tutup</button>
+					{#if batalPreview && batalPreview.jumlah > 0}
+						<button onclick={submitBatalMassal} disabled={!canSubmitBatal} class="px-4 py-2.5 rounded-xl bg-error text-white text-sm font-semibold disabled:opacity-40">{submittingBatal ? "Membatalkan…" : `Batalkan ${batalPreview.jumlah} tagihan`}</button>
+					{/if}
+				</div>
+			</section>
+		</div>
+	{/if}
+
+	{#if showBatalHistory}
+		<div class="fixed inset-0 z-50 bg-neutral-950/55 flex items-center justify-center p-4">
+			<section class="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-neutral-925 shadow-xl">
+				<header class="sticky top-0 bg-white dark:bg-neutral-925 flex items-center justify-between px-6 py-4 border-b border-neutral-200 dark:border-neutral-800">
+					<div><h2 class="text-xl font-bold text-neutral-900 dark:text-white">Riwayat batal massal</h2><p class="text-sm text-neutral-500">20 aksi terakhir. Pulihkan mengembalikan tagihan ke kondisi sebelum dibatalkan.</p></div>
+					<button onclick={() => (showBatalHistory = false)} class="text-neutral-500"><X /></button>
+				</header>
+				<div class="p-6 space-y-3">
+					{#if props.flash?.success}<div class="rounded-xl border border-success/20 bg-success/10 p-3 text-sm font-medium text-success">{props.flash.success}</div>{/if}
+					{#if props.flash?.error}<div class="rounded-xl border border-error/20 bg-error/10 p-3 text-sm font-medium text-error">{props.flash.error}</div>{/if}
+					{#each batalMassalHistory as b (b.id)}
+						<div class="rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+							<div class="min-w-0">
+								<p class="font-semibold text-neutral-900 dark:text-white">{b.jumlah.toLocaleString("id-ID")} tagihan · {rupiah(b.total_nominal)}</p>
+								<p class="mt-1 text-xs text-neutral-500">{b.created_at} · {b.dibuat_oleh_nama || "-"}</p>
+								<p class="mt-2 text-sm text-neutral-700 dark:text-neutral-300">Alasan: {b.alasan}</p>
+								<p class="mt-1 text-xs text-neutral-500 break-words">{b.filter_ringkas}</p>
+								{#if b.dipulihkan_at}<p class="mt-2 text-xs font-semibold text-success">Dipulihkan {b.jumlah_dipulihkan} tagihan · {b.dipulihkan_at} · {b.dipulihkan_oleh_nama || "-"}</p>{/if}
+							</div>
+							{#if canManage && !b.dipulihkan_at}
+								<button onclick={() => pulihkanBatch(b)} class="shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-brand-500/30 text-brand-700 dark:text-brand-300 text-sm font-semibold"><RotateCcw size="15" /> Pulihkan</button>
+							{/if}
+						</div>
+					{:else}
+						<p class="text-sm text-neutral-500">Belum ada pembatalan massal.</p>
+					{/each}
 				</div>
 			</section>
 		</div>

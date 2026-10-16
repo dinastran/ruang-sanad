@@ -348,6 +348,10 @@ func (s *TagihanService) Sync() error {
 }
 
 func (s *TagihanService) List(filter models.TagihanFilter) ([]models.TagihanResponse, error) {
+	return s.listWithQuerier(context.Background(), s.querier, filter)
+}
+
+func (s *TagihanService) listWithQuerier(ctx context.Context, q *queries.Querier, filter models.TagihanFilter) ([]models.TagihanResponse, error) {
 	var status, kelasID, guruID, bulanKe, dari, sampai interface{}
 	if filter.Status != "" && filter.Status != "terlambat" {
 		status = filter.Status
@@ -367,8 +371,7 @@ func (s *TagihanService) List(filter models.TagihanFilter) ([]models.TagihanResp
 	if filter.TanggalSampai != "" {
 		sampai = filter.TanggalSampai
 	}
-	ctx := context.Background()
-	rows, err := s.querier.ListTagihan(ctx, queries.ListTagihanParams{
+	rows, err := q.ListTagihan(ctx, queries.ListTagihanParams{
 		Status: status, KelasID: kelasID, AngkatanKelas: filter.AngkatanKelas, GuruID: guruID,
 		Frekuensi: filter.Frekuensi, Level: filter.Level, Gender: filter.Gender,
 		BulanKe: bulanKe, TanggalDari: dari, TanggalSampai: sampai, Search: filter.Search,
@@ -380,7 +383,7 @@ func (s *TagihanService) List(filter models.TagihanFilter) ([]models.TagihanResp
 	for _, row := range rows {
 		tagihanIDs = append(tagihanIDs, row.ID)
 	}
-	overrides, err := s.querier.ListTagihanNominalOverrideIDs(ctx, tagihanIDs)
+	overrides, err := q.ListTagihanNominalOverrideIDs(ctx, tagihanIDs)
 	if err != nil {
 		return nil, err
 	}

@@ -79,11 +79,14 @@ func (s *ProductCRMService) CreateProduct(req models.CreateProductRequest) error
 	if req.MinimumStock < 0 {
 		return errors.New("minimum stok tidak boleh negatif")
 	}
+	if req.Harga < 0 {
+		return ErrHargaProdukNegatif
+	}
 	if req.Kategori == "program" || !req.TrackStok {
 		req.TrackStok = false
 		req.MinimumStock = 0
 	}
-	_, err := s.querier.CreateProduk(context.Background(), req.Nama, req.Kategori, req.TrackStok, req.MinimumStock)
+	_, err := s.querier.CreateProduk(context.Background(), req.Nama, req.Kategori, req.TrackStok, req.MinimumStock, req.Harga)
 	return err
 }
 
@@ -101,6 +104,9 @@ func (s *ProductCRMService) UpdateProduct(id int64, req models.UpdateProductRequ
 	if req.MinimumStock < 0 {
 		return errors.New("minimum stok tidak boleh negatif")
 	}
+	if req.Harga < 0 {
+		return ErrHargaProdukNegatif
+	}
 	if req.Kategori == "program" || !req.TrackStok {
 		req.TrackStok = false
 		req.MinimumStock = 0
@@ -114,7 +120,7 @@ func (s *ProductCRMService) UpdateProduct(id int64, req models.UpdateProductRequ
 			return errors.New("kategori dan mode stok tidak dapat diubah setelah produk memiliki histori transaksi")
 		}
 	}
-	return s.querier.UpdateProduk(ctx, id, req.Nama, req.Kategori, req.TrackStok, req.IsAktif, req.MinimumStock)
+	return s.querier.UpdateProduk(ctx, id, req.Nama, req.Kategori, req.TrackStok, req.IsAktif, req.MinimumStock, req.Harga)
 }
 
 func (s *ProductCRMService) CreateBatch(productID int64, req models.CreateProductBatchRequest) error {

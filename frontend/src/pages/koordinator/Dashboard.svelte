@@ -63,7 +63,6 @@
 	}
 
 	function namaGuru(item: MonitoringKelasItem): string {
-		if (item.guru_pengganti_nama) return `${item.guru_pengganti_nama} (badal)`;
 		return item.guru_utama_nama || "Belum ada guru";
 	}
 
@@ -166,7 +165,7 @@
 								{#if item.is_reschedule || item.guru_pengganti_id}
 									<p class="mt-1 flex flex-wrap gap-1">
 										{#if item.is_reschedule}<span class="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400" title={item.alasan_reschedule ? `Alasan: ${item.alasan_reschedule}` : "Jadwal dipindah"}><RotateCcw class="h-3 w-3" /> Reschedule{#if item.jadwal_semula} · dari {formatJadwalSemula(item.jadwal_semula)}{/if}</span>{/if}
-										{#if item.guru_pengganti_id}<span class="inline-flex items-center gap-1 rounded-full bg-secondary-500/10 px-2 py-0.5 text-[11px] font-semibold text-secondary-700 dark:text-secondary-300" title={item.alasan_badal ? `Alasan: ${item.alasan_badal}` : "Diajar guru pengganti"}><UserRoundCheck class="h-3 w-3" /> Badal · {item.guru_pengganti_nama}</span>{/if}
+										{#if item.guru_pengganti_id}<span class="inline-flex items-center gap-1 rounded-full bg-secondary-500/10 px-2 py-0.5 text-[11px] font-semibold text-secondary-700 dark:text-secondary-300" title={`Menggantikan ${item.guru_utama_nama || "guru kelas"}${item.alasan_badal ? ` · Alasan: ${item.alasan_badal}` : ""}`}><UserRoundCheck class="h-3 w-3" /> Badal · {item.guru_pengganti_nama}</span>{/if}
 									</p>
 								{/if}
 							</div>

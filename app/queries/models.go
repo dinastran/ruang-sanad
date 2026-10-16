@@ -340,6 +340,7 @@ type ProductOrderItem struct {
 	ProdukBatchID sql.NullInt64
 	Qty           int64
 	CreatedAt     time.Time
+	HargaSatuan   int64
 }
 
 type Produk struct {
@@ -351,6 +352,7 @@ type Produk struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	MinimumStock int64
+	Harga        int64
 }
 
 type ProdukBatch struct {
@@ -542,6 +544,27 @@ type Tagihan struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	AngkatanKelas string
+}
+
+type TagihanBatalBatch struct {
+	ID               int64
+	Alasan           string
+	FilterJson       string
+	Jumlah           int64
+	TotalNominal     int64
+	DibuatOleh       sql.NullInt64
+	CreatedAt        time.Time
+	DipulihkanAt     sql.NullTime
+	DipulihkanOleh   sql.NullInt64
+	JumlahDipulihkan int64
+}
+
+type TagihanBatalBatchItem struct {
+	ID          int64
+	BatchID     int64
+	TagihanID   int64
+	StatusLama  string
+	CatatanLama string
 }
 
 type TagihanFollowUpLog struct {

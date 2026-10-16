@@ -612,6 +612,74 @@ export interface Tagihan {
 	fu_count: number;
 }
 
+export interface KeuanganBulan {
+	bulan: string;
+	label: string;
+	kas_masuk_spp: number;
+	jumlah_bayar_spp: number;
+	kas_masuk_produk: number;
+	kas_masuk: number;
+	kas_keluar: number;
+	jumlah_ujroh_dibayar: number;
+	kas_bersih: number;
+	terbit_jumlah: number;
+	terbit_nominal: number;
+	terbit_lunas_nominal: number;
+	kolektibilitas: number;
+}
+
+export interface KeuanganPiutangGroup {
+	label: string;
+	href: string;
+	jumlah_santri: number;
+	jumlah_tagihan: number;
+	nominal: number;
+}
+
+export interface KeuanganDashboard {
+	bulan: string;
+	bulan_label: string;
+	bulan_sebelum: string;
+	bulan_berikut: string;
+	hari_ini: string;
+	sekarang: KeuanganBulan;
+	sebelumnya: KeuanganBulan;
+	tren: KeuanganBulan[];
+	aging: { key: string; label: string; jumlah: number; nominal: number }[];
+	total_piutang: number;
+	jumlah_piutang: number;
+	jumlah_terlambat: number;
+	prioritas: (Tagihan & { hari_telat: number })[];
+	piutang_kelas: KeuanganPiutangGroup[];
+	piutang_angkatan: KeuanganPiutangGroup[];
+	ujroh: {
+		bulan: string;
+		terkunci: boolean;
+		total_ujroh: number;
+		total_dibayar: number;
+		total_belum: number;
+		jumlah_guru: number;
+		guru_dibayar: number;
+		kewajiban_terkunci: number;
+		kewajiban_terkunci_guru: number;
+		estimasi_berjalan: number;
+	};
+	produk: { jumlah_order: number; jumlah_qty: number; omzet: number };
+}
+
+export interface TagihanBatalBatch {
+	id: number;
+	alasan: string;
+	filter_ringkas: string;
+	jumlah: number;
+	total_nominal: number;
+	dibuat_oleh_nama: string;
+	created_at: string;
+	dipulihkan_at: string;
+	dipulihkan_oleh_nama: string;
+	jumlah_dipulihkan: number;
+}
+
 export interface TagihanFollowUpLog {
 	id: number;
 	template_id?: number;
