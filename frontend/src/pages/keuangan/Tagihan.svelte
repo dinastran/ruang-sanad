@@ -3,6 +3,7 @@
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import type { Flash, Tagihan, TagihanBatalBatch, User, WaTemplate } from "@lib/types";
 	import { getCSRFToken } from "@lib/utils/csrf";
+	import FollowUpTagihanDialog from "@components/keuangan/FollowUpTagihanDialog.svelte";
 	import { Check, Eye, History, MessageCircle, RefreshCw, Search, X, Pencil, RotateCcw, Settings2, Plus, Trash2, Ban } from "lucide-svelte";
 
 	interface Props {
@@ -54,9 +55,6 @@
 	let nominalValue = $state(0);
 
 	let followUpTarget = $state<Tagihan | null>(null);
-	let followUpTemplateID = $state("");
-	let followUpMessage = $state("");
-	let sendingFollowUp = $state(false);
 
 	let showTemplateManager = $state(false);
 	let templateEditID = $state<number | null>(null);
@@ -214,70 +212,6 @@
 		router.delete(`/app/keuangan/tagihan/${t.id}/nominal`);
 	}
 
-	function renderTemplate(body: string, t: Tagihan): string {
-		const values: Record<string, string> = {
-			"{nama}": t.santri_nama || "",
-			"{id_mahasantri}": t.id_mahasantri || "",
-			"{bulan_ke}": String(t.bulan_ke ?? ""),
-			"{pertemuan_ke}": String(t.pertemuan_ke ?? ""),
-			"{nominal}": new Intl.NumberFormat("id-ID").format(t.nominal || 0),
-			"{tanggal_tagih}": t.tanggal_tagih || "",
-			"{jatuh_tempo}": t.jatuh_tempo || "-",
-			"{kelas}": t.kelas_nama || "-",
-			"{guru}": t.guru_nama || "-",
-			"{angkatan}": t.angkatan || "-",
-			"{angkatan_kelas}": t.angkatan_kelas || "-",
-			"{frekuensi}": t.frekuensi || "-",
-		};
-		let result = body;
-		for (const [key, value] of Object.entries(values)) result = result.split(key).join(value);
-		return result;
-	}
-
-	function openFollowUp(t: Tagihan) {
-		followUpTarget = t;
-		const first = activeTemplates[0];
-		followUpTemplateID = first ? String(first.id) : "";
-		followUpMessage = first ? renderTemplate(first.body, t) : "";
-	}
-
-	function chooseFollowUpTemplate() {
-		if (!followUpTarget) return;
-		const current = templates.find((t) => String(t.id) === followUpTemplateID);
-		followUpMessage = current ? renderTemplate(current.body, followUpTarget) : "";
-	}
-
-	async function sendFollowUp() {
-		if (!followUpTarget || !followUpMessage.trim()) return;
-		sendingFollowUp = true;
-		const popup = window.open("", "_blank");
-		try {
-			const response = await fetch(`/app/keuangan/tagihan/${followUpTarget.id}/follow-up`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"X-XSRF-TOKEN": getCSRFToken(),
-				},
-				body: JSON.stringify({
-					template_id: Number(followUpTemplateID || 0),
-					message: followUpMessage,
-				}),
-			});
-			const data = await response.json();
-			if (!response.ok) {
-				popup?.close();
-				alert(data.error ?? data.message ?? "Gagal membuat tautan WhatsApp");
-				return;
-			}
-			if (popup) popup.location.href = data.url;
-			else window.location.href = data.url;
-			followUpTarget = null;
-			router.reload({ only: ["tagihan"] });
-		} finally {
-			sendingFollowUp = false;
-		}
-	}
-
 	function newTemplate() {
 		templateEditID = null;
 		templateForm = { nama: "", body: "", is_aktif: true };
@@ -390,7 +324,7 @@
 										<button onclick={() => openNominal(t)} title="Edit nominal tagihan" class="p-2 text-indigo-600 hover:bg-indigo-500/10 rounded-lg"><Pencil size="17" /></button>
 										{#if t.nominal_override}<button onclick={() => resetNominal(t)} title="Kembali ikuti nominal Data Santri" class="p-2 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg"><RotateCcw size="17" /></button>{/if}
 									{/if}
-									<button onclick={() => openFollowUp(t)} disabled={!t.no_wa || activeTemplates.length === 0} title={t.no_wa ? "Follow-up WhatsApp" : "Nomor WA belum diisi"} class="p-2 text-brand-600 hover:bg-brand-500/10 rounded-lg disabled:opacity-30"><MessageCircle size="17" /></button>
+									<button onclick={() => (followUpTarget = t)} disabled={!t.no_wa || activeTemplates.length === 0} title={t.no_wa ? "Follow-up WhatsApp" : "Nomor WA belum diisi"} class="p-2 text-brand-600 hover:bg-brand-500/10 rounded-lg disabled:opacity-30"><MessageCircle size="17" /></button>
 									{#if canManage && t.status !== "lunas" && t.status !== "batal"}<button onclick={() => batal(t)} title="Batalkan" class="p-2 text-error hover:bg-error/10 rounded-lg"><X size="17" /></button>{/if}
 								</div>
 							</td>
@@ -429,23 +363,7 @@
 	{/if}
 
 	{#if followUpTarget}
-		<div class="fixed inset-0 z-50 bg-neutral-950/55 flex items-center justify-center p-4">
-			<section class="w-full max-w-xl rounded-2xl bg-white dark:bg-neutral-925 p-6 shadow-xl">
-				<div class="flex justify-between gap-4"><div><h2 class="text-xl font-bold text-neutral-900 dark:text-white">Follow-up WhatsApp</h2><p class="text-sm text-neutral-500 mt-1">{followUpTarget.santri_nama} · {rupiah(followUpTarget.nominal)}</p></div><button onclick={() => followUpTarget = null} class="text-neutral-500"><X /></button></div>
-				<div class="mt-5 space-y-4">
-					<label class="block text-sm font-medium">Template
-						<select bind:value={followUpTemplateID} onchange={chooseFollowUpTemplate} class="mt-1 w-full px-3 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800">
-							{#each activeTemplates as template}<option value={String(template.id)}>{template.nama}</option>{/each}
-						</select>
-					</label>
-					<label class="block text-sm font-medium">Pesan
-						<textarea bind:value={followUpMessage} rows="9" class="mt-1 w-full px-3 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800"></textarea>
-					</label>
-					<p class="text-xs text-neutral-500">Pesan boleh diedit untuk pengiriman ini tanpa mengubah template utama.</p>
-					<button onclick={sendFollowUp} disabled={sendingFollowUp || !followUpMessage.trim()} class="w-full py-2.5 rounded-xl bg-brand-600 text-white font-semibold disabled:opacity-50">{sendingFollowUp ? "Menyiapkan WhatsApp..." : "Buka WhatsApp & Catat FU"}</button>
-				</div>
-			</section>
-		</div>
+		<FollowUpTagihanDialog target={followUpTarget} {templates} onclose={() => (followUpTarget = null)} onsent={() => router.reload({ only: ["tagihan"] })} />
 	{/if}
 
 	{#if showBatalMassal}

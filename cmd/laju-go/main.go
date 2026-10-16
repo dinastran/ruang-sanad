@@ -209,6 +209,7 @@ func main() {
 		TSI:                         tsiHandler,
 		Tagihan:                     tagihanHandler,
 		TagihanMassal:               handlers.NewTagihanMassalHandler(tagihanService, sessionStore, inertiaService),
+		KeuanganDashboard:           handlers.NewKeuanganDashboardHandler(services.NewKeuanganDashboardService(querier, ujrohService), tagihanService, sessionStore, inertiaService),
 		Ujroh:                       ujrohHandler,
 		ProductCRM:                  productCRMHandler,
 		ProductOrders:               productOrderHandler,

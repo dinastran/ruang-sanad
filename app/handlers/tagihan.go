@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"strconv"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/models"
@@ -18,26 +17,6 @@ type TagihanHandler struct {
 
 func NewTagihanHandler(tagihan *services.TagihanService, store *session.Store, inertiaService *services.InertiaService) *TagihanHandler {
 	return &TagihanHandler{tagihan: tagihan, store: store, inertiaService: inertiaService}
-}
-
-func (h *TagihanHandler) Dashboard(c *fiber.Ctx) error {
-	sess, _ := h.store.Get(c)
-	now := time.Now()
-	dari := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	sampai := dari.AddDate(0, 1, 0).Add(-time.Nanosecond)
-	ringkasan, err := h.tagihan.RingkasanPeriode(dari, sampai)
-	if err != nil {
-		return err
-	}
-	belum, err := h.tagihan.List(models.TagihanFilter{Status: "belum_bayar", TanggalDari: dari.Format("2006-01-02"), TanggalSampai: sampai.Format("2006-01-02")})
-	if err != nil {
-		return err
-	}
-	lunas, err := h.tagihan.List(models.TagihanFilter{Status: "lunas", TanggalDari: dari.Format("2006-01-02"), TanggalSampai: sampai.Format("2006-01-02")})
-	if err != nil {
-		return err
-	}
-	return h.inertiaService.Render(c, "keuangan/Dashboard", fiber.Map{"user": sessionUser(sess), "ringkasan": ringkasan, "belumBayar": belum, "lunas": lunas, "periode": dari.Format("January 2006")})
 }
 
 func (h *TagihanHandler) List(c *fiber.Ctx) error {

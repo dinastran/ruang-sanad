@@ -42,6 +42,7 @@ type Handlers struct {
 	TSI                         *handlers.TSIHandler
 	Tagihan                     *handlers.TagihanHandler
 	TagihanMassal               *handlers.TagihanMassalHandler
+	KeuanganDashboard           *handlers.KeuanganDashboardHandler
 	Ujroh                       *handlers.UjrohHandler
 	ProductCRM                  *handlers.ProductCRMHandler
 	ProductOrders               *handlers.ProductOrderHandler
@@ -187,7 +188,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Post("/produk-crm/orders/:id/batal", akRole, h.ProductOrders.Cancel)
 
 	// Keuangan routes (keuangan + super_admin)
-	protected.Get("/keuangan", kuReadRole, h.Tagihan.Dashboard)
+	protected.Get("/keuangan", kuReadRole, h.KeuanganDashboard.Index)
 	protected.Get("/keuangan/tagihan", kuReadRole, h.Tagihan.List)
 	protected.Post("/keuangan/tagihan/batal-massal/preview", kuRole, h.TagihanMassal.Preview)
 	protected.Post("/keuangan/tagihan/batal-massal", kuRole, h.TagihanMassal.Batal)
