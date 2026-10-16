@@ -12,6 +12,7 @@ type ProductOrder struct {
 	DicatatOleh     string             `json:"dicatat_oleh"`
 	DibatalkanOleh  string             `json:"dibatalkan_oleh"`
 	CreatedAt       string             `json:"created_at"`
+	Total           int64              `json:"total"`
 	Items           []ProductOrderItem `json:"items"`
 }
 
@@ -25,12 +26,16 @@ type ProductOrderItem struct {
 	Kategori       string `json:"kategori"`
 	TrackStok      bool   `json:"track_stok"`
 	Qty            int64  `json:"qty"`
+	HargaSatuan    int64  `json:"harga_satuan"`
+	Subtotal       int64  `json:"subtotal"`
 }
 
 type CreateProductOrderItemRequest struct {
 	ProdukID      int64 `json:"produk_id"`
 	ProdukBatchID int64 `json:"produk_batch_id"`
 	Qty           int64 `json:"qty"`
+	// HargaSatuan nil means "use the product's current harga".
+	HargaSatuan *int64 `json:"harga_satuan"`
 }
 
 type CreateProductOrderRequest struct {

@@ -50,11 +50,11 @@ func (q *Queries) UpdateProductOrderNumber(ctx context.Context, id int64, orderN
 	return err
 }
 
-func (q *Queries) CreateProductOrderItem(ctx context.Context, orderID, productID int64, batchID sql.NullInt64, qty int64) (int64, error) {
+func (q *Queries) CreateProductOrderItem(ctx context.Context, orderID, productID int64, batchID sql.NullInt64, qty, hargaSatuan int64) (int64, error) {
 	res, err := q.db.ExecContext(ctx, `
-		INSERT INTO product_order_items (order_id, produk_id, produk_batch_id, qty)
-		VALUES (?, ?, ?, ?)`,
-		orderID, productID, nullableInt64(batchID), qty,
+		INSERT INTO product_order_items (order_id, produk_id, produk_batch_id, qty, harga_satuan)
+		VALUES (?, ?, ?, ?, ?)`,
+		orderID, productID, nullableInt64(batchID), qty, hargaSatuan,
 	)
 	if err != nil {
 		return 0, err
@@ -107,7 +107,7 @@ func (q *Queries) ListProductOrders(ctx context.Context, limit int64) ([]models.
 func (q *Queries) ListProductOrderItems(ctx context.Context, orderID int64) ([]models.ProductOrderItem, error) {
 	rows, err := q.db.QueryContext(ctx, `
 		SELECT poi.id, poi.order_id, poi.produk_id, poi.produk_batch_id,
-		       p.nama, COALESCE(pb.nama, ''), p.kategori, p.track_stok, poi.qty
+		       p.nama, COALESCE(pb.nama, ''), p.kategori, p.track_stok, poi.qty, poi.harga_satuan
 		FROM product_order_items poi
 		JOIN produk p ON p.id = poi.produk_id
 		LEFT JOIN produk_batch pb ON pb.id = poi.produk_batch_id
@@ -125,7 +125,7 @@ func (q *Queries) ListProductOrderItems(ctx context.Context, orderID int64) ([]m
 		var track int64
 		if err := rows.Scan(
 			&item.ID, &item.OrderID, &item.ProdukID, &batchID,
-			&item.ProdukNama, &item.BatchNama, &item.Kategori, &track, &item.Qty,
+			&item.ProdukNama, &item.BatchNama, &item.Kategori, &track, &item.Qty, &item.HargaSatuan,
 		); err != nil {
 			return nil, err
 		}
@@ -133,6 +133,7 @@ func (q *Queries) ListProductOrderItems(ctx context.Context, orderID int64) ([]m
 			item.ProdukBatchID = batchID.Int64
 		}
 		item.TrackStok = track == 1
+		item.Subtotal = item.Qty * item.HargaSatuan
 		out = append(out, item)
 	}
 	return out, rows.Err()

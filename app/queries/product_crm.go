@@ -15,7 +15,7 @@ type productScanner interface {
 func scanProduct(s productScanner) (models.Product, error) {
 	var out models.Product
 	var track, aktif int64
-	err := s.Scan(&out.ID, &out.Nama, &out.Kategori, &track, &aktif, &out.Stok, &out.MinimumStock)
+	err := s.Scan(&out.ID, &out.Nama, &out.Kategori, &track, &aktif, &out.Stok, &out.MinimumStock, &out.Harga)
 	out.TrackStok = track == 1
 	out.IsAktif = aktif == 1
 	return out, err
@@ -23,10 +23,10 @@ func scanProduct(s productScanner) (models.Product, error) {
 
 func (q *Queries) ListProduk(ctx context.Context) ([]models.Product, error) {
 	rows, err := q.db.QueryContext(ctx, `
-		SELECT p.id, p.nama, p.kategori, p.track_stok, p.is_aktif, COALESCE(SUM(sm.qty), 0), p.minimum_stock
+		SELECT p.id, p.nama, p.kategori, p.track_stok, p.is_aktif, COALESCE(SUM(sm.qty), 0), p.minimum_stock, p.harga
 		FROM produk p
 		LEFT JOIN stok_mutasi sm ON sm.produk_id = p.id
-		GROUP BY p.id, p.nama, p.kategori, p.track_stok, p.is_aktif, p.minimum_stock
+		GROUP BY p.id, p.nama, p.kategori, p.track_stok, p.is_aktif, p.minimum_stock, p.harga
 		ORDER BY p.is_aktif DESC, p.nama ASC`)
 	if err != nil {
 		return nil, err
@@ -46,28 +46,28 @@ func (q *Queries) ListProduk(ctx context.Context) ([]models.Product, error) {
 
 func (q *Queries) GetProduk(ctx context.Context, id int64) (models.Product, error) {
 	return scanProduct(q.db.QueryRowContext(ctx, `
-		SELECT p.id, p.nama, p.kategori, p.track_stok, p.is_aktif, COALESCE(SUM(sm.qty), 0), p.minimum_stock
+		SELECT p.id, p.nama, p.kategori, p.track_stok, p.is_aktif, COALESCE(SUM(sm.qty), 0), p.minimum_stock, p.harga
 		FROM produk p
 		LEFT JOIN stok_mutasi sm ON sm.produk_id = p.id
 		WHERE p.id = ?
-		GROUP BY p.id, p.nama, p.kategori, p.track_stok, p.is_aktif, p.minimum_stock`, id))
+		GROUP BY p.id, p.nama, p.kategori, p.track_stok, p.is_aktif, p.minimum_stock, p.harga`, id))
 }
 
-func (q *Queries) CreateProduk(ctx context.Context, nama, kategori string, trackStok bool, minimumStock int64) (int64, error) {
+func (q *Queries) CreateProduk(ctx context.Context, nama, kategori string, trackStok bool, minimumStock, harga int64) (int64, error) {
 	res, err := q.db.ExecContext(ctx, `
-		INSERT INTO produk (nama, kategori, track_stok, is_aktif, minimum_stock)
-		VALUES (?, ?, ?, 1, ?)`, nama, kategori, trackStok, minimumStock)
+		INSERT INTO produk (nama, kategori, track_stok, is_aktif, minimum_stock, harga)
+		VALUES (?, ?, ?, 1, ?, ?)`, nama, kategori, trackStok, minimumStock, harga)
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-func (q *Queries) UpdateProduk(ctx context.Context, id int64, nama, kategori string, trackStok, isAktif bool, minimumStock int64) error {
+func (q *Queries) UpdateProduk(ctx context.Context, id int64, nama, kategori string, trackStok, isAktif bool, minimumStock, harga int64) error {
 	_, err := q.db.ExecContext(ctx, `
 		UPDATE produk
-		SET nama = ?, kategori = ?, track_stok = ?, is_aktif = ?, minimum_stock = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?`, nama, kategori, trackStok, isAktif, minimumStock, id)
+		SET nama = ?, kategori = ?, track_stok = ?, is_aktif = ?, minimum_stock = ?, harga = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?`, nama, kategori, trackStok, isAktif, minimumStock, harga, id)
 	return err
 }
 

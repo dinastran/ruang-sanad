@@ -35,6 +35,7 @@
 		is_aktif: boolean;
 		stok: number;
 		minimum_stock: number;
+		harga: number;
 		batches: Batch[];
 	}
 	interface OwnedProduct {
@@ -79,6 +80,8 @@
 		kategori: string;
 		track_stok: boolean;
 		qty: number;
+		harga_satuan: number;
+		subtotal: number;
 	}
 	interface ManualOrder {
 		id: number;
@@ -92,12 +95,14 @@
 		dicatat_oleh: string;
 		dibatalkan_oleh: string;
 		created_at: string;
+		total: number;
 		items: ManualOrderItem[];
 	}
 	interface ManualOrderDraftItem {
 		produk_id: number;
 		produk_batch_id: number;
 		qty: number;
+		harga_satuan: number;
 	}
 	interface Angkatan { id: number; kode: string; keterangan: string; }
 	interface Filters {
@@ -160,7 +165,7 @@
 		return new Date(d.getTime() - offset * 60000).toISOString().slice(0, 10);
 	}
 
-	let productForm = $state({ nama: "", kategori: "buku", track_stok: true, is_aktif: true, minimum_stock: 5 });
+	let productForm = $state({ nama: "", kategori: "buku", track_stok: true, is_aktif: true, minimum_stock: 5, harga: 0 });
 	let editingProductID = $state<number | null>(null);
 	let batchForm = $state({ produk_id: 0, nama: "", tanggal_mulai: "", tanggal_selesai: "", is_aktif: true });
 	let editingBatchID = $state<number | null>(null);
@@ -178,13 +183,15 @@
 	let assignSantri = $state<CRMRow | null>(null);
 	let assignForm = $state({ produk_id: 0, produk_batch_id: 0, tanggal: todayLocal(), catatan: "" });
 	let orderForm = $state({ tanggal: todayLocal(), nama_pembeli: "", no_wa: "", sumber: "whatsapp", catatan: "" });
-	let orderItems = $state<ManualOrderDraftItem[]>([{ produk_id: 0, produk_batch_id: 0, qty: 1 }]);
+	let orderItems = $state<ManualOrderDraftItem[]>([{ produk_id: 0, produk_batch_id: 0, qty: 1, harga_satuan: 0 }]);
 
 	let stockProduct = $derived(products.find((p) => p.id === Number(stockForm.produk_id)));
 	let opnameProduct = $derived(products.find((p) => p.id === Number(opnameForm.produk_id)));
 	let assignProduct = $derived(products.find((p) => p.id === Number(assignForm.produk_id)));
 	let filterProduct = $derived(products.find((p) => p.id === Number(filterForm.has_product_id)));
 	let totalPages = $derived(Math.max(1, Math.ceil(total / limit)));
+	let orderDraftTotal = $derived(orderItems.reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.harga_satuan || 0), 0));
+	const rupiah = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n || 0);
 
 	const inputCls = "w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3.5 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-400/15 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white";
 
@@ -204,12 +211,12 @@
 	}
 
 	function resetProductForm() {
-		productForm = { nama: "", kategori: "buku", track_stok: true, is_aktif: true, minimum_stock: 5 };
+		productForm = { nama: "", kategori: "buku", track_stok: true, is_aktif: true, minimum_stock: 5, harga: 0 };
 		editingProductID = null;
 	}
 
 	function editProduct(p: Product) {
-		productForm = { nama: p.nama, kategori: p.kategori, track_stok: p.track_stok, is_aktif: p.is_aktif, minimum_stock: p.minimum_stock ?? 5 };
+		productForm = { nama: p.nama, kategori: p.kategori, track_stok: p.track_stok, is_aktif: p.is_aktif, minimum_stock: p.minimum_stock ?? 5, harga: p.harga ?? 0 };
 		editingProductID = p.id;
 		setTab("produk");
 	}
@@ -276,8 +283,13 @@
 		return orderProduct(item)?.batches?.filter((batch) => batch.is_aktif) ?? [];
 	}
 
+	function chooseOrderProduct(item: ManualOrderDraftItem) {
+		item.produk_batch_id = 0;
+		item.harga_satuan = orderProduct(item)?.harga ?? 0;
+	}
+
 	function addOrderItem() {
-		orderItems.push({ produk_id: 0, produk_batch_id: 0, qty: 1 });
+		orderItems.push({ produk_id: 0, produk_batch_id: 0, qty: 1, harga_satuan: 0 });
 	}
 
 	function removeOrderItem(index: number) {
@@ -287,7 +299,7 @@
 
 	function resetOrderForm() {
 		orderForm = { tanggal: todayLocal(), nama_pembeli: "", no_wa: "", sumber: "whatsapp", catatan: "" };
-		orderItems = [{ produk_id: 0, produk_batch_id: 0, qty: 1 }];
+		orderItems = [{ produk_id: 0, produk_batch_id: 0, qty: 1, harga_satuan: 0 }];
 	}
 
 	function submitManualOrder(e: Event) {
@@ -299,6 +311,7 @@
 				produk_id: Number(item.produk_id),
 				produk_batch_id: Number(item.produk_batch_id || 0),
 				qty: Number(item.qty),
+				harga_satuan: Number(item.harga_satuan || 0),
 			})),
 		}, {
 			preserveScroll: true,
@@ -401,6 +414,7 @@
 						{#if productForm.track_stok && productForm.kategori === "buku"}
 							<label class="block space-y-1.5 text-xs text-neutral-600 dark:text-neutral-400">Minimum stok untuk alert<input type="number" min="0" bind:value={productForm.minimum_stock} class={inputCls} placeholder="Mis. 5" /></label>
 						{/if}
+						<label class="block space-y-1.5 text-xs text-neutral-600 dark:text-neutral-400">Harga jual (Rp)<input type="number" min="0" step="1000" bind:value={productForm.harga} class={inputCls} placeholder="Mis. 85000" /></label>
 						{#if editingProductID}<label class="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300"><input type="checkbox" bind:checked={productForm.is_aktif} /> Produk aktif</label>{/if}
 						<button disabled={loading === "product"} class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"><Plus size="16" /> {editingProductID ? "Simpan Perubahan" : "Tambah Produk"}</button>
 					</form>
@@ -425,7 +439,7 @@
 										<span class="rounded-full px-2 py-0.5 text-xs font-semibold {p.kategori === 'buku' ? 'bg-amber-500/10 text-amber-600' : 'bg-blue-500/10 text-blue-600'}">{p.kategori === "buku" ? "Buku" : "Program"}</span>
 										<span class="rounded-full px-2 py-0.5 text-xs {p.is_aktif ? 'bg-green-500/10 text-green-600' : 'bg-neutral-500/10 text-neutral-500'}">{p.is_aktif ? "Aktif" : "Nonaktif"}</span>
 									</div>
-									<p class="mt-1 text-sm text-neutral-500">{p.track_stok ? `Stok total: ${p.stok} · minimum ${p.minimum_stock ?? 0}` : "Tanpa stok fisik"}</p>
+									<p class="mt-1 text-sm text-neutral-500">{rupiah(p.harga)} · {p.track_stok ? `Stok total: ${p.stok} · minimum ${p.minimum_stock ?? 0}` : "Tanpa stok fisik"}</p>
 								</div>
 								<button onclick={() => editProduct(p)} class="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-2 text-xs font-semibold text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"><Pencil size="14" /> Edit</button>
 							</div>
@@ -508,7 +522,7 @@
 						{#each orderItems as item, index}
 							<div class="space-y-2 rounded-xl border border-neutral-200 p-3 dark:border-white/[0.07]">
 								<div class="flex items-start gap-2">
-									<select bind:value={item.produk_id} onchange={() => item.produk_batch_id = 0} required class={inputCls}>
+									<select bind:value={item.produk_id} onchange={() => chooseOrderProduct(item)} required class={inputCls}>
 										<option value={0}>Pilih produk / program</option>
 										{#each products.filter((p) => p.is_aktif) as p}
 											<option value={p.id}>{p.nama}{p.track_stok ? ` · stok ${p.stok}` : " · program"}</option>
@@ -524,14 +538,20 @@
 										{#each activeOrderBatches(item) as batch}<option value={batch.id}>{batch.nama}</option>{/each}
 									</select>
 								{/if}
-								<label class="flex items-center gap-3 text-xs text-neutral-500">
-									<span class="shrink-0">Qty</span>
-									<input type="number" min="1" bind:value={item.qty} required class={inputCls} />
-								</label>
+								<div class="grid grid-cols-[88px_1fr] gap-2">
+									<label class="space-y-1 text-xs text-neutral-500">Qty
+										<input type="number" min="1" bind:value={item.qty} required class={inputCls} />
+									</label>
+									<label class="space-y-1 text-xs text-neutral-500">Harga satuan (Rp)
+										<input type="number" min="0" step="1000" bind:value={item.harga_satuan} required class={inputCls} />
+									</label>
+								</div>
+								<p class="text-right text-xs text-neutral-500">Subtotal <span class="font-mono font-semibold text-neutral-800 dark:text-neutral-200">{rupiah(Number(item.qty || 0) * Number(item.harga_satuan || 0))}</span></p>
 							</div>
 						{/each}
 					</div>
 
+					<div class="flex items-center justify-between rounded-xl bg-neutral-50 px-3.5 py-2.5 text-sm dark:bg-white/[0.03]"><span class="text-neutral-600 dark:text-neutral-400">Total order</span><span class="font-mono font-bold text-neutral-900 dark:text-white">{rupiah(orderDraftTotal)}</span></div>
 					<textarea bind:value={orderForm.catatan} rows="2" placeholder="Catatan opsional" class={inputCls}></textarea>
 					<button disabled={loading === "manual-order"} class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
 						<PackagePlus size="16" /> Simpan Order
@@ -552,7 +572,7 @@
 											<span class="font-mono text-xs font-semibold text-neutral-500">{order.order_no}</span>
 											<span class="rounded-full px-2 py-0.5 text-[11px] font-semibold {order.status === 'aktif' ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-neutral-500/10 text-neutral-500'}">{order.status === "aktif" ? "Aktif" : "Dibatalkan"}</span>
 										</div>
-										<h3 class="mt-1 font-semibold text-neutral-900 dark:text-white">{order.nama_pembeli}</h3>
+										<h3 class="mt-1 font-semibold text-neutral-900 dark:text-white">{order.nama_pembeli} <span class="ml-1 font-mono text-sm font-semibold {order.status === 'aktif' ? 'text-brand-600 dark:text-brand-400' : 'text-neutral-400 line-through'}">{rupiah(order.total)}</span></h3>
 										<p class="mt-1 text-xs text-neutral-500">{order.tanggal} · {sourceLabel(order.sumber)}{order.no_wa ? ` · ${order.no_wa}` : ""}</p>
 									</div>
 									{#if order.status === "aktif"}
@@ -561,7 +581,7 @@
 								</div>
 								<div class="mt-3 flex flex-wrap gap-2">
 									{#each order.items as item}
-										<span class="rounded-lg bg-neutral-100 px-2.5 py-1.5 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">{item.produk_nama}{item.batch_nama ? ` · ${item.batch_nama}` : ""} × {item.qty}</span>
+										<span class="rounded-lg bg-neutral-100 px-2.5 py-1.5 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">{item.produk_nama}{item.batch_nama ? ` · ${item.batch_nama}` : ""} × {item.qty}{item.harga_satuan ? ` · ${rupiah(item.subtotal)}` : ""}</span>
 									{/each}
 								</div>
 								{#if order.catatan}<p class="mt-3 text-xs leading-5 text-neutral-500">{order.catatan}</p>{/if}

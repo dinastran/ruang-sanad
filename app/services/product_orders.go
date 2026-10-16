@@ -11,7 +11,10 @@ import (
 	"github.com/maulanashalihin/laju-go/app/queries"
 )
 
-var ErrStokOrderTidakCukup = errors.New("stok produk tidak mencukupi")
+var (
+	ErrStokOrderTidakCukup = errors.New("stok produk tidak mencukupi")
+	ErrHargaProdukNegatif  = errors.New("harga tidak boleh negatif")
+)
 
 type ProductOrderService struct {
 	querier *queries.Querier
@@ -85,6 +88,7 @@ func (s *ProductOrderService) Create(req models.CreateProductOrderRequest, userI
 		request models.CreateProductOrderItemRequest
 		product models.Product
 		batch   sql.NullInt64
+		harga   int64
 	}
 	validated := make([]validatedItem, 0, len(req.Items))
 	reservedStock := make(map[string]int64)
@@ -95,6 +99,9 @@ func (s *ProductOrderService) Create(req models.CreateProductOrderRequest, userI
 		}
 		if item.Qty <= 0 {
 			return 0, errors.New("qty order harus lebih dari nol")
+		}
+		if item.HargaSatuan != nil && *item.HargaSatuan < 0 {
+			return 0, ErrHargaProdukNegatif
 		}
 		product, err := q.GetProduk(ctx, item.ProdukID)
 		if err != nil {
@@ -119,7 +126,11 @@ func (s *ProductOrderService) Create(req models.CreateProductOrderRequest, userI
 			}
 			reservedStock[key] = needed
 		}
-		validated = append(validated, validatedItem{request: item, product: product, batch: batch})
+		harga := product.Harga
+		if item.HargaSatuan != nil {
+			harga = *item.HargaSatuan
+		}
+		validated = append(validated, validatedItem{request: item, product: product, batch: batch, harga: harga})
 	}
 
 	orderID, err := q.CreateProductOrder(ctx, req.Tanggal, req.NamaPembeli, req.NoWA, req.Sumber, req.Catatan, userID)
@@ -132,7 +143,7 @@ func (s *ProductOrderService) Create(req models.CreateProductOrderRequest, userI
 	}
 
 	for _, item := range validated {
-		itemID, err := q.CreateProductOrderItem(ctx, orderID, item.product.ID, item.batch, item.request.Qty)
+		itemID, err := q.CreateProductOrderItem(ctx, orderID, item.product.ID, item.batch, item.request.Qty, item.harga)
 		if err != nil {
 			return 0, err
 		}
@@ -172,6 +183,9 @@ func (s *ProductOrderService) List(limit int64) ([]models.ProductOrder, error) {
 			return nil, err
 		}
 		orders[i].Items = items
+		for _, item := range items {
+			orders[i].Total += item.Subtotal
+		}
 	}
 	return orders, nil
 }

@@ -117,3 +117,48 @@ func TestManualProgramOrderDoesNotChangeStock(t *testing.T) {
 	require.Len(t, orders, 1)
 	require.Equal(t, "program", orders[0].Items[0].Kategori)
 }
+
+func TestManualProductOrderSnapshotsHarga(t *testing.T) {
+	f := setupProductCRM(t)
+	orderService := NewProductOrderService(f.querier)
+	require.NoError(t, f.service.CreateProduct(models.CreateProductRequest{Nama: "Program Tahsin", Kategori: "program", Harga: 150000}))
+	require.Error(t, f.service.CreateProduct(models.CreateProductRequest{Nama: "Minus", Kategori: "program", Harga: -1}))
+	products, err := f.service.Products()
+	require.NoError(t, err)
+	var productID int64
+	for _, p := range products {
+		if p.Nama == "Program Tahsin" {
+			productID = p.ID
+			require.EqualValues(t, 150000, p.Harga)
+		}
+	}
+	require.NotZero(t, productID)
+
+	diskon := int64(100000)
+	_, err = orderService.Create(models.CreateProductOrderRequest{
+		Tanggal: "2026-09-28", NamaPembeli: "Fulan", Sumber: "whatsapp",
+		Items: []models.CreateProductOrderItemRequest{
+			{ProdukID: productID, Qty: 2},
+			{ProdukID: productID, Qty: 1, HargaSatuan: &diskon},
+		},
+	}, f.adminID)
+	require.NoError(t, err)
+
+	// Changing the product price later must not change the order's value.
+	require.NoError(t, f.service.UpdateProduct(productID, models.UpdateProductRequest{Nama: "Program Tahsin", Kategori: "program", IsAktif: true, Harga: 200000}))
+
+	orders, err := orderService.List(10)
+	require.NoError(t, err)
+	require.Len(t, orders[0].Items, 2)
+	require.EqualValues(t, 150000, orders[0].Items[0].HargaSatuan)
+	require.EqualValues(t, 300000, orders[0].Items[0].Subtotal)
+	require.EqualValues(t, 100000, orders[0].Items[1].HargaSatuan)
+	require.EqualValues(t, 400000, orders[0].Total)
+
+	negatif := int64(-5)
+	_, err = orderService.Create(models.CreateProductOrderRequest{
+		Tanggal: "2026-09-28", NamaPembeli: "Fulan", Sumber: "whatsapp",
+		Items: []models.CreateProductOrderItemRequest{{ProdukID: productID, Qty: 1, HargaSatuan: &negatif}},
+	}, f.adminID)
+	require.ErrorIs(t, err, ErrHargaProdukNegatif)
+}

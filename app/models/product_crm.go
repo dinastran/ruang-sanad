@@ -8,6 +8,7 @@ type Product struct {
 	IsAktif   bool           `json:"is_aktif"`
 	Stok         int64          `json:"stok"`
 	MinimumStock int64          `json:"minimum_stock"`
+	Harga        int64          `json:"harga"`
 	Batches      []ProductBatch `json:"batches"`
 }
 
@@ -169,6 +170,7 @@ type CreateProductRequest struct {
 	Kategori     string `json:"kategori"`
 	TrackStok    bool   `json:"track_stok"`
 	MinimumStock int64  `json:"minimum_stock"`
+	Harga        int64  `json:"harga"`
 }
 
 type UpdateProductRequest struct {
@@ -177,6 +179,7 @@ type UpdateProductRequest struct {
 	TrackStok    bool   `json:"track_stok"`
 	IsAktif      bool   `json:"is_aktif"`
 	MinimumStock int64  `json:"minimum_stock"`
+	Harga        int64  `json:"harga"`
 }
 
 type CreateProductBatchRequest struct {

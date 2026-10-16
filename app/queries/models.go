@@ -340,6 +340,7 @@ type ProductOrderItem struct {
 	ProdukBatchID sql.NullInt64
 	Qty           int64
 	CreatedAt     time.Time
+	HargaSatuan   int64
 }
 
 type Produk struct {
@@ -351,6 +352,7 @@ type Produk struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	MinimumStock int64
+	Harga        int64
 }
 
 type ProdukBatch struct {
