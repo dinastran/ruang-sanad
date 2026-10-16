@@ -183,6 +183,27 @@ func TestKoordinatorMonitoringKPITidakBerubahOlehFilterStatusDanBadal(t *testing
 	require.EqualValues(t, 0, result.Summary.Dinilai)
 }
 
+func TestKoordinatorMonitoringBadalMenyertakanGuruKelasDanGuruPengganti(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	day := time.Now().In(wib).AddDate(0, 0, -1).Format("2006-01-02")
+	_, err := f.db.Exec(`INSERT INTO jadwal_pertemuan (kelas_id, tanggal, jam_mulai, status, guru_pengganti_id, alasan_badal) VALUES (?, ?, '19:30', 'dijadwalkan', ?, 'Guru sakit')`, f.kelasID, day, f.guruBadalID)
+	require.NoError(t, err)
+
+	service := NewKoordinatorMonitoringService(f.querier, f.service)
+	result, err := service.List(models.ClassMonitoringFilter{StartDate: day, EndDate: day})
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	item := result.Items[0]
+	// Koordinator harus tetap tahu pemilik kelas meskipun sesi dibadal.
+	require.Equal(t, "Guru Utama", item.GuruUtamaNama)
+	require.NotNil(t, item.GuruUtamaID)
+	require.Equal(t, f.guruUtamaID, *item.GuruUtamaID)
+	require.Equal(t, "Guru Badal", item.GuruPenggantiNama)
+	require.NotNil(t, item.GuruPenggantiID)
+	require.Equal(t, f.guruBadalID, *item.GuruPenggantiID)
+	require.Equal(t, "Guru sakit", item.AlasanBadal)
+}
+
 func TestKoordinatorMonitoringMenandaiTanggalAsalJadwalYangDipindah(t *testing.T) {
 	f := setupJadwalPertemuanService(t)
 	asal := time.Now().In(wib).AddDate(0, 0, 1).Format("2006-01-02")

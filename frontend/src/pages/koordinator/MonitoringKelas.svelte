@@ -196,6 +196,12 @@
 		return item.guru_pengganti_nama || item.guru_utama_nama || "Belum ditetapkan";
 	}
 
+	function badalTitle(item: MonitoringKelasItem): string {
+		const parts = [`Menggantikan ${item.guru_utama_nama || "guru kelas"}`];
+		if (item.alasan_badal) parts.push(`Alasan: ${item.alasan_badal}`);
+		return parts.join(" · ");
+	}
+
 	function displayClassName(item: MonitoringKelasItem): string {
 		let name = (item.nama_kelas || "").trim();
 		const schedule = (item.jadwal_kelas || "").trim();
@@ -672,7 +678,7 @@
 											<h3 class="min-w-0 max-w-full break-words text-base font-semibold leading-6 text-neutral-900 dark:text-white" title={item.nama_kelas}>{displayClassName(item)}</h3>
 											<span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold {statusClass(item.status)}">{statusLabel[item.status] ?? item.status}</span>
 											{#if item.is_reschedule}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400" title={item.alasan_reschedule ? `Alasan: ${item.alasan_reschedule}` : "Jadwal ini dipindah dari jadwal asalnya"}><RotateCcw class="h-3.5 w-3.5" /> Reschedule{#if item.jadwal_semula} · dari {formatJadwalSemula(item.jadwal_semula)}{/if}</span>{/if}
-											{#if item.guru_pengganti_id}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary-500/10 px-2.5 py-1 text-xs font-semibold text-secondary-700 dark:text-secondary-300" title={item.alasan_badal ? `Alasan: ${item.alasan_badal}` : "Kelas diajar guru pengganti"}><UserRoundCheck class="h-3.5 w-3.5" /> Badal · {item.guru_pengganti_nama}</span>{/if}
+											{#if item.guru_pengganti_id}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary-500/10 px-2.5 py-1 text-xs font-semibold text-secondary-700 dark:text-secondary-300" title={badalTitle(item)}><UserRoundCheck class="h-3.5 w-3.5" /> Badal · {item.guru_pengganti_nama}</span>{/if}
 											{#if item.tanpa_jadwal}<span class="shrink-0 rounded-full bg-neutral-200/70 px-2.5 py-1 text-xs font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300" title="Guru memulai sesi langsung tanpa jadwal pertemuan yang dibuat sebelumnya">Sesi spontan</span>{/if}
 											{#if item.is_tambahan}<span class="shrink-0 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-400" title="Sesi tambahan di luar pola jadwal rutin. Tidak masuk perhitungan KPI.">Sesi tambahan</span>{/if}
 											{#if item.needs_action}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-error/10 px-2.5 py-1 text-xs font-semibold text-red-700 dark:text-red-400"><AlertTriangle class="h-3.5 w-3.5" /> Perlu tindakan</span>{/if}
@@ -687,9 +693,15 @@
 
 									<div class="grid min-w-0 grid-cols-2 gap-x-5 gap-y-3 text-xs sm:grid-cols-4 xl:grid-cols-2">
 										<div class="min-w-0">
-											<p class="text-neutral-500">Guru bertugas</p>
-											<p class="mt-0.5 truncate font-medium text-neutral-800 dark:text-neutral-200" title={teacherName(item)}>{teacherName(item)}</p>
+											<p class="text-neutral-500">Guru kelas</p>
+											<p class="mt-0.5 truncate font-medium text-neutral-800 dark:text-neutral-200" title={item.guru_utama_nama || "Belum ada guru"}>{item.guru_utama_nama || "Belum ada guru"}</p>
 										</div>
+										{#if item.guru_pengganti_id}
+											<div class="min-w-0">
+												<p class="text-neutral-500">Badal</p>
+												<p class="mt-0.5 truncate font-medium text-secondary-700 dark:text-secondary-300" title={item.guru_pengganti_nama}>{item.guru_pengganti_nama}</p>
+											</div>
+										{/if}
 										<div>
 											<p class="text-neutral-500">Presensi guru</p>
 											<span class="mt-0.5 inline-flex rounded-full px-2 py-0.5 font-medium {attendanceClass(item.teacher_attendance)}">{attendanceLabel[item.teacher_attendance] ?? item.teacher_attendance}</span>
@@ -758,6 +770,8 @@
 											<div><dt class="text-xs text-neutral-500">Selesai aktual</dt><dd class="mt-0.5 text-neutral-800 dark:text-neutral-200">{formatDateTime(item.actual_end_time)}</dd></div>
 											<div><dt class="text-xs text-neutral-500">Check-in guru</dt><dd class="mt-0.5 text-neutral-800 dark:text-neutral-200">{formatDateTime(item.teacher_checked_in_at)}</dd></div>
 											<div><dt class="text-xs text-neutral-500">Mode materi</dt><dd class="mt-0.5 text-neutral-800 dark:text-neutral-200">{item.materi_individual ? "Individual" : "Kelas"}</dd></div>
+											<div><dt class="text-xs text-neutral-500">Guru kelas</dt><dd class="mt-0.5 text-neutral-800 dark:text-neutral-200">{item.guru_utama_nama || "Belum ada guru"}</dd></div>
+											{#if item.guru_pengganti_id}<div><dt class="text-xs text-neutral-500">Badal</dt><dd class="mt-0.5 text-neutral-800 dark:text-neutral-200">{item.guru_pengganti_nama}</dd></div>{/if}
 										</dl>
 									</section>
 									<section aria-label="Materi dan catatan pertemuan">
@@ -767,7 +781,7 @@
 											<div><p class="text-xs text-neutral-500">Catatan jadwal</p><p class="mt-0.5 whitespace-pre-wrap">{item.schedule_note || "Tidak ada"}</p></div>
 											<div><p class="text-xs text-neutral-500">Catatan pertemuan</p><p class="mt-0.5 whitespace-pre-wrap">{item.meeting_note || "Tidak ada"}</p></div>
 											{#if item.is_reschedule}<div><p class="text-xs text-neutral-500">Perubahan jadwal</p><p class="mt-0.5">Dari {item.jadwal_semula ? formatJadwalSemula(item.jadwal_semula) : "jadwal sebelumnya"}{#if item.alasan_reschedule}: {item.alasan_reschedule}{/if}</p></div>{/if}
-											{#if item.guru_pengganti_id}<div><p class="text-xs text-neutral-500">Guru pengganti</p><p class="mt-0.5">{item.guru_pengganti_nama}{#if item.alasan_badal}: {item.alasan_badal}{/if}</p></div>{/if}
+											{#if item.guru_pengganti_id}<div><p class="text-xs text-neutral-500">Alasan badal</p><p class="mt-0.5">{item.guru_pengganti_nama} menggantikan {item.guru_utama_nama || "guru kelas"}{#if item.alasan_badal}: {item.alasan_badal}{/if}</p></div>{/if}
 										</div>
 									</section>
 
