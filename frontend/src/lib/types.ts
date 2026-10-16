@@ -612,6 +612,19 @@ export interface Tagihan {
 	fu_count: number;
 }
 
+export interface TagihanBatalBatch {
+	id: number;
+	alasan: string;
+	filter_ringkas: string;
+	jumlah: number;
+	total_nominal: number;
+	dibuat_oleh_nama: string;
+	created_at: string;
+	dipulihkan_at: string;
+	dipulihkan_oleh_nama: string;
+	jumlah_dipulihkan: number;
+}
+
 export interface TagihanFollowUpLog {
 	id: number;
 	template_id?: number;

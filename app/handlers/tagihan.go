@@ -50,7 +50,11 @@ func (h *TagihanHandler) List(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return h.inertiaService.Render(c, "keuangan/Tagihan", fiber.Map{"user": sessionUser(sess), "tagihan": tagihan, "templates": templates, "filter": fiber.Map{"status": c.Query("status"), "search": c.Query("search"), "tanggal_dari": c.Query("tanggal_dari"), "tanggal_sampai": c.Query("tanggal_sampai"), "kelas_id": c.Query("kelas_id"), "angkatan_kelas": c.Query("angkatan_kelas"), "guru_id": c.Query("guru_id"), "frekuensi": c.Query("frekuensi"), "level": c.Query("level"), "gender": c.Query("gender"), "bulan_ke": c.Query("bulan_ke")}})
+	batalMassal, err := h.tagihan.ListBatalMassal(20)
+	if err != nil {
+		return err
+	}
+	return h.inertiaService.Render(c, "keuangan/Tagihan", fiber.Map{"user": sessionUser(sess), "tagihan": tagihan, "templates": templates, "batal_massal": batalMassal, "filter": fiber.Map{"status": c.Query("status"), "search": c.Query("search"), "tanggal_dari": c.Query("tanggal_dari"), "tanggal_sampai": c.Query("tanggal_sampai"), "kelas_id": c.Query("kelas_id"), "angkatan_kelas": c.Query("angkatan_kelas"), "guru_id": c.Query("guru_id"), "frekuensi": c.Query("frekuensi"), "level": c.Query("level"), "gender": c.Query("gender"), "bulan_ke": c.Query("bulan_ke")}})
 }
 
 func (h *TagihanHandler) Detail(c *fiber.Ctx) error {

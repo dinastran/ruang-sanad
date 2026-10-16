@@ -242,8 +242,10 @@ WHERE (?1 IS NULL OR t.status = ?1)
   AND (?6 = '' OR s.level = ?6)
   AND (?7 = '' OR s.jenis_kelamin = ?7)
   AND (?8 IS NULL OR t.bulan_ke = ?8)
-  AND (?9 IS NULL OR t.tanggal_tagih >= ?9)
-  AND (?10 IS NULL OR t.tanggal_tagih <= ?10)
+  -- tanggal_tagih is stored as "YYYY-MM-DD 00:00:00 +0000 UTC"; compare the date
+  -- part so tanggal_sampai is inclusive.
+  AND (?9 IS NULL OR substr(t.tanggal_tagih, 1, 10) >= ?9)
+  AND (?10 IS NULL OR substr(t.tanggal_tagih, 1, 10) <= ?10)
   AND (?11 = '' OR s.nama LIKE '%' || ?11 || '%' OR s.id_mahasantri LIKE '%' || ?11 || '%')
 ORDER BY t.tanggal_tagih DESC, t.id DESC
 `

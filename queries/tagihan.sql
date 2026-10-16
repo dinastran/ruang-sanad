@@ -39,8 +39,10 @@ WHERE (sqlc.narg('status') IS NULL OR t.status = sqlc.narg('status'))
   AND (sqlc.arg('level') = '' OR s.level = sqlc.arg('level'))
   AND (sqlc.arg('gender') = '' OR s.jenis_kelamin = sqlc.arg('gender'))
   AND (sqlc.narg('bulan_ke') IS NULL OR t.bulan_ke = sqlc.narg('bulan_ke'))
-  AND (sqlc.narg('tanggal_dari') IS NULL OR t.tanggal_tagih >= sqlc.narg('tanggal_dari'))
-  AND (sqlc.narg('tanggal_sampai') IS NULL OR t.tanggal_tagih <= sqlc.narg('tanggal_sampai'))
+  -- tanggal_tagih is stored as "YYYY-MM-DD 00:00:00 +0000 UTC"; compare the date
+  -- part so tanggal_sampai is inclusive.
+  AND (sqlc.narg('tanggal_dari') IS NULL OR substr(t.tanggal_tagih, 1, 10) >= sqlc.narg('tanggal_dari'))
+  AND (sqlc.narg('tanggal_sampai') IS NULL OR substr(t.tanggal_tagih, 1, 10) <= sqlc.narg('tanggal_sampai'))
   AND (sqlc.arg('search') = '' OR s.nama LIKE '%' || sqlc.arg('search') || '%' OR s.id_mahasantri LIKE '%' || sqlc.arg('search') || '%')
 ORDER BY t.tanggal_tagih DESC, t.id DESC;
 

@@ -544,6 +544,27 @@ type Tagihan struct {
 	AngkatanKelas string
 }
 
+type TagihanBatalBatch struct {
+	ID               int64
+	Alasan           string
+	FilterJson       string
+	Jumlah           int64
+	TotalNominal     int64
+	DibuatOleh       sql.NullInt64
+	CreatedAt        time.Time
+	DipulihkanAt     sql.NullTime
+	DipulihkanOleh   sql.NullInt64
+	JumlahDipulihkan int64
+}
+
+type TagihanBatalBatchItem struct {
+	ID          int64
+	BatchID     int64
+	TagihanID   int64
+	StatusLama  string
+	CatatanLama string
+}
+
 type TagihanFollowUpLog struct {
 	ID           int64
 	TagihanID    int64
