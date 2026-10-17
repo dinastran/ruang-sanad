@@ -224,6 +224,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/santri/:id/keuangan", kuRole, h.Santri.UpdateKeuangan)
 	protected.Put("/keuangan/santri/:id/status", kuRole, h.SantriStatus.UpdateKeuangan)
 	protected.Get("/laporan/keuangan", kuRole, h.Laporan.Keuangan)
+	protected.Get("/laporan/keuangan/export", kuRole, h.Laporan.Export)
 
 	// Master data API (all authenticated)
 	api := protected.Group("/api")
