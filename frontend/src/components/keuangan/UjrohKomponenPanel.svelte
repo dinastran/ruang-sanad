@@ -24,7 +24,9 @@
 	let editID = $state<number | null>(null);
 	let edit = $state({ nama: "", nominal_default: 0 });
 	let penerimaID = $state<number | null>(null);
-	let penerimaDraft = $state<Record<number, string | number | null>>({});
+	// Draft penerima per guru: dicentang = menerima dengan nominal tsb.
+	let penerimaDraft = $state<Record<number, { terima: boolean; nominal: number }>>({});
+	let cariGuru = $state("");
 
 	let guruAktif = $derived(guru.filter((g) => g.is_aktif));
 	let jumlahTetap = $derived(komponen.filter((k) => k.is_aktif && k.jenis === "tetap").length);
@@ -64,18 +66,42 @@
 			return;
 		}
 		penerimaID = k.id;
-		penerimaDraft = Object.fromEntries(guruAktif.map((g) => [g.guru_id, k.penerima[g.guru_id] !== undefined ? String(k.penerima[g.guru_id]) : ""]));
+		cariGuru = "";
+		penerimaDraft = Object.fromEntries(guruAktif.map((g) => {
+			const cur = k.penerima[g.guru_id];
+			return [g.guru_id, { terima: cur !== undefined, nominal: cur ?? k.nominal_default }];
+		}));
 	}
 
-	function simpanPenerima(k: UjrohKomponen, guruID: number) {
-		const raw = String(penerimaDraft[guruID] ?? "").trim();
-		const nominal = raw === "" ? null : Number(raw);
-		if (nominal !== null && (!Number.isFinite(nominal) || nominal < 0)) return;
-		router.put(`/app/keuangan/ujroh/komponen/${k.id}/guru/${guruID}${q}`, { nominal }, opts);
+	let komponenPenerima = $derived(komponen.find((k) => k.id === penerimaID));
+	let guruTampil = $derived(guruAktif.filter((g) => g.nama.toLowerCase().includes(cariGuru.trim().toLowerCase())));
+	let ringkasPenerima = $derived.by(() => {
+		let jumlah = 0, total = 0;
+		for (const d of Object.values(penerimaDraft)) if (d.terima) { jumlah++; total += Number(d.nominal) || 0; }
+		return { jumlah, total };
+	});
+	// Hanya baris yang berubah dikirim ke server.
+	let perubahan = $derived.by(() => {
+		const k = komponenPenerima;
+		if (!k) return [];
+		return guruAktif.flatMap((g) => {
+			const d = penerimaDraft[g.guru_id];
+			if (!d) return [];
+			const cur = k.penerima[g.guru_id];
+			const baru = d.terima ? Number(d.nominal) : null;
+			if (baru === (cur ?? null)) return [];
+			return [{ guru_id: g.guru_id, nominal: baru }];
+		});
+	});
+	let draftValid = $derived(Object.values(penerimaDraft).every((d) => !d.terima || (Number.isFinite(Number(d.nominal)) && Number(d.nominal) >= 0)));
+
+	function centangSemua(terima: boolean) {
+		for (const g of guruTampil) penerimaDraft[g.guru_id].terima = terima;
 	}
 
-	function isiSemua(k: UjrohKomponen) {
-		for (const g of guruAktif) if (String(penerimaDraft[g.guru_id] ?? "").trim() === "") penerimaDraft[g.guru_id] = k.nominal_default;
+	function simpanPenerima(k: UjrohKomponen) {
+		if (perubahan.length === 0 || !draftValid) return;
+		router.put(`/app/keuangan/ujroh/komponen/${k.id}/penerima${q}`, { penerima: perubahan }, opts);
 	}
 </script>
 
@@ -147,19 +173,46 @@
 
 						{#if penerimaID === k.id}
 							<div class="mt-3 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-900/40">
-								<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-									<p class="text-xs text-neutral-500">Kosongkan nominal lalu Simpan untuk menghapus guru dari penerima. Berlaku untuk bulan yang belum dikunci.</p>
-									<button onclick={() => isiSemua(k)} class="text-xs font-semibold text-brand-700 hover:underline dark:text-brand-300">Isi kosong dengan default</button>
+								<p class="text-sm text-neutral-700 dark:text-neutral-300">
+									Centang guru yang menerima <strong>{k.nama}</strong> setiap bulan, isi nominalnya, lalu tekan <strong>Simpan penerima</strong>. Berlaku untuk bulan yang belum dikunci.
+								</p>
+								<div class="mt-3 flex flex-wrap items-center gap-2">
+									<input bind:value={cariGuru} placeholder="Cari guru" aria-label="Cari guru" class="{inputClass} sm:max-w-56" />
+									<button onclick={() => centangSemua(true)} class="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-400/10 dark:text-brand-300">Centang semua</button>
+									<button onclick={() => centangSemua(false)} class="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800">Hapus centang</button>
 								</div>
-								<div class="divide-y divide-neutral-100 dark:divide-neutral-800/70">
-									{#each guruAktif as g (g.guru_id)}
-										<div class="flex items-center gap-2 py-1.5">
-											<p class="min-w-0 flex-1 truncate text-sm text-neutral-900 dark:text-white">{g.nama}</p>
-											<label class="sr-only" for="penerima-{k.id}-{g.guru_id}">Nominal {k.nama} untuk {g.nama}</label>
-											<input id="penerima-{k.id}-{g.guru_id}" type="number" min="0" step="1000" placeholder="Tidak menerima" bind:value={penerimaDraft[g.guru_id]} class="{inputClass} w-40" />
-											<button onclick={() => simpanPenerima(k, g.guru_id)} disabled={busy} class="rounded-lg border border-neutral-300 px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800">Simpan</button>
-										</div>
+								<ul class="mt-3 divide-y divide-neutral-200 rounded-xl border border-neutral-200 bg-white dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-925">
+									{#each guruTampil as g (g.guru_id)}
+										{@const d = penerimaDraft[g.guru_id]}
+										{#if d}
+											<li class="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center">
+												<label class="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+													<input type="checkbox" bind:checked={d.terima} class="h-5 w-5 shrink-0 rounded accent-brand-600" />
+													<span class="min-w-0">
+														<span class="block font-medium text-neutral-900 dark:text-white">{g.nama}</span>
+														<span class="block text-xs text-neutral-500">{g.status === "tetap" ? "Guru tetap" : g.status === "part_time" ? "Part time" : g.status}{k.penerima[g.guru_id] !== undefined ? ` · saat ini ${rupiah(k.penerima[g.guru_id])}` : ""}</span>
+													</span>
+												</label>
+												{#if d.terima}
+													<label class="flex items-center gap-2 pl-8 text-xs text-neutral-500 sm:pl-0">
+														Rp
+														<input type="number" min="0" step="1000" bind:value={d.nominal} aria-label="Nominal {k.nama} untuk {g.nama}" class="w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2 text-sm text-neutral-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/15 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-white sm:w-36" />
+													</label>
+												{:else}
+													<span class="pl-8 text-xs text-neutral-400 sm:pl-0">Tidak menerima</span>
+												{/if}
+											</li>
+										{/if}
+									{:else}
+										<li class="px-3 py-4 text-center text-sm text-neutral-500">Guru tidak ditemukan.</li>
 									{/each}
+								</ul>
+								<div class="sticky bottom-0 mt-3 flex flex-col gap-2 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-925 sm:flex-row sm:items-center sm:justify-between">
+									<p class="text-sm text-neutral-700 dark:text-neutral-300">
+										<strong>{ringkasPenerima.jumlah}</strong> guru menerima · {rupiah(ringkasPenerima.total)}/bulan
+										{#if perubahan.length > 0}<span class="block text-xs text-warning">{perubahan.length} perubahan belum disimpan</span>{/if}
+									</p>
+									<button onclick={() => simpanPenerima(k)} disabled={busy || perubahan.length === 0 || !draftValid} class="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">Simpan penerima</button>
 								</div>
 							</div>
 						{/if}
