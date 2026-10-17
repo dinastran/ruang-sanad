@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"time"
 
 	"github.com/maulanashalihin/laju-go/app/models"
 	"github.com/maulanashalihin/laju-go/app/queries"
@@ -11,6 +12,7 @@ type LaporanService struct {
 	querier       *queries.Querier
 	santriService *SantriService
 	kelasService  *KelasService
+	now           func() time.Time
 }
 
 func NewLaporanService(querier *queries.Querier, santriService *SantriService, kelasService *KelasService) *LaporanService {
@@ -145,62 +147,4 @@ func (s *LaporanService) GetDashboardStats() (*models.DashboardStats, error) {
 		PerTipe:            tipeStats,
 		NominalPerAngkatan: nominalStats,
 	}, nil
-}
-
-func (s *LaporanService) GetLaporanKeuangan() (*models.LaporanKeuangan, error) {
-	nominalRows, err := s.santriService.SumNominalByAngkatan()
-	if err != nil {
-		return nil, err
-	}
-	nominalStats := make([]models.NominalAngkatan, len(nominalRows))
-	for i, n := range nominalRows {
-		val := float64(0)
-		if n.TotalNominal.Valid {
-			val = n.TotalNominal.Float64
-		}
-		nominalStats[i] = models.NominalAngkatan{
-			Angkatan:     n.Angkatan,
-			TotalNominal: val,
-		}
-	}
-
-	statusRows, err := s.santriService.CountByStatus()
-	if err != nil {
-		return nil, err
-	}
-	tidakLanjut := int64(0)
-	for _, r := range statusRows {
-		if r.Status == "tidak_lanjut" {
-			tidakLanjut = r.Total
-		}
-	}
-
-	return &models.LaporanKeuangan{
-		PerAngkatan: nominalStats,
-		TidakLanjut: tidakLanjut,
-	}, nil
-}
-
-// ListTidakLanjut returns the santri whose payment follow-up has stopped
-// (status = tidak_lanjut), including their keterangan for the report table.
-func (s *LaporanService) ListTidakLanjut() ([]models.SantriResponse, error) {
-	res, err := s.santriService.List(models.SantriListParams{
-		Status: "tidak_lanjut", Lengkap: -1, Limit: 1000, Offset: 0,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return res.Data, nil
-}
-
-// ListInfaqRekap returns active santri with their nominal & infaq_terakhir for
-// the infaq recap table.
-func (s *LaporanService) ListInfaqRekap() ([]models.SantriResponse, error) {
-	res, err := s.santriService.List(models.SantriListParams{
-		Status: "aktif", Lengkap: -1, Limit: 1000, Offset: 0,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return res.Data, nil
 }

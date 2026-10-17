@@ -985,3 +985,82 @@ export interface GuruHapusInfo {
 	kelas_aktif: string[];
 	riwayat: { label: string; jumlah: number }[];
 }
+
+// Laporan Keuangan per periode (basis kas).
+export interface LaporanKelompok {
+	nama: string;
+	jumlah: number;
+	nominal: number;
+}
+
+export interface LaporanPembayaran {
+	tagihan_id: number;
+	tanggal_bayar: string;
+	santri_id: number;
+	id_mahasantri: string;
+	santri_nama: string;
+	angkatan_kelas: string;
+	kelas_nama: string;
+	bulan_ke: number;
+	nominal: number;
+	metode: string;
+	catatan: string;
+	dicatat_oleh: string;
+}
+
+export interface LaporanUjrohDibayar {
+	bulan: string;
+	guru_nama: string;
+	pokok: number;
+	komponen: number;
+	kasbon: number;
+	diterima: number;
+	dibayar_at: string;
+	catatan: string;
+}
+
+export interface LaporanKasbon {
+	tanggal: string;
+	guru_nama: string;
+	nominal: number;
+	keterangan: string;
+}
+
+export interface LaporanSantri {
+	santri_id: number;
+	id_mahasantri: string;
+	nama: string;
+	angkatan: string;
+	angkatan_kelas: string;
+	kelas_nama: string;
+	status: string;
+	nominal_spp: number;
+	keterangan_tidak_lanjut: string;
+	terbit_periode: number;
+	dibayar_periode: number;
+	belum_bayar: number;
+	jumlah_belum_bayar: number;
+	terlambat: number;
+	jumlah_terlambat: number;
+	pembayaran_terakhir: { tanggal: string; bulan_ke: number; nominal: number; metode: string } | null;
+	catatan_infaq_lama: string;
+}
+
+export interface LaporanKeuangan {
+	filter: { dari: string; sampai: string; status: string; angkatan_kelas: string };
+	ringkasan: {
+		pemasukan_spp: number; jumlah_bayar_spp: number; pemasukan_produk: number; jumlah_order_produk: number; total_pemasukan: number;
+		pengeluaran_ujroh: number; jumlah_ujroh: number; pengeluaran_kasbon: number; jumlah_kasbon: number; total_pengeluaran: number;
+		saldo: number;
+	};
+	spp_per_metode: LaporanKelompok[];
+	spp_per_angkatan: LaporanKelompok[];
+	tagihan: { jumlah: number; nominal: number; jumlah_lunas: number; nominal_lunas: number; jumlah_batal: number; persen_lunas: number };
+	piutang: { belum_bayar: number; jumlah_tagihan: number; terlambat: number; jumlah_terlambat: number; jumlah_santri: number };
+	pembayaran: LaporanPembayaran[];
+	ujroh: LaporanUjrohDibayar[];
+	kasbon: LaporanKasbon[];
+	santri: LaporanSantri[];
+	tidak_lanjut: LaporanSantri[];
+	opsi_angkatan: string[];
+}

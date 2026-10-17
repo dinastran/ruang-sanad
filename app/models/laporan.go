@@ -34,8 +34,3 @@ type NominalAngkatan struct {
 	Angkatan     string  `json:"angkatan"`
 	TotalNominal float64 `json:"total_nominal"`
 }
-
-type LaporanKeuangan struct {
-	PerAngkatan []NominalAngkatan `json:"per_angkatan"`
-	TidakLanjut int64             `json:"tidak_lanjut"`
-}
