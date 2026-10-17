@@ -3,6 +3,7 @@
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import type { Flash, Tagihan, TagihanBatalBatch, User, WaTemplate } from "@lib/types";
 	import { getCSRFToken } from "@lib/utils/csrf";
+	import { Toast } from "@lib/notifications/toast";
 	import FollowUpTagihanDialog from "@components/keuangan/FollowUpTagihanDialog.svelte";
 	import SantriStatusModal from "@components/SantriStatusModal.svelte";
 	import StatusBadge from "@components/StatusBadge.svelte";
@@ -131,19 +132,44 @@
 		router.get("/app/keuangan/tagihan");
 	}
 
+	// Row actions keep the scroll position and briefly highlight the edited row,
+	// so the petugas can continue down the list instead of scrolling back.
+	let lastEditedID = $state<number | null>(null);
+	let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function rowActionOptions(id: number, onDone?: () => void) {
+		return {
+			preserveScroll: true,
+			preserveState: true,
+			onSuccess: (page: { props: Record<string, unknown> }) => {
+				onDone?.();
+				const flash = page.props.flash as Flash | undefined;
+				if (flash?.error) { Toast(flash.error, "error"); return; }
+				if (flash?.success) Toast(flash.success, "success");
+				markEdited(id);
+			},
+		};
+	}
+
+	function markEdited(id: number) {
+		lastEditedID = id;
+		clearTimeout(highlightTimer);
+		highlightTimer = setTimeout(() => (lastEditedID = null), 4000);
+	}
+
 	function lunasi() {
 		if (!selected) return;
 		router.put(
 			`/app/keuangan/tagihan/${selected.id}/lunas`,
 			{ tanggal_bayar: tanggalBayar, metode, catatan },
-			{ onSuccess: () => { selected = null; } },
+			rowActionOptions(selected.id, () => { selected = null; }),
 		);
 	}
 
 	function batal(t: Tagihan) {
 		if (!canManage) return;
 		if (confirm(`Batalkan tagihan ${t.santri_nama}?`)) {
-			router.put(`/app/keuangan/tagihan/${t.id}/batal`, { catatan: "Dibatalkan oleh petugas" });
+			router.put(`/app/keuangan/tagihan/${t.id}/batal`, { catatan: "Dibatalkan oleh petugas" }, rowActionOptions(t.id));
 		}
 	}
 
@@ -218,14 +244,14 @@
 		router.put(
 			`/app/keuangan/tagihan/${nominalTarget.id}/nominal`,
 			{ nominal: nominalValue },
-			{ onSuccess: () => { nominalTarget = null; } },
+			rowActionOptions(nominalTarget.id, () => { nominalTarget = null; }),
 		);
 	}
 
 	function resetNominal(t: Tagihan) {
 		if (!canManage || !t.nominal_override) return;
 		if (!confirm(`Kembalikan nominal tagihan ${t.santri_nama} agar mengikuti Data Santri?`)) return;
-		router.delete(`/app/keuangan/tagihan/${t.id}/nominal`);
+		router.delete(`/app/keuangan/tagihan/${t.id}/nominal`, rowActionOptions(t.id));
 	}
 
 	function newTemplate() {
@@ -322,7 +348,7 @@
 				</thead>
 				<tbody class="divide-y divide-neutral-100 dark:divide-neutral-800/70">
 					{#each tagihan as t (t.id)}
-						<tr>
+						<tr class="transition-colors duration-700 {lastEditedID === t.id ? 'bg-brand-400/10' : ''}">
 							<td class="p-4">
 								<p class="font-semibold text-neutral-900 dark:text-white">{t.santri_nama}</p>
 								<p class="text-xs text-neutral-500">{t.id_mahasantri || "-"} · {t.frekuensi}</p>
@@ -392,6 +418,7 @@
 			santri={{ id: statusTarget.santri_id, nama: statusTarget.santri_nama, status: statusTarget.santri_status, status_alasan: statusTarget.santri_status_alasan, cuti_mulai: statusTarget.santri_cuti_mulai, cuti_selesai: statusTarget.santri_cuti_selesai }}
 			action={santriStatusAction(statusTarget)}
 			onclose={() => (statusTarget = null)}
+			onsaved={() => { if (statusTarget) markEdited(statusTarget.id); }}
 		/>
 	{/if}
 
