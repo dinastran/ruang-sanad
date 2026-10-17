@@ -63,6 +63,20 @@ func (h *UjrohKomponenHandler) SetGuru(c *fiber.Ctx) error {
 	return ujrohBack(c, h.store, h.inertiaService, c.Query("bulan"), "success", "Penerima komponen diperbarui")
 }
 
+// SetPenerima saves the recurring amounts of many guru at once.
+func (h *UjrohKomponenHandler) SetPenerima(c *fiber.Ctx) error {
+	sess, _ := h.store.Get(c)
+	id, _ := strconv.ParseInt(c.Params("id"), 10, 64)
+	var req models.SetUjrohKomponenPenerimaRequest
+	if err := c.BodyParser(&req); err != nil {
+		return ujrohBack(c, h.store, h.inertiaService, c.Query("bulan"), "error", "Data penerima tidak valid")
+	}
+	if err := h.ujroh.SetKomponenPenerima(id, req.Penerima, toInt64(sess.Get("user_id"))); err != nil {
+		return ujrohBack(c, h.store, h.inertiaService, c.Query("bulan"), "error", err.Error())
+	}
+	return ujrohBack(c, h.store, h.inertiaService, c.Query("bulan"), "success", "Penerima komponen disimpan")
+}
+
 func (h *UjrohKomponenHandler) SetBulan(c *fiber.Ctx) error {
 	sess, _ := h.store.Get(c)
 	bulan := c.Params("bulan")

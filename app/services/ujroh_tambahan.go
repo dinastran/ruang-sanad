@@ -255,6 +255,49 @@ func (s *UjrohService) SetKomponenGuru(komponenID, guruID int64, nominal *int64,
 	return s.querier.UpsertUjrohKomponenGuru(ctx, komponenID, guruID, *nominal, userID)
 }
 
+// SetKomponenPenerima saves the recurring amounts of several guru for a tetap
+// component in one transaction.
+func (s *UjrohService) SetKomponenPenerima(komponenID int64, penerima []models.UjrohKomponenPenerima, userID int64) error {
+	ctx := context.Background()
+	k, err := s.querier.GetUjrohKomponen(ctx, komponenID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrUjrohKomponenTidakAda
+	}
+	if err != nil {
+		return err
+	}
+	if k.Jenis != UjrohKomponenTetap {
+		return ErrUjrohKomponenBukanTetap
+	}
+	for _, p := range penerima {
+		if p.Nominal != nil && *p.Nominal < 0 {
+			return ErrUjrohNominalTidakSah
+		}
+		if p.Nominal != nil {
+			if err := s.ensureGuru(ctx, p.GuruID); err != nil {
+				return err
+			}
+		}
+	}
+	tx, err := s.querier.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := s.querier.WithTx(tx)
+	for _, p := range penerima {
+		if p.Nominal == nil {
+			err = q.DeleteUjrohKomponenGuru(ctx, komponenID, p.GuruID)
+		} else {
+			err = q.UpsertUjrohKomponenGuru(ctx, komponenID, p.GuruID, *p.Nominal, userID)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // SetKomponenBulan records a component for one guru in one unlocked month: an
 // insidental entry, or a tetap amount adjusted for this month (jumlah 0 means
 // not given this month).

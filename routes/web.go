@@ -216,6 +216,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Post("/keuangan/ujroh/komponen", kuRole, h.UjrohKomponen.Create)
 	protected.Put("/keuangan/ujroh/komponen/:id", kuRole, h.UjrohKomponen.Update)
 	protected.Put("/keuangan/ujroh/komponen/:id/guru/:guruId", kuRole, h.UjrohKomponen.SetGuru)
+	protected.Put("/keuangan/ujroh/komponen/:id/penerima", kuRole, h.UjrohKomponen.SetPenerima)
 	protected.Put("/keuangan/ujroh/:bulan/guru/:guruId/komponen/:komponenId", kuRole, h.UjrohKomponen.SetBulan)
 	protected.Delete("/keuangan/ujroh/:bulan/guru/:guruId/komponen/:komponenId", kuRole, h.UjrohKomponen.DeleteBulan)
 	protected.Post("/keuangan/kasbon", kuRole, h.Kasbon.Create)

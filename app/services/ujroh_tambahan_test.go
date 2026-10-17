@@ -169,3 +169,26 @@ func TestKasKeluarDashboardMemakaiUjrohBersihDanKasbon(t *testing.T) {
 	require.EqualValues(t, 50000, got["2026-09"], "kasbon keluar saat diberikan")
 	require.EqualValues(t, 25000, got["2026-10"], "ujroh 75rb dikurangi kasbon 50rb")
 }
+
+func TestUjrohKomponenPenerimaDisimpanSekaligus(t *testing.T) {
+	f := setupUjroh(t)
+	kuota := f.komponen(t, "Kuota", UjrohKomponenTetap, 75000)
+	require.NoError(t, f.svc.SetKomponenGuru(kuota, f.guruBadalID, nominal(50000), f.guruUtamaUser))
+
+	require.NoError(t, f.svc.SetKomponenPenerima(kuota, []models.UjrohKomponenPenerima{
+		{GuruID: f.guruUtamaID, Nominal: nominal(75000)},
+		{GuruID: f.guruBadalID, Nominal: nil},
+	}, f.guruUtamaUser))
+	list, err := f.svc.ListKomponen()
+	require.NoError(t, err)
+	require.Equal(t, map[int64]int64{f.guruUtamaID: 75000}, list[0].Penerima)
+
+	// Satu nominal tidak sah membatalkan seluruh simpanan.
+	require.ErrorIs(t, f.svc.SetKomponenPenerima(kuota, []models.UjrohKomponenPenerima{
+		{GuruID: f.guruBadalID, Nominal: nominal(10000)},
+		{GuruID: f.guruUtamaID, Nominal: nominal(-1)},
+	}, f.guruUtamaUser), ErrUjrohNominalTidakSah)
+	list, err = f.svc.ListKomponen()
+	require.NoError(t, err)
+	require.Len(t, list[0].Penerima, 1)
+}

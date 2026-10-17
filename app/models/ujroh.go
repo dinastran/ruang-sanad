@@ -141,6 +141,17 @@ type SetUjrohKomponenGuruRequest struct {
 	Nominal *int64 `json:"nominal"`
 }
 
+// SetUjrohKomponenPenerimaRequest saves the recurring amount of many guru at
+// once; a null nominal removes that guru from the recipients.
+type SetUjrohKomponenPenerimaRequest struct {
+	Penerima []UjrohKomponenPenerima `json:"penerima"`
+}
+
+type UjrohKomponenPenerima struct {
+	GuruID  int64  `json:"guru_id"`
+	Nominal *int64 `json:"nominal"`
+}
+
 type SetUjrohKomponenBulanRequest struct {
 	Jumlah  int64  `json:"jumlah"`
 	Tarif   int64  `json:"tarif"`

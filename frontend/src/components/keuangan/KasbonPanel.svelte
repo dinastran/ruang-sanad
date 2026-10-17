@@ -178,8 +178,8 @@
 												<label class="flex items-center gap-1"><input type="radio" value="sekaligus" bind:group={edit.cara} /> Sekaligus</label>
 												<label class="flex items-center gap-1"><input type="radio" value="cicil" bind:group={edit.cara} /> Cicil</label>
 											</div>
-											{#if edit.cara === "cicil"}<input type="number" min="0" step="10000" bind:value={edit.cicilan} aria-label="Cicilan per bulan" class="{inputClass} w-36" />{/if}
-											<input bind:value={edit.keterangan} placeholder="Keterangan" aria-label="Keterangan" class="{inputClass} w-48" />
+											{#if edit.cara === "cicil"}<input type="number" min="0" step="10000" bind:value={edit.cicilan} aria-label="Cicilan per bulan" class="{inputClass} !w-36" />{/if}
+											<input bind:value={edit.keterangan} placeholder="Keterangan" aria-label="Keterangan" class="{inputClass} !w-48" />
 										</div>
 									{:else}
 										{k.cicilan > 0 ? `${rupiah(k.cicilan)}/bulan` : "Sekaligus"}<br />mulai {namaBulan(k.mulai_bulan)}
