@@ -211,6 +211,8 @@ func main() {
 		TagihanMassal:               handlers.NewTagihanMassalHandler(tagihanService, sessionStore, inertiaService),
 		KeuanganDashboard:           handlers.NewKeuanganDashboardHandler(services.NewKeuanganDashboardService(querier, ujrohService), tagihanService, sessionStore, inertiaService),
 		Ujroh:                       ujrohHandler,
+		UjrohKomponen:               handlers.NewUjrohKomponenHandler(ujrohService, sessionStore, inertiaService),
+		Kasbon:                      handlers.NewKasbonHandler(ujrohService, sessionStore, inertiaService),
 		ProductCRM:                  productCRMHandler,
 		ProductOrders:               productOrderHandler,
 	}

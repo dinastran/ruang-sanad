@@ -25,7 +25,8 @@ var (
 )
 
 // UjrohService computes monthly teacher pay: completed meetings × the
-// teaching guru's rate (per-guru override, else the status default).
+// teaching guru's rate (per-guru override, else the status default) as pokok,
+// plus components (kuota, MC, ...) minus kasbon deductions.
 type UjrohService struct {
 	querier *queries.Querier
 	now     func() time.Time
@@ -80,7 +81,9 @@ func (s *UjrohService) GetRekap(bulan string) (*models.UjrohRekap, error) {
 	}
 
 	if !rekap.Terkunci {
-		rekap.Guru = live
+		if rekap.Guru, err = s.lengkapiLive(ctx, s.querier, bulan, live); err != nil {
+			return nil, err
+		}
 	} else {
 		snapshot, err := s.snapshot(ctx, bulan)
 		if err != nil {
@@ -109,10 +112,13 @@ func (s *UjrohService) GetRekap(bulan string) (*models.UjrohRekap, error) {
 	}
 
 	for _, g := range rekap.Guru {
-		rekap.Ringkasan.TotalUjroh += g.Total
+		rekap.Ringkasan.TotalPokok += g.Total
+		rekap.Ringkasan.TotalKomponen += g.TotalKomponen
+		rekap.Ringkasan.TotalKasbon += g.TotalKasbon
+		rekap.Ringkasan.TotalUjroh += g.Diterima
 		rekap.Ringkasan.JumlahPertemuan += g.JumlahPertemuan
 		if g.Dibayar {
-			rekap.Ringkasan.TotalDibayar += g.Total
+			rekap.Ringkasan.TotalDibayar += g.Diterima
 		}
 	}
 	rekap.Ringkasan.JumlahGuru = int64(len(rekap.Guru))
@@ -194,11 +200,41 @@ func (s *UjrohService) snapshot(ctx context.Context, bulan string) ([]models.Ujr
 			Tarif:       r.Tarif,
 		})
 	}
+	komponenRows, err := s.querier.ListUjrohGuruKomponen(ctx, bulan)
+	if err != nil {
+		return nil, err
+	}
+	komponenPerGuru := map[int64][]models.UjrohKomponenLine{}
+	for _, r := range komponenRows {
+		komponenPerGuru[r.GuruID] = append(komponenPerGuru[r.GuruID], models.UjrohKomponenLine{
+			KomponenID: r.KomponenID, KomponenNama: r.KomponenNama, Jenis: r.Jenis,
+			Jumlah: r.Jumlah, Tarif: r.Tarif, Total: r.Total, Catatan: r.Catatan,
+		})
+	}
+	potonganRows, err := s.querier.ListKasbonPotongan(ctx, bulan)
+	if err != nil {
+		return nil, err
+	}
+	kasbonPerGuru := map[int64][]models.UjrohKasbonLine{}
+	for _, r := range potonganRows {
+		kasbonPerGuru[r.GuruID] = append(kasbonPerGuru[r.GuruID], models.UjrohKasbonLine{
+			KasbonID: r.KasbonID, Tanggal: r.Tanggal, Keterangan: r.Keterangan, TotalKasbon: r.Total,
+			SisaSebelum: r.SisaSetelah + r.Nominal, Potongan: r.Nominal, SisaSetelah: r.SisaSetelah,
+		})
+	}
 	out := make([]models.UjrohGuru, 0, len(guruRows))
 	for _, r := range guruRows {
 		items := perGuru[r.GuruID]
 		if items == nil {
 			items = []models.UjrohPertemuan{}
+		}
+		komponen := komponenPerGuru[r.GuruID]
+		if komponen == nil {
+			komponen = []models.UjrohKomponenLine{}
+		}
+		kasbon := kasbonPerGuru[r.GuruID]
+		if kasbon == nil {
+			kasbon = []models.UjrohKasbonLine{}
 		}
 		out = append(out, models.UjrohGuru{
 			GuruID:          r.GuruID,
@@ -208,18 +244,24 @@ func (s *UjrohService) snapshot(ctx context.Context, bulan string) ([]models.Ujr
 			JumlahPertemuan: r.JumlahPertemuan,
 			JumlahBadal:     r.JumlahBadal,
 			Total:           r.Total,
+			TotalKomponen:   r.TotalKomponen,
+			TotalKasbon:     r.TotalKasbon,
+			Diterima:        r.Diterima,
 			Dibayar:         r.DibayarAt.Valid,
 			DibayarAt:       formatNullDate(r.DibayarAt),
 			DibayarOleh:     r.DibayarOleh,
 			CatatanBayar:    r.CatatanBayar,
 			Pertemuan:       items,
+			Komponen:        komponen,
+			Kasbon:          kasbon,
 		})
 	}
 	return out, nil
 }
 
-// Kunci freezes the month: the current calculation is stored and later rate,
-// status or meeting changes no longer alter it.
+// Kunci freezes the month: the current calculation (pokok, components and
+// kasbon deductions) is stored and later rate, status, component or meeting
+// changes no longer alter it.
 func (s *UjrohService) Kunci(bulan string, userID int64) error {
 	bulan, err := s.NormalizeBulan(bulan)
 	if err != nil {
@@ -243,11 +285,19 @@ func (s *UjrohService) Kunci(bulan string, userID int64) error {
 	if !locked {
 		return ErrUjrohSudahDikunci
 	}
-	live, _, err := s.hitungLive(ctx, q, bulan)
+	pokok, _, err := s.hitungLive(ctx, q, bulan)
+	if err != nil {
+		return err
+	}
+	live, err := s.lengkapiLive(ctx, q, bulan, pokok)
 	if err != nil {
 		return err
 	}
 	for _, g := range live {
+		if g.Total == 0 && g.TotalKomponen == 0 {
+			// Only components set to zero for this month: nothing to pay.
+			continue
+		}
 		if err := q.InsertUjrohGuru(ctx, bulan, queries.UjrohGuruRow{
 			GuruID:          g.GuruID,
 			GuruNama:        g.GuruNama,
@@ -256,8 +306,30 @@ func (s *UjrohService) Kunci(bulan string, userID int64) error {
 			JumlahPertemuan: g.JumlahPertemuan,
 			JumlahBadal:     g.JumlahBadal,
 			Total:           g.Total,
+			TotalKomponen:   g.TotalKomponen,
+			TotalKasbon:     g.TotalKasbon,
+			Diterima:        g.Diterima,
 		}); err != nil {
 			return err
+		}
+		for _, k := range g.Komponen {
+			if k.Total == 0 {
+				continue
+			}
+			if err := q.InsertUjrohGuruKomponen(ctx, bulan, queries.UjrohGuruKomponenRow{
+				GuruID: g.GuruID, KomponenID: k.KomponenID, KomponenNama: k.KomponenNama, Jenis: k.Jenis,
+				Jumlah: k.Jumlah, Tarif: k.Tarif, Total: k.Total, Catatan: k.Catatan,
+			}); err != nil {
+				return err
+			}
+		}
+		for _, k := range g.Kasbon {
+			if k.Potongan == 0 {
+				continue
+			}
+			if err := q.InsertKasbonPotongan(ctx, bulan, k.KasbonID, g.GuruID, k.Potongan); err != nil {
+				return err
+			}
 		}
 		for _, p := range g.Pertemuan {
 			if err := q.InsertUjrohPertemuan(ctx, bulan, queries.UjrohPertemuanRow{
