@@ -610,6 +610,11 @@ export interface Tagihan {
 	catatan: string;
 	fu_terakhir: string;
 	fu_count: number;
+	// Status santri, bukan status tagihan.
+	santri_status: string;
+	santri_status_alasan: string;
+	santri_cuti_mulai: string;
+	santri_cuti_selesai: string;
 }
 
 export interface KeuanganBulan {

@@ -88,6 +88,11 @@
 		<p class="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
 			<strong>{santri.nama}</strong> · saat ini <StatusBadge status={santri.status} />
 		</p>
+		{#if santri.status === "tidak_lanjut"}
+			<p class="-mt-2 mb-4 rounded-xl bg-warning/10 px-3 py-2 text-xs text-neutral-700 dark:text-neutral-300">
+				Keterangan Tidak Lanjut akan dikosongkan dan diganti status baru.
+			</p>
+		{/if}
 
 		<fieldset class="mb-4">
 			<legend class="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-2">Status baru</legend>

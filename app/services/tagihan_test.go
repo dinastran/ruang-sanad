@@ -485,3 +485,21 @@ func TestTagihanFollowUpMultiTemplateCustomDanHistory(t *testing.T) {
 	require.EqualValues(t, 2, item.FuCount)
 	require.NotEmpty(t, item.FuTerakhir)
 }
+
+func TestListTagihanMenyertakanStatusSantri(t *testing.T) {
+	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
+	santriID := firstSantriID(t, db)
+	generateMeetings(t, db, service, kelasID, santriID, 1, 4, "hadir")
+	_, err := db.Exec(`UPDATE santri SET status = 'aktif', status_alasan = 'Safar', cuti_mulai = '2099-01-01', cuti_selesai = '2099-01-10' WHERE id = ?`, santriID)
+	require.NoError(t, err)
+
+	list, err := service.List(models.TagihanFilter{})
+	require.NoError(t, err)
+	require.NotEmpty(t, list)
+	require.Equal(t, "aktif", list[0].SantriStatus)
+	require.Equal(t, "2099-01-01", list[0].SantriCutiMulai)
+
+	detail, err := service.Get(list[0].ID)
+	require.NoError(t, err)
+	require.Equal(t, "Safar", detail.SantriStatusAlasan)
+}

@@ -399,7 +399,35 @@ func (s *TagihanService) listWithQuerier(ctx context.Context, q *queries.Querier
 		}
 		out = append(out, item)
 	}
+	if err := fillSantriStatus(ctx, q, out); err != nil {
+		return nil, err
+	}
 	return out, nil
+}
+
+// fillSantriStatus adds each santri's current status so Keuangan can see (and
+// change) it from the tagihan list.
+func fillSantriStatus(ctx context.Context, q *queries.Querier, list []models.TagihanResponse) error {
+	seen := make(map[int64]struct{}, len(list))
+	ids := make([]int64, 0, len(list))
+	for _, t := range list {
+		if _, ok := seen[t.SantriID]; !ok {
+			seen[t.SantriID] = struct{}{}
+			ids = append(ids, t.SantriID)
+		}
+	}
+	statuses, err := q.ListSantriStatusByIDs(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for i := range list {
+		info := statuses[list[i].SantriID]
+		list[i].SantriStatus = info.Status
+		list[i].SantriStatusAlasan = info.StatusAlasan
+		list[i].SantriCutiMulai = info.CutiMulai
+		list[i].SantriCutiSelesai = info.CutiSelesai
+	}
+	return nil
 }
 
 func (s *TagihanService) Get(id int64) (*models.TagihanResponse, error) {
@@ -416,7 +444,11 @@ func (s *TagihanService) Get(id int64) (*models.TagihanResponse, error) {
 		return nil, err
 	}
 	item.NominalOverride = override
-	return &item, nil
+	single := []models.TagihanResponse{item}
+	if err := fillSantriStatus(context.Background(), s.querier, single); err != nil {
+		return nil, err
+	}
+	return &single[0], nil
 }
 
 func (s *TagihanService) MarkLunas(id, userID int64, req models.MarkTagihanLunasRequest) error {
