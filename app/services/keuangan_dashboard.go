@@ -107,7 +107,7 @@ func (s *KeuanganDashboardService) tren(ctx context.Context, akhir time.Time) ([
 	if err != nil {
 		return nil, err
 	}
-	keluar, err := s.querier.KeuanganUjrohDibayarPerBulan(ctx, queries.KeuanganUjrohDibayarPerBulanParams{DariBulan: dari, SampaiBulan: sampai})
+	keluar, err := s.querier.KeuanganUjrohKasKeluarPerBulan(ctx, dari, sampai)
 	if err != nil {
 		return nil, err
 	}
@@ -216,11 +216,11 @@ func (s *KeuanganDashboardService) ujrohPanel(ctx context.Context, bulan, bulanI
 			panel.GuruDibayar++
 		}
 	}
-	terkunci, err := s.querier.KeuanganUjrohTerkunciBelumDibayar(ctx)
+	jumlahGuru, nominal, err := s.querier.KeuanganUjrohTerkunciBelumDibayarBersih(ctx)
 	if err != nil {
 		return panel, err
 	}
-	panel.KewajibanTerkunci, panel.KewajibanTerkunciGuru = terkunci.Nominal, terkunci.JumlahGuru
+	panel.KewajibanTerkunci, panel.KewajibanTerkunciGuru = nominal, jumlahGuru
 
 	berjalan := rekap
 	if bulan != bulanIni {

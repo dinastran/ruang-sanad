@@ -42,11 +42,21 @@ func (h *UjrohHandler) Index(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	komponen, err := h.ujroh.ListKomponen()
+	if err != nil {
+		return err
+	}
+	kasbon, err := h.ujroh.ListKasbon()
+	if err != nil {
+		return err
+	}
 	return h.inertiaService.Render(c, "keuangan/Ujroh", fiber.Map{
 		"user":       sessionUser(sess),
 		"rekap":      rekap,
 		"tarif":      tarif,
 		"tarif_guru": tarifGuru,
+		"komponen":   komponen,
+		"kasbon":     kasbon,
 	})
 }
 
@@ -139,19 +149,20 @@ func (h *UjrohHandler) Export(c *fiber.Ctx) error {
 	f.SetCellValue(ringkasan, "A1", "Ujroh Guru "+rekap.Bulan)
 	f.SetCellValue(ringkasan, "A2", "Status")
 	f.SetCellValue(ringkasan, "B2", status)
-	headers := []string{"No.", "Nama Guru", "Status Guru", "Tarif", "Pertemuan", "Badal", "Total", "Dibayar", "Tanggal Bayar", "Catatan"}
+	headers := []string{"No.", "Nama Guru", "Status Guru", "Tarif", "Pertemuan", "Badal", "Pokok", "Komponen", "Kasbon", "Diterima", "Dibayar", "Tanggal Bayar", "Catatan"}
 	f.SetSheetRow(ringkasan, "A4", &headers)
 	for i, g := range rekap.Guru {
 		dibayar := "Belum"
 		if g.Dibayar {
 			dibayar = "Sudah"
 		}
-		f.SetSheetRow(ringkasan, fmt.Sprintf("A%d", i+5), &[]interface{}{i + 1, g.GuruNama, statusGuruLabel(g.GuruStatus), g.Tarif, g.JumlahPertemuan, g.JumlahBadal, g.Total, dibayar, g.DibayarAt, g.CatatanBayar})
+		f.SetSheetRow(ringkasan, fmt.Sprintf("A%d", i+5), &[]interface{}{i + 1, g.GuruNama, statusGuruLabel(g.GuruStatus), g.Tarif, g.JumlahPertemuan, g.JumlahBadal,
+			g.Total, g.TotalKomponen, g.TotalKasbon, g.Diterima, dibayar, g.DibayarAt, g.CatatanBayar})
 	}
 	totalRow := len(rekap.Guru) + 5
 	f.SetCellValue(ringkasan, fmt.Sprintf("B%d", totalRow), "Total")
 	f.SetCellValue(ringkasan, fmt.Sprintf("E%d", totalRow), rekap.Ringkasan.JumlahPertemuan)
-	f.SetCellValue(ringkasan, fmt.Sprintf("G%d", totalRow), rekap.Ringkasan.TotalUjroh)
+	f.SetSheetRow(ringkasan, fmt.Sprintf("G%d", totalRow), &[]interface{}{rekap.Ringkasan.TotalPokok, rekap.Ringkasan.TotalKomponen, rekap.Ringkasan.TotalKasbon, rekap.Ringkasan.TotalUjroh})
 
 	rincian := "Rincian"
 	_, _ = f.NewSheet(rincian)
@@ -169,17 +180,49 @@ func (h *UjrohHandler) Export(c *fiber.Ctx) error {
 		}
 	}
 
+	komponenSheet := "Komponen"
+	_, _ = f.NewSheet(komponenSheet)
+	f.SetSheetRow(komponenSheet, "A1", &[]string{"Nama Guru", "Komponen", "Jenis", "Jumlah", "Tarif", "Total", "Catatan"})
+	komponenRow := 2
+	for _, g := range rekap.Guru {
+		for _, k := range g.Komponen {
+			if k.Total == 0 {
+				continue
+			}
+			f.SetSheetRow(komponenSheet, fmt.Sprintf("A%d", komponenRow), &[]interface{}{g.GuruNama, k.KomponenNama, k.Jenis, k.Jumlah, k.Tarif, k.Total, k.Catatan})
+			komponenRow++
+		}
+	}
+
+	kasbonSheet := "Kasbon"
+	_, _ = f.NewSheet(kasbonSheet)
+	f.SetSheetRow(kasbonSheet, "A1", &[]string{"Nama Guru", "Tanggal Kasbon", "Keterangan", "Nominal Kasbon", "Sisa Sebelum", "Potongan", "Sisa Setelah"})
+	kasbonRow := 2
+	for _, g := range rekap.Guru {
+		for _, k := range g.Kasbon {
+			f.SetSheetRow(kasbonSheet, fmt.Sprintf("A%d", kasbonRow), &[]interface{}{g.GuruNama, k.Tanggal, k.Keterangan, k.TotalKasbon, k.SisaSebelum, k.Potongan, k.SisaSetelah})
+			kasbonRow++
+		}
+	}
+
 	bold, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
 	money, _ := f.NewStyle(&excelize.Style{NumFmt: 3})
 	f.SetCellStyle(ringkasan, "A1", "A1", bold)
-	f.SetCellStyle(ringkasan, "A4", "J4", bold)
-	f.SetCellStyle(ringkasan, fmt.Sprintf("A%d", totalRow), fmt.Sprintf("J%d", totalRow), bold)
+	f.SetCellStyle(ringkasan, "A4", "M4", bold)
+	f.SetCellStyle(ringkasan, fmt.Sprintf("A%d", totalRow), fmt.Sprintf("M%d", totalRow), bold)
 	f.SetCellStyle(ringkasan, "D5", fmt.Sprintf("D%d", totalRow), money)
-	f.SetCellStyle(ringkasan, "G5", fmt.Sprintf("G%d", totalRow), money)
+	f.SetCellStyle(ringkasan, "G5", fmt.Sprintf("J%d", totalRow), money)
+	f.SetCellStyle(komponenSheet, "A1", "G1", bold)
+	f.SetCellStyle(komponenSheet, "E2", fmt.Sprintf("F%d", komponenRow), money)
+	f.SetCellStyle(kasbonSheet, "A1", "G1", bold)
+	f.SetCellStyle(kasbonSheet, "D2", fmt.Sprintf("G%d", kasbonRow), money)
+	f.SetColWidth(komponenSheet, "A", "B", 28)
+	f.SetColWidth(kasbonSheet, "A", "A", 28)
+	f.SetColWidth(kasbonSheet, "C", "C", 36)
 	f.SetCellStyle(rincian, "A1", "F1", bold)
 	f.SetCellStyle(rincian, "F2", fmt.Sprintf("F%d", row), money)
 	f.SetColWidth(ringkasan, "B", "B", 30)
-	f.SetColWidth(ringkasan, "C", "J", 14)
+	f.SetColWidth(ringkasan, "C", "M", 14)
 	f.SetColWidth(rincian, "A", "A", 30)
 	f.SetColWidth(rincian, "C", "C", 45)
 

@@ -115,7 +115,8 @@ func (q *Querier) KunciUjrohBulan(ctx context.Context, bulan string, userID int6
 	return n > 0, err
 }
 
-// BukaUjrohBulan unlocks bulan and drops its snapshot. It returns false when
+// BukaUjrohBulan unlocks bulan and drops its snapshot (meetings, components and
+// kasbon deductions). It returns false when
 // bulan was not locked.
 func (q *Querier) BukaUjrohBulan(ctx context.Context, bulan string, userID int64, at time.Time) (bool, error) {
 	res, err := q.Queries.db.ExecContext(ctx,
@@ -127,8 +128,10 @@ func (q *Querier) BukaUjrohBulan(ctx context.Context, bulan string, userID int64
 	if n, err := res.RowsAffected(); err != nil || n == 0 {
 		return false, err
 	}
-	if _, err := q.Queries.db.ExecContext(ctx, `DELETE FROM ujroh_pertemuan WHERE bulan = ?`, bulan); err != nil {
-		return false, err
+	for _, table := range []string{"ujroh_pertemuan", "ujroh_guru_komponen", "kasbon_potongan"} {
+		if _, err := q.Queries.db.ExecContext(ctx, `DELETE FROM `+table+` WHERE bulan = ?`, bulan); err != nil {
+			return false, err
+		}
 	}
 	if _, err := q.Queries.db.ExecContext(ctx, `DELETE FROM ujroh_guru WHERE bulan = ?`, bulan); err != nil {
 		return false, err
@@ -144,6 +147,9 @@ type UjrohGuruRow struct {
 	JumlahPertemuan int64
 	JumlahBadal     int64
 	Total           int64
+	TotalKomponen   int64
+	TotalKasbon     int64
+	Diterima        int64
 	DibayarAt       sql.NullTime
 	DibayarOleh     string
 	CatatanBayar    string
@@ -151,16 +157,18 @@ type UjrohGuruRow struct {
 
 func (q *Querier) InsertUjrohGuru(ctx context.Context, bulan string, r UjrohGuruRow) error {
 	_, err := q.Queries.db.ExecContext(ctx, `
-INSERT INTO ujroh_guru (bulan, guru_id, guru_nama, guru_status, tarif, jumlah_pertemuan, jumlah_badal, total)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		bulan, r.GuruID, r.GuruNama, r.GuruStatus, r.Tarif, r.JumlahPertemuan, r.JumlahBadal, r.Total)
+INSERT INTO ujroh_guru (bulan, guru_id, guru_nama, guru_status, tarif, jumlah_pertemuan, jumlah_badal, total,
+	total_komponen, total_kasbon, diterima)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		bulan, r.GuruID, r.GuruNama, r.GuruStatus, r.Tarif, r.JumlahPertemuan, r.JumlahBadal, r.Total,
+		r.TotalKomponen, r.TotalKasbon, r.Diterima)
 	return err
 }
 
 func (q *Querier) ListUjrohGuru(ctx context.Context, bulan string) ([]UjrohGuruRow, error) {
 	rows, err := q.Queries.db.QueryContext(ctx, `
 SELECT ug.guru_id, ug.guru_nama, ug.guru_status, ug.tarif, ug.jumlah_pertemuan, ug.jumlah_badal, ug.total,
-	ug.dibayar_at, COALESCE(u.name, ''), ug.catatan_bayar
+	ug.total_komponen, ug.total_kasbon, ug.diterima, ug.dibayar_at, COALESCE(u.name, ''), ug.catatan_bayar
 FROM ujroh_guru ug
 LEFT JOIN users u ON u.id = ug.dibayar_oleh
 WHERE ug.bulan = ?
@@ -173,7 +181,7 @@ ORDER BY ug.guru_nama`, bulan)
 	for rows.Next() {
 		var r UjrohGuruRow
 		if err := rows.Scan(&r.GuruID, &r.GuruNama, &r.GuruStatus, &r.Tarif, &r.JumlahPertemuan, &r.JumlahBadal, &r.Total,
-			&r.DibayarAt, &r.DibayarOleh, &r.CatatanBayar); err != nil {
+			&r.TotalKomponen, &r.TotalKasbon, &r.Diterima, &r.DibayarAt, &r.DibayarOleh, &r.CatatanBayar); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

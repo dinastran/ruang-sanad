@@ -49,7 +49,7 @@ func TestKeuanganDashboard(t *testing.T) {
 
 	_, err := db.Exec(`INSERT INTO ujroh_bulan (bulan, dikunci_at) VALUES ('2026-02', ?)`, tgl(2026, 3, 1))
 	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO ujroh_guru (bulan, guru_id, guru_nama, total, dibayar_at) VALUES ('2026-02', 1, 'Ustadz A', 300000, ?), ('2026-02', 2, 'Ustadz B', 200000, NULL)`, tgl(2026, 3, 5))
+	_, err = db.Exec(`INSERT INTO ujroh_guru (bulan, guru_id, guru_nama, total, diterima, dibayar_at) VALUES ('2026-02', 1, 'Ustadz A', 300000, 300000, ?), ('2026-02', 2, 'Ustadz B', 200000, 200000, NULL)`, tgl(2026, 3, 5))
 	require.NoError(t, err)
 
 	_, err = db.Exec(`INSERT INTO produk (nama, kategori, harga) VALUES ('Program X', 'program', 75000)`)

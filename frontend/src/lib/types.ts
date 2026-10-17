@@ -879,6 +879,58 @@ export interface UjrohGuru {
 	live_jumlah: number;
 	live_total: number;
 	pertemuan: UjrohPertemuan[];
+	// total = pokok dari pertemuan; diterima = total + total_komponen - total_kasbon.
+	total_komponen: number;
+	total_kasbon: number;
+	diterima: number;
+	komponen: UjrohKomponenLine[];
+	kasbon: UjrohKasbonLine[];
+}
+
+export interface UjrohKomponenLine {
+	komponen_id: number;
+	komponen_nama: string;
+	jenis: "tetap" | "insidental" | string;
+	jumlah: number;
+	tarif: number;
+	total: number;
+	catatan: string;
+	diubah_bulan: boolean;
+	nominal_tetap: number;
+}
+
+export interface UjrohKasbonLine {
+	kasbon_id: number;
+	tanggal: string;
+	keterangan: string;
+	total_kasbon: number;
+	sisa_sebelum: number;
+	potongan: number;
+	sisa_setelah: number;
+}
+
+export interface UjrohKomponen {
+	id: number;
+	nama: string;
+	jenis: "tetap" | "insidental" | string;
+	nominal_default: number;
+	is_aktif: boolean;
+	penerima: Record<string, number>;
+}
+
+export interface Kasbon {
+	id: number;
+	guru_id: number;
+	guru_nama: string;
+	tanggal: string;
+	nominal: number;
+	cicilan: number;
+	mulai_bulan: string;
+	keterangan: string;
+	dibuat_oleh: string;
+	terpotong: number;
+	sisa: number;
+	status: "berjalan" | "lunas" | "dibatalkan" | string;
 }
 
 export interface UjrohRekap {
@@ -889,7 +941,11 @@ export interface UjrohRekap {
 	dibuka_at: string;
 	dibuka_oleh: string;
 	guru: UjrohGuru[];
-	ringkasan: { total_ujroh: number; total_dibayar: number; total_belum: number; jumlah_guru: number; jumlah_pertemuan: number };
+	// total_ujroh = jumlah diterima (bersih) seluruh guru.
+	ringkasan: {
+		total_ujroh: number; total_pokok: number; total_komponen: number; total_kasbon: number;
+		total_dibayar: number; total_belum: number; jumlah_guru: number; jumlah_pertemuan: number;
+	};
 	tanpa_guru: UjrohPertemuan[];
 	berlangsung: number;
 	guru_baru_selisih: UjrohGuru[];

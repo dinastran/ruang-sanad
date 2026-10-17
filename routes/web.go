@@ -44,6 +44,8 @@ type Handlers struct {
 	TagihanMassal               *handlers.TagihanMassalHandler
 	KeuanganDashboard           *handlers.KeuanganDashboardHandler
 	Ujroh                       *handlers.UjrohHandler
+	UjrohKomponen               *handlers.UjrohKomponenHandler
+	Kasbon                      *handlers.KasbonHandler
 	ProductCRM                  *handlers.ProductCRMHandler
 	ProductOrders               *handlers.ProductOrderHandler
 }
@@ -211,6 +213,14 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Post("/keuangan/ujroh/:bulan/buka", superAdminRole, h.Ujroh.Buka)
 	protected.Put("/keuangan/ujroh/:bulan/guru/:guruId/bayar", kuRole, h.Ujroh.TandaiDibayar)
 	protected.Delete("/keuangan/ujroh/:bulan/guru/:guruId/bayar", kuRole, h.Ujroh.BatalDibayar)
+	protected.Post("/keuangan/ujroh/komponen", kuRole, h.UjrohKomponen.Create)
+	protected.Put("/keuangan/ujroh/komponen/:id", kuRole, h.UjrohKomponen.Update)
+	protected.Put("/keuangan/ujroh/komponen/:id/guru/:guruId", kuRole, h.UjrohKomponen.SetGuru)
+	protected.Put("/keuangan/ujroh/:bulan/guru/:guruId/komponen/:komponenId", kuRole, h.UjrohKomponen.SetBulan)
+	protected.Delete("/keuangan/ujroh/:bulan/guru/:guruId/komponen/:komponenId", kuRole, h.UjrohKomponen.DeleteBulan)
+	protected.Post("/keuangan/kasbon", kuRole, h.Kasbon.Create)
+	protected.Put("/keuangan/kasbon/:id", kuRole, h.Kasbon.Update)
+	protected.Post("/keuangan/kasbon/:id/batal", kuRole, h.Kasbon.Batal)
 	protected.Put("/santri/:id/keuangan", kuRole, h.Santri.UpdateKeuangan)
 	protected.Put("/keuangan/santri/:id/status", kuRole, h.SantriStatus.UpdateKeuangan)
 	protected.Get("/laporan/keuangan", kuRole, h.Laporan.Keuangan)

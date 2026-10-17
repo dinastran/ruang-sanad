@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
-	import type { User, UjrohRekap, UjrohTarif, UjrohTarifGuru, UjrohGuru, UjrohPertemuan } from "@lib/types";
+	import type { Kasbon, User, UjrohRekap, UjrohTarif, UjrohTarifGuru, UjrohGuru, UjrohKomponen } from "@lib/types";
+	import UjrohGuruRincian from "@components/keuangan/UjrohGuruRincian.svelte";
+	import UjrohKomponenPanel from "@components/keuangan/UjrohKomponenPanel.svelte";
+	import KasbonPanel from "@components/keuangan/KasbonPanel.svelte";
 	import { ChevronDown, CircleAlert, CircleCheck, Download, Lock, LockOpen, Settings2, TriangleAlert } from "lucide-svelte";
 
 	interface Props {
@@ -9,18 +12,22 @@
 		rekap?: UjrohRekap;
 		tarif?: UjrohTarif;
 		tarif_guru?: UjrohTarifGuru[];
+		komponen?: UjrohKomponen[];
+		kasbon?: Kasbon[];
 		flash?: { success?: string; error?: string };
 	}
 
 	let props: Props = $props();
 	const kosong: UjrohRekap = {
 		bulan: "", terkunci: false, dikunci_at: "", dikunci_oleh: "", dibuka_at: "", dibuka_oleh: "",
-		guru: [], ringkasan: { total_ujroh: 0, total_dibayar: 0, total_belum: 0, jumlah_guru: 0, jumlah_pertemuan: 0 },
+		guru: [], ringkasan: { total_ujroh: 0, total_pokok: 0, total_komponen: 0, total_kasbon: 0, total_dibayar: 0, total_belum: 0, jumlah_guru: 0, jumlah_pertemuan: 0 },
 		tanpa_guru: [], berlangsung: 0, guru_baru_selisih: [],
 	};
 	let rekap = $derived(props.rekap ?? kosong);
 	let tarif = $derived(props.tarif ?? { tetap: 0, part_time: 0 });
 	let tarifGuru = $derived(props.tarif_guru ?? []);
+	let komponen = $derived(props.komponen ?? []);
+	let kasbon = $derived(props.kasbon ?? []);
 	let role = $derived(props.user?.role ?? "");
 	let canEdit = $derived(role === "keuangan" || role === "super_admin");
 	let isSuperAdmin = $derived(role === "super_admin");
@@ -44,17 +51,6 @@
 		const [y, m] = b.split("-").map(Number);
 		return new Date(y, m - 1, 1).toLocaleDateString("id-ID", { month: "long", year: "numeric" });
 	};
-	const tanggalPendek = (t: string) => (t ? new Date(t + "T00:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "short" }) : "");
-
-	function perKelas(items: UjrohPertemuan[]) {
-		const groups = new Map<number, { nama: string; items: UjrohPertemuan[] }>();
-		for (const p of items) {
-			const g = groups.get(p.kelas_id) ?? { nama: p.kelas_nama, items: [] };
-			g.items.push(p);
-			groups.set(p.kelas_id, g);
-		}
-		return Array.from(groups.entries()).map(([id, g]) => ({ id, ...g }));
-	}
 
 	const opts = { preserveScroll: true, preserveState: true, onStart: () => (busy = true), onFinish: () => (busy = false) };
 	const q = (bulan: string) => `?bulan=${encodeURIComponent(bulan)}`;
@@ -210,7 +206,13 @@
 		{/if}
 
 		<section class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-			<div class="rounded-2xl bg-neutral-900 text-white p-5"><p class="text-xs text-neutral-400">Total ujroh</p><p class="mt-3 text-2xl font-bold">{rupiah(rekap.ringkasan.total_ujroh)}</p><p class="mt-1 text-sm text-neutral-400">{rekap.ringkasan.jumlah_guru} guru</p></div>
+			<div class="rounded-2xl bg-neutral-900 text-white p-5">
+				<p class="text-xs text-neutral-400">Total diterima guru</p>
+				<p class="mt-3 text-2xl font-bold">{rupiah(rekap.ringkasan.total_ujroh)}</p>
+				<p class="mt-1 text-xs text-neutral-400">
+					{rekap.ringkasan.jumlah_guru} guru · pokok {rupiah(rekap.ringkasan.total_pokok)}{#if rekap.ringkasan.total_komponen > 0} + komponen {rupiah(rekap.ringkasan.total_komponen)}{/if}{#if rekap.ringkasan.total_kasbon > 0} − kasbon {rupiah(rekap.ringkasan.total_kasbon)}{/if}
+				</p>
+			</div>
 			<div class="rounded-2xl border border-success/20 bg-success/10 p-5"><p class="text-xs text-neutral-600 dark:text-neutral-300">Sudah dibayar</p><p class="mt-3 text-2xl font-bold text-success">{rupiah(rekap.ringkasan.total_dibayar)}</p></div>
 			<div class="rounded-2xl border border-warning/20 bg-warning/10 p-5"><p class="text-xs text-neutral-600 dark:text-neutral-300">Belum dibayar</p><p class="mt-3 text-2xl font-bold text-warning">{rupiah(rekap.ringkasan.total_belum)}</p></div>
 			<div class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-925 p-5"><p class="text-xs text-neutral-600 dark:text-neutral-300">Pertemuan selesai</p><p class="mt-3 text-2xl font-bold text-neutral-900 dark:text-white">{rekap.ringkasan.jumlah_pertemuan}</p></div>
@@ -219,18 +221,20 @@
 		<section class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-925 overflow-hidden">
 			{#if rekap.guru.length === 0}
 				<div class="p-12 text-center">
-					<p class="font-medium text-neutral-700 dark:text-neutral-300">Belum ada pertemuan selesai di {namaBulan(rekap.bulan)}</p>
-					<p class="mt-1 text-sm text-neutral-500">Ujroh muncul otomatis setelah guru menyelesaikan pertemuan. Pilih bulan lain untuk melihat rekap sebelumnya.</p>
+					<p class="font-medium text-neutral-700 dark:text-neutral-300">Belum ada ujroh di {namaBulan(rekap.bulan)}</p>
+					<p class="mt-1 text-sm text-neutral-500">Ujroh muncul otomatis setelah guru menyelesaikan pertemuan atau punya komponen tetap. Pilih bulan lain untuk melihat rekap sebelumnya.</p>
 				</div>
 			{:else}
 				<div class="overflow-x-auto">
-					<table class="w-full min-w-[820px] text-sm">
+					<table class="w-full min-w-[960px] text-sm">
 						<thead>
 							<tr class="border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
 								<th class="px-4 py-3">Guru</th>
 								<th class="px-4 py-3 text-right">Pertemuan</th>
-								<th class="px-4 py-3 text-right">Tarif</th>
-								<th class="px-4 py-3 text-right">Total</th>
+								<th class="px-4 py-3 text-right">Pokok</th>
+								<th class="px-4 py-3 text-right">Komponen</th>
+								<th class="px-4 py-3 text-right">Kasbon</th>
+								<th class="px-4 py-3 text-right">Diterima</th>
 								<th class="px-4 py-3">Pembayaran</th>
 							</tr>
 						</thead>
@@ -250,9 +254,11 @@
 											</span>
 										</button>
 									</td>
-									<td class="px-4 py-3 text-right font-mono">{g.jumlah_pertemuan}{#if g.jumlah_badal > 0}<span class="block text-xs text-neutral-500">{g.jumlah_badal} badal</span>{/if}</td>
-									<td class="px-4 py-3 text-right font-mono">{rupiah(g.tarif)}</td>
-									<td class="px-4 py-3 text-right font-mono font-semibold text-neutral-900 dark:text-white">{rupiah(g.total)}</td>
+									<td class="px-4 py-3 text-right font-mono">{g.jumlah_pertemuan}{#if g.jumlah_badal > 0}<span class="block text-xs text-neutral-500">{g.jumlah_badal} badal</span>{/if}{#if g.jumlah_pertemuan > 0}<span class="block text-xs text-neutral-500">× {rupiah(g.tarif)}</span>{/if}</td>
+									<td class="px-4 py-3 text-right font-mono">{rupiah(g.total)}</td>
+									<td class="px-4 py-3 text-right font-mono">{g.total_komponen > 0 ? rupiah(g.total_komponen) : "-"}</td>
+									<td class="px-4 py-3 text-right font-mono {g.total_kasbon > 0 ? 'text-error' : ''}">{g.total_kasbon > 0 ? `−${rupiah(g.total_kasbon)}` : "-"}</td>
+									<td class="px-4 py-3 text-right font-mono font-semibold text-neutral-900 dark:text-white">{rupiah(g.diterima)}</td>
 									<td class="px-4 py-3">
 										{#if g.dibayar}
 											<div class="flex items-start gap-2">
@@ -284,22 +290,8 @@
 								</tr>
 								{#if expanded === g.guru_id}
 									<tr class="bg-neutral-50/70 dark:bg-neutral-900/40">
-										<td colspan="5" class="px-4 py-4">
-											<div class="grid gap-3 md:grid-cols-2">
-												{#each perKelas(g.pertemuan) as k (k.id)}
-													<div class="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-925 p-3">
-														<p class="text-sm font-semibold text-neutral-900 dark:text-white">{k.nama}</p>
-														<p class="text-xs text-neutral-500">{k.items.length} pertemuan · {rupiah(k.items.reduce((a, p) => a + p.tarif, 0))}</p>
-														<ul class="mt-2 flex flex-wrap gap-1.5">
-															{#each k.items as p (p.pertemuan_id)}
-																<li class="rounded-md px-2 py-0.5 text-xs {p.is_badal ? 'bg-brand-400/10 text-brand-700 dark:text-brand-300' : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'}" title="Pertemuan ke-{p.pertemuan_ke}">
-																	{tanggalPendek(p.tanggal)} · ke-{p.pertemuan_ke}{p.is_badal ? " · badal" : ""}
-																</li>
-															{/each}
-														</ul>
-													</div>
-												{/each}
-											</div>
+										<td colspan="7" class="px-4 py-4">
+											<UjrohGuruRincian guru={g} bulan={rekap.bulan} terkunci={rekap.terkunci} {canEdit} {komponen} />
 										</td>
 									</tr>
 								{/if}
@@ -309,6 +301,9 @@
 				</div>
 			{/if}
 		</section>
+
+		<UjrohKomponenPanel {komponen} guru={tarifGuru} bulan={rekap.bulan} {canEdit} />
+		<KasbonPanel {kasbon} guru={tarifGuru} bulan={rekap.bulan} bulanTerkunci={rekap.terkunci} {canEdit} />
 
 		<section class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-925">
 			<button onclick={bukaTarif} aria-expanded={showTarif} class="flex w-full items-center justify-between gap-3 px-5 py-4 text-left">
