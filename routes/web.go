@@ -212,6 +212,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/keuangan/ujroh/:bulan/guru/:guruId/bayar", kuRole, h.Ujroh.TandaiDibayar)
 	protected.Delete("/keuangan/ujroh/:bulan/guru/:guruId/bayar", kuRole, h.Ujroh.BatalDibayar)
 	protected.Put("/santri/:id/keuangan", kuRole, h.Santri.UpdateKeuangan)
+	protected.Put("/keuangan/santri/:id/status", kuRole, h.SantriStatus.UpdateKeuangan)
 	protected.Get("/laporan/keuangan", kuRole, h.Laporan.Keuangan)
 
 	// Master data API (all authenticated)

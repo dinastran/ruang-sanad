@@ -329,3 +329,29 @@ func TestUbahStatusSantriTanpaKelas(t *testing.T) {
 	require.NoError(t, err)
 	require.ErrorIs(t, f.service.UbahStatusSantri(f.santriID, f.adminID, models.UpdateSantriStatusRequest{Status: "aktif"}), ErrStatusSantriTerkunci)
 }
+
+func TestUbahStatusOlehKeuanganBisaMembukaTidakLanjut(t *testing.T) {
+	f := setupSantriStatus(t, 2)
+	require.NoError(t, f.santri.UpdateByKeuangan(f.santriID, f.adminID, models.UpdateSantriKeuanganRequest{InfaqTerakhir: "Juli 2026", KeteranganTidakLanjut: "Berhenti bayar"}))
+	require.Equal(t, "tidak_lanjut", f.santriRow(t).Status)
+
+	// Admin Kelas tetap tidak bisa membuka Tidak Lanjut.
+	require.ErrorIs(t, f.service.UbahStatusSantri(f.santriID, f.adminID, models.UpdateSantriStatusRequest{Status: "aktif"}), ErrStatusSantriTerkunci)
+
+	// Kursi yang dilepas Tidak Lanjut harus tersedia sebelum kembali memegang kursi.
+	f.insertSantri(t, "Budi", "aktif")
+	f.insertSantri(t, "Umar", "aktif")
+	require.ErrorContains(t, f.service.UbahStatusOlehKeuangan(f.santriID, f.adminID, cutiReq("2026-09-22", "2026-09-30")), "penuh")
+
+	require.NoError(t, f.service.UbahStatusOlehKeuangan(f.santriID, f.adminID, models.UpdateSantriStatusRequest{Status: "nonaktif", Alasan: "Mengundurkan diri"}))
+	s := f.santriRow(t)
+	require.Equal(t, "nonaktif", s.Status)
+	require.Equal(t, "Mengundurkan diri", s.StatusAlasan)
+	require.Empty(t, s.KeteranganTidakLanjut)
+	require.Equal(t, "Juli 2026", s.InfaqTerakhir)
+
+	var lama, baru string
+	require.NoError(t, f.db.QueryRow(`SELECT status_lama, status_baru FROM santri_status_log WHERE santri_id = ? ORDER BY id DESC LIMIT 1`, f.santriID).Scan(&lama, &baru))
+	require.Equal(t, "tidak_lanjut", lama)
+	require.Equal(t, "nonaktif", baru)
+}

@@ -117,19 +117,26 @@ func (s *SantriStatusService) validasi(req models.UpdateSantriStatusRequest) (st
 // UbahStatus changes a santri's status from the class detail page. Only
 // aktif/cuti/nonaktif are allowed; tidak_lanjut stays under Keuangan's control.
 func (s *SantriStatusService) UbahStatus(kelasID, santriID, actorID int64, req models.UpdateSantriStatusRequest) error {
-	return s.ubahStatus(santriID, &kelasID, actorID, req)
+	return s.ubahStatus(santriID, &kelasID, actorID, req, false)
 }
 
 // UbahStatusSantri changes a santri's status from the Data Santri list, where
 // the santri may belong to any class or none. Class rules (meeting in
 // progress, capacity) apply only when the santri has a class.
 func (s *SantriStatusService) UbahStatusSantri(santriID, actorID int64, req models.UpdateSantriStatusRequest) error {
-	return s.ubahStatus(santriID, nil, actorID, req)
+	return s.ubahStatus(santriID, nil, actorID, req, false)
+}
+
+// UbahStatusOlehKeuangan changes a santri's status from the Keuangan pages.
+// Tidak Lanjut is Keuangan's own status, so Keuangan may also move a santri
+// out of it; the keterangan tidak lanjut is then cleared.
+func (s *SantriStatusService) UbahStatusOlehKeuangan(santriID, actorID int64, req models.UpdateSantriStatusRequest) error {
+	return s.ubahStatus(santriID, nil, actorID, req, true)
 }
 
 // ubahStatus applies a status change. When kelasID is non-nil the santri must
-// currently belong to that class.
-func (s *SantriStatusService) ubahStatus(santriID int64, kelasID *int64, actorID int64, req models.UpdateSantriStatusRequest) error {
+// currently belong to that class. bukaTidakLanjut allows leaving tidak_lanjut.
+func (s *SantriStatusService) ubahStatus(santriID int64, kelasID *int64, actorID int64, req models.UpdateSantriStatusRequest, bukaTidakLanjut bool) error {
 	baru, err := s.validasi(req)
 	if err != nil {
 		return err
@@ -156,7 +163,8 @@ func (s *SantriStatusService) ubahStatus(santriID int64, kelasID *int64, actorID
 	if kelasID != nil && (!santri.KelasID.Valid || santri.KelasID.Int64 != *kelasID) {
 		return ErrStatusSantriBukanDiKelas
 	}
-	if santri.Status == StatusSantriTidakLanjut {
+	dariTidakLanjut := santri.Status == StatusSantriTidakLanjut
+	if dariTidakLanjut && !bukaTidakLanjut {
 		return ErrStatusSantriTerkunci
 	}
 	// A cuti starting after today is only scheduled: the santri stays aktif
@@ -176,14 +184,26 @@ func (s *SantriStatusService) ubahStatus(santriID int64, kelasID *int64, actorID
 		}
 	}
 
-	// Nonaktif released the seat; taking it back needs room in the class.
-	if santri.Status == StatusSantriNonaktif && baru.status != StatusSantriNonaktif && santri.KelasID.Valid {
+	// Nonaktif and tidak lanjut released the seat; taking it back needs room in the class.
+	if (santri.Status == StatusSantriNonaktif || dariTidakLanjut) && baru.status != StatusSantriNonaktif && santri.KelasID.Valid {
 		kelas, err := q.GetKelasByID(ctx, santri.KelasID.Int64)
 		if err != nil {
 			return err
 		}
 		if kelas.JumlahSantri >= kelas.Kapasitas {
 			return fmt.Errorf("kelas sudah penuh (kapasitas %d)", kelas.Kapasitas)
+		}
+	}
+
+	if dariTidakLanjut {
+		if err := q.UpdateSantriKeuangan(ctx, queries.UpdateSantriKeuanganParams{
+			InfaqTerakhir:         santri.InfaqTerakhir,
+			KeteranganTidakLanjut: "",
+			Status:                efektif.status,
+			UpdatedAt:             s.now(),
+			ID:                    santri.ID,
+		}); err != nil {
+			return err
 		}
 	}
 

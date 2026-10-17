@@ -3,8 +3,11 @@
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import type { Flash, Tagihan, TagihanBatalBatch, User, WaTemplate } from "@lib/types";
 	import { getCSRFToken } from "@lib/utils/csrf";
+	import { Toast } from "@lib/notifications/toast";
 	import FollowUpTagihanDialog from "@components/keuangan/FollowUpTagihanDialog.svelte";
-	import { Check, Eye, History, MessageCircle, RefreshCw, Search, X, Pencil, RotateCcw, Settings2, Plus, Trash2, Ban } from "lucide-svelte";
+	import SantriStatusModal from "@components/SantriStatusModal.svelte";
+	import StatusBadge from "@components/StatusBadge.svelte";
+	import { Check, Eye, History, MessageCircle, RefreshCw, Search, X, Pencil, RotateCcw, Settings2, Plus, Trash2, Ban, UserCog } from "lucide-svelte";
 
 	interface Props {
 		user?: User;
@@ -55,6 +58,20 @@
 	let nominalValue = $state(0);
 
 	let followUpTarget = $state<Tagihan | null>(null);
+
+	// Ubah status santri (aktif/cuti/nonaktif) dari baris tagihan.
+	let statusTarget = $state<Tagihan | null>(null);
+
+	function santriStatusAction(t: Tagihan): string {
+		const returnTo = window.location.pathname + window.location.search;
+		return `/app/keuangan/santri/${t.santri_id}/status?return_to=${encodeURIComponent(returnTo)}`;
+	}
+
+	function formatTanggal(iso: string): string {
+		if (!iso) return "";
+		const [y, m, d] = iso.split("-").map(Number);
+		return new Date(y, m - 1, d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+	}
 
 	let showTemplateManager = $state(false);
 	let templateEditID = $state<number | null>(null);
@@ -115,19 +132,44 @@
 		router.get("/app/keuangan/tagihan");
 	}
 
+	// Row actions keep the scroll position and briefly highlight the edited row,
+	// so the petugas can continue down the list instead of scrolling back.
+	let lastEditedID = $state<number | null>(null);
+	let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function rowActionOptions(id: number, onDone?: () => void) {
+		return {
+			preserveScroll: true,
+			preserveState: true,
+			onSuccess: (page: { props: Record<string, unknown> }) => {
+				onDone?.();
+				const flash = page.props.flash as Flash | undefined;
+				if (flash?.error) { Toast(flash.error, "error"); return; }
+				if (flash?.success) Toast(flash.success, "success");
+				markEdited(id);
+			},
+		};
+	}
+
+	function markEdited(id: number) {
+		lastEditedID = id;
+		clearTimeout(highlightTimer);
+		highlightTimer = setTimeout(() => (lastEditedID = null), 4000);
+	}
+
 	function lunasi() {
 		if (!selected) return;
 		router.put(
 			`/app/keuangan/tagihan/${selected.id}/lunas`,
 			{ tanggal_bayar: tanggalBayar, metode, catatan },
-			{ onSuccess: () => { selected = null; } },
+			rowActionOptions(selected.id, () => { selected = null; }),
 		);
 	}
 
 	function batal(t: Tagihan) {
 		if (!canManage) return;
 		if (confirm(`Batalkan tagihan ${t.santri_nama}?`)) {
-			router.put(`/app/keuangan/tagihan/${t.id}/batal`, { catatan: "Dibatalkan oleh petugas" });
+			router.put(`/app/keuangan/tagihan/${t.id}/batal`, { catatan: "Dibatalkan oleh petugas" }, rowActionOptions(t.id));
 		}
 	}
 
@@ -202,14 +244,14 @@
 		router.put(
 			`/app/keuangan/tagihan/${nominalTarget.id}/nominal`,
 			{ nominal: nominalValue },
-			{ onSuccess: () => { nominalTarget = null; } },
+			rowActionOptions(nominalTarget.id, () => { nominalTarget = null; }),
 		);
 	}
 
 	function resetNominal(t: Tagihan) {
 		if (!canManage || !t.nominal_override) return;
 		if (!confirm(`Kembalikan nominal tagihan ${t.santri_nama} agar mengikuti Data Santri?`)) return;
-		router.delete(`/app/keuangan/tagihan/${t.id}/nominal`);
+		router.delete(`/app/keuangan/tagihan/${t.id}/nominal`, rowActionOptions(t.id));
 	}
 
 	function newTemplate() {
@@ -306,8 +348,16 @@
 				</thead>
 				<tbody class="divide-y divide-neutral-100 dark:divide-neutral-800/70">
 					{#each tagihan as t (t.id)}
-						<tr>
-							<td class="p-4"><p class="font-semibold text-neutral-900 dark:text-white">{t.santri_nama}</p><p class="text-xs text-neutral-500">{t.id_mahasantri || "-"} · {t.frekuensi}</p></td>
+						<tr class="transition-colors duration-700 {lastEditedID === t.id ? 'bg-brand-400/10' : ''}">
+							<td class="p-4">
+								<p class="font-semibold text-neutral-900 dark:text-white">{t.santri_nama}</p>
+								<p class="text-xs text-neutral-500">{t.id_mahasantri || "-"} · {t.frekuensi}</p>
+								{#if t.santri_status && t.santri_status !== "aktif"}
+									<div class="mt-1" title={t.santri_status_alasan}><StatusBadge status={t.santri_status} /></div>
+								{:else if t.santri_cuti_mulai}
+									<p class="mt-1 text-xs text-amber-600 dark:text-amber-400" title={t.santri_status_alasan}>Cuti mulai {formatTanggal(t.santri_cuti_mulai)}</p>
+								{/if}
+							</td>
 							<td class="p-4 text-neutral-600 dark:text-neutral-300">{t.kelas_nama || "-"}<br /><span class="text-xs text-neutral-500">{t.guru_nama}</span></td>
 							<td class="p-4">Bulan {t.bulan_ke}<br /><span class="text-xs text-neutral-500">P-{t.pertemuan_ke}</span></td>
 							<td class="p-4">
@@ -325,6 +375,7 @@
 										{#if t.nominal_override}<button onclick={() => resetNominal(t)} title="Kembali ikuti nominal Data Santri" class="p-2 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg"><RotateCcw size="17" /></button>{/if}
 									{/if}
 									<button onclick={() => (followUpTarget = t)} disabled={!t.no_wa || activeTemplates.length === 0} title={t.no_wa ? "Follow-up WhatsApp" : "Nomor WA belum diisi"} class="p-2 text-brand-600 hover:bg-brand-500/10 rounded-lg disabled:opacity-30"><MessageCircle size="17" /></button>
+									{#if canManage}<button onclick={() => (statusTarget = t)} title="Ubah status santri" aria-label="Ubah status santri {t.santri_nama}" class="p-2 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg"><UserCog size="17" /></button>{/if}
 									{#if canManage && t.status !== "lunas" && t.status !== "batal"}<button onclick={() => batal(t)} title="Batalkan" class="p-2 text-error hover:bg-error/10 rounded-lg"><X size="17" /></button>{/if}
 								</div>
 							</td>
@@ -360,6 +411,15 @@
 				<div class="mt-5 flex justify-end gap-2"><button onclick={() => nominalTarget = null} class="px-4 py-2.5 rounded-xl text-sm font-semibold">Batal</button><button onclick={saveNominal} class="px-4 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold">Simpan nominal khusus</button></div>
 			</section>
 		</div>
+	{/if}
+
+	{#if statusTarget}
+		<SantriStatusModal
+			santri={{ id: statusTarget.santri_id, nama: statusTarget.santri_nama, status: statusTarget.santri_status, status_alasan: statusTarget.santri_status_alasan, cuti_mulai: statusTarget.santri_cuti_mulai, cuti_selesai: statusTarget.santri_cuti_selesai }}
+			action={santriStatusAction(statusTarget)}
+			onclose={() => (statusTarget = null)}
+			onsaved={() => { if (statusTarget) markEdited(statusTarget.id); }}
+		/>
 	{/if}
 
 	{#if followUpTarget}

@@ -38,6 +38,11 @@ type TagihanResponse struct {
 	Catatan       string `json:"catatan"`
 	FuTerakhir    string `json:"fu_terakhir"`
 	FuCount       int64  `json:"fu_count"`
+	// Status santri (aktif/cuti/nonaktif/tidak_lanjut), not the tagihan's.
+	SantriStatus       string `json:"santri_status"`
+	SantriStatusAlasan string `json:"santri_status_alasan"`
+	SantriCutiMulai    string `json:"santri_cuti_mulai"`
+	SantriCutiSelesai  string `json:"santri_cuti_selesai"`
 }
 
 type TagihanRingkasan struct {
