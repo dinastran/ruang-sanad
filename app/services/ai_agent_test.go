@@ -361,3 +361,36 @@ func TestAIAgentDaftarToolsListNamesBehindOverviewCounts(t *testing.T) {
 	text, _ = callTool(t, s, p, "daftar_kelas", `{"termasuk_nonaktif":true}`)
 	require.Contains(t, text, "Kelas Tutup")
 }
+
+func TestAIAgentRincianOnlyNamesToolsTheRoleHas(t *testing.T) {
+	s, _, db := setupAIAgent(t)
+	_, err := db.Exec(`INSERT INTO santri (nama,status,kelas_id) VALUES ('Tanpa Kelas','aktif',NULL)`)
+	require.NoError(t, err)
+	for role, wantTool := range map[string]bool{"super_admin": true, "keuangan": false} {
+		text, isErr := callTool(t, s, aiPrincipal(role, 1), "ringkasan_kondisi", `{}`)
+		require.False(t, isErr, text)
+		var ov struct {
+			Prioritas []struct {
+				Judul   string         `json:"judul"`
+				Rincian map[string]any `json:"rincian"`
+			} `json:"prioritas"`
+			Tools []string `json:"tool_untuk_role_ini"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(text), &ov))
+		for _, pr := range ov.Prioritas {
+			if tool, ok := pr.Rincian["tool"].(string); ok {
+				require.Contains(t, ov.Tools, tool, "%s: rincian names a tool the role cannot call", role)
+			}
+		}
+		require.Equal(t, wantTool, contains(ov.Tools, "daftar_santri"), role)
+	}
+}
+
+func contains(xs []string, x string) bool {
+	for _, v := range xs {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}

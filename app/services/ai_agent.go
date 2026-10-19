@@ -102,6 +102,23 @@ func (s *AIAgentService) Tools(role string) []AITool {
 	return out
 }
 
+func (s *AIAgentService) toolAllowed(name, role string) bool {
+	for _, t := range s.tools {
+		if t.Name == name {
+			return t.allows(role)
+		}
+	}
+	return false
+}
+
+func (s *AIAgentService) toolNames(role string) []string {
+	out := []string{}
+	for _, t := range s.Tools(role) {
+		out = append(out, t.Name)
+	}
+	return out
+}
+
 // AIToolResult is the sanitized JSON text of a tool call. IsError marks a
 // result the AI should read as a failure (validation, access, not found).
 type AIToolResult struct {
