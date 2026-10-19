@@ -256,8 +256,14 @@ func (s *AIAgentService) toolRingkasan(ctx context.Context, p *models.AIPrincipa
 	prioritas := make([]map[string]any, 0, len(ov.Priorities))
 	for _, pr := range ov.Priorities {
 		item := map[string]any{"judul": pr.Title, "detail": pr.Detail, "jumlah": pr.Count, "link": aiLink(p, pr.Href)}
+		// Only point at a tool this role can call; otherwise say why there is
+		// no drill-down instead of naming a tool the client will not list.
 		if r, ok := aiRincianPrioritas[pr.Title]; ok {
-			item["rincian"] = r
+			if s.toolAllowed(r["tool"].(string), p.Role) {
+				item["rincian"] = r
+			} else {
+				item["rincian"] = map[string]any{"tersedia": false, "alasan": "rincian nama untuk prioritas ini tidak tersedia bagi role " + p.Role}
+			}
 		}
 		prioritas = append(prioritas, item)
 	}
@@ -320,7 +326,9 @@ func (s *AIAgentService) toolRingkasan(ctx context.Context, p *models.AIPrincipa
 		}
 	}
 	out["sumber_gagal_dimuat"] = ov.Errors
-	out["langkah_lanjut"] = "Untuk nama-nama di balik angka, panggil tool di field 'rincian' tiap prioritas. Daftar lengkap: daftar_santri, daftar_kelas, daftar_guru, daftar_tagihan."
+	out["langkah_lanjut"] = "Untuk nama-nama di balik angka, panggil tool di field 'rincian' tiap prioritas. " +
+		"Bila tool itu tidak ada di daftar tool Anda, daftar tool di aplikasi AI sudah usang: minta pengguna menyambung ulang (restart/reconnect) server MCP Ruang Sanad."
+	out["tool_untuk_role_ini"] = s.toolNames(p.Role)
 	return out, nil
 }
 
