@@ -31,6 +31,7 @@
 		HeartHandshake,
 		History,
 		ClipboardCheck,
+		Bot,
 	} from "lucide-svelte";
 	import DarkModeToggle from "@components/DarkModeToggle.svelte";
 	import Logo from "@components/Logo.svelte";
@@ -58,6 +59,8 @@
 	let isGuru = $derived(role === "guru" || isSuperAdmin);
 	let isGuruWorkflow = $derived(isGuru || role === "admin_kelas");
 	let isKoordinator = $derived(role === "koordinator_guru" || isSuperAdmin);
+	// Roles allowed to connect an AI agent (services.AIRoleAllowed).
+	let canAIAkses = $derived(["super_admin", "admin", "keuangan", "cs", "admin_kelas", "koordinator_guru"].includes(role));
 	let homeHref = $derived(role === "guru" ? "/app/guru" : role === "koordinator_guru" ? "/app/koordinator-guru" : role === "user" ? "/app/profile" : "/app");
 
 	let sidebarW = $derived(sidebarCollapsed ? "w-16" : "w-72");
@@ -78,6 +81,7 @@
 		{ href: "/app/produk-crm", label: "Produk & CRM", group: "produk-crm", category: "Administrasi", show: isAdminKelas, icon: Boxes },
 		{ href: "/admin/import", label: "Import CSV", group: "import", category: "Administrasi", show: isSuperAdmin, icon: FileSpreadsheet },
 		{ href: "/admin/users", label: "Kelola User", group: "users", category: "Administrasi", show: isSuperAdmin, icon: Shield },
+		{ href: "/app/ai-akses", label: "Akses AI", group: "ai-akses", category: "Administrasi", show: canAIAkses, icon: Bot },
 		{ href: "/app/guru", label: "Dashboard", group: "guru-dashboard", category: "Guru", show: isGuruWorkflow, icon: GraduationCap },
 		{ href: "/app/guru/jadwal-pertemuan", label: "Agenda Mengajar", group: "guru-jadwal", category: "Guru", show: isGuruWorkflow, icon: CalendarClock },
 		{ href: "/app/guru/riwayat-mengajar", label: "Riwayat Mengajar", group: "guru-riwayat-mengajar", category: "Guru", show: isGuruWorkflow, icon: History },
@@ -123,6 +127,7 @@
 		if (path.startsWith("/admin/import")) return "import";
 		if (path.startsWith("/admin/users")) return "users";
 		if (path.startsWith("/app/profile")) return "profile";
+		if (path.startsWith("/app/ai-akses")) return "ai-akses";
 		if (path.startsWith("/app/guru/jadwal-pertemuan")) return "guru-jadwal";
 		if (path.startsWith("/app/guru/riwayat-mengajar")) return "guru-riwayat-mengajar";
 		if (path.startsWith("/app/guru/kelas")) return "guru-kelas";
