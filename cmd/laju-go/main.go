@@ -161,7 +161,13 @@ func main() {
 	importHandler := handlers.NewImportHandler(importService, sessionStore, inertiaService)
 	laporanHandler := handlers.NewLaporanHandler(laporanService, sessionStore, inertiaService)
 	adminHandler := handlers.NewAdminHandler(userService, sessionStore, inertiaService)
-	dashboardHandler := handlers.NewDashboardHandler(services.NewOverviewService(querier, services.NewKeuanganDashboardService(querier, ujrohService), riayahSantriService), userService, sessionStore, inertiaService)
+	keuanganDashboardService := services.NewKeuanganDashboardService(querier, ujrohService)
+	overviewService := services.NewOverviewService(querier, keuanganDashboardService, riayahSantriService)
+	dashboardHandler := handlers.NewDashboardHandler(overviewService, userService, sessionStore, inertiaService)
+
+	// AI agent access (MCP): read-only tools over the same services.
+	aiTokenService := services.NewAITokenService(querier)
+	aiAgentService := services.NewAIAgentService(querier, overviewService, keuanganDashboardService, riayahSantriService, tsiService, santriService)
 	guruHandler := handlers.NewGuruHandler(guruService, pertemuanService, riayahService, sessionStore, inertiaService, notificationService).WithRiayahSantri(riayahSantriService).WithBeranda(services.NewGuruBerandaService(querier, tsiService))
 	pertemuanHandler := handlers.NewPertemuanHandler(guruService, pertemuanService, jadwalPertemuanService, sessionStore, inertiaService)
 	jadwalPertemuanHandler := handlers.NewJadwalPertemuanHandler(guruService, jadwalPertemuanService, pertemuanService, sessionStore, inertiaService)
@@ -215,6 +221,8 @@ func main() {
 		Kasbon:                      handlers.NewKasbonHandler(ujrohService, sessionStore, inertiaService),
 		ProductCRM:                  productCRMHandler,
 		ProductOrders:               productOrderHandler,
+		MCP:                         handlers.NewMCPHandler(aiTokenService, aiAgentService, cfg.AppURL, cfg.AllowedOrigins, Version),
+		AIAkses:                     handlers.NewAIAksesHandler(aiTokenService, aiAgentService, userService, sessionStore, inertiaService, cfg.AppURL),
 	}
 
 	// Setup CSRF middleware (Secure cookies only in production with HTTPS)

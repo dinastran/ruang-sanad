@@ -48,6 +48,8 @@ type Handlers struct {
 	Kasbon                      *handlers.KasbonHandler
 	ProductCRM                  *handlers.ProductCRMHandler
 	ProductOrders               *handlers.ProductOrderHandler
+	MCP                         *handlers.MCPHandler
+	AIAkses                     *handlers.AIAksesHandler
 }
 
 func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, mailerService *services.MailerService, csrfMiddleware *middlewares.CSRFMiddleware) {
@@ -56,6 +58,19 @@ func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *
 	setupAuthRoutes(app, h.Auth, h.PasswordReset, store, mailerService, csrfMiddleware)
 	setupAppRoutes(app, h, store, userService, csrfMiddleware)
 	setupAdminRoutes(app, h, store, userService, csrfMiddleware)
+	setupMCPRoutes(app, h.MCP)
+}
+
+// setupMCPRoutes exposes the read-only AI agent endpoint. It sits outside
+// /app: no session cookie or CSRF token; each request carries a bearer token
+// created on /app/ai-akses.
+func setupMCPRoutes(app *fiber.App, h *handlers.MCPHandler) {
+	if h == nil {
+		return
+	}
+	app.Post("/mcp", middlewares.MCPRateLimit.Limit(), h.Handle)
+	app.Get("/mcp", h.MethodNotAllowed)
+	app.Delete("/mcp", h.MethodNotAllowed)
 }
 
 func setupStaticRoutes(app *fiber.App) {
@@ -116,6 +131,14 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/profile", h.App.UpdateProfile)
 	protected.Put("/profile/password", h.App.UpdatePassword)
 	protected.Put("/notifications/:id/read", h.Notifications.MarkRead)
+
+	// Akses AI: personal tokens for AI agents (MCP). Role is checked in the
+	// service so the page can explain why a role has no access yet.
+	if h.AIAkses != nil {
+		protected.Get("/ai-akses", h.AIAkses.Index)
+		protected.Post("/ai-akses/token", h.AIAkses.Store)
+		protected.Delete("/ai-akses/token/:id", h.AIAkses.Revoke)
+	}
 
 	// Upload
 	protected.Get("/upload", h.App.UploadTest)

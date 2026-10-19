@@ -1,6 +1,8 @@
 package middlewares
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strconv"
 	"sync"
 	"time"
@@ -148,5 +150,21 @@ var (
 		MaxRequests: 50,
 		Window:      time.Hour,
 		Message:     "Too many upload requests, please try again later",
+	})
+
+	// MCPRateLimit: 120 AI agent requests per minute per token (or per IP
+	// when no token is sent). An agent answering one question usually makes
+	// a handful of tool calls.
+	MCPRateLimit = NewRateLimiter(RateLimiterConfig{
+		MaxRequests: 120,
+		Window:      time.Minute,
+		Message:     "Terlalu banyak permintaan AI agent, coba lagi sebentar lagi",
+		CustomKeyFn: func(c *fiber.Ctx) string {
+			if auth := c.Get(fiber.HeaderAuthorization); auth != "" {
+				sum := sha256.Sum256([]byte(auth))
+				return "mcp:" + hex.EncodeToString(sum[:8])
+			}
+			return "mcp-ip:" + c.IP()
+		},
 	})
 )

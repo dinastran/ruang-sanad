@@ -19,6 +19,9 @@ type Config struct {
 	GoogleClientSecret string
 	GoogleRedirectURL  string
 	FrontendURL        string
+	// AppURL is the public base URL (e.g. https://dashboard.ruangsanad.com),
+	// used for links in AI agent answers. Empty means derive from the request.
+	AppURL string
 	// CORS
 	AllowedOrigins []string
 	// Email configuration
@@ -49,6 +52,7 @@ func Load() *Config {
 		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
 		GoogleRedirectURL:  getEnv("GOOGLE_REDIRECT_URL", ""),
 		FrontendURL:        getEnv("FRONTEND_URL", "http://localhost:5173"),
+		AppURL:             strings.TrimRight(getEnv("APP_URL", ""), "/"),
 		AllowedOrigins:     parseAllowedOrigins(),
 		// Email configuration
 		SMTPHost:  getEnv("SMTP_HOST", "smtp.gmail.com"),
