@@ -96,10 +96,10 @@ func TestMCPEndpointProtocolAndAuth(t *testing.T) {
 
 	// tools/list is role-scoped.
 	_, out, _ = mcpPost(t, app, boss.Plaintext, `{"jsonrpc":"2.0","id":3,"method":"tools/list"}`)
-	require.Len(t, out["result"].(map[string]any)["tools"], 11)
+	require.Len(t, out["result"].(map[string]any)["tools"], 15)
 	_, out, _ = mcpPost(t, app, cs.Plaintext, `{"jsonrpc":"2.0","id":3,"method":"tools/list"}`)
 	csTools := out["result"].(map[string]any)["tools"].([]any)
-	require.Len(t, csTools, 2)
+	require.Len(t, csTools, 3)
 	require.Equal(t, true, csTools[0].(map[string]any)["annotations"].(map[string]any)["readOnlyHint"])
 
 	// tools/call returns sanitized text content with dashboard links.

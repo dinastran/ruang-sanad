@@ -90,7 +90,7 @@ func aiPercent(part, total int64) *float64 {
 func (s *AIAgentService) today() time.Time { return s.now().In(ZonaWaktuRiayah) }
 
 func (s *AIAgentService) buildTools() []AITool {
-	return []AITool{
+	return append([]AITool{
 		{
 			Name:  "ringkasan_kondisi",
 			Title: "Ringkasan kondisi Ruang Sanad",
@@ -226,10 +226,22 @@ func (s *AIAgentService) buildTools() []AITool {
 			Roles: []string{"super_admin", "admin_kelas", "koordinator_guru"},
 			run:   s.toolCariCatatan,
 		},
-	}
+	}, s.daftarTools()...)
 }
 
 // --- ringkasan_kondisi -------------------------------------------------------
+
+// aiRincianPrioritas tells the AI which tool call lists the rows behind each
+// overview priority (titles from OverviewService.Get).
+var aiRincianPrioritas = map[string]map[string]any{
+	"Data santri belum lengkap":            {"tool": "daftar_santri", "argumen": map[string]any{"status": "aktif", "belum_lengkap": true}},
+	"Santri aktif belum punya kelas aktif": {"tool": "daftar_santri", "argumen": map[string]any{"status": "aktif", "tanpa_kelas_aktif": true}},
+	"Kelas membutuhkan guru":               {"tool": "kelas_perlu_perhatian", "argumen": map[string]any{}},
+	"Pertemuan lama belum ditutup":         {"tool": "kelas_perlu_perhatian", "argumen": map[string]any{}},
+	"Santri membutuhkan perhatian":         {"tool": "santri_perlu_tindak_lanjut", "argumen": map[string]any{}},
+	"Tindak lanjut guru jatuh tempo":       {"tool": "guru_perlu_perhatian", "argumen": map[string]any{}},
+	"Tagihan melewati jatuh tempo":         {"tool": "daftar_tagihan", "argumen": map[string]any{"terlambat": true}},
+}
 
 func (s *AIAgentService) toolRingkasan(ctx context.Context, p *models.AIPrincipal, a aiArgs) (any, error) {
 	now := s.today()
@@ -243,7 +255,11 @@ func (s *AIAgentService) toolRingkasan(ctx context.Context, p *models.AIPrincipa
 	}
 	prioritas := make([]map[string]any, 0, len(ov.Priorities))
 	for _, pr := range ov.Priorities {
-		prioritas = append(prioritas, map[string]any{"judul": pr.Title, "detail": pr.Detail, "jumlah": pr.Count, "link": aiLink(p, pr.Href)})
+		item := map[string]any{"judul": pr.Title, "detail": pr.Detail, "jumlah": pr.Count, "link": aiLink(p, pr.Href)}
+		if r, ok := aiRincianPrioritas[pr.Title]; ok {
+			item["rincian"] = r
+		}
+		prioritas = append(prioritas, item)
 	}
 	out := map[string]any{
 		"data_per":    now.Format("2006-01-02 15:04") + " WIB",
@@ -304,7 +320,7 @@ func (s *AIAgentService) toolRingkasan(ctx context.Context, p *models.AIPrincipa
 		}
 	}
 	out["sumber_gagal_dimuat"] = ov.Errors
-	out["langkah_lanjut"] = "Rincian: santri_perlu_tindak_lanjut, rekap_tunggakan, kelas_perlu_perhatian, guru_perlu_perhatian, tren_program."
+	out["langkah_lanjut"] = "Untuk nama-nama di balik angka, panggil tool di field 'rincian' tiap prioritas. Daftar lengkap: daftar_santri, daftar_kelas, daftar_guru, daftar_tagihan."
 	return out, nil
 }
 
@@ -828,7 +844,7 @@ func (s *AIAgentService) evaluateKelas(p *models.AIPrincipal, k models.AIKelasMe
 
 func (s *AIAgentService) kelasPerhatian(ctx context.Context, p *models.AIPrincipal, now time.Time, semua bool) ([]aiKelasRow, error) {
 	sejak := now.AddDate(0, 0, -30).Format("2006-01-02")
-	metrik, err := s.querier.AIKelasMetrik(ctx, now.Format("2006-01-02"), sejak, 0)
+	metrik, err := s.querier.AIKelasMetrik(ctx, now.Format("2006-01-02"), sejak, 0, false)
 	if err != nil {
 		return nil, err
 	}
@@ -874,7 +890,7 @@ func (s *AIAgentService) toolDetailKelas(ctx context.Context, p *models.AIPrinci
 		return nil, aiArgErr("kelas_id wajib diisi")
 	}
 	now := s.today()
-	metrik, err := s.querier.AIKelasMetrik(ctx, now.Format("2006-01-02"), now.AddDate(0, 0, -30).Format("2006-01-02"), id)
+	metrik, err := s.querier.AIKelasMetrik(ctx, now.Format("2006-01-02"), now.AddDate(0, 0, -30).Format("2006-01-02"), id, false)
 	if err != nil {
 		return nil, err
 	}
@@ -990,7 +1006,7 @@ func (s *AIAgentService) evaluateGuru(p *models.AIPrincipal, g models.AIGuruMetr
 
 func (s *AIAgentService) guruPerhatian(ctx context.Context, p *models.AIPrincipal, now time.Time, bulanTSI string, semua bool) ([]aiGuruRow, string, error) {
 	hariIni := now.Format("2006-01-02")
-	metrik, err := s.querier.AIGuruMetrik(ctx, hariIni, now.AddDate(0, 0, -30).Format("2006-01-02"), now.AddDate(0, 0, -90).Format("2006-01-02"), 0)
+	metrik, err := s.querier.AIGuruMetrik(ctx, hariIni, now.AddDate(0, 0, -30).Format("2006-01-02"), now.AddDate(0, 0, -90).Format("2006-01-02"), 0, false)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1065,7 +1081,7 @@ func (s *AIAgentService) toolDetailGuru(ctx context.Context, p *models.AIPrincip
 	}
 	now := s.today()
 	hariIni := now.Format("2006-01-02")
-	metrik, err := s.querier.AIGuruMetrik(ctx, hariIni, now.AddDate(0, 0, -30).Format("2006-01-02"), now.AddDate(0, 0, -90).Format("2006-01-02"), id)
+	metrik, err := s.querier.AIGuruMetrik(ctx, hariIni, now.AddDate(0, 0, -30).Format("2006-01-02"), now.AddDate(0, 0, -90).Format("2006-01-02"), id, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1103,7 +1119,7 @@ func (s *AIAgentService) toolDetailGuru(ctx context.Context, p *models.AIPrincip
 			}
 		}
 	}
-	semuaKelas, err := s.querier.AIKelasMetrik(ctx, hariIni, now.AddDate(0, 0, -30).Format("2006-01-02"), 0)
+	semuaKelas, err := s.querier.AIKelasMetrik(ctx, hariIni, now.AddDate(0, 0, -30).Format("2006-01-02"), 0, false)
 	if err != nil {
 		return nil, err
 	}

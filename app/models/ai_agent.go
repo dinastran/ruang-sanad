@@ -217,3 +217,58 @@ type AIKunjunganRingkas struct {
 	TanggapanGuru  string `json:"tanggapan_guru"`
 	TLTerbuka      int64  `json:"tindak_lanjut_terbuka"`
 }
+
+// AISantriDaftarFilter drives the daftar_santri tool. Zero values mean "no
+// filter". TanpaKelasAktif and BelumLengkap match the dashboard overview
+// definitions exactly.
+type AISantriDaftarFilter struct {
+	Status          string
+	KelasID         int64
+	GuruID          int64
+	Level           string
+	Tipe            string
+	Frekuensi       string
+	Angkatan        string
+	AngkatanKelas   string
+	JenisKelamin    string
+	Kata            string
+	DaftarDari      string
+	DaftarSampai    string
+	TanpaKelasAktif bool
+	BelumLengkap    bool
+	Limit           int64
+	Offset          int64
+}
+
+type AISantriDaftar struct {
+	AISantriRingkas
+	JenisKelamin  string `json:"jenis_kelamin"`
+	TanggalDaftar string `json:"tanggal_daftar"`
+	MulaiBelajar  string `json:"mulai_belajar"`
+	KelasAktif    bool   `json:"kelas_aktif"`
+	DataLengkap   bool   `json:"data_lengkap"`
+}
+
+type AITagihanDaftarFilter struct {
+	Status        string
+	Terlambat     bool
+	SantriID      int64
+	KelasID       int64
+	AngkatanKelas string
+	TagihDari     string
+	TagihSampai   string
+	HariIni       string
+	Limit         int64
+	Offset        int64
+}
+
+type AITagihanDaftar struct {
+	AITagihanSantri
+	SantriID     int64  `json:"santri_id"`
+	SantriNama   string `json:"santri_nama"`
+	IDMahasantri string `json:"id_mahasantri"`
+	SantriStatus string `json:"santri_status"`
+	NamaKelas    string `json:"kelas"`
+	GuruNama     string `json:"guru"`
+	Angkatan     string `json:"angkatan_kelas"`
+}

@@ -94,11 +94,15 @@ func TestAIAgentToolsRunReadOnlyWithoutContactData(t *testing.T) {
 		"guru_perlu_perhatian":       `{"semua":true}`,
 		"detail_guru":                `{"guru_id":1}`,
 		"cari_catatan":               `{"kata":"hubungi"}`,
+		"daftar_santri":              `{}`,
+		"daftar_kelas":               `{"termasuk_nonaktif":true}`,
+		"daftar_guru":                `{"termasuk_nonaktif":true}`,
+		"daftar_tagihan":             `{}`,
 	}
 	for _, dim := range []string{"level", "tipe", "frekuensi", "angkatan", "produk"} {
 		calls["tren_program/"+dim] = `{"dimensi":"` + dim + `","bulan":3}`
 	}
-	require.Len(t, s.Tools("super_admin"), 11)
+	require.Len(t, s.Tools("super_admin"), 15)
 
 	var before, after int64
 	require.NoError(t, db.QueryRow(`SELECT total_changes()`).Scan(&before))
@@ -155,8 +159,10 @@ func TestAIAgentRoleGating(t *testing.T) {
 		}
 		return out
 	}
-	require.ElementsMatch(t, []string{"ringkasan_kondisi", "rekap_tunggakan"}, names("keuangan"))
-	require.ElementsMatch(t, []string{"cari_santri", "detail_santri"}, names("cs"))
+	require.ElementsMatch(t, []string{"ringkasan_kondisi", "rekap_tunggakan", "daftar_tagihan"}, names("keuangan"))
+	require.ElementsMatch(t, []string{"cari_santri", "detail_santri", "daftar_santri"}, names("cs"))
+	require.NotContains(t, names("admin_kelas"), "daftar_guru")
+	require.NotContains(t, names("koordinator_guru"), "daftar_tagihan")
 	require.NotContains(t, names("admin_kelas"), "rekap_tunggakan")
 	require.NotContains(t, names("koordinator_guru"), "tren_program")
 	require.Empty(t, names("guru"))
@@ -281,4 +287,77 @@ func TestRedactContactText(t *testing.T) {
 	for in, want := range cases {
 		require.Equal(t, want, RedactContactText(in), in)
 	}
+}
+
+func TestAIAgentDaftarToolsListNamesBehindOverviewCounts(t *testing.T) {
+	s, _, db := setupAIAgent(t)
+	_, err := db.Exec(`INSERT INTO kelas (id,kunci_kelas,angkatan,tipe,jenis_kelamin,level,frekuensi,nama_kelas,guru_id,kapasitas,is_aktif) VALUES (3,'C','2026','Reguler','L','Dasar','1x/pekan','Kelas Tutup',1,10,0)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO santri (id,nama,status,kelas_id,tanggal_daftar,no_wa) VALUES
+	 (10,'Eko Tanpa Kelas','aktif',NULL,'2026-03-12','085555555555'),(11,'Fani Kelas Tutup','aktif',3,'2026-03-13',''),(12,'Gina Cuti','cuti',NULL,'2026-03-13','')`)
+	require.NoError(t, err)
+	p := aiPrincipal("super_admin", 1)
+
+	// The overview count and the list use the same definition.
+	text, isErr := callTool(t, s, p, "ringkasan_kondisi", `{}`)
+	require.False(t, isErr, text)
+	var ov struct {
+		Operasional struct {
+			WithoutClass int64 `json:"santri_aktif_tanpa_kelas_aktif"`
+		} `json:"operasional"`
+		Prioritas []struct {
+			Judul   string         `json:"judul"`
+			Rincian map[string]any `json:"rincian"`
+		} `json:"prioritas"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(text), &ov))
+	require.EqualValues(t, 2, ov.Operasional.WithoutClass)
+	var hint map[string]any
+	for _, pr := range ov.Prioritas {
+		if pr.Judul == "Santri aktif belum punya kelas aktif" {
+			hint = pr.Rincian
+		}
+	}
+	require.Equal(t, "daftar_santri", hint["tool"])
+	args, _ := json.Marshal(hint["argumen"])
+
+	text, isErr = callTool(t, s, p, "daftar_santri", string(args))
+	require.False(t, isErr, text)
+	var list struct {
+		Total  int64 `json:"total"`
+		Santri []struct {
+			Santri struct {
+				Nama string `json:"nama"`
+			} `json:"santri"`
+		} `json:"santri"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(text), &list))
+	require.EqualValues(t, ov.Operasional.WithoutClass, list.Total)
+	names := []string{}
+	for _, r := range list.Santri {
+		names = append(names, r.Santri.Nama)
+	}
+	require.ElementsMatch(t, []string{"Eko Tanpa Kelas", "Fani Kelas Tutup"}, names)
+	require.NotContains(t, text, "085555555555")
+
+	// Paging.
+	text, isErr = callTool(t, s, p, "daftar_santri", `{"per_halaman":2,"halaman":2}`)
+	require.False(t, isErr, text)
+	require.Contains(t, text, `"halaman":2`)
+	require.Contains(t, text, `"total":7`)
+
+	// Registration date filter works on driver-written and plain dates.
+	text, _ = callTool(t, s, p, "daftar_santri", `{"daftar_dari":"2026-03-12","daftar_sampai":"2026-03-12"}`)
+	require.Contains(t, text, "Eko Tanpa Kelas")
+	require.NotContains(t, text, "Fani")
+
+	text, isErr = callTool(t, s, p, "daftar_tagihan", `{"terlambat":true}`)
+	require.False(t, isErr, text)
+	require.Contains(t, text, `"total":1`)
+	require.Contains(t, text, "Ahmad")
+
+	text, _ = callTool(t, s, p, "daftar_kelas", `{}`)
+	require.NotContains(t, text, "Kelas Tutup")
+	text, _ = callTool(t, s, p, "daftar_kelas", `{"termasuk_nonaktif":true}`)
+	require.Contains(t, text, "Kelas Tutup")
 }

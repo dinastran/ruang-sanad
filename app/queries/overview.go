@@ -16,12 +16,12 @@ func (q *Queries) OverviewOperations(ctx context.Context, today, from, until str
 	 (SELECT COUNT(*) FROM kelas WHERE is_aktif = 1),
 	 (SELECT COUNT(*) FROM kelas k LEFT JOIN guru g ON g.id = k.guru_id WHERE k.is_aktif = 1 AND (g.id IS NULL OR g.is_aktif != 1)),
 	 (SELECT COUNT(*) FROM santri s LEFT JOIN kelas k ON k.id = s.kelas_id WHERE s.status = 'aktif' AND (k.id IS NULL OR k.is_aktif != 1)),
-	 (SELECT COUNT(*) FROM pertemuan WHERE status = 'berlangsung' AND date(tanggal) < date(?)),
-	 (SELECT COUNT(*) FROM kunjungan_tindak_lanjut WHERE status = 'terbuka' AND date(target_tanggal) <= date(?)),
-	 (SELECT COUNT(*) FROM todo_koordinator WHERE status IN ('belum', 'proses') AND date(deadline) <= date(?)),
-	 (SELECT COUNT(*) FROM pertemuan WHERE status = 'selesai' AND date(tanggal) BETWEEN date(?) AND date(?)),
-	 (SELECT COUNT(*) FROM pertemuan WHERE status = 'selesai' AND is_badal = 1 AND date(tanggal) BETWEEN date(?) AND date(?)),
-	 (SELECT COUNT(*) FROM pertemuan WHERE status = 'selesai' AND is_reschedule = 1 AND date(tanggal) BETWEEN date(?) AND date(?))`,
+	 (SELECT COUNT(*) FROM pertemuan WHERE status = 'berlangsung' AND date(substr(tanggal, 1, 10)) < date(?)),
+	 (SELECT COUNT(*) FROM kunjungan_tindak_lanjut WHERE status = 'terbuka' AND date(substr(target_tanggal, 1, 10)) <= date(?)),
+	 (SELECT COUNT(*) FROM todo_koordinator WHERE status IN ('belum', 'proses') AND date(substr(deadline, 1, 10)) <= date(?)),
+	 (SELECT COUNT(*) FROM pertemuan WHERE status = 'selesai' AND date(substr(tanggal, 1, 10)) BETWEEN date(?) AND date(?)),
+	 (SELECT COUNT(*) FROM pertemuan WHERE status = 'selesai' AND is_badal = 1 AND date(substr(tanggal, 1, 10)) BETWEEN date(?) AND date(?)),
+	 (SELECT COUNT(*) FROM pertemuan WHERE status = 'selesai' AND is_reschedule = 1 AND date(substr(tanggal, 1, 10)) BETWEEN date(?) AND date(?))`,
 		today, today, today, from, until, from, until, from, until).Scan(
 		&out.Incomplete, &out.Teachers, &out.Classes, &out.WithoutTeacher, &out.WithoutClass,
 		&out.OpenMeetings, &out.FollowUps, &out.Todos, &out.Finished, &out.Badal, &out.Rescheduled)

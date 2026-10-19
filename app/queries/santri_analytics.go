@@ -16,10 +16,10 @@ func santriAnalyticsWhere(filters models.SantriAnalyticsFilters, includeSegment 
 	}
 
 	if filters.DateFrom != "" {
-		add("date(tanggal_daftar) >= date(?)", filters.DateFrom)
+		add("date(substr(tanggal_daftar, 1, 10)) >= date(?)", filters.DateFrom)
 	}
 	if filters.DateTo != "" {
-		add("date(tanggal_daftar) <= date(?)", filters.DateTo)
+		add("date(substr(tanggal_daftar, 1, 10)) <= date(?)", filters.DateTo)
 	}
 	if filters.AngkatanPendaftaran != "" {
 		add("angkatan = ?", filters.AngkatanPendaftaran)
@@ -63,7 +63,7 @@ func santriAnalyticsWhere(filters models.SantriAnalyticsFilters, includeSegment 
 			add("status = ?", filters.SegmentStatus)
 		}
 		if filters.SegmentRegistrationMo != "" {
-			add("strftime('%Y-%m', tanggal_daftar) = ?", filters.SegmentRegistrationMo)
+			add("strftime('%Y-%m', substr(tanggal_daftar, 1, 10)) = ?", filters.SegmentRegistrationMo)
 		}
 	}
 
@@ -90,9 +90,9 @@ func (q *Queries) SantriAnalyticsSummary(ctx context.Context, filters models.San
 
 func (q *Queries) SantriAnalyticsGrowth(ctx context.Context, filters models.SantriAnalyticsFilters) ([]models.SantriAnalyticsGrowthPoint, error) {
 	where, args := santriAnalyticsWhere(filters, false)
-	query := `SELECT strftime('%Y-%m', tanggal_daftar) AS month, COUNT(*) AS total
+	query := `SELECT strftime('%Y-%m', substr(tanggal_daftar, 1, 10)) AS month, COUNT(*) AS total
 	FROM santri` + where + ` AND tanggal_daftar IS NOT NULL
-	GROUP BY strftime('%Y-%m', tanggal_daftar)
+	GROUP BY strftime('%Y-%m', substr(tanggal_daftar, 1, 10))
 	HAVING month IS NOT NULL AND month != ''
 	ORDER BY month`
 	rows, err := q.db.QueryContext(ctx, query, args...)
@@ -266,7 +266,7 @@ func (q *Queries) SantriAnalyticsDetail(ctx context.Context, filters models.Sant
 	offset := (page - 1) * limit
 	query := `SELECT
 		id, id_mahasantri, nama, COALESCE(usia, 0), jenis_kelamin, domisili,
-		COALESCE(strftime('%Y-%m-%d', tanggal_daftar), ''),
+		COALESCE(strftime('%Y-%m-%d', substr(tanggal_daftar, 1, 10)), ''),
 		angkatan, angkatan_kelas, level, tipe, status
 	FROM santri` + where + `
 	ORDER BY CASE WHEN tanggal_daftar IS NULL THEN 1 ELSE 0 END, tanggal_daftar DESC, id DESC

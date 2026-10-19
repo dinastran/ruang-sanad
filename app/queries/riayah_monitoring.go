@@ -30,7 +30,7 @@ func (q *Queries) ListRiayahCurrentAssignments(ctx context.Context) ([]RiayahCur
 		SELECT s.id,
 		       COALESCE(k.guru_id, 0),
 		       COALESCE(g.nama, ''),
-		       COALESCE(strftime('%Y-%m-%d', s.mulai_belajar), strftime('%Y-%m-%d', s.tanggal_daftar), '')
+		       COALESCE(strftime('%Y-%m-%d', substr(s.mulai_belajar, 1, 10)), strftime('%Y-%m-%d', substr(s.tanggal_daftar, 1, 10)), '')
 		FROM santri s
 		LEFT JOIN kelas k ON k.id = s.kelas_id
 		LEFT JOIN guru g ON g.id = k.guru_id
