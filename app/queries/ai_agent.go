@@ -295,9 +295,14 @@ func (q *Queries) AIProdukPenugasan(ctx context.Context, dariBulan string) ([]mo
 
 // --- Kelas ------------------------------------------------------------------
 
-// AIKelasMetrik returns operational metrics for active classes (kelasID 0)
-// or for one class regardless of its active flag.
-func (q *Queries) AIKelasMetrik(ctx context.Context, hariIni, sejak string, kelasID int64) ([]models.AIKelasMetrik, error) {
+// AIKelasMetrik returns operational metrics for one class (kelasID > 0,
+// regardless of its active flag) or for all active classes, plus inactive
+// ones when termasukNonaktif.
+func (q *Queries) AIKelasMetrik(ctx context.Context, hariIni, sejak string, kelasID int64, termasukNonaktif bool) ([]models.AIKelasMetrik, error) {
+	semua := 0
+	if termasukNonaktif {
+		semua = 1
+	}
 	rows, err := q.db.QueryContext(ctx, `SELECT k.id, k.nama_kelas, k.angkatan, k.level, k.tipe, k.frekuensi, k.jadwal,
 	 COALESCE(k.guru_id, 0), COALESCE(g.nama, ''), COALESCE(g.is_aktif, 0), k.kapasitas,
 	 (SELECT COUNT(*) FROM santri s WHERE s.kelas_id = k.id AND s.status = 'aktif'),
@@ -309,8 +314,8 @@ func (q *Queries) AIKelasMetrik(ctx context.Context, hariIni, sejak string, kela
 	 (SELECT COUNT(*) FROM absensi a JOIN pertemuan p ON p.id = a.pertemuan_id WHERE p.kelas_id = k.id AND p.status = 'selesai' AND substr(p.tanggal, 1, 10) >= ?),
 	 (SELECT COUNT(*) FROM absensi a JOIN pertemuan p ON p.id = a.pertemuan_id WHERE p.kelas_id = k.id AND p.status = 'selesai' AND substr(p.tanggal, 1, 10) >= ? AND a.status IN ('hadir', 'telat'))
 	 FROM kelas k LEFT JOIN guru g ON g.id = k.guru_id
-	 WHERE (? = 0 AND k.is_aktif = 1) OR k.id = ?
-	 ORDER BY k.nama_kelas`, sejak, sejak, hariIni, sejak, sejak, kelasID, kelasID)
+	 WHERE (? > 0 AND k.id = ?) OR (? = 0 AND (k.is_aktif = 1 OR ? = 1))
+	 ORDER BY k.is_aktif DESC, k.nama_kelas`, sejak, sejak, hariIni, sejak, sejak, kelasID, kelasID, kelasID, semua)
 	if err != nil {
 		return nil, err
 	}
@@ -360,8 +365,13 @@ func (q *Queries) AIListPertemuanKelas(ctx context.Context, kelasID, limit int64
 
 // --- Guru -------------------------------------------------------------------
 
-// AIGuruMetrik returns metrics for active guru (guruID 0) or one guru.
-func (q *Queries) AIGuruMetrik(ctx context.Context, hariIni, sejak30, sejak90 string, guruID int64) ([]models.AIGuruMetrik, error) {
+// AIGuruMetrik returns metrics for one guru (guruID > 0) or all active guru,
+// plus inactive ones when termasukNonaktif.
+func (q *Queries) AIGuruMetrik(ctx context.Context, hariIni, sejak30, sejak90 string, guruID int64, termasukNonaktif bool) ([]models.AIGuruMetrik, error) {
+	semua := 0
+	if termasukNonaktif {
+		semua = 1
+	}
 	rows, err := q.db.QueryContext(ctx, `SELECT g.id, g.nama, g.gelar, g.status, g.is_aktif, COALESCE(substr(g.tanggal_gabung, 1, 10), ''),
 	 (SELECT COUNT(*) FROM kelas k WHERE k.guru_id = g.id AND k.is_aktif = 1),
 	 (SELECT COUNT(*) FROM santri s JOIN kelas k ON k.id = s.kelas_id WHERE k.guru_id = g.id AND k.is_aktif = 1 AND s.status = 'aktif'),
@@ -376,8 +386,8 @@ func (q *Queries) AIGuruMetrik(ctx context.Context, hariIni, sejak30, sejak90 st
 	 (SELECT COUNT(*) FROM pembinaan_absen pa JOIN pembinaan pb ON pb.id = pa.pembinaan_id WHERE pa.guru_id = g.id AND substr(pb.tanggal, 1, 10) >= ?),
 	 (SELECT COUNT(*) FROM rapat_absen ra JOIN rapat_guru r ON r.id = ra.rapat_id WHERE ra.guru_id = g.id AND ra.hadir = 1 AND substr(r.tanggal, 1, 10) >= ?),
 	 (SELECT COUNT(*) FROM rapat_absen ra JOIN rapat_guru r ON r.id = ra.rapat_id WHERE ra.guru_id = g.id AND substr(r.tanggal, 1, 10) >= ?)
-	 FROM guru g WHERE (? = 0 AND g.is_aktif = 1) OR g.id = ? ORDER BY g.nama`,
-		sejak30, hariIni, hariIni, sejak90, sejak90, sejak90, sejak90, guruID, guruID)
+	 FROM guru g WHERE (? > 0 AND g.id = ?) OR (? = 0 AND (g.is_aktif = 1 OR ? = 1)) ORDER BY g.is_aktif DESC, g.nama`,
+		sejak30, hariIni, hariIni, sejak90, sejak90, sejak90, sejak90, guruID, guruID, guruID, semua)
 	if err != nil {
 		return nil, err
 	}
@@ -536,4 +546,150 @@ func (q *Queries) AICariCatatan(ctx context.Context, f AICatatanFilter) ([]model
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// --- Daftar (list) tools -----------------------------------------------------
+
+// AIDaftarSantri lists santri with flexible filters and returns the total
+// match count for paging. Contact columns are never selected.
+func (q *Queries) AIDaftarSantri(ctx context.Context, f models.AISantriDaftarFilter) ([]models.AISantriDaftar, int64, error) {
+	where := []string{"1=1"}
+	args := []any{}
+	add := func(clause string, a ...any) {
+		where = append(where, clause)
+		args = append(args, a...)
+	}
+	if f.Status != "" {
+		add("s.status = ?", f.Status)
+	}
+	if f.KelasID > 0 {
+		add("s.kelas_id = ?", f.KelasID)
+	}
+	if f.GuruID > 0 {
+		add("k.guru_id = ?", f.GuruID)
+	}
+	if f.Level != "" {
+		add("s.level = ?", f.Level)
+	}
+	if f.Tipe != "" {
+		add("s.tipe = ?", f.Tipe)
+	}
+	if f.Frekuensi != "" {
+		add("s.frekuensi = ?", f.Frekuensi)
+	}
+	if f.Angkatan != "" {
+		add("s.angkatan = ?", f.Angkatan)
+	}
+	if f.AngkatanKelas != "" {
+		add("s.angkatan_kelas = ?", f.AngkatanKelas)
+	}
+	if f.JenisKelamin != "" {
+		add("s.jenis_kelamin = ?", f.JenisKelamin)
+	}
+	for _, w := range strings.Fields(f.Kata) {
+		p := "%" + escapeLike(w) + "%"
+		add(`(s.nama LIKE ? ESCAPE '\' OR s.id_mahasantri LIKE ? ESCAPE '\')`, p, p)
+	}
+	if f.DaftarDari != "" {
+		add("substr(s.tanggal_daftar, 1, 10) >= ?", f.DaftarDari)
+	}
+	if f.DaftarSampai != "" {
+		add("substr(s.tanggal_daftar, 1, 10) <= ?", f.DaftarSampai)
+	}
+	if f.TanpaKelasAktif {
+		// Same rule as OverviewOperations.WithoutClass.
+		where = append(where, "(k.id IS NULL OR k.is_aktif != 1)")
+	}
+	if f.BelumLengkap {
+		// Same rule as OverviewOperations.Incomplete.
+		where = append(where, "s.is_lengkap = 0")
+	}
+	from := ` FROM santri s LEFT JOIN kelas k ON k.id = s.kelas_id LEFT JOIN guru g ON g.id = k.guru_id WHERE ` + strings.Join(where, " AND ")
+	var total int64
+	if err := q.db.QueryRowContext(ctx, `SELECT COUNT(*)`+from, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := q.db.QueryContext(ctx, `SELECT `+aiSantriRingkasCols+`, s.jenis_kelamin,
+	 COALESCE(substr(s.tanggal_daftar, 1, 10), ''), COALESCE(substr(s.mulai_belajar, 1, 10), ''),
+	 COALESCE(k.is_aktif, 0), s.is_lengkap`+from+`
+	 ORDER BY s.nama COLLATE NOCASE, s.id LIMIT ? OFFSET ?`, append(args, f.Limit, f.Offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	out := make([]models.AISantriDaftar, 0)
+	for rows.Next() {
+		var r models.AISantriDaftar
+		var aktif, lengkap int64
+		if err := scanAISantriRingkas(rows, &r.AISantriRingkas, &r.JenisKelamin, &r.TanggalDaftar, &r.MulaiBelajar, &aktif, &lengkap); err != nil {
+			return nil, 0, err
+		}
+		r.KelasAktif, r.DataLengkap = aktif == 1, lengkap == 1
+		out = append(out, r)
+	}
+	return out, total, rows.Err()
+}
+
+// AIDaftarTagihan lists tagihan with filters. Terlambat uses the finance
+// dashboard rule (belum_bayar and past jatuh_tempo, else tanggal_tagih).
+func (q *Queries) AIDaftarTagihan(ctx context.Context, f models.AITagihanDaftarFilter) ([]models.AITagihanDaftar, int64, error) {
+	where := []string{"1=1"}
+	args := []any{}
+	add := func(clause string, a ...any) {
+		where = append(where, clause)
+		args = append(args, a...)
+	}
+	if f.Status != "" {
+		add("t.status = ?", f.Status)
+	}
+	if f.Terlambat {
+		add("t.status = 'belum_bayar' AND substr(COALESCE(t.jatuh_tempo, t.tanggal_tagih), 1, 10) < ?", f.HariIni)
+	}
+	if f.SantriID > 0 {
+		add("t.santri_id = ?", f.SantriID)
+	}
+	if f.KelasID > 0 {
+		add("t.kelas_id = ?", f.KelasID)
+	}
+	if f.AngkatanKelas != "" {
+		add("t.angkatan_kelas = ?", f.AngkatanKelas)
+	}
+	if f.TagihDari != "" {
+		add("substr(t.tanggal_tagih, 1, 10) >= ?", f.TagihDari)
+	}
+	if f.TagihSampai != "" {
+		add("substr(t.tanggal_tagih, 1, 10) <= ?", f.TagihSampai)
+	}
+	from := ` FROM tagihan t JOIN santri s ON s.id = t.santri_id LEFT JOIN kelas k ON k.id = t.kelas_id LEFT JOIN guru g ON g.id = k.guru_id
+	 WHERE ` + strings.Join(where, " AND ")
+	var total int64
+	if err := q.db.QueryRowContext(ctx, `SELECT COUNT(*)`+from, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := q.db.QueryContext(ctx, `SELECT t.id, t.bulan_ke, t.nominal, CAST(t.tanggal_tagih AS TEXT), CAST(t.jatuh_tempo AS TEXT), t.status,
+	 CAST(t.tanggal_bayar AS TEXT), t.fu_count, CAST(t.fu_terakhir AS TEXT),
+	 CAST(julianday(?) - julianday(substr(COALESCE(t.jatuh_tempo, t.tanggal_tagih), 1, 10)) AS INTEGER),
+	 t.santri_id, s.nama, s.id_mahasantri, s.status, COALESCE(k.nama_kelas, ''), COALESCE(g.nama, ''), t.angkatan_kelas`+from+`
+	 ORDER BY t.status = 'belum_bayar' DESC, substr(COALESCE(t.jatuh_tempo, t.tanggal_tagih), 1, 10), t.id LIMIT ? OFFSET ?`,
+		append(append([]any{f.HariIni}, args...), f.Limit, f.Offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	out := make([]models.AITagihanDaftar, 0)
+	for rows.Next() {
+		var r models.AITagihanDaftar
+		var tagih, tempo, bayar, fu sql.NullString
+		var hari sql.NullInt64
+		if err := rows.Scan(&r.ID, &r.BulanKe, &r.Nominal, &tagih, &tempo, &r.Status, &bayar, &r.FUCount, &fu, &hari,
+			&r.SantriID, &r.SantriNama, &r.IDMahasantri, &r.SantriStatus, &r.NamaKelas, &r.GuruNama, &r.Angkatan); err != nil {
+			return nil, 0, err
+		}
+		r.TanggalTagih, r.JatuhTempo, r.TanggalBayar, r.FUTerakhir = aiDate(tagih), aiDate(tempo), aiDate(bayar), aiDate(fu)
+		if r.Status == "belum_bayar" && hari.Valid && hari.Int64 > 0 {
+			r.HariTelat = hari.Int64
+		}
+		out = append(out, r)
+	}
+	return out, total, rows.Err()
 }

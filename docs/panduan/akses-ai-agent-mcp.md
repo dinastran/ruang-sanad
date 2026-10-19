@@ -84,6 +84,13 @@ mcp_servers:
 | `kelas_perlu_perhatian`, `detail_kelas` | Masalah kelas + bukti | super_admin, admin_kelas, koordinator_guru |
 | `guru_perlu_perhatian`, `detail_guru` | Masalah guru + bukti (TSI, riayah, kunjungan, pembinaan/rapat) | super_admin, koordinator_guru |
 | `cari_catatan` | Cari teks di catatan dashboard; sumber dibatasi per role | super_admin, admin_kelas, koordinator_guru |
+| `daftar_santri` | Daftar lengkap santri + nama, berhalaman, filter bebas (status, tanpa kelas aktif, belum lengkap, kelas, guru, level, tipe, angkatan, tanggal daftar) | super_admin, admin_kelas, koordinator_guru, cs |
+| `daftar_kelas` | Semua kelas + metrik (opsional termasuk nonaktif) | super_admin, admin_kelas, koordinator_guru |
+| `daftar_guru` | Semua guru + metrik (tanpa kontak) | super_admin, koordinator_guru |
+| `daftar_tagihan` | Daftar tagihan per santri, filter status/terlambat/kelas/angkatan/tanggal tagih, berhalaman | super_admin, admin, keuangan |
+
+Setiap prioritas di `ringkasan_kondisi` membawa field `rincian` yang menyebut tool + argumen untuk melihat nama-nama di balik angkanya
+(mis. "Santri aktif belum punya kelas aktif" → `daftar_santri {status: aktif, tanpa_kelas_aktif: true}`).
 
 Role `guru` dan `user` belum mendapat akses (data guru dibatasi ke kelasnya sendiri; belum dimodelkan di tahap 1).
 
