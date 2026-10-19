@@ -8,27 +8,30 @@ import (
 )
 
 type DashboardHandler struct {
-	santriService  *services.SantriService
-	laporanService *services.LaporanService
-	kelasService   *services.KelasService
+	overview       *services.OverviewService
+	userService    *services.UserService
 	store          *session.Store
 	inertiaService *services.InertiaService
 }
 
-func NewDashboardHandler(santriService *services.SantriService, laporanService *services.LaporanService, kelasService *services.KelasService, store *session.Store, inertiaService *services.InertiaService) *DashboardHandler {
-	return &DashboardHandler{
-		santriService:  santriService,
-		laporanService: laporanService,
-		kelasService:   kelasService,
-		store:          store,
-		inertiaService: inertiaService,
-	}
+func NewDashboardHandler(overview *services.OverviewService, userService *services.UserService, store *session.Store, inertiaService *services.InertiaService) *DashboardHandler {
+	return &DashboardHandler{overview: overview, userService: userService, store: store, inertiaService: inertiaService}
 }
 
 func (h *DashboardHandler) Index(c *fiber.Ctx) error {
-	sess, _ := h.store.Get(c)
+	sess, err := h.store.Get(c)
+	if err != nil {
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+	if sess.Get("user_id") == nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 	user := sessionUser(sess)
-	role := toStr(sess.Get("role"))
+	role, err := h.userService.GetUserRole(user.ID)
+	if err != nil {
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+	user.Role = models.UserRole(role)
 	switch role {
 	case "user":
 		return h.inertiaService.Redirect(c, "/app/profile")
@@ -42,37 +45,14 @@ func (h *DashboardHandler) Index(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, "/app/koordinator-guru")
 	}
 
-	stats, err := h.laporanService.GetDashboardStats()
+	if !services.OverviewCanFinance(role) {
+		return c.SendStatus(fiber.StatusForbidden)
+	}
+	overview, err := h.overview.Get(c.UserContext(), c.Query("bulan"), role)
 	if err != nil {
-		stats = &models.DashboardStats{}
+		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
 	}
-
-	var roleData fiber.Map
-	switch role {
-	case "cs":
-		roleData = fiber.Map{}
-	case "admin_kelas":
-		perluLengkap, _ := h.santriService.ListPerluDilengkapi()
-		roleData = fiber.Map{
-			"perlu_dilengkapi": perluLengkap,
-		}
-	case "keuangan":
-		roleData = fiber.Map{
-			"nominal_per_angkatan": stats.NominalPerAngkatan,
-		}
-	case "super_admin":
-		perluLengkap, _ := h.santriService.ListPerluDilengkapi()
-		roleData = fiber.Map{
-			"perlu_dilengkapi":     perluLengkap,
-			"nominal_per_angkatan": stats.NominalPerAngkatan,
-		}
-	default:
-		roleData = fiber.Map{}
-	}
-
 	return h.inertiaService.Render(c, "app/Dashboard", fiber.Map{
-		"user":      user,
-		"stats":     stats,
-		"role_data": roleData,
+		"user": user, "overview": overview,
 	})
 }
