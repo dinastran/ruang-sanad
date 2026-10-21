@@ -96,6 +96,14 @@
 		ketepatan_jadwal: 0,
 	};
 	const inputClass = "mt-1.5 w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-white";
+	const activityLabel: Record<string, string> = {
+		jadwal_dibatalkan: "Jadwal dibatalkan",
+		absen_susulan: "Absen diisi susulan",
+		jadwal_diubah: "Jadwal diubah",
+		guru_pengganti_ditetapkan: "Guru pengganti ditetapkan",
+		pengingat_dikirim: "Pengingat dikirim",
+	};
+
 	const statusLabel: Record<string, string> = {
 		belum_mulai: "Belum mulai",
 		berlangsung: "Berlangsung",
@@ -679,6 +687,7 @@
 											<span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold {statusClass(item.status)}">{statusLabel[item.status] ?? item.status}</span>
 											{#if item.is_reschedule}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400" title={item.alasan_reschedule ? `Alasan: ${item.alasan_reschedule}` : "Jadwal ini dipindah dari jadwal asalnya"}><RotateCcw class="h-3.5 w-3.5" /> Reschedule{#if item.jadwal_semula} · dari {formatJadwalSemula(item.jadwal_semula)}{/if}</span>{/if}
 											{#if item.guru_pengganti_id}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary-500/10 px-2.5 py-1 text-xs font-semibold text-secondary-700 dark:text-secondary-300" title={badalTitle(item)}><UserRoundCheck class="h-3.5 w-3.5" /> Badal · {item.guru_pengganti_nama}</span>{/if}
+											{#if item.is_susulan}<span class="shrink-0 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400" title={item.alasan_susulan ? `Absen diisi setelah tanggal jadwal. Alasan: ${item.alasan_susulan}` : "Absen diisi setelah tanggal jadwal"}>Susulan</span>{/if}
 											{#if item.tanpa_jadwal}<span class="shrink-0 rounded-full bg-neutral-200/70 px-2.5 py-1 text-xs font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300" title="Guru memulai sesi langsung tanpa jadwal pertemuan yang dibuat sebelumnya">Sesi spontan</span>{/if}
 											{#if item.is_tambahan}<span class="shrink-0 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-400" title="Sesi tambahan di luar pola jadwal rutin. Tidak masuk perhitungan KPI.">Sesi tambahan</span>{/if}
 											{#if item.needs_action}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-error/10 px-2.5 py-1 text-xs font-semibold text-red-700 dark:text-red-400"><AlertTriangle class="h-3.5 w-3.5" /> Perlu tindakan</span>{/if}
@@ -781,6 +790,8 @@
 											<div><p class="text-xs text-neutral-500">Catatan jadwal</p><p class="mt-0.5 whitespace-pre-wrap">{item.schedule_note || "Tidak ada"}</p></div>
 											<div><p class="text-xs text-neutral-500">Catatan pertemuan</p><p class="mt-0.5 whitespace-pre-wrap">{item.meeting_note || "Tidak ada"}</p></div>
 											{#if item.is_reschedule}<div><p class="text-xs text-neutral-500">Perubahan jadwal</p><p class="mt-0.5">Dari {item.jadwal_semula ? formatJadwalSemula(item.jadwal_semula) : "jadwal sebelumnya"}{#if item.alasan_reschedule}: {item.alasan_reschedule}{/if}</p></div>{/if}
+											{#if item.status === "dibatalkan"}<div><p class="text-xs text-neutral-500">Alasan pembatalan</p><p class="mt-0.5 whitespace-pre-wrap">{item.alasan_batal || "Tidak dicatat"}</p></div>{/if}
+											{#if item.is_susulan}<div><p class="text-xs text-neutral-500">Absen susulan</p><p class="mt-0.5 whitespace-pre-wrap">Diisi setelah tanggal jadwal{#if item.teacher_checked_in_at} ({formatDateTime(item.teacher_checked_in_at)}){/if}{#if item.alasan_susulan}: {item.alasan_susulan}{/if}</p></div>{/if}
 											{#if item.guru_pengganti_id}<div><p class="text-xs text-neutral-500">Alasan badal</p><p class="mt-0.5">{item.guru_pengganti_nama} menggantikan {item.guru_utama_nama || "guru kelas"}{#if item.alasan_badal}: {item.alasan_badal}{/if}</p></div>{/if}
 										</div>
 									</section>
@@ -807,7 +818,7 @@
 
 									<section aria-label="Riwayat perubahan">
 										<h4 class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-neutral-500"><History class="h-3.5 w-3.5" /> Riwayat perubahan</h4>
-										<div class="mt-3 space-y-3">{#each item.activities as entry (entry.id)}<article class="border-l border-neutral-300 pl-3 dark:border-neutral-700"><p class="text-sm font-medium text-neutral-800 dark:text-neutral-200">{entry.action}</p>{#if entry.details}<p class="mt-0.5 text-sm text-neutral-600 dark:text-neutral-400">{entry.details}</p>{/if}<p class="mt-1 text-xs text-neutral-500">{entry.actor_name || "Sistem"} / {formatDateTime(entry.created_at)}</p></article>{:else}<p class="rounded-lg bg-neutral-100/70 p-3 text-sm text-neutral-500 dark:bg-neutral-800/40">Belum ada perubahan pada jadwal ini.</p>{/each}</div>
+										<div class="mt-3 space-y-3">{#each item.activities as entry (entry.id)}<article class="border-l border-neutral-300 pl-3 dark:border-neutral-700"><p class="text-sm font-medium text-neutral-800 dark:text-neutral-200">{activityLabel[entry.action] ?? entry.action}</p>{#if entry.details}<p class="mt-0.5 text-sm text-neutral-600 dark:text-neutral-400">{entry.details}</p>{/if}<p class="mt-1 text-xs text-neutral-500">{entry.actor_name || "Sistem"} / {formatDateTime(entry.created_at)}</p></article>{:else}<p class="rounded-lg bg-neutral-100/70 p-3 text-sm text-neutral-500 dark:bg-neutral-800/40">Belum ada perubahan pada jadwal ini.</p>{/each}</div>
 									</section>
 									{/if}
 								</div>

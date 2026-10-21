@@ -49,7 +49,7 @@ WHERE id = ? AND kelas_id = ? AND status = 'dijadwalkan';
 
 -- name: CancelJadwalPertemuan :execrows
 UPDATE jadwal_pertemuan
-SET status = 'dibatalkan', updated_at = CURRENT_TIMESTAMP
+SET status = 'dibatalkan', alasan_batal = ?, updated_at = CURRENT_TIMESTAMP
 WHERE id = ? AND kelas_id = ? AND status = 'dijadwalkan';
 
 -- name: ClaimJadwalPertemuan :execrows
@@ -62,6 +62,14 @@ UPDATE jadwal_pertemuan
 SET status = 'dimulai', pertemuan_id = ?, updated_at = CURRENT_TIMESTAMP
 WHERE id = ? AND kelas_id = ? AND status = 'diproses';
 
+-- name: MarkJadwalPertemuanSusulan :exec
+UPDATE jadwal_pertemuan
+SET is_susulan = 1, alasan_susulan = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND kelas_id = ?;
+
+-- name: ListKoordinatorUserIDs :many
+SELECT id FROM users WHERE role = 'koordinator_guru' ORDER BY id;
+
 -- name: MarkJadwalPertemuanSelesai :exec
 UPDATE jadwal_pertemuan
 SET status = 'selesai', updated_at = CURRENT_TIMESTAMP
@@ -71,3 +79,33 @@ WHERE pertemuan_id = ? AND status = 'dimulai';
 UPDATE jadwal_pertemuan
 SET jadwal_kelas_berubah = 1, updated_at = CURRENT_TIMESTAMP
 WHERE kelas_id = ? AND status = 'dijadwalkan';
+
+-- name: ListJadwalDibatalkanByKelas :many
+-- Riwayat pembatalan kelas: tidak punya pertemuan sehingga tidak memakai
+-- nomor pertemuan. Pembatal diambil dari log aktivitas terakhir.
+SELECT
+    jp.id,
+    jp.tanggal,
+    jp.jam_mulai,
+    jp.alasan_batal,
+    jp.updated_at,
+    CAST(COALESCE((
+        SELECT u.name FROM schedule_activity_logs l
+        JOIN users u ON u.id = l.created_by
+        WHERE l.jadwal_pertemuan_id = jp.id AND l.action = 'jadwal_dibatalkan'
+        ORDER BY l.created_at DESC, l.id DESC LIMIT 1
+    ), '') AS TEXT) AS dibatalkan_oleh,
+    CAST(COALESCE((
+        SELECT u.role FROM schedule_activity_logs l
+        JOIN users u ON u.id = l.created_by
+        WHERE l.jadwal_pertemuan_id = jp.id AND l.action = 'jadwal_dibatalkan'
+        ORDER BY l.created_at DESC, l.id DESC LIMIT 1
+    ), '') AS TEXT) AS dibatalkan_oleh_role
+FROM jadwal_pertemuan jp
+WHERE jp.kelas_id = ? AND jp.status = 'dibatalkan'
+ORDER BY jp.tanggal DESC, jp.jam_mulai DESC, jp.id DESC;
+
+-- name: ListSusulanByKelas :many
+SELECT pertemuan_id, alasan_susulan
+FROM jadwal_pertemuan
+WHERE kelas_id = ? AND is_susulan = 1 AND pertemuan_id IS NOT NULL;

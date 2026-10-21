@@ -82,6 +82,9 @@ type ClassMonitoringItem struct {
 	GuruPenggantiID    *int64                 `json:"guru_pengganti_id,omitempty"`
 	GuruPenggantiNama  string                 `json:"guru_pengganti_nama"`
 	AlasanBadal        string                 `json:"alasan_badal"`
+	AlasanBatal        string                 `json:"alasan_batal"`
+	IsSusulan          bool                   `json:"is_susulan"`
+	AlasanSusulan      string                 `json:"alasan_susulan"`
 	AssignedUserID     *int64                 `json:"assigned_user_id,omitempty"`
 	PertemuanID        *int64                 `json:"pertemuan_id,omitempty"`
 	ActualStartTime    string                 `json:"actual_start_time"`

@@ -3,7 +3,7 @@
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import type { Flash, User, GuruKelas, JadwalPertemuanGuru } from "@lib/types";
-	import { BookOpen, Clock, Calendar, Play, RotateCcw, UserRoundCheck } from "lucide-svelte";
+	import { BookOpen, Clock, Calendar, ClipboardPen, Play, RotateCcw, UserRoundCheck } from "lucide-svelte";
 
 	interface Props {
 		user?: User;
@@ -19,6 +19,10 @@
 	let selectedJadwalID = $state(initialScheduleID());
 	let selectedJadwal = $derived(jadwal_tersedia.find((item) => item.id === selectedJadwalID));
 	let hasDueSchedule = $derived(jadwal_tersedia.length > 0);
+	// Jadwal yang tanggalnya sudah lewat diisi sebagai absen susulan: pertemuan
+	// tercatat di tanggal jadwal, bukan hari ini.
+	let isSusulan = $derived(!!selectedJadwal && !selectedJadwal.can_start);
+	let alasanSusulan = $state("");
 
 	let jamMulai = $state(new Date().toTimeString().substring(0, 5));
 	let catatan = $state("");
@@ -40,26 +44,39 @@
 			errorMsg = "Konfirmasi bahwa ini pertemuan tambahan di luar jadwal rutin";
 			return;
 		}
+		if (isSusulan && !selectedJadwal?.can_susulan) {
+			errorMsg = "Jadwal ini sudah lewat batas absen susulan. Hubungi Admin Kelas.";
+			return;
+		}
+		if (isSusulan && !alasanSusulan.trim()) {
+			errorMsg = "Isi alasan absen susulan";
+			return;
+		}
 		isSubmitting = true;
 		errorMsg = "";
-		router.post("/app/guru/kelas/" + kelas.id + "/pertemuan/mulai", {
-			jadwal_id: selectedJadwalID,
-			jam_mulai: hasDueSchedule ? "" : jamMulai,
-			catatan: hasDueSchedule ? "" : catatan,
-			konfirmasi_tambahan: !hasDueSchedule && confirmExtra,
-		}, {
-			onError: (err) => {
+		const requestOptions = {
+			onError: (err: Record<string, string>) => {
 				errorMsg = Object.values(err).join(", ");
 				isSubmitting = false;
 			},
-			onSuccess: (page) => {
+			onSuccess: (page: { props: Record<string, unknown> }) => {
 				const responseFlash = page.props.flash as Flash | undefined;
 				if (responseFlash?.error) errorMsg = responseFlash.error;
 			},
 			onFinish: () => {
 				isSubmitting = false;
 			},
-		});
+		};
+		if (isSusulan && selectedJadwal) {
+			router.post(`/app/guru/kelas/${kelas.id}/jadwal-pertemuan/${selectedJadwal.id}/susulan`, { alasan: alasanSusulan.trim() }, requestOptions);
+			return;
+		}
+		router.post("/app/guru/kelas/" + kelas.id + "/pertemuan/mulai", {
+			jadwal_id: selectedJadwalID,
+			jam_mulai: hasDueSchedule ? "" : jamMulai,
+			catatan: hasDueSchedule ? "" : catatan,
+			konfirmasi_tambahan: !hasDueSchedule && confirmExtra,
+		}, requestOptions);
 	}
 </script>
 
@@ -121,7 +138,7 @@
 					<label for="jadwal_id" class="mb-4 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Pilih jadwal
 						<select id="jadwal_id" bind:value={selectedJadwalID} class="mt-1.5 w-full rounded-xl border border-neutral-300 bg-neutral-100/80 px-4 py-3 text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700/80 dark:bg-neutral-800/50 dark:text-white">
 							<option value={0}>Pilih jadwal yang dijalankan</option>
-							{#each jadwal_tersedia as jadwal}<option value={jadwal.id}>{formatDate(jadwal.tanggal)} · {jadwal.jam_mulai}</option>{/each}
+							{#each jadwal_tersedia as jadwal}<option value={jadwal.id}>{formatDate(jadwal.tanggal)} · {jadwal.jam_mulai}{jadwal.can_start ? "" : " (susulan)"}</option>{/each}
 						</select>
 					</label>
 				{/if}
@@ -137,6 +154,19 @@
 							{#if selectedJadwal.guru_pengganti_id}<span class="inline-flex items-center gap-1 rounded-full bg-secondary-500/10 px-2.5 py-1 text-secondary-700 dark:text-secondary-400"><UserRoundCheck class="h-3.5 w-3.5" /> Badal: {selectedJadwal.guru_pengganti_nama}</span>{/if}
 						</div>
 					</div>
+					{#if isSusulan}
+						<div class="mt-4 space-y-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+							<p class="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-800 dark:text-amber-300"><ClipboardPen class="h-4 w-4" /> Absen susulan</p>
+							{#if selectedJadwal.can_susulan}
+								<p class="text-xs leading-5 text-amber-700 dark:text-amber-400">Tanggal jadwal ini sudah lewat. Pertemuan akan dicatat pada tanggal dan jam jadwal, diberi label susulan, dan Koordinator Guru diberi tahu.</p>
+								<label class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Alasan absen terlambat diisi <span class="text-red-500">*</span>
+									<textarea bind:value={alasanSusulan} rows="2" placeholder="Mis. lupa absen, kendala sinyal saat kelas" class="mt-1.5 w-full resize-none rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"></textarea>
+								</label>
+							{:else}
+								<p class="text-xs leading-5 text-red-700 dark:text-red-400">Jadwal ini sudah lewat batas 14 hari. Hubungi Admin Kelas untuk mengisi absen susulan.</p>
+							{/if}
+						</div>
+					{/if}
 				{/if}
 			{:else}
 			<div class="space-y-4">
@@ -178,7 +208,7 @@
 			<div class="mt-6 pt-4 border-t border-neutral-200/80 dark:border-white/[0.04]">
 				<button
 					onclick={handleMulai}
-					disabled={!canEdit || isSubmitting || (hasDueSchedule ? !selectedJadwalID : !jamMulai || !confirmExtra)}
+					disabled={!canEdit || isSubmitting || (hasDueSchedule ? !selectedJadwalID || (isSusulan && (!selectedJadwal?.can_susulan || !alasanSusulan.trim())) : !jamMulai || !confirmExtra)}
 					class="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold transition-all dark:bg-brand-500 dark:hover:bg-brand-400 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-600/25 text-base"
 				>
 					{#if isSubmitting}
@@ -191,7 +221,7 @@
 						Mode lihat saja
 					{:else}
 						<Play class="w-5 h-5" />
-						{hasDueSchedule ? "Mulai Jadwal Ini" : "Mulai Pertemuan Tambahan"}
+						{isSusulan ? "Lanjut ke Absen Susulan" : hasDueSchedule ? "Mulai Jadwal Ini" : "Mulai Pertemuan Tambahan"}
 					{/if}
 				</button>
 			</div>

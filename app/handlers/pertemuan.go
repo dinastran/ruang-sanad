@@ -383,11 +383,17 @@ func (h *PertemuanHandler) Riwayat(c *fiber.Ctx) error {
 		h.store.Flash(c, "error", "Gagal memuat riwayat pertemuan")
 		return h.inertiaService.Redirect(c, "/app/guru/kelas/"+c.Params("id"))
 	}
+	dibatalkan, err := h.jadwalService.ListDibatalkan(kelasID)
+	if err != nil {
+		h.store.Flash(c, "error", "Gagal memuat riwayat pembatalan")
+		return h.inertiaService.Redirect(c, "/app/guru/kelas/"+c.Params("id"))
+	}
 
 	return h.inertiaService.Render(c, "guru/RiwayatPertemuan", fiber.Map{
-		"user":      user,
-		"kelas":     kelas,
-		"pertemuan": pertemuan,
+		"user":       user,
+		"kelas":      kelas,
+		"pertemuan":  pertemuan,
+		"dibatalkan": dibatalkan,
 	})
 }
 

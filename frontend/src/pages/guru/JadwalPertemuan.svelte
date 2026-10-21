@@ -5,10 +5,13 @@
 	import type { Flash, GuruDirectory, GuruKelas, JadwalPertemuanGuru, PertemuanBelumDitutup, User } from "@lib/types";
 	import {
 		AlertTriangle, ArrowLeft, Ban, BookOpen, CalendarClock, CalendarDays,
-		MoreHorizontal, Play, Plus, RotateCcw, UserRoundCheck
+		ClipboardPen, MoreHorizontal, Play, Plus, RotateCcw, UserRoundCheck
 	} from "lucide-svelte";
 
 	type AgendaFilter = "attention" | "today" | "week" | "all";
+	type ActionType = "reschedule" | "badal" | "batal" | "susulan";
+
+	const BATAS_SUSULAN_HARI = 14;
 
 	interface Props {
 		user?: User;
@@ -52,12 +55,20 @@
 	let catatan = $state("");
 	let submitting = $state(false);
 	let openMenuID = $state<number | null>(null);
-	let action = $state<{ type: "reschedule" | "badal"; item: JadwalPertemuanGuru } | null>(null);
+	let action = $state<{ type: ActionType; item: JadwalPertemuanGuru } | null>(null);
 	let tanggalBaru = $state("");
 	let jamBaru = $state("");
 	let guruPenggantiID = $state("");
 	let alasan = $state("");
 
+	// Batal dan susulan wajib beralasan: koordinator membaca alasan ini.
+	let alasanWajib = $derived(action?.type === "batal" || action?.type === "susulan");
+	let canSubmitAction = $derived.by(() => {
+		if (!action) return false;
+		if (action.type === "reschedule") return !!tanggalBaru && !!jamBaru;
+		if (action.type === "badal") return !!guruPenggantiID;
+		return alasan.trim() !== "";
+	});
 	let availableGuru = $derived(guruList.filter((guru) => guru.is_aktif && guru.user_id && guru.id !== action?.item.guru_utama_id));
 	// Kartu ringkasan dan daftar memakai filter kelas yang sama, supaya angka
 	// "Perlu tindakan" tidak menunjuk agenda kelas lain yang tidak tampil.
@@ -145,14 +156,21 @@
 		return "semua agenda aktif";
 	}
 
-	function openAction(type: "reschedule" | "badal", item: JadwalPertemuanGuru) {
+	function openAction(type: ActionType, item: JadwalPertemuanGuru) {
 		openMenuID = null;
 		action = { type, item };
 		tanggalBaru = item.tanggal;
 		jamBaru = item.jam_mulai;
 		guruPenggantiID = item.guru_pengganti_id ? String(item.guru_pengganti_id) : "";
-		alasan = type === "reschedule" ? item.alasan_reschedule : item.alasan_badal;
+		alasan = type === "reschedule" ? item.alasan_reschedule : type === "badal" ? item.alasan_badal : "";
 	}
+
+	const actionTitle: Record<ActionType, string> = {
+		reschedule: "Reschedule Pertemuan",
+		badal: "Tetapkan Guru Badal",
+		batal: "Batalkan Kelas",
+		susulan: "Isi Absen Susulan",
+	};
 
 	function closeAction() {
 		action = null;
@@ -184,9 +202,13 @@
 		const base = `/app/guru/kelas/${action.item.kelas_id}/jadwal-pertemuan/${action.item.id}`;
 		const data = action.type === "reschedule"
 			? { tanggal_baru: tanggalBaru, jam_baru: jamBaru, alasan }
-			: { guru_pengganti_id: Number(guruPenggantiID), alasan };
+			: action.type === "badal"
+				? { guru_pengganti_id: Number(guruPenggantiID), alasan }
+				: { alasan: alasan.trim() };
+		submitting = true;
 		router.post(`${base}/${action.type}`, data, {
 			preserveScroll: true,
+			onFinish: () => (submitting = false),
 			onSuccess: (page) => {
 				const responseFlash = page.props.flash as Flash | undefined;
 				if (!responseFlash?.error) closeAction();
@@ -199,11 +221,6 @@
 		router.post(`/app/guru/kelas/${item.kelas_id}/jadwal-pertemuan/${item.id}/mulai`, {});
 	}
 
-	function cancelSchedule(item: JadwalPertemuanGuru) {
-		openMenuID = null;
-		if (!window.confirm(`Batalkan jadwal ${item.kelas_nama} pada ${formatDate(item.tanggal)}?`)) return;
-		router.post(`/app/guru/kelas/${item.kelas_id}/jadwal-pertemuan/${item.id}/batal`, {}, { preserveScroll: true });
-	}
 </script>
 
 <svelte:head><title>Agenda Mengajar</title></svelte:head>
@@ -347,7 +364,7 @@
 													<div class="fixed inset-x-3 bottom-3 z-40 w-auto overflow-hidden rounded-2xl border border-neutral-200 bg-white p-2 shadow-2xl sm:absolute sm:inset-auto sm:right-0 sm:bottom-auto sm:mt-2 sm:w-48 sm:rounded-xl sm:p-1.5 sm:shadow-xl dark:border-neutral-700 dark:bg-neutral-900">
 														<button onclick={() => openAction("reschedule", item)} class="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800"><RotateCcw class="h-4 w-4 text-blue-500" /> Reschedule</button>
 														<button onclick={() => openAction("badal", item)} class="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800"><UserRoundCheck class="h-4 w-4 text-secondary-500" /> Tetapkan badal</button>
-														<button onclick={() => cancelSchedule(item)} class="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-500/10 dark:text-red-400"><Ban class="h-4 w-4" /> Batalkan kelas</button>
+														<button onclick={() => openAction("batal", item)} class="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-500/10 dark:text-red-400"><Ban class="h-4 w-4" /> Batalkan kelas</button>
 													</div>
 												{/if}
 											</div>
@@ -373,6 +390,15 @@
 											<button onclick={() => startSchedule(item)} class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 sm:py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400 sm:w-auto">
 												<Play class="h-4 w-4" /> Mulai Kelas
 											</button>
+										{:else if item.can_susulan}
+											<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+												<button onclick={() => openAction("susulan", item)} class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 sm:py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 sm:w-auto">
+													<ClipboardPen class="h-4 w-4" /> Isi Absen Susulan
+												</button>
+												<p class="text-xs text-neutral-500">Tercatat di tanggal jadwal ini, diberi label susulan.</p>
+											</div>
+										{:else if isOverdue(item)}
+											<p class="text-xs font-medium text-red-600 dark:text-red-400">Lewat {BATAS_SUSULAN_HARI} hari. Hubungi Admin Kelas untuk mengisi absen susulan.</p>
 										{:else}
 											<p class="text-xs font-medium text-neutral-400">Belum dapat dimulai sebelum tanggal jadwal.</p>
 										{/if}
@@ -396,19 +422,29 @@
 		<div class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
 			<button class="absolute inset-0 bg-black/50" aria-label="Tutup dialog" onclick={closeAction}></button>
 			<div class="relative max-h-[90vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:max-w-md sm:rounded-2xl dark:bg-neutral-925" role="dialog" aria-modal="true" aria-labelledby="action-title" tabindex="-1">
-				<h2 id="action-title" class="text-lg font-semibold text-neutral-900 dark:text-white">{action.type === "reschedule" ? "Reschedule Pertemuan" : "Tetapkan Guru Badal"}</h2>
-				<p class="mt-1 text-sm text-neutral-500">{action.item.kelas_nama}</p>
+				<h2 id="action-title" class="text-lg font-semibold text-neutral-900 dark:text-white">{actionTitle[action.type]}</h2>
+				<p class="mt-1 text-sm text-neutral-500">{action.item.kelas_nama} · {formatDate(action.item.tanggal)} · {action.item.jam_mulai}</p>
+				{#if action.type === "batal"}
+					<p class="mt-3 rounded-xl bg-red-500/5 px-3 py-2 text-xs leading-5 text-red-700 dark:text-red-300">Koordinator Guru akan menerima notifikasi pembatalan beserta alasannya. Pembatalan tercatat di riwayat kelas tanpa nomor pertemuan.</p>
+					<p class="mt-2 rounded-xl bg-blue-500/5 px-3 py-2 text-xs leading-5 text-blue-800 dark:text-blue-300">Kelasnya hanya pindah hari? Gunakan <button type="button" class="font-semibold underline underline-offset-2" onclick={() => action && openAction("reschedule", action.item)}>Reschedule</button>, bukan Batalkan.</p>
+				{:else if action.type === "susulan"}
+					<p class="mt-3 rounded-xl bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-800 dark:text-amber-300">Pertemuan dicatat pada tanggal dan jam jadwal di atas, lalu Anda diarahkan ke form absen. Koordinator Guru akan melihat label <strong>Susulan</strong> beserta alasannya.</p>
+				{/if}
 				<div class="mt-5 space-y-4">
 					{#if action.type === "reschedule"}
 						<label class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Tanggal baru<input type="date" min={today} bind:value={tanggalBaru} class="mt-1.5 w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm dark:border-neutral-700 dark:bg-neutral-800/50 dark:text-white" /></label>
 						<label class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Jam baru<input type="time" bind:value={jamBaru} class="mt-1.5 w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm dark:border-neutral-700 dark:bg-neutral-800/50 dark:text-white" /></label>
-					{:else}
+					{:else if action.type === "badal"}
 						<label class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Guru pengganti<select bind:value={guruPenggantiID} class="mt-1.5 w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm dark:border-neutral-700 dark:bg-neutral-800/50 dark:text-white"><option value="">Pilih guru aktif</option>{#each availableGuru as guru}<option value={guru.id}>{guru.nama}</option>{/each}</select></label>
 					{/if}
-					<label class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">Alasan <span class="font-normal text-neutral-400">(opsional)</span><textarea bind:value={alasan} rows="3" class="mt-1.5 w-full resize-none rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm dark:border-neutral-700 dark:bg-neutral-800/50 dark:text-white"></textarea></label>
+					<label class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+						{action.type === "batal" ? "Alasan pembatalan" : action.type === "susulan" ? "Alasan absen terlambat diisi" : "Alasan"}
+						{#if alasanWajib}<span class="text-red-500">*</span>{:else}<span class="font-normal text-neutral-400">(opsional)</span>{/if}
+						<textarea bind:value={alasan} rows="3" placeholder={action.type === "batal" ? "Mis. guru sakit, santri sedang ujian, libur pondok" : action.type === "susulan" ? "Mis. lupa absen, kendala sinyal saat kelas" : ""} class="mt-1.5 w-full resize-none rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 text-sm dark:border-neutral-700 dark:bg-neutral-800/50 dark:text-white"></textarea>
+					</label>
 					<div class="flex justify-end gap-2">
-						<button onclick={closeAction} class="rounded-xl px-4 py-2 text-sm text-neutral-600 dark:text-neutral-300">Batal</button>
-						<button onclick={submitAction} disabled={action.type === "reschedule" ? !tanggalBaru || !jamBaru : !guruPenggantiID} class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Simpan</button>
+						<button onclick={closeAction} class="rounded-xl px-4 py-2 text-sm text-neutral-600 dark:text-neutral-300">{action.type === "batal" ? "Kembali" : "Batal"}</button>
+						<button onclick={submitAction} disabled={!canSubmitAction || submitting} class="rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 {action.type === 'batal' ? 'bg-red-600 hover:bg-red-700' : action.type === 'susulan' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-brand-600'}">{action.type === "batal" ? "Batalkan Kelas" : action.type === "susulan" ? "Lanjut ke Absen" : "Simpan"}</button>
 					</div>
 				</div>
 			</div>

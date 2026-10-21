@@ -21,6 +21,30 @@ type Absensi struct {
 	BatasMateri string
 }
 
+type AiAuditLog struct {
+	ID        int64
+	UserID    sql.NullInt64
+	TokenID   sql.NullInt64
+	Tool      string
+	Arguments string
+	Status    string
+	Pesan     string
+	DurasiMs  int64
+	CreatedAt time.Time
+}
+
+type AiToken struct {
+	ID         int64
+	UserID     int64
+	Nama       string
+	TokenHash  string
+	Prefix     string
+	ExpiresAt  time.Time
+	LastUsedAt sql.NullTime
+	RevokedAt  sql.NullTime
+	CreatedAt  time.Time
+}
+
 type Angkatan struct {
 	ID         int64
 	Kode       string
@@ -112,6 +136,9 @@ type JadwalPertemuan struct {
 	TanggalRutin       sql.NullTime
 	IsOtomatis         int64
 	IsTambahan         int64
+	AlasanBatal        string
+	IsSusulan          int64
+	AlasanSusulan      string
 }
 
 type KalamBersanad struct {
@@ -129,6 +156,28 @@ type KalamShareLog struct {
 	KalamID   int64
 	GuruID    int64
 	CreatedAt time.Time
+}
+
+type Kasbon struct {
+	ID             int64
+	GuruID         int64
+	Tanggal        string
+	Nominal        int64
+	Cicilan        int64
+	MulaiBulan     string
+	Keterangan     string
+	DibuatOleh     sql.NullInt64
+	CreatedAt      time.Time
+	DibatalkanAt   sql.NullTime
+	DibatalkanOleh sql.NullInt64
+}
+
+type KasbonPotongan struct {
+	ID       int64
+	Bulan    string
+	KasbonID int64
+	GuruID   int64
+	Nominal  int64
 }
 
 type Kela struct {
@@ -671,6 +720,53 @@ type UjrohGuru struct {
 	DibayarOleh     sql.NullInt64
 	CatatanBayar    string
 	CreatedAt       time.Time
+	TotalKomponen   int64
+	TotalKasbon     int64
+	Diterima        int64
+}
+
+type UjrohGuruKomponen struct {
+	ID           int64
+	Bulan        string
+	GuruID       int64
+	KomponenID   int64
+	KomponenNama string
+	Jenis        string
+	Jumlah       int64
+	Tarif        int64
+	Total        int64
+	Catatan      string
+}
+
+type UjrohKomponen struct {
+	ID             int64
+	Nama           string
+	Jenis          string
+	NominalDefault int64
+	IsAktif        int64
+	DiubahOleh     sql.NullInt64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type UjrohKomponenBulan struct {
+	ID         int64
+	Bulan      string
+	GuruID     int64
+	KomponenID int64
+	Jumlah     int64
+	Tarif      int64
+	Catatan    string
+	DiubahOleh sql.NullInt64
+	UpdatedAt  time.Time
+}
+
+type UjrohKomponenGuru struct {
+	KomponenID int64
+	GuruID     int64
+	Nominal    int64
+	DiubahOleh sql.NullInt64
+	UpdatedAt  time.Time
 }
 
 type UjrohPertemuan struct {

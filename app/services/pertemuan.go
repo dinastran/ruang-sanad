@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -291,10 +292,35 @@ func (s *PertemuanService) ListRiwayat(kelasID int64) ([]models.PertemuanRespons
 	if err != nil {
 		return nil, err
 	}
+	susulan, err := s.querier.ListSusulanByKelas(context.Background(), kelasID)
+	if err != nil {
+		return nil, err
+	}
+	alasanSusulan := make(map[int64]string, len(susulan))
+	for _, row := range susulan {
+		alasanSusulan[row.PertemuanID.Int64] = row.AlasanSusulan
+	}
+
 	out := make([]models.PertemuanResponse, 0, len(list))
 	for _, pe := range list {
-		out = append(out, *mapPertemuanToResponse(pe))
+		item := mapPertemuanToResponse(pe)
+		if alasan, ok := alasanSusulan[pe.ID]; ok {
+			item.IsSusulan = true
+			item.AlasanSusulan = alasan
+		}
+		out = append(out, *item)
 	}
+	// Urut tanggal, bukan nomor pertemuan: absen susulan bisa bernomor lebih
+	// besar dari pertemuan yang tanggalnya lebih baru.
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Tanggal != out[j].Tanggal {
+			return out[i].Tanggal > out[j].Tanggal
+		}
+		if out[i].JamMulai != out[j].JamMulai {
+			return out[i].JamMulai > out[j].JamMulai
+		}
+		return out[i].PertemuanKe > out[j].PertemuanKe
+	})
 	return out, nil
 }
 

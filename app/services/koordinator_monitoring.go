@@ -242,7 +242,7 @@ func (s *KoordinatorMonitoringService) Cancel(actorID, scheduleID, kelasID int64
 		return fmt.Errorf("alasan pembatalan wajib diisi")
 	}
 	return s.withScheduleTx(func(ctx context.Context, q *queries.Querier) error {
-		if err := s.jadwalService.cancel(ctx, q, scheduleID, kelasID); err != nil {
+		if err := s.jadwalService.cancel(ctx, q, scheduleID, kelasID, reason); err != nil {
 			return err
 		}
 		return logScheduleActivity(ctx, q, actorID, scheduleID, "jadwal_dibatalkan", reason)
@@ -382,6 +382,9 @@ func mapClassMonitoringItem(row queries.ListClassMonitoringSchedulesRow, now tim
 		GuruUtamaNama:      row.GuruUtamaNama,
 		GuruPenggantiNama:  row.GuruPenggantiNama,
 		AlasanBadal:        row.AlasanBadal,
+		AlasanBatal:        row.AlasanBatal,
+		IsSusulan:          row.IsSusulan == 1,
+		AlasanSusulan:      row.AlasanSusulan,
 		ActualStartTime:    row.ActualStartTime,
 		ActualEndTime:      row.ActualEndTime,
 		TeacherCheckedInAt: checkedInAt,

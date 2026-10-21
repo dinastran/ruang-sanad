@@ -135,11 +135,17 @@ func (h *JadwalPertemuanHandler) Badal(c *fiber.Ctx) error {
 
 func (h *JadwalPertemuanHandler) Cancel(c *fiber.Ctx) error {
 	id, kelasID := scheduleParams(c)
-	if _, err := h.ensureCanManageClass(c, kelasID); err != nil {
+	userID, err := h.ensureCanManageClass(c, kelasID)
+	if err != nil {
 		h.store.Flash(c, "error", err.Error())
 		return h.inertiaService.Back(c, "/app/guru/jadwal-pertemuan")
 	}
-	if err := h.jadwalService.Cancel(id, kelasID); err != nil {
+	var req models.BatalJadwalRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data pembatalan tidak valid")
+		return h.inertiaService.Back(c, "/app/guru/jadwal-pertemuan")
+	}
+	if err := h.jadwalService.Cancel(id, kelasID, userID, req.Alasan); err != nil {
 		h.store.Flash(c, "error", "Gagal membatalkan jadwal: "+err.Error())
 		return h.inertiaService.Back(c, "/app/guru/jadwal-pertemuan")
 	}
@@ -162,6 +168,32 @@ func (h *JadwalPertemuanHandler) Start(c *fiber.Ctx) error {
 			return redirectPertemuanBelumDitutup(c, h.store, h.inertiaService, h.pertemuanService, kelasID, userID, privileged, "/app/guru/jadwal-pertemuan")
 		}
 		h.store.Flash(c, "error", "Gagal memulai pertemuan: "+err.Error())
+		return h.inertiaService.Back(c, "/app/guru/jadwal-pertemuan")
+	}
+	return h.inertiaService.Redirect(c, "/app/guru/kelas/"+strconv.FormatInt(kelasID, 10)+"/pertemuan/"+strconv.FormatInt(pertemuan.ID, 10)+"/selesai")
+}
+
+// Susulan opens a missed session at its scheduled date so the guru can still
+// fill in attendance, then sends them to the attendance form.
+func (h *JadwalPertemuanHandler) Susulan(c *fiber.Ctx) error {
+	id, kelasID := scheduleParams(c)
+	sess, _ := h.store.Get(c)
+	user := sessionUser(sess)
+	userID := toInt64(sess.Get("user_id"))
+	role := requestRole(c, user)
+	privileged := role == models.RoleSuperAdmin || role == models.RoleAdminKelas
+
+	var req models.SusulanRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data absen susulan tidak valid")
+		return h.inertiaService.Back(c, "/app/guru/jadwal-pertemuan")
+	}
+	pertemuan, err := h.jadwalService.StartSusulan(id, kelasID, userID, privileged, req.Alasan)
+	if err != nil {
+		if errors.Is(err, services.ErrPertemuanBerlangsung) {
+			return redirectPertemuanBelumDitutup(c, h.store, h.inertiaService, h.pertemuanService, kelasID, userID, privileged, "/app/guru/jadwal-pertemuan")
+		}
+		h.store.Flash(c, "error", "Gagal membuka absen susulan: "+err.Error())
 		return h.inertiaService.Back(c, "/app/guru/jadwal-pertemuan")
 	}
 	return h.inertiaService.Redirect(c, "/app/guru/kelas/"+strconv.FormatInt(kelasID, 10)+"/pertemuan/"+strconv.FormatInt(pertemuan.ID, 10)+"/selesai")

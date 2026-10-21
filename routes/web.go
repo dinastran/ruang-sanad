@@ -296,6 +296,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Post("/guru/kelas/:id/jadwal-pertemuan/:jid/badal", guruWorkflowRole, h.JadwalPertemuan.Badal)
 	protected.Post("/guru/kelas/:id/jadwal-pertemuan/:jid/batal", guruWorkflowRole, h.JadwalPertemuan.Cancel)
 	protected.Post("/guru/kelas/:id/jadwal-pertemuan/:jid/mulai", guruWorkflowRole, h.JadwalPertemuan.Start)
+	protected.Post("/guru/kelas/:id/jadwal-pertemuan/:jid/susulan", guruWorkflowRole, h.JadwalPertemuan.Susulan)
 	protected.Get("/guru/kelas/:id/rekap", guruWorkflowRole, h.Pertemuan.RekapAbsensi)
 	protected.Get("/guru/kelas/:id/riwayat-pertemuan", guruWorkflowRole, h.Pertemuan.Riwayat)
 	protected.Put("/guru/kelas/:id/absensi/:aid", guruWorkflowRole, h.Pertemuan.EditAbsensi)

@@ -13,17 +13,18 @@ import (
 
 const cancelJadwalPertemuan = `-- name: CancelJadwalPertemuan :execrows
 UPDATE jadwal_pertemuan
-SET status = 'dibatalkan', updated_at = CURRENT_TIMESTAMP
+SET status = 'dibatalkan', alasan_batal = ?, updated_at = CURRENT_TIMESTAMP
 WHERE id = ? AND kelas_id = ? AND status = 'dijadwalkan'
 `
 
 type CancelJadwalPertemuanParams struct {
-	ID      int64
-	KelasID int64
+	AlasanBatal string
+	ID          int64
+	KelasID     int64
 }
 
 func (q *Queries) CancelJadwalPertemuan(ctx context.Context, arg CancelJadwalPertemuanParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, cancelJadwalPertemuan, arg.ID, arg.KelasID)
+	result, err := q.db.ExecContext(ctx, cancelJadwalPertemuan, arg.AlasanBatal, arg.ID, arg.KelasID)
 	if err != nil {
 		return 0, err
 	}
@@ -111,7 +112,7 @@ func (q *Queries) CreateJadwalPertemuan(ctx context.Context, arg CreateJadwalPer
 }
 
 const getJadwalPertemuanByID = `-- name: GetJadwalPertemuanByID :one
-SELECT id, kelas_id, tanggal, jam_mulai, catatan, is_reschedule, jadwal_semula, alasan_reschedule, guru_pengganti_id, alasan_badal, status, pertemuan_id, dibuat_oleh, created_at, updated_at, jadwal_kelas_berubah, jadwal_rutin_id, tanggal_rutin, is_otomatis, is_tambahan FROM jadwal_pertemuan WHERE id = ? AND kelas_id = ?
+SELECT id, kelas_id, tanggal, jam_mulai, catatan, is_reschedule, jadwal_semula, alasan_reschedule, guru_pengganti_id, alasan_badal, status, pertemuan_id, dibuat_oleh, created_at, updated_at, jadwal_kelas_berubah, jadwal_rutin_id, tanggal_rutin, is_otomatis, is_tambahan, alasan_batal, is_susulan, alasan_susulan FROM jadwal_pertemuan WHERE id = ? AND kelas_id = ?
 `
 
 type GetJadwalPertemuanByIDParams struct {
@@ -143,12 +144,15 @@ func (q *Queries) GetJadwalPertemuanByID(ctx context.Context, arg GetJadwalPerte
 		&i.TanggalRutin,
 		&i.IsOtomatis,
 		&i.IsTambahan,
+		&i.AlasanBatal,
+		&i.IsSusulan,
+		&i.AlasanSusulan,
 	)
 	return i, err
 }
 
 const listDueJadwalPertemuanByKelas = `-- name: ListDueJadwalPertemuanByKelas :many
-SELECT jp.id, jp.kelas_id, jp.tanggal, jp.jam_mulai, jp.catatan, jp.is_reschedule, jp.jadwal_semula, jp.alasan_reschedule, jp.guru_pengganti_id, jp.alasan_badal, jp.status, jp.pertemuan_id, jp.dibuat_oleh, jp.created_at, jp.updated_at, jp.jadwal_kelas_berubah, jp.jadwal_rutin_id, jp.tanggal_rutin, jp.is_otomatis, jp.is_tambahan, COALESCE(gb.nama, '') AS guru_pengganti_nama
+SELECT jp.id, jp.kelas_id, jp.tanggal, jp.jam_mulai, jp.catatan, jp.is_reschedule, jp.jadwal_semula, jp.alasan_reschedule, jp.guru_pengganti_id, jp.alasan_badal, jp.status, jp.pertemuan_id, jp.dibuat_oleh, jp.created_at, jp.updated_at, jp.jadwal_kelas_berubah, jp.jadwal_rutin_id, jp.tanggal_rutin, jp.is_otomatis, jp.is_tambahan, jp.alasan_batal, jp.is_susulan, jp.alasan_susulan, COALESCE(gb.nama, '') AS guru_pengganti_nama
 FROM jadwal_pertemuan jp
 LEFT JOIN guru gb ON gb.id = jp.guru_pengganti_id
 WHERE jp.kelas_id = ? AND jp.status = 'dijadwalkan' AND jp.tanggal <= ?
@@ -181,6 +185,9 @@ type ListDueJadwalPertemuanByKelasRow struct {
 	TanggalRutin       sql.NullTime
 	IsOtomatis         int64
 	IsTambahan         int64
+	AlasanBatal        string
+	IsSusulan          int64
+	AlasanSusulan      string
 	GuruPenggantiNama  string
 }
 
@@ -214,7 +221,77 @@ func (q *Queries) ListDueJadwalPertemuanByKelas(ctx context.Context, arg ListDue
 			&i.TanggalRutin,
 			&i.IsOtomatis,
 			&i.IsTambahan,
+			&i.AlasanBatal,
+			&i.IsSusulan,
+			&i.AlasanSusulan,
 			&i.GuruPenggantiNama,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listJadwalDibatalkanByKelas = `-- name: ListJadwalDibatalkanByKelas :many
+SELECT
+    jp.id,
+    jp.tanggal,
+    jp.jam_mulai,
+    jp.alasan_batal,
+    jp.updated_at,
+    CAST(COALESCE((
+        SELECT u.name FROM schedule_activity_logs l
+        JOIN users u ON u.id = l.created_by
+        WHERE l.jadwal_pertemuan_id = jp.id AND l.action = 'jadwal_dibatalkan'
+        ORDER BY l.created_at DESC, l.id DESC LIMIT 1
+    ), '') AS TEXT) AS dibatalkan_oleh,
+    CAST(COALESCE((
+        SELECT u.role FROM schedule_activity_logs l
+        JOIN users u ON u.id = l.created_by
+        WHERE l.jadwal_pertemuan_id = jp.id AND l.action = 'jadwal_dibatalkan'
+        ORDER BY l.created_at DESC, l.id DESC LIMIT 1
+    ), '') AS TEXT) AS dibatalkan_oleh_role
+FROM jadwal_pertemuan jp
+WHERE jp.kelas_id = ? AND jp.status = 'dibatalkan'
+ORDER BY jp.tanggal DESC, jp.jam_mulai DESC, jp.id DESC
+`
+
+type ListJadwalDibatalkanByKelasRow struct {
+	ID                 int64
+	Tanggal            time.Time
+	JamMulai           string
+	AlasanBatal        string
+	UpdatedAt          time.Time
+	DibatalkanOleh     string
+	DibatalkanOlehRole string
+}
+
+// Riwayat pembatalan kelas: tidak punya pertemuan sehingga tidak memakai
+// nomor pertemuan. Pembatal diambil dari log aktivitas terakhir.
+func (q *Queries) ListJadwalDibatalkanByKelas(ctx context.Context, kelasID int64) ([]ListJadwalDibatalkanByKelasRow, error) {
+	rows, err := q.db.QueryContext(ctx, listJadwalDibatalkanByKelas, kelasID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListJadwalDibatalkanByKelasRow
+	for rows.Next() {
+		var i ListJadwalDibatalkanByKelasRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tanggal,
+			&i.JamMulai,
+			&i.AlasanBatal,
+			&i.UpdatedAt,
+			&i.DibatalkanOleh,
+			&i.DibatalkanOlehRole,
 		); err != nil {
 			return nil, err
 		}
@@ -231,7 +308,7 @@ func (q *Queries) ListDueJadwalPertemuanByKelas(ctx context.Context, arg ListDue
 
 const listJadwalPertemuanForGuru = `-- name: ListJadwalPertemuanForGuru :many
 SELECT
-    jp.id, jp.kelas_id, jp.tanggal, jp.jam_mulai, jp.catatan, jp.is_reschedule, jp.jadwal_semula, jp.alasan_reschedule, jp.guru_pengganti_id, jp.alasan_badal, jp.status, jp.pertemuan_id, jp.dibuat_oleh, jp.created_at, jp.updated_at, jp.jadwal_kelas_berubah, jp.jadwal_rutin_id, jp.tanggal_rutin, jp.is_otomatis, jp.is_tambahan,
+    jp.id, jp.kelas_id, jp.tanggal, jp.jam_mulai, jp.catatan, jp.is_reschedule, jp.jadwal_semula, jp.alasan_reschedule, jp.guru_pengganti_id, jp.alasan_badal, jp.status, jp.pertemuan_id, jp.dibuat_oleh, jp.created_at, jp.updated_at, jp.jadwal_kelas_berubah, jp.jadwal_rutin_id, jp.tanggal_rutin, jp.is_otomatis, jp.is_tambahan, jp.alasan_batal, jp.is_susulan, jp.alasan_susulan,
     k.nama_kelas,
     k.guru_id AS guru_utama_id,
     COALESCE(gu.nama, '') AS guru_utama_nama,
@@ -270,6 +347,9 @@ type ListJadwalPertemuanForGuruRow struct {
 	TanggalRutin       sql.NullTime
 	IsOtomatis         int64
 	IsTambahan         int64
+	AlasanBatal        string
+	IsSusulan          int64
+	AlasanSusulan      string
 	NamaKelas          string
 	GuruUtamaID        sql.NullInt64
 	GuruUtamaNama      string
@@ -306,11 +386,75 @@ func (q *Queries) ListJadwalPertemuanForGuru(ctx context.Context, guruID interfa
 			&i.TanggalRutin,
 			&i.IsOtomatis,
 			&i.IsTambahan,
+			&i.AlasanBatal,
+			&i.IsSusulan,
+			&i.AlasanSusulan,
 			&i.NamaKelas,
 			&i.GuruUtamaID,
 			&i.GuruUtamaNama,
 			&i.GuruPenggantiNama,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listKoordinatorUserIDs = `-- name: ListKoordinatorUserIDs :many
+SELECT id FROM users WHERE role = 'koordinator_guru' ORDER BY id
+`
+
+func (q *Queries) ListKoordinatorUserIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listKoordinatorUserIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSusulanByKelas = `-- name: ListSusulanByKelas :many
+SELECT pertemuan_id, alasan_susulan
+FROM jadwal_pertemuan
+WHERE kelas_id = ? AND is_susulan = 1 AND pertemuan_id IS NOT NULL
+`
+
+type ListSusulanByKelasRow struct {
+	PertemuanID   sql.NullInt64
+	AlasanSusulan string
+}
+
+func (q *Queries) ListSusulanByKelas(ctx context.Context, kelasID int64) ([]ListSusulanByKelasRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSusulanByKelas, kelasID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSusulanByKelasRow
+	for rows.Next() {
+		var i ListSusulanByKelasRow
+		if err := rows.Scan(&i.PertemuanID, &i.AlasanSusulan); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -343,6 +487,23 @@ WHERE pertemuan_id = ? AND status = 'dimulai'
 
 func (q *Queries) MarkJadwalPertemuanSelesai(ctx context.Context, pertemuanID sql.NullInt64) error {
 	_, err := q.db.ExecContext(ctx, markJadwalPertemuanSelesai, pertemuanID)
+	return err
+}
+
+const markJadwalPertemuanSusulan = `-- name: MarkJadwalPertemuanSusulan :exec
+UPDATE jadwal_pertemuan
+SET is_susulan = 1, alasan_susulan = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND kelas_id = ?
+`
+
+type MarkJadwalPertemuanSusulanParams struct {
+	AlasanSusulan string
+	ID            int64
+	KelasID       int64
+}
+
+func (q *Queries) MarkJadwalPertemuanSusulan(ctx context.Context, arg MarkJadwalPertemuanSusulanParams) error {
+	_, err := q.db.ExecContext(ctx, markJadwalPertemuanSusulan, arg.AlasanSusulan, arg.ID, arg.KelasID)
 	return err
 }
 

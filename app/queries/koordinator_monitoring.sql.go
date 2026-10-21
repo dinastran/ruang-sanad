@@ -231,6 +231,9 @@ SELECT
     jp.guru_pengganti_id,
     COALESCE(gb.nama, '') AS guru_pengganti_nama,
     jp.alasan_badal,
+    jp.alasan_batal,
+    jp.is_susulan,
+    jp.alasan_susulan,
     ua.id AS assigned_user_id,
     jp.pertemuan_id,
     COALESCE(p.status, '') AS meeting_status,
@@ -286,6 +289,9 @@ type ListClassMonitoringSchedulesRow struct {
 	GuruPenggantiID    sql.NullInt64
 	GuruPenggantiNama  string
 	AlasanBadal        string
+	AlasanBatal        string
+	IsSusulan          int64
+	AlasanSusulan      string
 	AssignedUserID     sql.NullInt64
 	PertemuanID        sql.NullInt64
 	MeetingStatus      string
@@ -328,6 +334,9 @@ func (q *Queries) ListClassMonitoringSchedules(ctx context.Context, arg ListClas
 			&i.GuruPenggantiID,
 			&i.GuruPenggantiNama,
 			&i.AlasanBadal,
+			&i.AlasanBatal,
+			&i.IsSusulan,
+			&i.AlasanSusulan,
 			&i.AssignedUserID,
 			&i.PertemuanID,
 			&i.MeetingStatus,

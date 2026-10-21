@@ -73,6 +73,18 @@ export interface PertemuanGuru {
 	guru_pengganti_id?: number;
 	alasan_badal: string;
 	status: string;
+	is_susulan?: boolean;
+	alasan_susulan?: string;
+}
+
+export interface JadwalDibatalkan {
+	id: number;
+	tanggal: string;
+	jam_mulai: string;
+	alasan_batal: string;
+	dibatalkan_oleh: string;
+	dibatalkan_oleh_role: string;
+	dibatalkan_pada: string;
 }
 
 export interface RiwayatMengajarItem {
@@ -129,10 +141,13 @@ export interface JadwalPertemuanGuru {
 	guru_pengganti_nama: string;
 	alasan_badal: string;
 	jadwal_kelas_berubah?: boolean;
+	is_susulan?: boolean;
+	alasan_susulan?: string;
 	status: string;
 	pertemuan_id?: number;
 	can_manage: boolean;
 	can_start: boolean;
+	can_susulan?: boolean;
 }
 
 export interface GuruDashboard {
@@ -447,6 +462,9 @@ export interface MonitoringKelasItem {
 	guru_pengganti_id?: number;
 	guru_pengganti_nama: string;
 	alasan_badal: string;
+	alasan_batal?: string;
+	is_susulan?: boolean;
+	alasan_susulan?: string;
 	assigned_user_id?: number;
 	pertemuan_id?: number;
 	actual_start_time: string;

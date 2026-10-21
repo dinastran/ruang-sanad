@@ -223,10 +223,10 @@ func TestGeneratorMengadopsiJadwalManualYangSamaTanpaDuplikasi(t *testing.T) {
 	kelasService := NewKelasService(f.querier)
 	today := startOfToday()
 	manualID, err := f.service.Create(f.guruUtamaUser, models.BuatJadwalPertemuanRequest{
-		KelasID: f.kelasID,
-		Tanggal: today.Format("2006-01-02"),
+		KelasID:  f.kelasID,
+		Tanggal:  today.Format("2006-01-02"),
 		JamMulai: "08:00",
-		Catatan: "Jadwal manual lama",
+		Catatan:  "Jadwal manual lama",
 	})
 	require.NoError(t, err)
 
@@ -295,7 +295,7 @@ func TestJadwalTidakMengambilNomorPertemuanSebelumDimulai(t *testing.T) {
 
 	_, err = f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "08:00"})
 	require.ErrorIs(t, err, ErrJadwalPertemuanAktif)
-	require.NoError(t, f.service.Cancel(jadwalID, f.kelasID))
+	require.NoError(t, f.service.Cancel(jadwalID, f.kelasID, f.guruUtamaUser, "Guru sakit"))
 
 	spontan, err := f.pertemuan.MulaiPertemuan(f.kelasID, f.guruUtamaUser, models.MulaiPertemuanRequest{KonfirmasiTambahan: true, JamMulai: "08:00"})
 	require.NoError(t, err)
@@ -604,4 +604,156 @@ func TestJadwalRutinTidakMengadopsiJadwalManualJikaOccurrenceSudahAda(t *testing
 		`SELECT COUNT(*) FROM jadwal_pertemuan WHERE kelas_id = ?`, f.kelasID,
 	).Scan(&total))
 	require.EqualValues(t, 2, total)
+}
+
+func insertKoordinatorUser(t *testing.T, db *sql.DB) int64 {
+	t.Helper()
+	_, err := db.Exec(`INSERT INTO users (email, name, role) VALUES ('koor@example.com', 'Koordinator', 'koordinator_guru')`)
+	require.NoError(t, err)
+	id, err := lastID(db)
+	require.NoError(t, err)
+	return id
+}
+
+func TestBatalkanJadwalWajibAlasanDanMemberitahuKoordinator(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	koordinator := insertKoordinatorUser(t, f.db)
+	jadwalID, err := f.service.Create(f.guruUtamaUser, models.BuatJadwalPertemuanRequest{
+		KelasID: f.kelasID, Tanggal: time.Now().AddDate(0, 0, 1).Format("2006-01-02"), JamMulai: "09:00",
+	})
+	require.NoError(t, err)
+
+	require.Error(t, f.service.Cancel(jadwalID, f.kelasID, f.guruUtamaUser, "   "))
+	require.NoError(t, f.service.Cancel(jadwalID, f.kelasID, f.guruUtamaUser, "Guru sakit"))
+
+	var status, alasan string
+	require.NoError(t, f.db.QueryRow(`SELECT status, alasan_batal FROM jadwal_pertemuan WHERE id = ?`, jadwalID).Scan(&status, &alasan))
+	require.Equal(t, "dibatalkan", status)
+	require.Equal(t, "Guru sakit", alasan)
+
+	var logs, notif int
+	require.NoError(t, f.db.QueryRow(`SELECT COUNT(*) FROM schedule_activity_logs WHERE jadwal_pertemuan_id = ? AND action = 'jadwal_dibatalkan' AND details = 'Guru sakit'`, jadwalID).Scan(&logs))
+	require.Equal(t, 1, logs)
+	require.NoError(t, f.db.QueryRow(`SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'jadwal_dibatalkan' AND reference_id = ?`, koordinator, jadwalID).Scan(&notif))
+	require.Equal(t, 1, notif)
+}
+
+func TestAbsenSusulanMemakaiTanggalJadwalDanTercatat(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	koordinator := insertKoordinatorUser(t, f.db)
+	lalu := startOfToday().AddDate(0, 0, -7)
+	_, err := f.db.Exec(`INSERT INTO jadwal_pertemuan (kelas_id, tanggal, jam_mulai, status) VALUES (?, ?, '19:30', 'dijadwalkan')`, f.kelasID, lalu)
+	require.NoError(t, err)
+	jadwalID, err := lastID(f.db)
+	require.NoError(t, err)
+
+	utama := f.guruUtamaID
+	list, err := f.service.List(&utama)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	require.False(t, list[0].CanStart)
+	require.True(t, list[0].CanSusulan)
+
+	// Jadwal lampau tidak boleh dimulai biasa: tanggalnya akan tercatat hari ini.
+	_, err = f.service.Start(jadwalID, f.kelasID, f.guruUtamaUser, false)
+	require.Error(t, err)
+	_, err = f.service.StartSusulan(jadwalID, f.kelasID, f.guruUtamaUser, false, " ")
+	require.Error(t, err)
+	_, err = f.service.StartSusulan(jadwalID, f.kelasID, f.guruLainUser, false, "Lupa absen")
+	require.Error(t, err)
+
+	p, err := f.service.StartSusulan(jadwalID, f.kelasID, f.guruUtamaUser, false, "Lupa absen")
+	require.NoError(t, err)
+	require.Equal(t, lalu.Format("2006-01-02"), p.Tanggal)
+	require.Equal(t, "19:30", p.JamMulai)
+
+	var tanggal time.Time
+	var jam string
+	require.NoError(t, f.db.QueryRow(`SELECT tanggal, jam_mulai FROM pertemuan WHERE id = ?`, p.ID).Scan(&tanggal, &jam))
+	require.Equal(t, lalu.Format("2006-01-02"), tanggal.Format("2006-01-02"))
+	require.Equal(t, "19:30", jam)
+
+	var status, alasan string
+	var susulan int
+	require.NoError(t, f.db.QueryRow(`SELECT status, is_susulan, alasan_susulan FROM jadwal_pertemuan WHERE id = ?`, jadwalID).Scan(&status, &susulan, &alasan))
+	require.Equal(t, "dimulai", status)
+	require.Equal(t, 1, susulan)
+	require.Equal(t, "Lupa absen", alasan)
+
+	var notif int
+	require.NoError(t, f.db.QueryRow(`SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'absen_susulan'`, koordinator).Scan(&notif))
+	require.Equal(t, 1, notif)
+}
+
+func TestAbsenSusulanDibatasiEmpatBelasHari(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	lama := startOfToday().AddDate(0, 0, -(BatasAbsenSusulanHari + 1))
+	_, err := f.db.Exec(`INSERT INTO jadwal_pertemuan (kelas_id, tanggal, jam_mulai, status) VALUES (?, ?, '08:00', 'dijadwalkan')`, f.kelasID, lama)
+	require.NoError(t, err)
+	jadwalID, err := lastID(f.db)
+	require.NoError(t, err)
+
+	_, err = f.service.StartSusulan(jadwalID, f.kelasID, f.guruUtamaUser, false, "Lupa")
+	require.Error(t, err)
+	// Admin kelas / super admin tetap dapat mengisi di luar batas.
+	_, err = f.service.StartSusulan(jadwalID, f.kelasID, f.guruUtamaUser, true, "Diisi admin")
+	require.NoError(t, err)
+}
+
+func TestAbsenSusulanDitolakUntukJadwalHariIni(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	jadwalID, err := f.service.Create(f.guruUtamaUser, models.BuatJadwalPertemuanRequest{
+		KelasID: f.kelasID, Tanggal: time.Now().Format("2006-01-02"), JamMulai: "09:00",
+	})
+	require.NoError(t, err)
+	_, err = f.service.StartSusulan(jadwalID, f.kelasID, f.guruUtamaUser, false, "Lupa")
+	require.Error(t, err)
+}
+
+func TestRiwayatMemuatPembatalanTanpaNomorDanUrutTanggal(t *testing.T) {
+	f := setupJadwalPertemuanService(t)
+	ctx := context.Background()
+
+	// Pertemuan hari ini dimulai lebih dulu, lalu absen susulan 7 hari lalu:
+	// susulan mendapat nomor lebih besar tetapi tanggalnya lebih lama.
+	hariIni, err := f.service.Create(f.guruUtamaUser, models.BuatJadwalPertemuanRequest{KelasID: f.kelasID, Tanggal: time.Now().Format("2006-01-02"), JamMulai: "08:00"})
+	require.NoError(t, err)
+	p1, err := f.service.Start(hariIni, f.kelasID, f.guruUtamaUser, false)
+	require.NoError(t, err)
+	require.NoError(t, f.querier.UpdatePertemuanStatus(ctx, queries.UpdatePertemuanStatusParams{Status: "selesai", ID: p1.ID}))
+
+	lalu := startOfToday().AddDate(0, 0, -7)
+	_, err = f.db.Exec(`INSERT INTO jadwal_pertemuan (kelas_id, tanggal, jam_mulai, status) VALUES (?, ?, '19:30', 'dijadwalkan')`, f.kelasID, lalu)
+	require.NoError(t, err)
+	laluID, err := lastID(f.db)
+	require.NoError(t, err)
+	p2, err := f.service.StartSusulan(laluID, f.kelasID, f.guruUtamaUser, false, "Lupa absen")
+	require.NoError(t, err)
+	require.Greater(t, p2.PertemuanKe, p1.PertemuanKe)
+	require.NoError(t, f.querier.UpdatePertemuanStatus(ctx, queries.UpdatePertemuanStatusParams{Status: "selesai", ID: p2.ID}))
+
+	riwayat, err := f.pertemuan.ListRiwayat(f.kelasID)
+	require.NoError(t, err)
+	require.Len(t, riwayat, 2)
+	require.Equal(t, p1.ID, riwayat[0].ID)
+	require.False(t, riwayat[0].IsSusulan)
+	require.Equal(t, p2.ID, riwayat[1].ID)
+	require.True(t, riwayat[1].IsSusulan)
+	require.Equal(t, "Lupa absen", riwayat[1].AlasanSusulan)
+
+	besok, err := f.service.Create(f.guruUtamaUser, models.BuatJadwalPertemuanRequest{KelasID: f.kelasID, Tanggal: time.Now().AddDate(0, 0, 1).Format("2006-01-02"), JamMulai: "09:00"})
+	require.NoError(t, err)
+	require.NoError(t, f.service.Cancel(besok, f.kelasID, f.guruUtamaUser, "Guru sakit"))
+
+	batal, err := f.service.ListDibatalkan(f.kelasID)
+	require.NoError(t, err)
+	require.Len(t, batal, 1)
+	require.Equal(t, "Guru sakit", batal[0].AlasanBatal)
+	require.Equal(t, "Guru Utama", batal[0].DibatalkanOleh)
+	require.Equal(t, "guru", batal[0].DibatalkanOlehRole)
+
+	// Pembatalan tidak memakai nomor pertemuan.
+	next, err := f.querier.GetNextPertemuanKe(ctx, f.kelasID)
+	require.NoError(t, err)
+	require.Equal(t, p2.PertemuanKe+1, next)
 }

@@ -129,6 +129,20 @@ type PertemuanResponse struct {
 	GuruPenggantiID  *int64 `json:"guru_pengganti_id,omitempty"`
 	AlasanBadal      string `json:"alasan_badal"`
 	Status           string `json:"status"`
+	IsSusulan        bool   `json:"is_susulan,omitempty"`
+	AlasanSusulan    string `json:"alasan_susulan,omitempty"`
+}
+
+// JadwalDibatalkanItem is a cancelled session in a class's history. It never
+// became a meeting, so it carries no meeting number.
+type JadwalDibatalkanItem struct {
+	ID                 int64  `json:"id"`
+	Tanggal            string `json:"tanggal"`
+	JamMulai           string `json:"jam_mulai"`
+	AlasanBatal        string `json:"alasan_batal"`
+	DibatalkanOleh     string `json:"dibatalkan_oleh"`
+	DibatalkanOlehRole string `json:"dibatalkan_oleh_role"`
+	DibatalkanPada     string `json:"dibatalkan_pada"`
 }
 
 type RiwayatMengajarItem struct {
@@ -176,10 +190,15 @@ type JadwalPertemuanResponse struct {
 	GuruPenggantiNama  string `json:"guru_pengganti_nama"`
 	AlasanBadal        string `json:"alasan_badal"`
 	JadwalKelasBerubah bool   `json:"jadwal_kelas_berubah"`
+	IsSusulan          bool   `json:"is_susulan"`
+	AlasanSusulan      string `json:"alasan_susulan"`
 	Status             string `json:"status"`
 	PertemuanID        *int64 `json:"pertemuan_id,omitempty"`
 	CanManage          bool   `json:"can_manage"`
 	CanStart           bool   `json:"can_start"`
+	// CanSusulan: the date has passed but is still inside the window in which
+	// the guru may fill in attendance late (BatasAbsenSusulanHari).
+	CanSusulan bool `json:"can_susulan"`
 }
 
 type AbsensiResponse struct {
@@ -243,6 +262,14 @@ type RescheduleRequest struct {
 	TanggalBaru string `json:"tanggal_baru"`
 	JamBaru     string `json:"jam_baru"`
 	Alasan      string `json:"alasan"`
+}
+
+type BatalJadwalRequest struct {
+	Alasan string `json:"alasan"`
+}
+
+type SusulanRequest struct {
+	Alasan string `json:"alasan"`
 }
 
 type BadalRequest struct {
