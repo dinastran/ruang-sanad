@@ -1,0 +1,18 @@
+name: Temporary crm-cs-ai-funnel-check
+on:
+  push:
+    branches: [feature/crm-auto-cs-ai-funnel]
+permissions:
+  contents: read
+jobs:
+  targeted-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Test and vet related code
+        working-directory: .
+        run: go test ./app/services -run 'TestLeadIngest(Verified|CSAI|Regular)' -count=1 && go vet ./app/services
