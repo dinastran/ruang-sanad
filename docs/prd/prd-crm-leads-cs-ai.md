@@ -256,8 +256,8 @@ Index `(status, not_before)`.
 | Stage | Label UI | Masuk lewat |
 |---|---|---|
 | `baru` | Baru | Event pertama dari nomor baru |
-| `discovery` | Discovery | Manual (CS), atau saran AI yang diterapkan CS |
-| `rekomendasi` | Rekomendasi | Manual / saran AI yang diterapkan |
+| `discovery` | Discovery | Otomatis dari `conversation.stage` setelah CS AI mengirim rangkuman kebutuhan, atau manual CS |
+| `rekomendasi` | Rekomendasi | Otomatis dari `conversation.stage` setelah CS AI mengirim rekomendasi paket valid, atau manual CS |
 | `form_dikirim` | Form dikirim | Event `form.sent` |
 | `data_terisi` | Data terisi | Event `message.in` yang lolos parser form (7.2) |
 | `info_bayar_dikirim` | Info bayar dikirim | Event `payment_info.sent` |
@@ -271,7 +271,7 @@ Status akhir:
 
 ### 6.2 🔒 Aturan transisi
 
-1. Event otomatis **hanya boleh memajukan** stage, tidak pernah memundurkan. Event `form.sent` untuk lead yang sudah `info_bayar_dikirim` tetap dicatat di timeline, tapi stage tidak berubah.
+1. Event otomatis **hanya boleh memajukan** stage, tidak pernah memundurkan. `conversation.stage` hanya berasal dari bridge setelah pesan CS AI berhasil terkirim, bukan hasil pencarian kata pada transkrip. Event `form.sent` untuk lead yang sudah `info_bayar_dikirim` tetap dicatat di timeline, tapi stage tidak berubah.
 2. **Manual boleh maju atau mundur**, kecuali ke `terverifikasi`. Tahap itu hanya bisa dicapai lewat aksi Verifikasi, yang mencatat siapa dan kapan.
 3. `terverifikasi` → `won` hanya lewat **Jadikan Santri**.
 4. Lead `won` bersifat **read-only** untuk kolom data. Lead `lost` dan `do_not_contact` bisa dibuka kembali secara manual dengan event `lead.reopened`.
@@ -351,6 +351,7 @@ Format request (batch, maksimal 100 event):
 |---|---|---|
 | `message.in` | `wa_message_id`, `body`, `media_type` | Buat lead bila belum ada (`stage=baru`). Simpan `lead_messages` (`in`, `lead`). Update `last_inbound_at`. Jalankan parser form bila stage `form_dikirim` (7.2). Jalankan deteksi stop (7.3). Batalkan follow-up `pending_approval`/`approved` milik lead itu (`status=cancelled`, alasan "lead membalas") |
 | `message.out` | `wa_message_id`, `body`, `sender` (`ai`/`admin`/`followup`) | Simpan `lead_messages` (`out`). Update `last_outbound_at`. `sender=followup` → tandai `lead_followups.status=sent` lewat `reference_id` |
+| `conversation.stage` | `wa_message_id`, `stage` (`discovery`/`rekomendasi`), `paket_kode` (untuk rekomendasi) | Tahap maju dari bukti pesan CS AI terkirim; hanya untuk lead `open`, idempotent via `event_id`, tidak pernah mundur. Koreksi manual CS tetap tersedia. |
 | `form.sent` | `{}` | Stage maju ke `form_dikirim` |
 | `payment_info.sent` | `paket_kode`, `nominal_text` (mis. `"Rp149.000"`) | Simpan `paket_kode`, petakan ke `kelas_kode`, parse nominal ke integer (`payment_amount`). Stage maju ke `info_bayar_dikirim`. Isi `payment_info_sent_at` |
 | `proof.received` | `media_type` | Stage maju ke `bukti_masuk`. Isi `proof_received_at`. Notifikasi Dashboard ke user role `keuangan` dan CS yang di-assign: "Bukti transfer masuk dari <nama/wa_name>" |
@@ -486,7 +487,7 @@ Svelte 5 + Inertia, mengikuti design principles dan token warna di `frontend/src
 🔒 Persona **tidak boleh** memuat penilaian tingkat keagamaan, kondisi ekonomi, kesehatan, etnis, atau politik. Validator menolak `catatan` yang memuat kata kunci kategori sensitif dari daftar yang bisa dikonfigurasi. Instruksi agen (Lampiran C) juga melarangnya.
 
 ### 9.4 🔒 AI memberi saran, manusia memutuskan
-`suggested_stage` hanya disimpan di analisis. UI menampilkan tombol **Terapkan**, dan penerapannya dicatat sebagai event manual oleh user yang mengklik.
+`suggested_stage` dari **MCP analisis offline** tetap hanya disimpan sebagai saran. UI menampilkan tombol **Terapkan** dan mencatat aksi manual. Berbeda dari itu, `conversation.stage` adalah bukti milestone **pesan CS AI yang benar-benar terkirim**, sehingga dapat memajukan tahap otomatis.
 
 ### 9.5 Job harian Hermes
 - Jadwal lewat cron Hermes di profile `ruang-sanad`, misalnya setiap hari pukul 21:00 WIB. Hermes memakai token MCP Dashboard yang punya `can_write`.
