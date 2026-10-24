@@ -21,6 +21,7 @@ const (
 var leadIngestTypes = map[string]bool{
 	"message.in": true, "message.out": true, "form.sent": true, "payment_info.sent": true,
 	"proof.received": true, "handoff": true, "ai.paused": true, "ai.resumed": true,
+	"conversation.stage": true,
 }
 
 // errLeadSchema marks an event the bridge must not resend (bad schema).
@@ -35,6 +36,7 @@ type leadEventData struct {
 	Sender      string `json:"sender"`
 	ReferenceID int64  `json:"reference_id"`
 	Purpose     string `json:"purpose"`
+	Stage       string `json:"stage"`
 	PaketKode   string `json:"paket_kode"`
 	NominalText string `json:"nominal_text"`
 	Reason      string `json:"reason"`
@@ -84,6 +86,17 @@ func validateLeadIngestEvent(ev models.LeadIngestEvent) (time.Time, leadEventDat
 	if len(ev.Data) > 0 && string(ev.Data) != "null" {
 		if err := json.Unmarshal(ev.Data, &data); err != nil {
 			return time.Time{}, data, errLeadSchema{"data tidak valid: " + err.Error()}
+		}
+	}
+	if ev.Type == "conversation.stage" {
+		if data.Stage != LeadStageDiscovery && data.Stage != LeadStageRekomendasi {
+			return time.Time{}, data, errLeadSchema{"conversation.stage hanya boleh discovery atau rekomendasi"}
+		}
+		if data.WaMessageID == "" || len(data.WaMessageID) > 128 {
+			return time.Time{}, data, errLeadSchema{"conversation.stage memerlukan wa_message_id dari pesan terkirim"}
+		}
+		if data.Stage == LeadStageRekomendasi && !paketKey.MatchString(strings.ToLower(strings.TrimSpace(data.PaketKode))) {
+			return time.Time{}, data, errLeadSchema{"conversation.stage rekomendasi memerlukan kode paket valid"}
 		}
 	}
 	if len(data.Body) > maxLeadMessageBody {
@@ -198,6 +211,20 @@ func (s *LeadService) applyLeadEvent(ctx context.Context, q *queries.Querier, le
 			}); err != nil {
 				return nil, err
 			}
+		}
+
+	case "conversation.stage":
+		// Bridge emits this milestone ONLY after GOWA confirms an actual
+		// CS AI message was sent, with the referenced WhatsApp message id.
+		// Auto advancement is forward-only and must not override won/lost/DNC
+		// records. Staff can still correct the stage manually.
+		payload["wa_message_id"] = data.WaMessageID
+		payload["stage_source"] = "cs_ai"
+		if data.Stage == LeadStageRekomendasi {
+			payload["paket_kode"] = strings.ToLower(strings.TrimSpace(data.PaketKode))
+		}
+		if from, ok := advanceLeadStage(lead, data.Stage); ok {
+			stageChange(payload, from, lead.Stage)
 		}
 
 	case "form.sent":
