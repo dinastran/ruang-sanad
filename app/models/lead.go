@@ -278,6 +278,8 @@ type CRMSettingsResponse struct {
 	FollowupDailyCap            int64             `json:"followup_daily_cap"`
 	TranscriptRetentionDaysLost int64             `json:"transcript_retention_days_lost"`
 	PaymentVerifiedTemplate     string            `json:"payment_verified_template"`
+	// PersonaBlockedKeywords: one word/phrase per line (PRD 9.3).
+	PersonaBlockedKeywords string `json:"persona_blocked_keywords"`
 }
 
 type CRMSettingsRequest = CRMSettingsResponse

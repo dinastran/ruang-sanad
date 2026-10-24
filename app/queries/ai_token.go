@@ -21,15 +21,19 @@ func nullTimePtr(t sql.NullTime) *time.Time {
 	return &v
 }
 
-func (q *Queries) CreateAIToken(ctx context.Context, userID int64, nama, tokenHash, prefix string, expiresAt time.Time) (int64, error) {
+func (q *Queries) CreateAIToken(ctx context.Context, userID int64, nama, tokenHash, prefix string, expiresAt time.Time, canWrite bool) (int64, error) {
 	var id int64
-	err := q.db.QueryRowContext(ctx, `INSERT INTO ai_tokens (user_id, nama, token_hash, prefix, expires_at)
-	 VALUES (?, ?, ?, ?, ?) RETURNING id`, userID, nama, tokenHash, prefix, expiresAt.UTC()).Scan(&id)
+	write := 0
+	if canWrite {
+		write = 1
+	}
+	err := q.db.QueryRowContext(ctx, `INSERT INTO ai_tokens (user_id, nama, token_hash, prefix, expires_at, can_write)
+	 VALUES (?, ?, ?, ?, ?, ?) RETURNING id`, userID, nama, tokenHash, prefix, expiresAt.UTC(), write).Scan(&id)
 	return id, err
 }
 
 func (q *Queries) ListAITokensByUser(ctx context.Context, userID int64) ([]models.AIToken, error) {
-	rows, err := q.db.QueryContext(ctx, `SELECT id, user_id, nama, prefix, expires_at, last_used_at, revoked_at, created_at
+	rows, err := q.db.QueryContext(ctx, `SELECT id, user_id, nama, prefix, expires_at, last_used_at, revoked_at, created_at, can_write
 	 FROM ai_tokens WHERE user_id = ? ORDER BY created_at DESC, id DESC`, userID)
 	if err != nil {
 		return nil, err
@@ -39,7 +43,7 @@ func (q *Queries) ListAITokensByUser(ctx context.Context, userID int64) ([]model
 	for rows.Next() {
 		var t models.AIToken
 		var lastUsed, revoked sql.NullTime
-		if err := rows.Scan(&t.ID, &t.UserID, &t.Nama, &t.Prefix, &t.ExpiresAt, &lastUsed, &revoked, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.UserID, &t.Nama, &t.Prefix, &t.ExpiresAt, &lastUsed, &revoked, &t.CreatedAt, &t.CanWrite); err != nil {
 			return nil, err
 		}
 		t.LastUsedAt, t.RevokedAt = nullTimePtr(lastUsed), nullTimePtr(revoked)
@@ -70,9 +74,9 @@ func (q *Queries) CountActiveAITokensByUser(ctx context.Context, userID int64, n
 func (q *Queries) GetAITokenAuthByHash(ctx context.Context, tokenHash string) (*models.AITokenAuth, error) {
 	var a models.AITokenAuth
 	var revoked, lastUsed sql.NullTime
-	err := q.db.QueryRowContext(ctx, `SELECT t.id, t.user_id, u.name, u.role, t.expires_at, t.revoked_at, t.last_used_at
+	err := q.db.QueryRowContext(ctx, `SELECT t.id, t.user_id, u.name, u.role, t.expires_at, t.revoked_at, t.last_used_at, t.can_write
 	 FROM ai_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?`, tokenHash).
-		Scan(&a.TokenID, &a.UserID, &a.UserName, &a.Role, &a.ExpiresAt, &revoked, &lastUsed)
+		Scan(&a.TokenID, &a.UserID, &a.UserName, &a.Role, &a.ExpiresAt, &revoked, &lastUsed, &a.CanWrite)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrAITokenNotFound
 	}

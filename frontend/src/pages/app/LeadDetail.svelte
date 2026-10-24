@@ -303,6 +303,7 @@
 		"label.added": "Label ditambah",
 		"label.removed": "Label dihapus",
 		"analysis.saved": "Analisis AI disimpan",
+		"followup.proposed": "Follow-up diusulkan",
 	};
 	// Message events are already visible in the transcript.
 	let timeline = $derived(lead.events.filter((e) => e.type !== "message.in" && e.type !== "message.out"));
@@ -314,11 +315,19 @@
 		if (p.reason && e.type === "lead.lost") parts.push(LOST_REASON_LABELS[p.reason as string] ?? String(p.reason));
 		else if (p.reason) parts.push(String(p.reason));
 		if (p.label) parts.push(String(p.label));
+		if (e.type === "analysis.saved" && p.interest_score !== undefined) parts.push(`skor minat ${p.interest_score}`);
+		if (e.type === "followup.proposed" && p.step) parts.push(`${String(p.step).toUpperCase()} · ${p.scheduled_at}`);
 		if (e.type === "payment.verified") parts.push(`${formatRupiah(Number(p.amount))} · ${p.date}${p.note ? ` · ${p.note}` : ""}`);
 		if (e.type === "payment_info.sent" && p.nominal) parts.push(`Paket ${p.paket_kode} · ${formatRupiah(Number(p.nominal))}`);
 		if (Array.isArray(p.fields) && p.fields.length) parts.push((p.fields as string[]).map((f) => FIELD_LABELS[f] ?? f).join(", "));
 		if (e.type === "message.in" && p.contacted_again) parts.push("menghubungi lagi");
 		return parts.join(" · ");
+	}
+	// Persona values are snake_case codes or lists of them.
+	function personaText(v: unknown): string {
+		if (Array.isArray(v)) return v.length ? v.map((x) => String(x).replaceAll("_", " ")).join(", ") : "-";
+		if (v === undefined || v === null || v === "") return "-";
+		return String(v).replaceAll("_", " ");
 	}
 	function actorLabel(e: LeadEvent): string {
 		if (e.actor === "bridge") return "CS AI";
@@ -458,9 +467,16 @@
 							<dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
 								<div><dt class="text-neutral-500">Skor minat</dt><dd class="font-semibold text-neutral-900 dark:text-white">{a.interest_score}/100</dd></div>
 								<div><dt class="text-neutral-500">Keyakinan</dt><dd class="font-semibold text-neutral-900 dark:text-white capitalize">{a.confidence}</dd></div>
-								<div><dt class="text-neutral-500">Keberatan utama</dt><dd class="text-neutral-800 dark:text-neutral-200">{a.main_objection || "-"}</dd></div>
-								<div><dt class="text-neutral-500">Untuk</dt><dd class="text-neutral-800 dark:text-neutral-200">{String(a.persona?.untuk_siapa ?? "-").replaceAll("_", " ")}</dd></div>
+								<div><dt class="text-neutral-500">Keberatan utama</dt><dd class="text-neutral-800 dark:text-neutral-200">{personaText(a.main_objection)}</dd></div>
+								<div><dt class="text-neutral-500">Untuk</dt><dd class="text-neutral-800 dark:text-neutral-200">{personaText(a.persona?.untuk_siapa)}</dd></div>
+								<div><dt class="text-neutral-500">Level</dt><dd class="text-neutral-800 dark:text-neutral-200">{personaText(a.persona?.level)}</dd></div>
+								<div><dt class="text-neutral-500">Waktu</dt><dd class="text-neutral-800 dark:text-neutral-200">{personaText(a.persona?.preferensi_waktu)}</dd></div>
+								<div><dt class="text-neutral-500">Paket diminati</dt><dd class="text-neutral-800 dark:text-neutral-200">{personaText(a.persona?.paket_diminati)}</dd></div>
+								<div><dt class="text-neutral-500">Gaya komunikasi</dt><dd class="text-neutral-800 dark:text-neutral-200">{personaText(a.persona?.gaya_komunikasi)}</dd></div>
+								<div class="col-span-2"><dt class="text-neutral-500">Tujuan</dt><dd class="text-neutral-800 dark:text-neutral-200">{personaText(a.persona?.tujuan)}</dd></div>
+								<div class="col-span-2"><dt class="text-neutral-500">Hambatan</dt><dd class="text-neutral-800 dark:text-neutral-200">{personaText(a.persona?.hambatan)}</dd></div>
 							</dl>
+							{#if a.persona?.catatan}<p class="mt-2 text-xs text-neutral-600 dark:text-neutral-400 whitespace-pre-wrap break-words">{String(a.persona.catatan)}</p>{/if}
 							{#if a.suggested_next_action}<p class="mt-3 text-sm text-neutral-800 dark:text-neutral-200"><span class="text-neutral-500">Saran tindakan:</span> {a.suggested_next_action}</p>{/if}
 							{#if a.suggested_stage && isOpen && a.suggested_stage !== lead.stage && a.suggested_stage !== "terverifikasi" && stages.includes(a.suggested_stage)}
 								<button type="button" class="{btnGhost} mt-3" disabled={busy} onclick={() => send("put", `/app/leads/${lead.id}/stage?from=ai`, { stage: a.suggested_stage })}>Terapkan saran tahap: {STAGE_LABELS[a.suggested_stage]}</button>

@@ -102,7 +102,7 @@ SELECT * FROM crm_settings WHERE id = 1;
 UPDATE crm_settings SET
     paket_ke_kelas_kode = ?, followup_enabled = ?, followup_send_start = ?, followup_send_end = ?,
     followup_min_gap_seconds = ?, followup_daily_cap = ?, transcript_retention_days_lost = ?,
-    payment_verified_template = ?, updated_by = ?, updated_at = ?
+    payment_verified_template = ?, persona_blocked_keywords = ?, updated_by = ?, updated_at = ?
 WHERE id = 1;
 
 -- name: ListUserIDsByRole :many
@@ -129,3 +129,23 @@ WHERE type IN ('handoff', 'payment.verified', 'ai.paused', 'ai.resumed') AND pay
 DELETE FROM lead_messages WHERE lead_id IN (
     SELECT id FROM leads WHERE status IN ('lost', 'do_not_contact') AND updated_at < ?
 );
+
+-- name: CreateLeadAnalysis :one
+INSERT INTO lead_analyses (
+    lead_id, ai_token_id, summary, persona, interest_score, main_objection,
+    suggested_stage, suggested_next_action, confidence, analyzed_until_message_id, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id;
+
+-- name: SetLeadLastAnalyzedMessage :exec
+UPDATE leads SET last_analyzed_message_id = sqlc.arg(message_id)
+WHERE id = sqlc.arg(id) AND last_analyzed_message_id < sqlc.arg(message_id);
+
+-- name: GetLeadLabelByName :one
+SELECT * FROM lead_labels WHERE lower(nama) = lower(sqlc.arg(nama));
+
+-- name: CreateLeadFollowup :one
+INSERT INTO lead_followups (
+    lead_id, step, scheduled_at, draft_text, reason, status, created_by_kind, created_by, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, ?)
+RETURNING id;

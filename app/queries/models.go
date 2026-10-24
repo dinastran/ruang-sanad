@@ -43,6 +43,7 @@ type AiToken struct {
 	LastUsedAt sql.NullTime
 	RevokedAt  sql.NullTime
 	CreatedAt  time.Time
+	CanWrite   int64
 }
 
 type Angkatan struct {
@@ -85,6 +86,7 @@ type CrmSetting struct {
 	PaymentVerifiedTemplate     string
 	UpdatedBy                   sql.NullInt64
 	UpdatedAt                   time.Time
+	PersonaBlockedKeywords      string
 }
 
 type Guru struct {

@@ -88,6 +88,8 @@ mcp_servers:
 | `daftar_kelas` | Semua kelas + metrik (opsional termasuk nonaktif) | super_admin, admin_kelas, koordinator_guru |
 | `daftar_guru` | Semua guru + metrik (tanpa kontak) | super_admin, koordinator_guru |
 | `daftar_tagihan` | Daftar tagihan per santri, filter status/terlambat/kelas/angkatan/tanggal tagih, berhalaman | super_admin, admin, keuangan |
+| `daftar_lead`, `detail_lead`, `laporan_funnel` | CRM leads (calon santri dari WhatsApp CS) tanpa data kontak, transkrip disensor | super_admin, keuangan, cs |
+| `simpan_analisis_lead`, `usulkan_followup`, `tambah_label_lead` | **Tulis terbatas** CRM, hanya token dengan izin tulis (dibuat super_admin). Lihat `docs/panduan/crm-ai-agent.md` | super_admin, keuangan, cs |
 
 Setiap prioritas di `ringkasan_kondisi` membawa field `rincian` yang menyebut tool + argumen untuk melihat nama-nama di balik angkanya
 (mis. "Santri aktif belum punya kelas aktif" → `daftar_santri {status: aktif, tanpa_kelas_aktif: true}`).
