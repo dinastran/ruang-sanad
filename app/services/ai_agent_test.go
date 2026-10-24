@@ -33,7 +33,8 @@ func setupAIAgent(t *testing.T) (*AIAgentService, *AITokenService, *sql.DB) {
 	riayah := NewRiayahSantriService(q)
 	overview := NewOverviewService(q, finance, riayah)
 	overview.now = now
-	agent := NewAIAgentService(q, overview, finance, riayah, NewTSIService(q), NewSantriService(q, NewKelasEngineService(q)))
+	santri := NewSantriService(q, NewKelasEngineService(q))
+	agent := NewAIAgentService(q, overview, finance, riayah, NewTSIService(q), santri, NewLeadService(q, santri))
 	agent.now = now
 	tokens := NewAITokenService(q)
 	tokens.now = func() time.Time { return time.Date(2026, 3, 15, 2, 0, 0, 0, time.UTC) }
@@ -98,11 +99,13 @@ func TestAIAgentToolsRunReadOnlyWithoutContactData(t *testing.T) {
 		"daftar_kelas":               `{"termasuk_nonaktif":true}`,
 		"daftar_guru":                `{"termasuk_nonaktif":true}`,
 		"daftar_tagihan":             `{}`,
+		"daftar_lead":                `{}`,
+		"laporan_funnel":             `{}`,
 	}
 	for _, dim := range []string{"level", "tipe", "frekuensi", "angkatan", "produk"} {
 		calls["tren_program/"+dim] = `{"dimensi":"` + dim + `","bulan":3}`
 	}
-	require.Len(t, s.Tools("super_admin"), 15)
+	require.Len(t, s.Tools("super_admin"), 18)
 
 	var before, after int64
 	require.NoError(t, db.QueryRow(`SELECT total_changes()`).Scan(&before))
@@ -159,8 +162,11 @@ func TestAIAgentRoleGating(t *testing.T) {
 		}
 		return out
 	}
-	require.ElementsMatch(t, []string{"ringkasan_kondisi", "rekap_tunggakan", "daftar_tagihan"}, names("keuangan"))
-	require.ElementsMatch(t, []string{"cari_santri", "detail_santri", "daftar_santri"}, names("cs"))
+	crmRead := []string{"daftar_lead", "detail_lead", "laporan_funnel"}
+	require.ElementsMatch(t, append([]string{"ringkasan_kondisi", "rekap_tunggakan", "daftar_tagihan"}, crmRead...), names("keuangan"))
+	require.ElementsMatch(t, append([]string{"cari_santri", "detail_santri", "daftar_santri"}, crmRead...), names("cs"))
+	require.NotContains(t, names("admin_kelas"), "daftar_lead")
+	require.NotContains(t, names("koordinator_guru"), "detail_lead")
 	require.NotContains(t, names("admin_kelas"), "daftar_guru")
 	require.NotContains(t, names("koordinator_guru"), "daftar_tagihan")
 	require.NotContains(t, names("admin_kelas"), "rekap_tunggakan")
@@ -227,10 +233,10 @@ func TestAITokenLifecycle(t *testing.T) {
 	_, tokens, db := setupAIAgent(t)
 	ctx := context.Background()
 
-	_, err := tokens.Create(6, "guru", "Hermes", 30)
+	_, err := tokens.Create(6, "guru", "Hermes", 30, false)
 	require.ErrorIs(t, err, ErrAIRoleDitolak)
 
-	created, err := tokens.Create(1, "super_admin", "Claude Desktop", 30)
+	created, err := tokens.Create(1, "super_admin", "Claude Desktop", 30, false)
 	require.NoError(t, err)
 	require.True(t, strings.HasPrefix(created.Plaintext, AITokenPrefix))
 	var stored string
@@ -262,7 +268,7 @@ func TestAITokenLifecycle(t *testing.T) {
 	require.ErrorIs(t, err, ErrAITokenInvalid)
 
 	// Expiry.
-	short, err := tokens.Create(1, "super_admin", "Singkat", 1)
+	short, err := tokens.Create(1, "super_admin", "Singkat", 1, false)
 	require.NoError(t, err)
 	tokens.now = func() time.Time { return time.Date(2026, 3, 17, 2, 0, 0, 0, time.UTC) }
 	_, err = tokens.Authenticate(ctx, short.Plaintext)

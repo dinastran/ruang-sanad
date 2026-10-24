@@ -14,6 +14,7 @@
 		last_used_at: string | null;
 		revoked_at: string | null;
 		created_at: string;
+		can_write: boolean;
 	}
 
 	interface AuditEntry {
@@ -30,6 +31,7 @@
 		name: string;
 		title: string;
 		description: string;
+		write: boolean;
 	}
 
 	interface Props {
@@ -40,12 +42,14 @@
 		audit: AuditEntry[];
 		audit_semua: boolean;
 		tools: ToolInfo[];
+		boleh_tulis: boolean;
 	}
 
-	let { user, diizinkan, mcp_url, tokens, audit, audit_semua, tools }: Props = $props();
+	let { user, diizinkan, mcp_url, tokens, audit, audit_semua, tools, boleh_tulis }: Props = $props();
 
 	let nama = $state("");
 	let masaBerlaku = $state(90);
+	let bolehMenulis = $state(false);
 	let membuat = $state(false);
 	let tokenBaru = $state<string | null>(null);
 	let copied = $state<string | null>(null);
@@ -112,7 +116,7 @@
 			const res = await fetch("/app/ai-akses/token", {
 				method: "POST",
 				headers: { "Content-Type": "application/json", Accept: "application/json", "X-XSRF-TOKEN": getCSRFToken() },
-				body: JSON.stringify({ nama: nama.trim(), masa_berlaku_hari: Number(masaBerlaku) }),
+				body: JSON.stringify({ nama: nama.trim(), masa_berlaku_hari: Number(masaBerlaku), can_write: boleh_tulis && bolehMenulis }),
 			});
 			const data = await res.json().catch(() => ({}));
 			if (!res.ok) {
@@ -121,6 +125,7 @@
 			}
 			tokenBaru = data.plaintext;
 			nama = "";
+			bolehMenulis = false;
 			router.reload({ only: ["tokens"] });
 		} catch {
 			Toast("Koneksi gagal. Coba lagi.", "error");
@@ -154,8 +159,8 @@
 			</div>
 			<h1 class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white mb-2">Akses AI</h1>
 			<p class="text-neutral-600 dark:text-neutral-400 max-w-2xl">
-				Hubungkan Claude, Hermes, atau AI agent lain ke data dashboard. Aksesnya hanya membaca, mengikuti role Anda,
-				dan tidak pernah mengirim nomor HP, email, atau voice note.
+				Hubungkan Claude, Hermes, atau AI agent lain ke data dashboard. Aksesnya membaca sesuai role Anda (token tulis CRM
+				khusus dibuat super admin), dan tidak pernah mengirim nomor HP, email, domisili, atau voice note.
 			</p>
 		</div>
 	</div>
@@ -207,6 +212,15 @@
 						class="rounded-xl bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400 text-white px-5 py-2.5 text-sm font-semibold disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400 active:scale-[0.97] transition">
 						{membuat ? "Membuat…" : "Buat token"}
 					</button>
+					{#if boleh_tulis}
+						<label class="sm:col-span-3 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-neutral-700 dark:text-neutral-300">
+							<input type="checkbox" bind:checked={bolehMenulis} class="mt-0.5" />
+							<span>
+								<span class="font-medium text-neutral-900 dark:text-white">Boleh menulis analisis CRM</span>
+								<span class="block text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">Untuk job harian Hermes. AI bisa menyimpan analisis lead, mengusulkan follow-up (menunggu persetujuan CS), dan memasang label yang sudah ada. AI tetap tidak bisa mengubah tahap, memverifikasi, atau mengirim pesan.</span>
+							</span>
+						</label>
+					{/if}
 				</form>
 
 				{#if tokenBaru}
@@ -283,6 +297,7 @@
 										<td class="px-4 py-3">
 											<p class="font-medium text-neutral-900 dark:text-white">{t.nama}</p>
 											<p class="text-xs text-neutral-500 font-mono">{t.prefix}… · dibuat {tanggal(t.created_at)}</p>
+											{#if t.can_write}<span class="mt-1 inline-block rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">Tulis CRM</span>{/if}
 										</td>
 										<td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-medium {st.cls}">{st.label}</span></td>
 										<td class="px-4 py-3 text-neutral-600 dark:text-neutral-400">{tanggal(t.last_used_at, true)}</td>
@@ -306,11 +321,11 @@
 			<!-- Tools -->
 			<section aria-labelledby="data-ai">
 				<h2 id="data-ai" class="text-lg font-semibold text-neutral-900 dark:text-white mb-1 flex items-center gap-2"><ShieldCheck class="w-5 h-5 text-brand-600 dark:text-brand-400" />Data yang bisa dibaca AI dengan role Anda</h2>
-				<p class="text-sm text-neutral-600 dark:text-neutral-400 mb-4">AI memanggil fitur berikut sesuai pertanyaan. Tidak ada fitur untuk mengubah atau menghapus data.</p>
+				<p class="text-sm text-neutral-600 dark:text-neutral-400 mb-4">AI memanggil fitur berikut sesuai pertanyaan. Fitur bertanda "tulis" hanya aktif untuk token dengan izin menulis analisis CRM; tidak ada fitur untuk menghapus data.</p>
 				<ul class="divide-y divide-neutral-200/80 dark:divide-white/[0.06] border-y border-neutral-200/80 dark:border-white/[0.06]">
 					{#each tools as tool (tool.name)}
 						<li class="py-3">
-							<p class="text-sm font-medium text-neutral-900 dark:text-white">{tool.title} <span class="ml-1 font-mono text-xs text-neutral-500">{tool.name}</span></p>
+							<p class="text-sm font-medium text-neutral-900 dark:text-white">{tool.title} <span class="ml-1 font-mono text-xs text-neutral-500">{tool.name}</span>{#if tool.write}<span class="ml-2 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">tulis</span>{/if}</p>
 							<p class="text-sm text-neutral-600 dark:text-neutral-400 mt-0.5">{tool.description}</p>
 						</li>
 					{/each}

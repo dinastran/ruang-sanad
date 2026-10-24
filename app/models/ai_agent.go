@@ -13,6 +13,8 @@ type AIToken struct {
 	LastUsedAt *time.Time `json:"last_used_at"`
 	RevokedAt  *time.Time `json:"revoked_at"`
 	CreatedAt  time.Time  `json:"created_at"`
+	// CanWrite allows the limited CRM write tools (PRD CRM 9.1).
+	CanWrite bool `json:"can_write"`
 }
 
 // AITokenAuth is the token row joined with its owner, used to authenticate
@@ -26,6 +28,7 @@ type AITokenAuth struct {
 	ExpiresAt  time.Time
 	RevokedAt  *time.Time
 	LastUsedAt *time.Time
+	CanWrite   bool
 }
 
 // AIPrincipal is the authenticated caller of an AI agent tool.
@@ -34,6 +37,9 @@ type AIPrincipal struct {
 	TokenID  int64
 	UserName string
 	Role     string
+	// CanWrite is the token's permission for the CRM write tools; the tools
+	// also re-check the owner's role.
+	CanWrite bool
 	// BaseURL is the dashboard origin used to build links in tool results.
 	BaseURL string
 }

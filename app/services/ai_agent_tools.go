@@ -226,7 +226,7 @@ func (s *AIAgentService) buildTools() []AITool {
 			Roles: []string{"super_admin", "admin_kelas", "koordinator_guru"},
 			run:   s.toolCariCatatan,
 		},
-	}, s.daftarTools()...)
+	}, append(s.daftarTools(), s.crmTools()...)...)
 }
 
 // --- ringkasan_kondisi -------------------------------------------------------

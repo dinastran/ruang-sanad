@@ -14,6 +14,7 @@
 		followup_daily_cap: number;
 		transcript_retention_days_lost: number;
 		payment_verified_template: string;
+		persona_blocked_keywords: string;
 	}
 	interface Page {
 		settings: Settings;
@@ -35,6 +36,8 @@
 	let mapping = $state(Object.entries(props.page.settings.paket_ke_kelas_kode).map(([paket, kode]) => ({ paket, kode })));
 	// svelte-ignore state_referenced_locally
 	let retention = $state(props.page.settings.transcript_retention_days_lost);
+	// svelte-ignore state_referenced_locally
+	let blockedKeywords = $state(props.page.settings.persona_blocked_keywords);
 	let saving = $state(false);
 
 	// Ingest looks stale when nothing arrived for over a day.
@@ -50,6 +53,7 @@
 			...page.settings,
 			paket_ke_kelas_kode,
 			transcript_retention_days_lost: Number(retention),
+			persona_blocked_keywords: blockedKeywords,
 		}, { preserveScroll: true, onFinish: () => (saving = false) });
 	}
 
@@ -110,6 +114,11 @@
 			<label class="block text-xs font-medium text-neutral-600 dark:text-neutral-400 max-w-xs">
 				Hapus transkrip lead hilang / jangan-hubungi setelah (hari)
 				<input type="number" min="30" max="3650" class="{field} mt-1" bind:value={retention} />
+			</label>
+			<label class="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+				Kata terlarang di catatan persona analisis AI
+				<span class="block font-normal text-neutral-500">Satu kata atau frasa per baris. Analisis yang catatan personanya memuat kata ini ditolak (penilaian keagamaan, ekonomi, kesehatan, etnis, politik).</span>
+				<textarea class="{field} mt-1 font-mono" rows="6" bind:value={blockedKeywords}></textarea>
 			</label>
 			<div class="flex justify-end"><button type="submit" disabled={saving} class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold dark:bg-brand-500 disabled:opacity-50">{saving ? "Menyimpan..." : "Simpan pengaturan"}</button></div>
 		</form>

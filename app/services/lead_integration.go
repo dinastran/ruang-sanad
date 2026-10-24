@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/maulanashalihin/laju-go/app/models"
 	"github.com/maulanashalihin/laju-go/app/queries"
@@ -47,6 +48,7 @@ func settingsResponse(s queries.CrmSetting) models.CRMSettingsResponse {
 		FollowupSendStart: s.FollowupSendStart, FollowupSendEnd: s.FollowupSendEnd,
 		FollowupMinGapSeconds: s.FollowupMinGapSeconds, FollowupDailyCap: s.FollowupDailyCap,
 		TranscriptRetentionDaysLost: s.TranscriptRetentionDaysLost, PaymentVerifiedTemplate: s.PaymentVerifiedTemplate,
+		PersonaBlockedKeywords: s.PersonaBlockedKeywords,
 	}
 }
 
@@ -84,6 +86,18 @@ func (s *CRMIntegrationService) UpdateSettings(ctx context.Context, actorID int6
 	if len([]rune(req.PaymentVerifiedTemplate)) > 1000 {
 		return errors.New("template konfirmasi maksimal 1000 karakter")
 	}
+	keywords := ParseBlockedKeywords(req.PersonaBlockedKeywords)
+	if len(keywords) == 0 {
+		return errors.New("daftar kata terlarang persona tidak boleh kosong")
+	}
+	if len(keywords) > 300 {
+		return errors.New("daftar kata terlarang persona maksimal 300 entri")
+	}
+	for _, kw := range keywords {
+		if utf8.RuneCountInString(kw) > 60 {
+			return fmt.Errorf("kata terlarang %q terlalu panjang (maks 60 karakter)", kw)
+		}
+	}
 	raw, err := json.Marshal(mapping)
 	if err != nil {
 		return err
@@ -94,6 +108,7 @@ func (s *CRMIntegrationService) UpdateSettings(ctx context.Context, actorID int6
 		FollowupMinGapSeconds: req.FollowupMinGapSeconds, FollowupDailyCap: req.FollowupDailyCap,
 		TranscriptRetentionDaysLost: req.TranscriptRetentionDaysLost,
 		PaymentVerifiedTemplate:     strings.TrimSpace(req.PaymentVerifiedTemplate),
+		PersonaBlockedKeywords:      strings.Join(keywords, "\n"),
 		UpdatedBy:                   nullInt(actorID), UpdatedAt: s.now().UTC().Truncate(time.Second),
 	})
 }
