@@ -28,6 +28,11 @@ func leadIDParam(c *fiber.Ctx) (int64, bool) {
 	return id, err == nil && id > 0
 }
 
+func roleOf(c *fiber.Ctx) string {
+	role, _ := c.Locals("role").(string)
+	return role
+}
+
 func leadPath(id int64) string { return fmt.Sprintf("/app/leads/%d", id) }
 
 func (h *LeadHandler) Index(c *fiber.Ctx) error {
@@ -84,6 +89,10 @@ func (h *LeadHandler) Show(c *fiber.Ctx) error {
 		"users":        users,
 		"stages":       services.LeadStages,
 		"lost_reasons": services.LeadLostReasons,
+		"followup": fiber.Map{
+			"can_approve": services.CanApproveFollowup(roleOf(c)),
+			"steps":       append(append([]string{}, services.FollowupSteps...), services.FollowupStepManual),
+		},
 	}
 	if lead.Status == services.LeadStatusOpen && lead.Stage == services.LeadStageTerverifikasi && lead.SantriID == 0 {
 		opts, err := h.leads.ConvertOptions(c.UserContext(), id)

@@ -310,9 +310,15 @@ func (s *LeadService) Detail(ctx context.Context, id int64) (*models.LeadDetail,
 	for _, f := range followups {
 		d.Followups = append(d.Followups, models.LeadFollowupResponse{
 			ID: f.ID, Step: f.Step, ScheduledAt: formatLeadTime(f.ScheduledAt), DraftText: f.DraftText, Reason: f.Reason,
-			Status: f.Status, SentAt: formatLeadNullTime(f.SentAt), Error: f.Error,
+			Status: f.Status, SentAt: formatLeadNullTime(f.SentAt), Error: f.Error, CreatedByKind: f.CreatedByKind,
+			Warnings: FollowupDraftWarnings(f.Step, f.DraftText, f.Reason, l.FollowupPermission),
 		})
 	}
+	settings, err := s.querier.GetCRMSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	d.ConfirmationReady = strings.TrimSpace(settings.PaymentVerifiedTemplate) != ""
 	return d, nil
 }
 

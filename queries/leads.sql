@@ -102,7 +102,8 @@ SELECT * FROM crm_settings WHERE id = 1;
 UPDATE crm_settings SET
     paket_ke_kelas_kode = ?, followup_enabled = ?, followup_send_start = ?, followup_send_end = ?,
     followup_min_gap_seconds = ?, followup_daily_cap = ?, transcript_retention_days_lost = ?,
-    payment_verified_template = ?, persona_blocked_keywords = ?, updated_by = ?, updated_at = ?
+    payment_verified_template = ?, persona_blocked_keywords = ?, followup_only_label = ?,
+    updated_by = ?, updated_at = ?
 WHERE id = 1;
 
 -- name: ListUserIDsByRole :many
@@ -149,3 +150,61 @@ INSERT INTO lead_followups (
     lead_id, step, scheduled_at, draft_text, reason, status, created_by_kind, created_by, created_at, updated_at
 ) VALUES (?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, ?)
 RETURNING id;
+
+-- name: GetLeadFollowupByID :one
+SELECT * FROM lead_followups WHERE id = ?;
+
+-- name: ApproveLeadFollowup :execrows
+UPDATE lead_followups SET status = 'approved', draft_text = ?, scheduled_at = ?, approved_by = ?, approved_at = ?, error = '', updated_at = ?
+WHERE id = ? AND status = 'pending_approval';
+
+-- name: RescheduleLeadFollowup :execrows
+UPDATE lead_followups SET scheduled_at = ?, updated_at = ?
+WHERE id = ? AND status IN ('pending_approval', 'approved');
+
+-- name: SetLeadFollowupStatus :execrows
+UPDATE lead_followups SET status = ?, error = ?, updated_at = ?
+WHERE id = ? AND status IN ('pending_approval', 'approved');
+
+-- name: SetLeadFollowupError :exec
+UPDATE lead_followups SET error = ?, updated_at = ? WHERE id = ?;
+
+-- name: CreateWaOutbox :one
+INSERT INTO wa_outbox (purpose, channel, to_chat_id, body, reference_type, reference_id, not_before, status, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)
+RETURNING id;
+
+-- name: GetWaOutboxByID :one
+SELECT * FROM wa_outbox WHERE id = ?;
+
+-- name: ClaimWaOutbox :execrows
+UPDATE wa_outbox SET status = 'sending', attempts = attempts + 1, updated_at = ?
+WHERE id = ? AND status = 'queued';
+
+-- name: MarkWaOutboxSent :exec
+UPDATE wa_outbox SET status = 'sent', sent_at = ?, wa_message_id = ?, last_error = '', updated_at = ?
+WHERE id = ?;
+
+-- name: MarkWaOutboxRetry :exec
+UPDATE wa_outbox SET status = 'queued', not_before = ?, last_error = ?, updated_at = ?
+WHERE id = ?;
+
+-- name: MarkWaOutboxFailed :exec
+UPDATE wa_outbox SET status = 'failed', last_error = ?, updated_at = ?
+WHERE id = ?;
+
+-- name: CancelWaOutbox :exec
+UPDATE wa_outbox SET status = 'cancelled', last_error = ?, updated_at = ?
+WHERE id = ? AND status IN ('queued', 'sending', 'failed');
+
+-- name: RequeueFailedWaOutbox :execrows
+UPDATE wa_outbox SET status = 'queued', attempts = 0, not_before = ?, last_error = '', updated_at = ?
+WHERE id = ? AND status = 'failed';
+
+-- name: FailStuckWaOutbox :execrows
+UPDATE wa_outbox SET status = 'failed', last_error = sqlc.arg(reason), updated_at = sqlc.arg(now)
+WHERE status = 'sending' AND updated_at < sqlc.arg(before);
+
+-- name: LeadHasLabelNamed :one
+SELECT COUNT(*) FROM lead_label_links k JOIN lead_labels l ON l.id = k.label_id
+WHERE k.lead_id = ? AND lower(l.nama) = lower(sqlc.arg(nama));

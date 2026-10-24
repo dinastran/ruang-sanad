@@ -115,6 +115,9 @@ type LeadFollowupResponse struct {
 	Status      string `json:"status"`
 	SentAt      string `json:"sent_at"`
 	Error       string `json:"error"`
+	// CreatedByKind is "ai" or "user".
+	CreatedByKind string   `json:"created_by_kind"`
+	Warnings      []string `json:"warnings"`
 }
 
 // LeadDetail is everything /app/leads/:id shows about one lead.
@@ -161,6 +164,8 @@ type LeadDetail struct {
 	Events             []LeadEventResponse    `json:"events"`
 	Analysis           *LeadAnalysisResponse  `json:"analysis"`
 	Followups          []LeadFollowupResponse `json:"followups"`
+	// ConfirmationReady: a payment confirmation template is set (PRD 6.3).
+	ConfirmationReady bool `json:"confirmation_ready"`
 }
 
 type LeadUpdateRequest struct {
@@ -199,6 +204,9 @@ type LeadVerifyRequest struct {
 	Date    string `json:"date"`
 	Note    string `json:"note"`
 	NoProof bool   `json:"no_proof_confirmed"`
+	// SendConfirmation queues crm_settings.payment_verified_template to the
+	// lead through the bridge (PRD 6.3, default off).
+	SendConfirmation bool `json:"send_confirmation"`
 }
 
 type LeadConvertRequest struct {
@@ -280,6 +288,8 @@ type CRMSettingsResponse struct {
 	PaymentVerifiedTemplate     string            `json:"payment_verified_template"`
 	// PersonaBlockedKeywords: one word/phrase per line (PRD 9.3).
 	PersonaBlockedKeywords string `json:"persona_blocked_keywords"`
+	// FollowupOnlyLabel limits follow-up sends to leads with this label ("" = all).
+	FollowupOnlyLabel string `json:"followup_only_label"`
 }
 
 type CRMSettingsRequest = CRMSettingsResponse
@@ -294,7 +304,66 @@ type IntegrationStatus struct {
 type IntegrationPage struct {
 	Settings          CRMSettingsResponse `json:"settings"`
 	IngestEnabled     bool                `json:"ingest_enabled"`
+	OutboundReady     bool                `json:"outbound_ready"`
 	LastBridgeEvent   string              `json:"last_bridge_event"`
 	BridgeEventsToday int64               `json:"bridge_events_today"`
 	Statuses          []IntegrationStatus `json:"statuses"`
+}
+
+// --- Follow-up (Fase D) ---
+
+// LeadFollowupRequest creates or edits a follow-up. ScheduledAt is
+// "YYYY-MM-DDTHH:MM" (or with a space) in WIB.
+type LeadFollowupRequest struct {
+	Step        string `json:"step"`
+	ScheduledAt string `json:"scheduled_at"`
+	DraftText   string `json:"draft_text"`
+	Reason      string `json:"reason"`
+}
+
+type FollowupBulkRequest struct {
+	IDs []int64 `json:"ids"`
+}
+
+type FollowupQueueItem struct {
+	ID             int64                 `json:"id"`
+	LeadID         int64                 `json:"lead_id"`
+	LeadName       string                `json:"lead_name"`
+	LeadStage      string                `json:"lead_stage"`
+	Step           string                `json:"step"`
+	ScheduledAt    string                `json:"scheduled_at"`
+	DraftText      string                `json:"draft_text"`
+	Reason         string                `json:"reason"`
+	Status         string                `json:"status"`
+	CreatedByKind  string                `json:"created_by_kind"`
+	Error          string                `json:"error"`
+	OutboxStatus   string                `json:"outbox_status"`
+	Warnings       []string              `json:"warnings"`
+	Blocked        bool                  `json:"blocked"`
+	RecentMessages []LeadMessageResponse `json:"recent_messages"`
+}
+
+type FailedSendItem struct {
+	OutboxID  int64  `json:"outbox_id"`
+	LeadID    int64  `json:"lead_id"`
+	LeadName  string `json:"lead_name"`
+	Purpose   string `json:"purpose"`
+	Step      string `json:"step"`
+	Body      string `json:"body"`
+	Error     string `json:"error"`
+	Attempts  int64  `json:"attempts"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type FollowupQueuePage struct {
+	Pending         []FollowupQueueItem `json:"pending"`
+	Approved        []FollowupQueueItem `json:"approved"`
+	Failed          []FailedSendItem    `json:"failed"`
+	FollowupEnabled bool                `json:"followup_enabled"`
+	SendStart       string              `json:"send_start"`
+	SendEnd         string              `json:"send_end"`
+	DailyCap        int64               `json:"daily_cap"`
+	SentToday       int64               `json:"sent_today"`
+	OnlyLabel       string              `json:"only_label"`
+	CanApprove      bool                `json:"can_approve"`
 }
