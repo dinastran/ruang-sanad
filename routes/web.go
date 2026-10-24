@@ -51,6 +51,10 @@ type Handlers struct {
 	MCP                         *handlers.MCPHandler
 	AIAkses                     *handlers.AIAksesHandler
 	CsAiIngest                  *handlers.CsAiIngestHandler
+	Leads                       *handlers.LeadHandler
+	LeadClosing                 *handlers.LeadClosingHandler
+	LeadLaporan                 *handlers.LeadLaporanHandler
+	IntegrasiWhatsApp           *handlers.IntegrasiWhatsAppHandler
 }
 
 func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, mailerService *services.MailerService, csrfMiddleware *middlewares.CSRFMiddleware) {
@@ -69,7 +73,7 @@ func setupIntegrationRoutes(app *fiber.App, csAi *handlers.CsAiIngestHandler) {
 	if csAi == nil {
 		return
 	}
-	app.Post("/integrations/cs-ai/events", middlewares.CSAIIngestRateLimit.Limit(), csAi.Events)
+	app.Post("/integrations/cs-ai/events", csAi.Guard, middlewares.CSAIIngestRateLimit.Limit(), csAi.Events)
 }
 
 // setupMCPRoutes exposes the read-only AI agent endpoint. It sits outside
@@ -261,6 +265,8 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Get("/laporan/keuangan", kuRole, h.Laporan.Keuangan)
 	protected.Get("/laporan/keuangan/export", kuRole, h.Laporan.Export)
 
+	setupLeadRoutes(protected, h, store, userService)
+
 	// Master data API (all authenticated)
 	api := protected.Group("/api")
 	api.Get("/master/angkatan", h.Master.Angkatan)
@@ -415,6 +421,36 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Post("/koordinator-guru/tsi/:id", koordinatorRole, h.TSI.SaveNilai)
 	protected.Post("/koordinator-guru/tsi/:id/finalize", koordinatorRole, h.TSI.Finalize)
 	protected.Post("/koordinator-guru/tsi/:id/reopen", koordinatorRole, h.TSI.Reopen)
+}
+
+// LeadRoles may open the CRM lead pages (PRD CRM 8.6). admin_kelas is
+// deliberately absent: it only receives the "santri baru" notification.
+var LeadRoles = []string{"cs", "keuangan", "super_admin"}
+
+// setupLeadRoutes registers the CRM Leads pages under /app. Static paths
+// (laporan) come before /leads/:id.
+func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, userService *services.UserService) {
+	if h.Leads == nil {
+		return
+	}
+	leadRole := middlewares.RoleRequired(store, userService, LeadRoles...)
+	superAdminRole := middlewares.RoleRequired(store, userService, "super_admin")
+	protected.Get("/leads", leadRole, h.Leads.Index)
+	protected.Get("/leads/laporan", leadRole, h.LeadLaporan.Index)
+	protected.Get("/leads/laporan/export", leadRole, h.LeadLaporan.Export)
+	protected.Get("/leads/:id", leadRole, h.Leads.Show)
+	protected.Get("/leads/:id/messages", leadRole, h.Leads.Messages)
+	protected.Put("/leads/:id", leadRole, h.Leads.UpdateData)
+	protected.Put("/leads/:id/stage", leadRole, h.Leads.Stage)
+	protected.Put("/leads/:id/status", leadRole, h.Leads.Status)
+	protected.Put("/leads/:id/assign", leadRole, h.Leads.Assign)
+	protected.Post("/leads/:id/labels", leadRole, h.Leads.AddLabel)
+	protected.Delete("/leads/:id/labels/:labelID", leadRole, h.Leads.RemoveLabel)
+	protected.Post("/leads/:id/verify", leadRole, h.LeadClosing.Verify)
+	protected.Post("/leads/:id/convert", leadRole, h.LeadClosing.Convert)
+	protected.Delete("/leads/:id", superAdminRole, h.Leads.Delete)
+	protected.Get("/integrasi-whatsapp", superAdminRole, h.IntegrasiWhatsApp.Index)
+	protected.Put("/integrasi-whatsapp/settings", superAdminRole, h.IntegrasiWhatsApp.UpdateSettings)
 }
 
 func setupAdminRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, csrfMiddleware *middlewares.CSRFMiddleware) {

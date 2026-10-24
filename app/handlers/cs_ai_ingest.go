@@ -64,7 +64,23 @@ func (h *CsAiIngestHandler) validToken(header string) bool {
 	return subtle.ConstantTimeCompare(sum[:], h.tokenHash[:]) == 1
 }
 
+// Guard authenticates the bridge before anything else (including the rate
+// limiter), so unauthenticated traffic cannot use up the bridge's quota.
+func (h *CsAiIngestHandler) Guard(c *fiber.Ctx) error {
+	if err := h.authorize(c); err != nil {
+		return err
+	}
+	return c.Next()
+}
+
 func (h *CsAiIngestHandler) Events(c *fiber.Ctx) error {
+	if err := h.authorize(c); err != nil {
+		return err
+	}
+	return h.events(c)
+}
+
+func (h *CsAiIngestHandler) authorize(c *fiber.Ctx) error {
 	if !h.enabled {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
 	}
@@ -78,6 +94,10 @@ func (h *CsAiIngestHandler) Events(c *fiber.Ctx) error {
 	if !h.validToken(c.Get(fiber.HeaderAuthorization)) {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
 	}
+	return nil
+}
+
+func (h *CsAiIngestHandler) events(c *fiber.Ctx) error {
 	if c.Request().Header.ContentLength() > csAIIngestMaxBody {
 		return c.Status(fiber.StatusRequestEntityTooLarge).JSON(fiber.Map{"error": "body maksimal 256 KB"})
 	}

@@ -111,9 +111,6 @@ SELECT id FROM users WHERE role = ? ORDER BY id;
 -- name: ListUsersByRoles :many
 SELECT id, name, role FROM users WHERE role IN (sqlc.slice(roles)) ORDER BY name;
 
--- name: FindSantriByNoWA :many
-SELECT id, nama, id_mahasantri, no_wa FROM santri WHERE no_wa IN (sqlc.slice(numbers)) ORDER BY id LIMIT 5;
-
 -- name: ListAngkatanAktif :many
 SELECT * FROM angkatan WHERE is_aktif = 1 ORDER BY id DESC;
 
@@ -122,6 +119,11 @@ SELECT * FROM lead_events WHERE actor = 'bridge' ORDER BY id DESC LIMIT 1;
 
 -- name: CountLeadEventsSince :one
 SELECT COUNT(*) FROM lead_events WHERE actor = 'bridge' AND created_at >= ?;
+
+-- name: ClearLeadEventNotesForClosedLeads :execrows
+UPDATE lead_events SET payload = '{}'
+WHERE type IN ('handoff', 'payment.verified', 'ai.paused', 'ai.resumed') AND payload <> '{}'
+  AND lead_id IN (SELECT id FROM leads WHERE status IN ('lost', 'do_not_contact') AND updated_at < ?);
 
 -- name: DeleteLeadMessagesForClosedLeads :execrows
 DELETE FROM lead_messages WHERE lead_id IN (
