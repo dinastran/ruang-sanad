@@ -23,6 +23,7 @@ const PAGE_TITLES: Record<string, string> = {
 	"app/Leads": "Leads",
 	"app/LeadDetail": "Detail Lead",
 	"app/LeadLaporan": "Laporan Leads",
+	"app/LeadFollowups": "Follow-up Leads",
 	"app/IntegrasiWhatsApp": "Integrasi WhatsApp",
 	"app/SantriForm": "Form Santri",
 	"app/PerluDilengkapi": "Perlu Dilengkapi",

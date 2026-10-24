@@ -22,6 +22,7 @@ import (
 type CRMIntegrationConfig struct {
 	IngestEnabled bool
 	BridgeURL     string
+	OutboundReady bool // CS_BRIDGE_URL and CS_BRIDGE_OUTBOUND_TOKEN set
 	GowaURL       string
 	GowaUser      string
 	GowaPass      string
@@ -48,7 +49,7 @@ func settingsResponse(s queries.CrmSetting) models.CRMSettingsResponse {
 		FollowupSendStart: s.FollowupSendStart, FollowupSendEnd: s.FollowupSendEnd,
 		FollowupMinGapSeconds: s.FollowupMinGapSeconds, FollowupDailyCap: s.FollowupDailyCap,
 		TranscriptRetentionDaysLost: s.TranscriptRetentionDaysLost, PaymentVerifiedTemplate: s.PaymentVerifiedTemplate,
-		PersonaBlockedKeywords: s.PersonaBlockedKeywords,
+		PersonaBlockedKeywords: s.PersonaBlockedKeywords, FollowupOnlyLabel: s.FollowupOnlyLabel,
 	}
 }
 
@@ -98,6 +99,15 @@ func (s *CRMIntegrationService) UpdateSettings(ctx context.Context, actorID int6
 			return fmt.Errorf("kata terlarang %q terlalu panjang (maks 60 karakter)", kw)
 		}
 	}
+	onlyLabel := strings.TrimSpace(req.FollowupOnlyLabel)
+	if onlyLabel != "" {
+		if _, err := s.querier.GetLeadLabelByName(ctx, onlyLabel); err != nil {
+			return fmt.Errorf("label %q belum ada; buat labelnya dulu atau kosongkan", onlyLabel)
+		}
+	}
+	if strings.Contains(req.PaymentVerifiedTemplate, "[[") {
+		return errors.New("template konfirmasi tidak boleh memuat marker [[...]]")
+	}
 	raw, err := json.Marshal(mapping)
 	if err != nil {
 		return err
@@ -109,6 +119,7 @@ func (s *CRMIntegrationService) UpdateSettings(ctx context.Context, actorID int6
 		TranscriptRetentionDaysLost: req.TranscriptRetentionDaysLost,
 		PaymentVerifiedTemplate:     strings.TrimSpace(req.PaymentVerifiedTemplate),
 		PersonaBlockedKeywords:      strings.Join(keywords, "\n"),
+		FollowupOnlyLabel:           onlyLabel,
 		UpdatedBy:                   nullInt(actorID), UpdatedAt: s.now().UTC().Truncate(time.Second),
 	})
 }
@@ -143,7 +154,7 @@ func (s *CRMIntegrationService) Page(ctx context.Context) (*models.IntegrationPa
 	if err != nil {
 		return nil, err
 	}
-	page := &models.IntegrationPage{Settings: settingsResponse(settings), IngestEnabled: s.cfg.IngestEnabled, Statuses: []models.IntegrationStatus{}}
+	page := &models.IntegrationPage{Settings: settingsResponse(settings), IngestEnabled: s.cfg.IngestEnabled, OutboundReady: s.cfg.OutboundReady, Statuses: []models.IntegrationStatus{}}
 	if last, err := s.querier.GetLatestBridgeEvent(ctx); err == nil && len(last) > 0 {
 		page.LastBridgeEvent = formatLeadTime(last[0].CreatedAt)
 	} else if err != nil {

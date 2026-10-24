@@ -32,9 +32,10 @@ func TestLeadRoutesRoleGuard(t *testing.T) {
 	userService := services.NewUserService(q)
 	leads := services.NewLeadService(q, services.NewSantriService(q, services.NewKelasEngineService(q)))
 	h := Handlers{
-		Leads:       handlers.NewLeadHandler(leads, store, nil),
-		LeadClosing: handlers.NewLeadClosingHandler(leads, store, nil),
-		LeadLaporan: handlers.NewLeadLaporanHandler(leads, store, nil),
+		Leads:         handlers.NewLeadHandler(leads, store, nil),
+		LeadClosing:   handlers.NewLeadClosingHandler(leads, store, nil),
+		LeadLaporan:   handlers.NewLeadLaporanHandler(leads, store, nil),
+		LeadFollowups: handlers.NewLeadFollowupHandler(leads, services.NewWAOutboxService(q, services.NewCSBridgeClient("", "")), store, nil),
 		IntegrasiWhatsApp: handlers.NewIntegrasiWhatsAppHandler(
 			services.NewCRMIntegrationService(q, services.CRMIntegrationConfig{}), store, nil),
 	}
@@ -76,4 +77,12 @@ func TestLeadRoutesRoleGuard(t *testing.T) {
 	// Integration settings and hard delete are super_admin only.
 	require.Equal(t, fiber.StatusForbidden, do(cs, http.MethodGet, "/app/integrasi-whatsapp"))
 	require.Equal(t, fiber.StatusForbidden, do(keuangan, http.MethodDelete, "/app/leads/1"))
+	// Follow-up approval is cs and super_admin only (PRD 8.6).
+	for _, sid := range []string{keuangan, adminKelas, guru} {
+		require.Equal(t, fiber.StatusForbidden, do(sid, http.MethodGet, "/app/leads/followups"))
+		require.Equal(t, fiber.StatusForbidden, do(sid, http.MethodPut, "/app/leads/followups/1/approve"))
+		require.Equal(t, fiber.StatusForbidden, do(sid, http.MethodPost, "/app/leads/followups/bulk-approve"))
+		require.Equal(t, fiber.StatusForbidden, do(sid, http.MethodPost, "/app/leads/outbox/1/retry"))
+	}
+	require.Equal(t, fiber.StatusForbidden, do(adminKelas, http.MethodPost, "/app/leads/1/followups"))
 }

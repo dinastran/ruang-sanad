@@ -36,6 +36,35 @@ func (q *Queries) AddLeadLabelLink(ctx context.Context, arg AddLeadLabelLinkPara
 	return result.RowsAffected()
 }
 
+const approveLeadFollowup = `-- name: ApproveLeadFollowup :execrows
+UPDATE lead_followups SET status = 'approved', draft_text = ?, scheduled_at = ?, approved_by = ?, approved_at = ?, error = '', updated_at = ?
+WHERE id = ? AND status = 'pending_approval'
+`
+
+type ApproveLeadFollowupParams struct {
+	DraftText   string
+	ScheduledAt time.Time
+	ApprovedBy  sql.NullInt64
+	ApprovedAt  sql.NullTime
+	UpdatedAt   time.Time
+	ID          int64
+}
+
+func (q *Queries) ApproveLeadFollowup(ctx context.Context, arg ApproveLeadFollowupParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, approveLeadFollowup,
+		arg.DraftText,
+		arg.ScheduledAt,
+		arg.ApprovedBy,
+		arg.ApprovedAt,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const cancelActiveLeadFollowups = `-- name: CancelActiveLeadFollowups :execrows
 UPDATE lead_followups SET status = 'cancelled', error = ?, updated_at = ?
 WHERE lead_id = ? AND status IN ('pending_approval', 'approved')
@@ -69,6 +98,40 @@ type CancelQueuedOutboxForLeadParams struct {
 
 func (q *Queries) CancelQueuedOutboxForLead(ctx context.Context, arg CancelQueuedOutboxForLeadParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, cancelQueuedOutboxForLead, arg.LastError, arg.UpdatedAt, arg.LeadID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const cancelWaOutbox = `-- name: CancelWaOutbox :exec
+UPDATE wa_outbox SET status = 'cancelled', last_error = ?, updated_at = ?
+WHERE id = ? AND status IN ('queued', 'sending', 'failed')
+`
+
+type CancelWaOutboxParams struct {
+	LastError string
+	UpdatedAt time.Time
+	ID        int64
+}
+
+func (q *Queries) CancelWaOutbox(ctx context.Context, arg CancelWaOutboxParams) error {
+	_, err := q.db.ExecContext(ctx, cancelWaOutbox, arg.LastError, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const claimWaOutbox = `-- name: ClaimWaOutbox :execrows
+UPDATE wa_outbox SET status = 'sending', attempts = attempts + 1, updated_at = ?
+WHERE id = ? AND status = 'queued'
+`
+
+type ClaimWaOutboxParams struct {
+	UpdatedAt time.Time
+	ID        int64
+}
+
+func (q *Queries) ClaimWaOutbox(ctx context.Context, arg ClaimWaOutboxParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, claimWaOutbox, arg.UpdatedAt, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -309,6 +372,41 @@ func (q *Queries) CreateLeadMessage(ctx context.Context, arg CreateLeadMessagePa
 	return result.RowsAffected()
 }
 
+const createWaOutbox = `-- name: CreateWaOutbox :one
+INSERT INTO wa_outbox (purpose, channel, to_chat_id, body, reference_type, reference_id, not_before, status, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)
+RETURNING id
+`
+
+type CreateWaOutboxParams struct {
+	Purpose       string
+	Channel       string
+	ToChatID      string
+	Body          string
+	ReferenceType string
+	ReferenceID   sql.NullInt64
+	NotBefore     time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+func (q *Queries) CreateWaOutbox(ctx context.Context, arg CreateWaOutboxParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, createWaOutbox,
+		arg.Purpose,
+		arg.Channel,
+		arg.ToChatID,
+		arg.Body,
+		arg.ReferenceType,
+		arg.ReferenceID,
+		arg.NotBefore,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const deleteLead = `-- name: DeleteLead :execrows
 DELETE FROM leads WHERE id = ?
 `
@@ -335,8 +433,27 @@ func (q *Queries) DeleteLeadMessagesForClosedLeads(ctx context.Context, updatedA
 	return result.RowsAffected()
 }
 
+const failStuckWaOutbox = `-- name: FailStuckWaOutbox :execrows
+UPDATE wa_outbox SET status = 'failed', last_error = ?1, updated_at = ?2
+WHERE status = 'sending' AND updated_at < ?3
+`
+
+type FailStuckWaOutboxParams struct {
+	Reason string
+	Now    time.Time
+	Before time.Time
+}
+
+func (q *Queries) FailStuckWaOutbox(ctx context.Context, arg FailStuckWaOutboxParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, failStuckWaOutbox, arg.Reason, arg.Now, arg.Before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getCRMSettings = `-- name: GetCRMSettings :one
-SELECT id, paket_ke_kelas_kode, followup_enabled, followup_send_start, followup_send_end, followup_min_gap_seconds, followup_daily_cap, transcript_retention_days_lost, gowa_devices, payment_verified_template, updated_by, updated_at, persona_blocked_keywords FROM crm_settings WHERE id = 1
+SELECT id, paket_ke_kelas_kode, followup_enabled, followup_send_start, followup_send_end, followup_min_gap_seconds, followup_daily_cap, transcript_retention_days_lost, gowa_devices, payment_verified_template, updated_by, updated_at, persona_blocked_keywords, followup_only_label FROM crm_settings WHERE id = 1
 `
 
 func (q *Queries) GetCRMSettings(ctx context.Context) (CrmSetting, error) {
@@ -356,6 +473,7 @@ func (q *Queries) GetCRMSettings(ctx context.Context) (CrmSetting, error) {
 		&i.UpdatedBy,
 		&i.UpdatedAt,
 		&i.PersonaBlockedKeywords,
+		&i.FollowupOnlyLabel,
 	)
 	return i, err
 }
@@ -513,6 +631,34 @@ func (q *Queries) GetLeadByID(ctx context.Context, id int64) (Lead, error) {
 	return i, err
 }
 
+const getLeadFollowupByID = `-- name: GetLeadFollowupByID :one
+SELECT id, lead_id, step, scheduled_at, draft_text, reason, status, created_by_kind, created_by, approved_by, approved_at, sent_at, wa_message_id, error, created_at, updated_at FROM lead_followups WHERE id = ?
+`
+
+func (q *Queries) GetLeadFollowupByID(ctx context.Context, id int64) (LeadFollowup, error) {
+	row := q.db.QueryRowContext(ctx, getLeadFollowupByID, id)
+	var i LeadFollowup
+	err := row.Scan(
+		&i.ID,
+		&i.LeadID,
+		&i.Step,
+		&i.ScheduledAt,
+		&i.DraftText,
+		&i.Reason,
+		&i.Status,
+		&i.CreatedByKind,
+		&i.CreatedBy,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.SentAt,
+		&i.WaMessageID,
+		&i.Error,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getLeadLabelByID = `-- name: GetLeadLabelByID :one
 SELECT id, nama, warna, created_at FROM lead_labels WHERE id = ?
 `
@@ -571,12 +717,56 @@ func (q *Queries) GetLeadMessageByID(ctx context.Context, arg GetLeadMessageByID
 	return i, err
 }
 
+const getWaOutboxByID = `-- name: GetWaOutboxByID :one
+SELECT id, purpose, channel, to_chat_id, body, reference_type, reference_id, not_before, status, attempts, last_error, sent_at, wa_message_id, created_at, updated_at FROM wa_outbox WHERE id = ?
+`
+
+func (q *Queries) GetWaOutboxByID(ctx context.Context, id int64) (WaOutbox, error) {
+	row := q.db.QueryRowContext(ctx, getWaOutboxByID, id)
+	var i WaOutbox
+	err := row.Scan(
+		&i.ID,
+		&i.Purpose,
+		&i.Channel,
+		&i.ToChatID,
+		&i.Body,
+		&i.ReferenceType,
+		&i.ReferenceID,
+		&i.NotBefore,
+		&i.Status,
+		&i.Attempts,
+		&i.LastError,
+		&i.SentAt,
+		&i.WaMessageID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const leadEventExists = `-- name: LeadEventExists :one
 SELECT COUNT(*) FROM lead_events WHERE event_id = ?
 `
 
 func (q *Queries) LeadEventExists(ctx context.Context, eventID string) (int64, error) {
 	row := q.db.QueryRowContext(ctx, leadEventExists, eventID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const leadHasLabelNamed = `-- name: LeadHasLabelNamed :one
+SELECT COUNT(*) FROM lead_label_links k JOIN lead_labels l ON l.id = k.label_id
+WHERE k.lead_id = ? AND lower(l.nama) = lower(?2)
+`
+
+type LeadHasLabelNamedParams struct {
+	LeadID int64
+	Nama   string
+}
+
+func (q *Queries) LeadHasLabelNamed(ctx context.Context, arg LeadHasLabelNamedParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, leadHasLabelNamed, arg.LeadID, arg.Nama)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -985,6 +1175,66 @@ func (q *Queries) MarkLeadFollowupSent(ctx context.Context, arg MarkLeadFollowup
 	return result.RowsAffected()
 }
 
+const markWaOutboxFailed = `-- name: MarkWaOutboxFailed :exec
+UPDATE wa_outbox SET status = 'failed', last_error = ?, updated_at = ?
+WHERE id = ?
+`
+
+type MarkWaOutboxFailedParams struct {
+	LastError string
+	UpdatedAt time.Time
+	ID        int64
+}
+
+func (q *Queries) MarkWaOutboxFailed(ctx context.Context, arg MarkWaOutboxFailedParams) error {
+	_, err := q.db.ExecContext(ctx, markWaOutboxFailed, arg.LastError, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const markWaOutboxRetry = `-- name: MarkWaOutboxRetry :exec
+UPDATE wa_outbox SET status = 'queued', not_before = ?, last_error = ?, updated_at = ?
+WHERE id = ?
+`
+
+type MarkWaOutboxRetryParams struct {
+	NotBefore time.Time
+	LastError string
+	UpdatedAt time.Time
+	ID        int64
+}
+
+func (q *Queries) MarkWaOutboxRetry(ctx context.Context, arg MarkWaOutboxRetryParams) error {
+	_, err := q.db.ExecContext(ctx, markWaOutboxRetry,
+		arg.NotBefore,
+		arg.LastError,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	return err
+}
+
+const markWaOutboxSent = `-- name: MarkWaOutboxSent :exec
+UPDATE wa_outbox SET status = 'sent', sent_at = ?, wa_message_id = ?, last_error = '', updated_at = ?
+WHERE id = ?
+`
+
+type MarkWaOutboxSentParams struct {
+	SentAt      sql.NullTime
+	WaMessageID string
+	UpdatedAt   time.Time
+	ID          int64
+}
+
+func (q *Queries) MarkWaOutboxSent(ctx context.Context, arg MarkWaOutboxSentParams) error {
+	_, err := q.db.ExecContext(ctx, markWaOutboxSent,
+		arg.SentAt,
+		arg.WaMessageID,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	return err
+}
+
 const removeLeadLabelLink = `-- name: RemoveLeadLabelLink :execrows
 DELETE FROM lead_label_links WHERE lead_id = ? AND label_id = ?
 `
@@ -996,6 +1246,84 @@ type RemoveLeadLabelLinkParams struct {
 
 func (q *Queries) RemoveLeadLabelLink(ctx context.Context, arg RemoveLeadLabelLinkParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, removeLeadLabelLink, arg.LeadID, arg.LabelID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const requeueFailedWaOutbox = `-- name: RequeueFailedWaOutbox :execrows
+UPDATE wa_outbox SET status = 'queued', attempts = 0, not_before = ?, last_error = '', updated_at = ?
+WHERE id = ? AND status = 'failed'
+`
+
+type RequeueFailedWaOutboxParams struct {
+	NotBefore time.Time
+	UpdatedAt time.Time
+	ID        int64
+}
+
+func (q *Queries) RequeueFailedWaOutbox(ctx context.Context, arg RequeueFailedWaOutboxParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, requeueFailedWaOutbox, arg.NotBefore, arg.UpdatedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const rescheduleLeadFollowup = `-- name: RescheduleLeadFollowup :execrows
+UPDATE lead_followups SET scheduled_at = ?, updated_at = ?
+WHERE id = ? AND status IN ('pending_approval', 'approved')
+`
+
+type RescheduleLeadFollowupParams struct {
+	ScheduledAt time.Time
+	UpdatedAt   time.Time
+	ID          int64
+}
+
+func (q *Queries) RescheduleLeadFollowup(ctx context.Context, arg RescheduleLeadFollowupParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, rescheduleLeadFollowup, arg.ScheduledAt, arg.UpdatedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setLeadFollowupError = `-- name: SetLeadFollowupError :exec
+UPDATE lead_followups SET error = ?, updated_at = ? WHERE id = ?
+`
+
+type SetLeadFollowupErrorParams struct {
+	Error     string
+	UpdatedAt time.Time
+	ID        int64
+}
+
+func (q *Queries) SetLeadFollowupError(ctx context.Context, arg SetLeadFollowupErrorParams) error {
+	_, err := q.db.ExecContext(ctx, setLeadFollowupError, arg.Error, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const setLeadFollowupStatus = `-- name: SetLeadFollowupStatus :execrows
+UPDATE lead_followups SET status = ?, error = ?, updated_at = ?
+WHERE id = ? AND status IN ('pending_approval', 'approved')
+`
+
+type SetLeadFollowupStatusParams struct {
+	Status    string
+	Error     string
+	UpdatedAt time.Time
+	ID        int64
+}
+
+func (q *Queries) SetLeadFollowupStatus(ctx context.Context, arg SetLeadFollowupStatusParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setLeadFollowupStatus,
+		arg.Status,
+		arg.Error,
+		arg.UpdatedAt,
+		arg.ID,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1021,7 +1349,8 @@ const updateCRMSettings = `-- name: UpdateCRMSettings :exec
 UPDATE crm_settings SET
     paket_ke_kelas_kode = ?, followup_enabled = ?, followup_send_start = ?, followup_send_end = ?,
     followup_min_gap_seconds = ?, followup_daily_cap = ?, transcript_retention_days_lost = ?,
-    payment_verified_template = ?, persona_blocked_keywords = ?, updated_by = ?, updated_at = ?
+    payment_verified_template = ?, persona_blocked_keywords = ?, followup_only_label = ?,
+    updated_by = ?, updated_at = ?
 WHERE id = 1
 `
 
@@ -1035,6 +1364,7 @@ type UpdateCRMSettingsParams struct {
 	TranscriptRetentionDaysLost int64
 	PaymentVerifiedTemplate     string
 	PersonaBlockedKeywords      string
+	FollowupOnlyLabel           string
 	UpdatedBy                   sql.NullInt64
 	UpdatedAt                   time.Time
 }
@@ -1050,6 +1380,7 @@ func (q *Queries) UpdateCRMSettings(ctx context.Context, arg UpdateCRMSettingsPa
 		arg.TranscriptRetentionDaysLost,
 		arg.PaymentVerifiedTemplate,
 		arg.PersonaBlockedKeywords,
+		arg.FollowupOnlyLabel,
 		arg.UpdatedBy,
 		arg.UpdatedAt,
 	)

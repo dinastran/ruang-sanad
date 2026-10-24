@@ -15,10 +15,12 @@
 		transcript_retention_days_lost: number;
 		payment_verified_template: string;
 		persona_blocked_keywords: string;
+		followup_only_label: string;
 	}
 	interface Page {
 		settings: Settings;
 		ingest_enabled: boolean;
+		outbound_ready: boolean;
 		last_bridge_event: string;
 		bridge_events_today: number;
 		statuses: { name: string; target: string; ok: boolean; message: string }[];
@@ -38,6 +40,16 @@
 	let retention = $state(props.page.settings.transcript_retention_days_lost);
 	// svelte-ignore state_referenced_locally
 	let blockedKeywords = $state(props.page.settings.persona_blocked_keywords);
+	// svelte-ignore state_referenced_locally
+	let fu = $state({
+		followup_enabled: props.page.settings.followup_enabled,
+		followup_send_start: props.page.settings.followup_send_start,
+		followup_send_end: props.page.settings.followup_send_end,
+		followup_min_gap_seconds: props.page.settings.followup_min_gap_seconds,
+		followup_daily_cap: props.page.settings.followup_daily_cap,
+		followup_only_label: props.page.settings.followup_only_label,
+		payment_verified_template: props.page.settings.payment_verified_template,
+	});
 	let saving = $state(false);
 
 	// Ingest looks stale when nothing arrived for over a day.
@@ -48,9 +60,15 @@
 		saving = true;
 		const paket_ke_kelas_kode: Record<string, string> = {};
 		for (const row of mapping) if (row.paket.trim()) paket_ke_kelas_kode[row.paket.trim().toLowerCase()] = row.kode.trim();
-		// Follow-up settings are managed in a later phase; send them unchanged.
+		if (fu.followup_enabled && !page.settings.followup_enabled && !confirm("Nyalakan pengiriman follow-up lewat nomor CS? Hanya follow-up yang sudah disetujui yang dikirim.")) {
+			saving = false;
+			return;
+		}
 		router.put("/app/integrasi-whatsapp/settings", {
 			...page.settings,
+			...fu,
+			followup_min_gap_seconds: Number(fu.followup_min_gap_seconds),
+			followup_daily_cap: Number(fu.followup_daily_cap),
 			paket_ke_kelas_kode,
 			transcript_retention_days_lost: Number(retention),
 			persona_blocked_keywords: blockedKeywords,
@@ -115,6 +133,29 @@
 				Hapus transkrip lead hilang / jangan-hubungi setelah (hari)
 				<input type="number" min="30" max="3650" class="{field} mt-1" bind:value={retention} />
 			</label>
+			<fieldset class="space-y-3 border-t border-neutral-200/80 dark:border-white/[0.06] pt-4">
+				<legend class="text-sm font-semibold text-neutral-900 dark:text-white">Follow-up lewat nomor CS</legend>
+				{#if !page.outbound_ready}<p class="text-xs text-warning">CS_BRIDGE_URL / CS_BRIDGE_OUTBOUND_TOKEN belum diisi di .env, jadi pesan tidak bisa dikirim (akan tercatat gagal).</p>{/if}
+				<label class="flex items-start gap-2 text-sm text-neutral-800 dark:text-neutral-200">
+					<input type="checkbox" class="mt-0.5" bind:checked={fu.followup_enabled} />
+					<span>Kirim follow-up yang sudah disetujui<span class="block text-xs text-neutral-500">Saklar global. Matikan untuk menghentikan semua pengiriman follow-up seketika. Konfirmasi pembayaran tidak terpengaruh.</span></span>
+				</label>
+				<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+					<label class="block text-xs font-medium text-neutral-600 dark:text-neutral-400">Jam mulai (WIB)<input type="time" class="{field} mt-1" bind:value={fu.followup_send_start} /></label>
+					<label class="block text-xs font-medium text-neutral-600 dark:text-neutral-400">Jam selesai (WIB)<input type="time" class="{field} mt-1" bind:value={fu.followup_send_end} /></label>
+					<label class="block text-xs font-medium text-neutral-600 dark:text-neutral-400">Jeda min. (detik)<input type="number" min="10" max="3600" class="{field} mt-1" bind:value={fu.followup_min_gap_seconds} /></label>
+					<label class="block text-xs font-medium text-neutral-600 dark:text-neutral-400">Batas per hari<input type="number" min="1" max="500" class="{field} mt-1" bind:value={fu.followup_daily_cap} /></label>
+				</div>
+				<label class="block text-xs font-medium text-neutral-600 dark:text-neutral-400 max-w-sm">
+					Uji bertahap: hanya kirim ke lead berlabel
+					<input class="{field} mt-1" bind:value={fu.followup_only_label} placeholder="kosong = semua lead (mis. uji-followup)" />
+				</label>
+				<label class="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+					Template konfirmasi pembayaran
+					<span class="block font-normal text-neutral-500">Dikirim bila CS mencentang "kirim konfirmasi" saat verifikasi. [NAMA] = nama depan, [NOMINAL] = nominal diterima. Kosong = fitur mati.</span>
+					<textarea class="{field} mt-1" rows="3" maxlength="1000" bind:value={fu.payment_verified_template}></textarea>
+				</label>
+			</fieldset>
 			<label class="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
 				Kata terlarang di catatan persona analisis AI
 				<span class="block font-normal text-neutral-500">Satu kata atau frasa per baris. Analisis yang catatan personanya memuat kata ini ditolak (penilaian keagamaan, ekonomi, kesehatan, etnis, politik).</span>

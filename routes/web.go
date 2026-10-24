@@ -54,6 +54,7 @@ type Handlers struct {
 	Leads                       *handlers.LeadHandler
 	LeadClosing                 *handlers.LeadClosingHandler
 	LeadLaporan                 *handlers.LeadLaporanHandler
+	LeadFollowups               *handlers.LeadFollowupHandler
 	IntegrasiWhatsApp           *handlers.IntegrasiWhatsAppHandler
 }
 
@@ -438,6 +439,16 @@ func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, u
 	protected.Get("/leads", leadRole, h.Leads.Index)
 	protected.Get("/leads/laporan", leadRole, h.LeadLaporan.Index)
 	protected.Get("/leads/laporan/export", leadRole, h.LeadLaporan.Export)
+	if h.LeadFollowups != nil {
+		approver := middlewares.RoleRequired(store, userService, services.FollowupApproverRoles...)
+		protected.Get("/leads/followups", approver, h.LeadFollowups.Index)
+		protected.Post("/leads/followups/bulk-approve", approver, h.LeadFollowups.BulkApprove)
+		protected.Put("/leads/followups/:fid/approve", approver, h.LeadFollowups.Approve)
+		protected.Put("/leads/followups/:fid/schedule", approver, h.LeadFollowups.Reschedule)
+		protected.Post("/leads/followups/:fid/cancel", approver, h.LeadFollowups.Cancel)
+		protected.Post("/leads/outbox/:oid/retry", approver, h.LeadFollowups.Retry)
+		protected.Post("/leads/:id/followups", leadRole, h.LeadFollowups.Create)
+	}
 	protected.Get("/leads/:id", leadRole, h.Leads.Show)
 	protected.Get("/leads/:id/messages", leadRole, h.Leads.Messages)
 	protected.Put("/leads/:id", leadRole, h.Leads.UpdateData)

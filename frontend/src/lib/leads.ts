@@ -139,3 +139,43 @@ export function labelTone(warna: string): string {
 			return "border-neutral-300 text-neutral-700 dark:border-neutral-700 dark:text-neutral-300";
 	}
 }
+
+export const FOLLOWUP_STATUS_LABELS: Record<string, string> = {
+	pending_approval: "Menunggu persetujuan",
+	approved: "Disetujui",
+	sent: "Terkirim",
+	cancelled: "Dibatalkan",
+	skipped: "Dilewati",
+	failed: "Gagal",
+};
+
+export function followupStatusTone(status: string): string {
+	switch (status) {
+		case "pending_approval":
+			return "bg-warning/10 text-warning";
+		case "approved":
+			return "bg-brand-500/10 text-brand-700 dark:text-brand-300";
+		case "sent":
+			return "bg-success/10 text-success";
+		default:
+			return "bg-neutral-200/70 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400";
+	}
+}
+
+/** ISO time → "YYYY-MM-DDTHH:MM" in WIB, for <input type="datetime-local"> (server reads it as WIB). */
+export function toWIBInput(iso: string): string {
+	const d = iso ? new Date(iso) : new Date();
+	if (Number.isNaN(d.getTime())) return "";
+	const parts = new Intl.DateTimeFormat("en-CA", {
+		timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+	}).formatToParts(d);
+	const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+	return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+}
+
+/** Tomorrow 09:00 WIB as a datetime-local value. */
+export function tomorrowMorningWIB(): string {
+	const d = new Date(`${todayWIB()}T09:00:00+07:00`);
+	d.setUTCDate(d.getUTCDate() + 1);
+	return toWIBInput(d.toISOString());
+}
