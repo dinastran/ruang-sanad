@@ -15,4 +15,4 @@ jobs:
           cache: false
       - name: Test and vet related code
         working-directory: .
-        run: go test ./app/services -run 'TestLeadIngest(Verified|CSAI|Regular)' -count=1 && go vet ./app/services
+        run: go test -mod=mod ./app/services -run 'TestLeadIngest(Verified|CSAI|Regular)' -count=1 && go vet -mod=mod ./app/services
