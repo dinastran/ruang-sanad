@@ -141,6 +141,9 @@ func main() {
 	// CRM Leads (lead → closing) fed by the CS AI bridge.
 	leadService := services.NewLeadService(querier, santriService)
 	startLeadRetention(leadService)
+	// Follow-up and confirmation sends through the CS AI bridge (PRD CRM 10).
+	waOutboxService := services.NewWAOutboxService(querier, services.NewCSBridgeClient(cfg.CSBridgeURL, cfg.CSBridgeOutboundToken))
+	startWAOutboxWorker(waOutboxService)
 
 	// Create storage directories
 	if err := os.MkdirAll("storage/uploads", 0755); err != nil {
@@ -231,9 +234,11 @@ func main() {
 		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService),
 		LeadClosing:                 handlers.NewLeadClosingHandler(leadService, sessionStore, inertiaService),
 		LeadLaporan:                 handlers.NewLeadLaporanHandler(leadService, sessionStore, inertiaService),
+		LeadFollowups:               handlers.NewLeadFollowupHandler(leadService, waOutboxService, sessionStore, inertiaService),
 		IntegrasiWhatsApp: handlers.NewIntegrasiWhatsAppHandler(services.NewCRMIntegrationService(querier, services.CRMIntegrationConfig{
 			IngestEnabled: cfg.CSBridgeIngestToken != "",
 			BridgeURL:     cfg.CSBridgeURL,
+			OutboundReady: cfg.CSBridgeURL != "" && cfg.CSBridgeOutboundToken != "",
 			GowaURL:       cfg.GowaURL,
 			GowaUser:      cfg.GowaUser,
 			GowaPass:      cfg.GowaPass,
@@ -473,6 +478,25 @@ func startLeadRetention(leadService *services.LeadService) {
 				slog.Info("retensi transkrip lead", "pesan_dihapus", n)
 			}
 			<-ticker.C
+		}
+	}()
+}
+
+// startWAOutboxWorker runs the WhatsApp send worker every minute: queue due
+// approved follow-ups, then send at most one message through the bridge.
+func startWAOutboxWorker(outbox *services.WAOutboxService) {
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			res, err := outbox.Tick(context.Background())
+			if err != nil {
+				slog.Error("worker kirim WA gagal", "error", err)
+				continue
+			}
+			if res.Queued > 0 || res.Sent > 0 || res.Failed > 0 {
+				slog.Info("worker kirim WA", "masuk_antrean", res.Queued, "terkirim", res.Sent, "gagal", res.Failed)
+			}
 		}
 	}()
 }

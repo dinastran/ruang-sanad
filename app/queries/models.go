@@ -87,6 +87,7 @@ type CrmSetting struct {
 	UpdatedBy                   sql.NullInt64
 	UpdatedAt                   time.Time
 	PersonaBlockedKeywords      string
+	FollowupOnlyLabel           string
 }
 
 type Guru struct {

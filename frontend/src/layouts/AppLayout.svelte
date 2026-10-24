@@ -33,6 +33,7 @@
 		ClipboardCheck,
 		Bot,
 		MessageCircle,
+		Send,
 		ChartColumn,
 		Plug,
 	} from "lucide-svelte";
@@ -65,6 +66,8 @@
 	// Roles allowed to connect an AI agent (services.AIRoleAllowed).
 	// CRM Leads: cs, keuangan, super_admin (admin_kelas only gets notifications).
 	let canLeads = $derived(role === "cs" || role === "keuangan" || isSuperAdmin);
+	// Follow-up approval: cs, super_admin (services.FollowupApproverRoles).
+	let canApproveFollowup = $derived(role === "cs" || isSuperAdmin);
 	let canAIAkses = $derived(["super_admin", "admin", "keuangan", "cs", "admin_kelas", "koordinator_guru"].includes(role));
 	let homeHref = $derived(role === "guru" ? "/app/guru" : role === "koordinator_guru" ? "/app/koordinator-guru" : role === "user" ? "/app/profile" : "/app");
 
@@ -79,6 +82,7 @@
 		{ href: "/app/perlu-dilengkapi", label: "Perlu Dilengkapi", group: "perlu-dilengkapi", category: "Akademik", show: isAdminKelas, icon: AlertCircle },
 		{ href: "/app/kelas", label: "Kelas", group: "kelas", category: "Akademik", show: isAdminKelas, icon: BookOpen },
 		{ href: "/app/leads", label: "Leads", group: "leads", category: "CRM", show: canLeads, icon: MessageCircle },
+		{ href: "/app/leads/followups", label: "Follow-up", group: "leads-followups", category: "CRM", show: canApproveFollowup, icon: Send },
 		{ href: "/app/leads/laporan", label: "Laporan Leads", group: "leads-laporan", category: "CRM", show: canLeads, icon: ChartColumn },
 		{ href: "/app/keuangan", label: "Tagihan", group: "keuangan", category: "Keuangan", show: canViewKeuangan, icon: Wallet },
 		{ href: "/app/keuangan/tagihan", label: "Daftar Tagihan", group: "tagihan", category: "Keuangan", show: canViewKeuangan, icon: Receipt },
@@ -124,6 +128,7 @@
 		if (path === "/app" || path === "/app/") return "dashboard";
 		if (path.startsWith("/app/analitik-santri")) return "analitik-santri";
 		if (path.startsWith("/app/leads/laporan")) return "leads-laporan";
+		if (path.startsWith("/app/leads/followups")) return "leads-followups";
 		if (path.startsWith("/app/leads")) return "leads";
 		if (path.startsWith("/app/integrasi-whatsapp")) return "integrasi-whatsapp";
 		if (path.startsWith("/app/santri")) return "santri";

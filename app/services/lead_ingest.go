@@ -34,6 +34,7 @@ type leadEventData struct {
 	MediaType   string `json:"media_type"`
 	Sender      string `json:"sender"`
 	ReferenceID int64  `json:"reference_id"`
+	Purpose     string `json:"purpose"`
 	PaketKode   string `json:"paket_kode"`
 	NominalText string `json:"nominal_text"`
 	Reason      string `json:"reason"`
@@ -188,7 +189,9 @@ func (s *LeadService) applyLeadEvent(ctx context.Context, q *queries.Querier, le
 			return nil, err
 		}
 		lead.LastOutboundAt = laterTime(lead.LastOutboundAt, occurred)
-		if sender == "followup" && data.ReferenceID > 0 {
+		// Only a follow-up send carries a lead_followups id (other outbound
+		// purposes, e.g. payment confirmation, send reference_id 0).
+		if sender == "followup" && data.ReferenceID > 0 && (data.Purpose == "" || data.Purpose == OutboxPurposeFollowup) {
 			payload["followup_id"] = data.ReferenceID
 			if _, err := q.MarkLeadFollowupSent(ctx, queries.MarkLeadFollowupSentParams{
 				SentAt: nullTime(occurred), WaMessageID: data.WaMessageID, UpdatedAt: now, ID: data.ReferenceID, LeadID: lead.ID,

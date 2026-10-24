@@ -60,10 +60,29 @@ func (s *LeadService) VerifyPayment(ctx context.Context, id, actorID int64, req 
 		l.Stage = LeadStageTerverifikasi
 		l.VerifiedAt = nullTime(now)
 		l.VerifiedBy = sql.NullInt64{Int64: actorID, Valid: true}
-		return "payment.verified", map[string]any{
+		payload := map[string]any{
 			"stage_from": from, "stage_to": l.Stage, "amount": req.Amount, "expected_amount": l.PaymentAmount,
 			"date": date.Format(time.DateOnly), "note": note, "without_proof": from == LeadStageInfoBayarDikirim,
-		}, nil
+		}
+		if req.SendConfirmation {
+			settings, err := q.GetCRMSettings(ctx)
+			if err != nil {
+				return "", nil, err
+			}
+			if strings.TrimSpace(settings.PaymentVerifiedTemplate) == "" {
+				return "", nil, errors.New("template konfirmasi belum diisi di Integrasi WhatsApp; hilangkan centang kirim konfirmasi")
+			}
+			if _, err := q.CreateWaOutbox(ctx, queries.CreateWaOutboxParams{
+				Purpose: OutboxPurposePaymentOK, Channel: OutboxChannelBridge, ToChatID: l.WaChatID,
+				Body:          RenderPaymentVerifiedTemplate(settings.PaymentVerifiedTemplate, *l, req.Amount),
+				ReferenceType: "lead", ReferenceID: sql.NullInt64{Int64: l.ID, Valid: true},
+				NotBefore: now, CreatedAt: now, UpdatedAt: now,
+			}); err != nil {
+				return "", nil, err
+			}
+			payload["confirmation_queued"] = true
+		}
+		return "payment.verified", payload, nil
 	})
 }
 
@@ -231,4 +250,27 @@ func (s *LeadService) Convert(ctx context.Context, id, actorID int64, req models
 		return 0, err
 	}
 	return santriID, nil
+}
+
+// RenderPaymentVerifiedTemplate fills [NAMA] (first name, or "Kak") and
+// [NOMINAL] (e.g. Rp149.000) in the confirmation template.
+func RenderPaymentVerifiedTemplate(tpl string, l queries.Lead, amount int64) string {
+	nama := aiFirstName(l.Nama, l.WaName)
+	if nama == "" {
+		nama = "Kak"
+	}
+	out := strings.ReplaceAll(strings.TrimSpace(tpl), "[NAMA]", nama)
+	return strings.ReplaceAll(out, "[NOMINAL]", formatRupiahPlain(amount))
+}
+
+func formatRupiahPlain(n int64) string {
+	digits := fmt.Sprintf("%d", n)
+	var b strings.Builder
+	for i, r := range digits {
+		if i > 0 && (len(digits)-i)%3 == 0 {
+			b.WriteByte('.')
+		}
+		b.WriteRune(r)
+	}
+	return "Rp" + b.String()
 }

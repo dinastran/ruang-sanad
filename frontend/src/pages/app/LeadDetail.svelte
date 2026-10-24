@@ -20,9 +20,12 @@
 		todayWIB,
 		waLink,
 		labelTone,
+		FOLLOWUP_STATUS_LABELS,
+		followupStatusTone,
+		tomorrowMorningWIB,
 		type LeadLabel,
 	} from "@lib/leads";
-	import { ArrowLeft, Copy, ExternalLink, AlertTriangle, PauseCircle, Sparkles, X } from "lucide-svelte";
+	import { ArrowLeft, Copy, ExternalLink, AlertTriangle, PauseCircle, Sparkles, X, Send } from "lucide-svelte";
 
 	interface Message {
 		id: number;
@@ -58,6 +61,9 @@
 		status: string;
 		sent_at: string;
 		error: string;
+		reason: string;
+		created_by_kind: string;
+		warnings: string[];
 	}
 	interface Lead {
 		id: number;
@@ -99,6 +105,7 @@
 		events: LeadEvent[];
 		analysis: Analysis | null;
 		followups: Followup[];
+		confirmation_ready: boolean;
 	}
 	interface Duplicate {
 		id: number;
@@ -119,6 +126,7 @@
 		stages?: string[];
 		lost_reasons?: string[];
 		convert?: ConvertOptions;
+		followup?: { can_approve: boolean; steps: string[] };
 		flash?: Flash;
 	}
 
@@ -227,18 +235,28 @@
 	let review = $derived(new Set(lead.review_fields));
 
 	// --- Dialogs ---
-	type Dialog = "stage" | "lost" | "verify" | "convert" | "delete" | null;
+	type Dialog = "stage" | "lost" | "verify" | "convert" | "delete" | "followup" | null;
 	let dialog = $state<Dialog>(null);
 
 	// svelte-ignore state_referenced_locally
 	let stageTarget = $state(lead.stage);
 	let lostReason = $state("");
 
-	let verify = $state({ amount: 0, date: "", note: "", no_proof_confirmed: false });
+	let verify = $state({ amount: 0, date: "", note: "", no_proof_confirmed: false, send_confirmation: false });
 	function openVerify() {
-		verify = { amount: lead.payment_amount || 0, date: todayWIB(), note: "", no_proof_confirmed: false };
+		verify = { amount: lead.payment_amount || 0, date: todayWIB(), note: "", no_proof_confirmed: false, send_confirmation: false };
 		dialog = "verify";
 	}
+	// --- Follow-up (manual + approval from the lead page) ---
+	let canApprove = $derived(!!props.followup?.can_approve);
+	let fuSteps = $derived(props.followup?.steps ?? ["manual"]);
+	let fu = $state({ step: "manual", scheduled_at: "", draft_text: "", reason: "" });
+	function openFollowup() {
+		fu = { step: "manual", scheduled_at: tomorrowMorningWIB(), draft_text: "", reason: "" };
+		dialog = "followup";
+	}
+	let fuValid = $derived(fu.draft_text.trim() !== "" && fu.scheduled_at !== "" && ((fu.step !== "d7" && fu.step !== "d30") || fu.reason.trim().length >= 20));
+
 	let amountDiffers = $derived(lead.payment_amount > 0 && Number(verify.amount) !== lead.payment_amount);
 	let verifyValid = $derived(
 		Number(verify.amount) > 0 && !!verify.date && (!amountDiffers || verify.note.trim() !== "") && (lead.stage !== "info_bayar_dikirim" || verify.no_proof_confirmed),
@@ -304,6 +322,14 @@
 		"label.removed": "Label dihapus",
 		"analysis.saved": "Analisis AI disimpan",
 		"followup.proposed": "Follow-up diusulkan",
+		"followup.approved": "Follow-up disetujui",
+		"followup.rescheduled": "Jadwal follow-up diubah",
+		"followup.cancelled": "Follow-up dibatalkan",
+		"followup.skipped": "Follow-up dilewati",
+		"followup.sent": "Follow-up terkirim",
+		"payment_confirmation.sent": "Konfirmasi pembayaran terkirim",
+		"outbox.failed": "Gagal kirim WA",
+		"outbox.retried": "Kirim WA dicoba lagi",
 	};
 	// Message events are already visible in the transcript.
 	let timeline = $derived(lead.events.filter((e) => e.type !== "message.in" && e.type !== "message.out"));
@@ -316,7 +342,7 @@
 		else if (p.reason) parts.push(String(p.reason));
 		if (p.label) parts.push(String(p.label));
 		if (e.type === "analysis.saved" && p.interest_score !== undefined) parts.push(`skor minat ${p.interest_score}`);
-		if (e.type === "followup.proposed" && p.step) parts.push(`${String(p.step).toUpperCase()} · ${p.scheduled_at}`);
+		if (e.type.startsWith("followup.") && p.step) parts.push(`${String(p.step).toUpperCase()}${p.scheduled_at ? ` · ${p.scheduled_at}` : ""}`);
 		if (e.type === "payment.verified") parts.push(`${formatRupiah(Number(p.amount))} · ${p.date}${p.note ? ` · ${p.note}` : ""}`);
 		if (e.type === "payment_info.sent" && p.nominal) parts.push(`Paket ${p.paket_kode} · ${formatRupiah(Number(p.nominal))}`);
 		if (Array.isArray(p.fields) && p.fields.length) parts.push((p.fields as string[]).map((f) => FIELD_LABELS[f] ?? f).join(", "));
@@ -526,17 +552,45 @@
 						</form>
 					</section>
 
-					{#if lead.followups.length > 0}
+					{#if lead.followups.length > 0 || isOpen}
 						<section class="rounded-xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-4">
-							<h2 class="text-sm font-semibold text-neutral-900 dark:text-white">Follow-up</h2>
-							<ul class="mt-2 divide-y divide-neutral-200/80 dark:divide-white/[0.05]">
-								{#each lead.followups as f}
-									<li class="py-2 text-sm">
-										<div class="flex items-center justify-between gap-2"><span class="font-medium uppercase text-neutral-800 dark:text-neutral-200">{f.step}</span><span class="text-xs text-neutral-500">{f.status.replaceAll("_", " ")} · {formatDateTime(f.sent_at || f.scheduled_at)}</span></div>
-										<p class="mt-1 text-neutral-600 dark:text-neutral-400 whitespace-pre-wrap break-words">{f.draft_text}</p>
-									</li>
-								{/each}
-							</ul>
+							<div class="flex items-center justify-between gap-2">
+								<h2 class="text-sm font-semibold text-neutral-900 dark:text-white">Follow-up</h2>
+								{#if isOpen && lead.followup_permission !== "no"}
+									<button type="button" class="{btnGhost} !py-1.5 text-xs" onclick={openFollowup}><Send class="w-3.5 h-3.5" /> Buat follow-up manual</button>
+								{/if}
+							</div>
+							{#if lead.followups.length === 0}
+								<p class="mt-2 text-sm text-neutral-500">Belum ada follow-up.</p>
+							{:else}
+								<ul class="mt-2 divide-y divide-neutral-200/80 dark:divide-white/[0.05]">
+									{#each lead.followups as f (f.id)}
+										{@const active = f.status === "pending_approval" || f.status === "approved"}
+										<li class="py-3 text-sm">
+											<div class="flex flex-wrap items-center justify-between gap-2">
+												<span class="font-medium uppercase text-neutral-800 dark:text-neutral-200">{f.step}<span class="ml-1.5 normal-case font-normal text-xs text-neutral-500">{f.created_by_kind === "ai" ? "usulan AI" : "manual"}</span></span>
+												<span class="rounded-full px-2 py-0.5 text-xs font-medium {followupStatusTone(f.status)}">{FOLLOWUP_STATUS_LABELS[f.status] ?? f.status}</span>
+											</div>
+											<p class="mt-0.5 text-xs text-neutral-500">{f.sent_at ? "Terkirim" : "Jadwal"} {formatDateTime(f.sent_at || f.scheduled_at)} WIB</p>
+											<p class="mt-1 text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap break-words">{f.draft_text}</p>
+											{#if f.reason}<p class="mt-1 text-xs text-neutral-500">Alasan: {f.reason}</p>{/if}
+											{#if active}
+												{#each f.warnings as w}<p class="mt-1 text-xs font-medium text-error">⚠ {w}</p>{/each}
+											{/if}
+											{#if f.error && f.status !== "sent"}<p class="mt-1 text-xs text-warning">{f.error}</p>{/if}
+											{#if canApprove && active}
+												<div class="mt-2 flex flex-wrap gap-2">
+													{#if f.status === "pending_approval"}
+														<button type="button" class="{btnPrimary} !py-1.5 text-xs" disabled={busy || lead.followup_permission === "no"} onclick={() => send("put", `/app/leads/followups/${f.id}/approve?lead=${lead.id}`, {})}>Setujui</button>
+													{/if}
+													<button type="button" class="{btnGhost} !py-1.5 text-xs" disabled={busy} onclick={() => { if (confirm("Batalkan follow-up ini?")) send("post", `/app/leads/followups/${f.id}/cancel?lead=${lead.id}`); }}>Batalkan</button>
+												</div>
+											{/if}
+										</li>
+									{/each}
+								</ul>
+							{/if}
+							{#if canApprove}<a href="/app/leads/followups" use:inertia class="mt-2 inline-block text-xs text-brand-600 dark:text-brand-400">Buka antrean persetujuan →</a>{/if}
 						</section>
 					{/if}
 				</div>
@@ -614,6 +668,21 @@
 					{/each}
 				</div>
 				<div class="mt-5 flex gap-2"><button class="{btnGhost} flex-1" onclick={() => (dialog = null)}>Batal</button><button class="{btnPrimary} flex-1" disabled={busy || !lostReason} onclick={() => send("put", `/app/leads/${lead.id}/status`, { status: "lost", lost_reason: lostReason }, () => (dialog = null))}>Simpan</button></div>
+			{:else if dialog === "followup"}
+				<h3 class="text-lg font-bold text-neutral-900 dark:text-white">Buat follow-up manual</h3>
+				<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Masuk antrean persetujuan dulu, lalu dikirim lewat nomor CS sesuai jam kirim. Tanpa nominal, nomor rekening, atau link.</p>
+				<div class="mt-4 space-y-3">
+					<label class={labelCls}>Langkah
+						<select class="{field} mt-1" bind:value={fu.step}>
+							{#each fuSteps as st}<option value={st}>{st === "manual" ? "Manual (di luar Script 30 Hari)" : st.toUpperCase()}</option>{/each}
+						</select>
+					</label>
+					<label class={labelCls}>Jadwal kirim (WIB)<input type="datetime-local" class="{field} mt-1" bind:value={fu.scheduled_at} /></label>
+					<label class={labelCls}>Pesan <span class="font-normal text-neutral-500">({fu.draft_text.length}/1000)</span><textarea rows="5" maxlength="1000" class="{field} mt-1" bind:value={fu.draft_text}></textarea></label>
+					<label class={labelCls}>Alasan {fu.step === "d7" || fu.step === "d30" ? "(wajib, update nyata, min. 20 karakter)" : "(opsional)"}<input class="{field} mt-1" maxlength="500" bind:value={fu.reason} /></label>
+					{#if fu.step === "d14"}<p class="text-xs text-neutral-500">D14 wajib memuat opsi balas "boleh kabari".</p>{/if}
+				</div>
+				<div class="mt-5 flex gap-2"><button class="{btnGhost} flex-1" onclick={() => (dialog = null)}>Batal</button><button class="{btnPrimary} flex-1" disabled={busy || !fuValid} onclick={() => send("post", `/app/leads/${lead.id}/followups`, { ...fu }, () => (dialog = null))}>Simpan</button></div>
 			{:else if dialog === "verify"}
 				<h3 class="text-lg font-bold text-neutral-900 dark:text-white">Verifikasi pembayaran</h3>
 				<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Cek bukti transfer di WhatsApp CS dan mutasi rekening sebelum memverifikasi.</p>
@@ -624,6 +693,11 @@
 					<label class={labelCls}>Catatan {amountDiffers ? "(wajib)" : "(opsional)"}<textarea rows="2" maxlength="500" class="{field} mt-1" bind:value={verify.note}></textarea></label>
 					{#if lead.stage === "info_bayar_dikirim"}
 						<label class="flex items-start gap-2 rounded-lg bg-warning/10 px-3 py-2 text-sm text-neutral-800 dark:text-neutral-200"><input type="checkbox" class="mt-0.5" bind:checked={verify.no_proof_confirmed} /> Bukti belum tercatat dari WA. Tetap verifikasi?</label>
+					{/if}
+					{#if lead.confirmation_ready}
+						<label class="flex items-start gap-2 text-sm text-neutral-800 dark:text-neutral-200"><input type="checkbox" class="mt-0.5" bind:checked={verify.send_confirmation} /> Kirim pesan konfirmasi ke calon santri lewat WhatsApp CS</label>
+					{:else}
+						<p class="text-xs text-neutral-500">Pesan konfirmasi WA belum bisa dikirim: template belum diisi di Integrasi WhatsApp.</p>
 					{/if}
 				</div>
 				<div class="mt-5 flex gap-2"><button class="{btnGhost} flex-1" onclick={() => (dialog = null)}>Batal</button><button class="{btnPrimary} flex-1" disabled={busy || !verifyValid} onclick={() => send("post", `/app/leads/${lead.id}/verify`, { ...verify, amount: Number(verify.amount) }, () => (dialog = null))}>Verifikasi</button></div>

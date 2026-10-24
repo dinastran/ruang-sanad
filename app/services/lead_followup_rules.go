@@ -58,6 +58,9 @@ const (
 type FollowupBlock struct {
 	Kind string
 	Msg  string
+	// Postpone: at send time the follow-up waits (another touch already
+	// happened today) instead of being dropped.
+	Postpone bool
 }
 
 func (b *FollowupBlock) Error() string { return b.Msg }
@@ -199,7 +202,9 @@ func checkFollowupRules(ctx context.Context, q *queries.Querier, c followupCheck
 		}
 	}
 	if n > 0 {
-		return blockFollowup(FollowupBlockReject, "sudah ada follow-up untuk lead ini pada %s; maksimal satu sentuhan per hari", dayStart.Format("2006-01-02")), nil
+		b := blockFollowup(FollowupBlockReject, "sudah ada follow-up untuk lead ini pada %s; maksimal satu sentuhan per hari", dayStart.Format("2006-01-02"))
+		b.Postpone = true
+		return b, nil
 	}
 	return nil, nil
 }
