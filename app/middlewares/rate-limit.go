@@ -167,4 +167,12 @@ var (
 			return "mcp-ip:" + c.IP()
 		},
 	})
+
+	// CSAIIngestRateLimit: 600 event batches per minute from the CS AI bridge.
+	CSAIIngestRateLimit = NewRateLimiter(RateLimiterConfig{
+		MaxRequests: 600,
+		Window:      time.Minute,
+		Message:     "Terlalu banyak event dari bridge",
+		CustomKeyFn: func(c *fiber.Ctx) string { return "cs-ai-ingest" },
+	})
 )

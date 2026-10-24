@@ -50,6 +50,7 @@ type Handlers struct {
 	ProductOrders               *handlers.ProductOrderHandler
 	MCP                         *handlers.MCPHandler
 	AIAkses                     *handlers.AIAksesHandler
+	CsAiIngest                  *handlers.CsAiIngestHandler
 }
 
 func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, mailerService *services.MailerService, csrfMiddleware *middlewares.CSRFMiddleware) {
@@ -59,6 +60,16 @@ func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *
 	setupAppRoutes(app, h, store, userService, csrfMiddleware)
 	setupAdminRoutes(app, h, store, userService, csrfMiddleware)
 	setupMCPRoutes(app, h.MCP)
+	setupIntegrationRoutes(app, h.CsAiIngest)
+}
+
+// setupIntegrationRoutes exposes machine-to-machine endpoints. They sit
+// outside /app (no session/CSRF); each handler authenticates its caller.
+func setupIntegrationRoutes(app *fiber.App, csAi *handlers.CsAiIngestHandler) {
+	if csAi == nil {
+		return
+	}
+	app.Post("/integrations/cs-ai/events", middlewares.CSAIIngestRateLimit.Limit(), csAi.Events)
 }
 
 // setupMCPRoutes exposes the read-only AI agent endpoint. It sits outside

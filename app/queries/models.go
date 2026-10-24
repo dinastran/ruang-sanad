@@ -72,6 +72,21 @@ type ClassMonitoringNote struct {
 	CreatedAt         time.Time
 }
 
+type CrmSetting struct {
+	ID                          int64
+	PaketKeKelasKode            string
+	FollowupEnabled             int64
+	FollowupSendStart           string
+	FollowupSendEnd             string
+	FollowupMinGapSeconds       int64
+	FollowupDailyCap            int64
+	TranscriptRetentionDaysLost int64
+	GowaDevices                 string
+	PaymentVerifiedTemplate     string
+	UpdatedBy                   sql.NullInt64
+	UpdatedAt                   time.Time
+}
+
 type Guru struct {
 	ID            int64
 	Nama          string
@@ -271,6 +286,113 @@ type KunjunganTindakLanjut struct {
 	DibuatOleh            sql.NullInt64
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
+}
+
+type Lead struct {
+	ID                    int64
+	WaChatID              string
+	Phone                 string
+	WaName                string
+	Nama                  string
+	Usia                  sql.NullInt64
+	Domisili              string
+	JenisKelamin          string
+	PaketKode             string
+	KelasKode             string
+	WaktuBelajar          string
+	RiwayatBelajar        string
+	BelajarDimana         string
+	UntukSiapa            string
+	Stage                 string
+	Status                string
+	LostReason            string
+	FollowupPermission    string
+	Source                string
+	AssignedUserID        sql.NullInt64
+	PaymentAmount         int64
+	PaymentInfoSentAt     sql.NullTime
+	ProofReceivedAt       sql.NullTime
+	VerifiedAt            sql.NullTime
+	VerifiedBy            sql.NullInt64
+	ConvertedAt           sql.NullTime
+	ConvertedBy           sql.NullInt64
+	SantriID              sql.NullInt64
+	NeedsReview           int64
+	LastInboundAt         sql.NullTime
+	LastOutboundAt        sql.NullTime
+	LastAnalyzedMessageID int64
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
+type LeadAnalysis struct {
+	ID                     int64
+	LeadID                 int64
+	AiTokenID              sql.NullInt64
+	Summary                string
+	Persona                string
+	InterestScore          int64
+	MainObjection          string
+	SuggestedStage         string
+	SuggestedNextAction    string
+	Confidence             string
+	AnalyzedUntilMessageID int64
+	CreatedAt              time.Time
+}
+
+type LeadEvent struct {
+	ID        int64
+	LeadID    int64
+	EventID   string
+	Type      string
+	Actor     string
+	Payload   string
+	CreatedAt time.Time
+}
+
+type LeadFollowup struct {
+	ID            int64
+	LeadID        int64
+	Step          string
+	ScheduledAt   time.Time
+	DraftText     string
+	Reason        string
+	Status        string
+	CreatedByKind string
+	CreatedBy     sql.NullInt64
+	ApprovedBy    sql.NullInt64
+	ApprovedAt    sql.NullTime
+	SentAt        sql.NullTime
+	WaMessageID   string
+	Error         string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+type LeadLabel struct {
+	ID        int64
+	Nama      string
+	Warna     string
+	CreatedAt time.Time
+}
+
+type LeadLabelLink struct {
+	LeadID    int64
+	LabelID   int64
+	CreatedBy sql.NullInt64
+	CreatedAt time.Time
+}
+
+type LeadMessage struct {
+	ID          int64
+	LeadID      int64
+	WaMessageID string
+	Direction   string
+	Sender      string
+	Body        string
+	MediaType   string
+	SentAt      time.Time
+	CreatedAt   time.Time
 }
 
 type Level struct {
@@ -805,6 +927,24 @@ type User struct {
 	Role          string
 	GoogleID      sql.NullString
 	EmailVerified bool
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+type WaOutbox struct {
+	ID            int64
+	Purpose       string
+	Channel       string
+	ToChatID      string
+	Body          string
+	ReferenceType string
+	ReferenceID   sql.NullInt64
+	NotBefore     time.Time
+	Status        string
+	Attempts      int64
+	LastError     string
+	SentAt        sql.NullTime
+	WaMessageID   string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }

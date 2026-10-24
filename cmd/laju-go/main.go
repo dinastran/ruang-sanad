@@ -138,6 +138,10 @@ func main() {
 		}
 	})
 
+	// CRM Leads (lead → closing) fed by the CS AI bridge.
+	leadService := services.NewLeadService(querier, santriService)
+	startLeadRetention(leadService)
+
 	// Create storage directories
 	if err := os.MkdirAll("storage/uploads", 0755); err != nil {
 		slog.Error("failed to create uploads directory", "error", err)
@@ -223,6 +227,7 @@ func main() {
 		ProductOrders:               productOrderHandler,
 		MCP:                         handlers.NewMCPHandler(aiTokenService, aiAgentService, cfg.AppURL, cfg.AllowedOrigins, Version),
 		AIAkses:                     handlers.NewAIAksesHandler(aiTokenService, aiAgentService, userService, sessionStore, inertiaService, cfg.AppURL),
+		CsAiIngest:                  handlers.NewCsAiIngestHandler(leadService, cfg.CSBridgeIngestToken, cfg.CSBridgeAllowedCIDRs),
 	}
 
 	// Setup CSRF middleware (Secure cookies only in production with HTTPS)
@@ -439,6 +444,23 @@ func startPengingatPertemuanLupa(pertemuanService *services.PertemuanService) {
 				slog.Error("pengingat pertemuan lupa ditutup gagal", "error", err)
 			} else if n > 0 {
 				slog.Info("pengingat pertemuan lupa ditutup terkirim", "jumlah", n)
+			}
+			<-ticker.C
+		}
+	}()
+}
+
+// startLeadRetention deletes old transcripts of lost/do_not_contact leads once
+// a day (PRD CRM 11.2).
+func startLeadRetention(leadService *services.LeadService) {
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			if n, err := leadService.PurgeClosedLeadTranscripts(context.Background()); err != nil {
+				slog.Error("retensi transkrip lead gagal", "error", err)
+			} else if n > 0 {
+				slog.Info("retensi transkrip lead", "pesan_dihapus", n)
 			}
 			<-ticker.C
 		}
