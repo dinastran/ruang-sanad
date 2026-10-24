@@ -256,3 +256,69 @@ func TestLeadIngestOutOfOrderKeepsLatestTimes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "kedua", msgs[0].Body, fmt.Sprintf("%+v", msgs))
 }
+
+func TestLeadIngestVerifiedCSAIConversationStages(t *testing.T) {
+	f := setupLeadFixture(t)
+	events := f.ingest(t,
+		leadEvent("evt_in_a", "message.in", "2026-10-24T03:00:00Z", map[string]string{"body": "ingin belajar tajwid"}),
+		leadEvent("evt_out_a", "message.out", "2026-10-24T03:01:00Z", map[string]string{"wa_message_id": "WA1", "body": "Kakak ingin perbaiki tajwid ya", "sender": "ai"}),
+		leadEvent("evt_stage_WA1", "conversation.stage", "2026-10-24T03:01:00Z", map[string]string{"wa_message_id": "WA1", "stage": "discovery"}),
+	)
+	require.Equal(t, 3, events.Accepted)
+	require.Equal(t, LeadStageDiscovery, f.lead(t).Stage)
+
+	events = f.ingest(t,
+		leadEvent("evt_out_b", "message.out", "2026-10-24T03:02:00Z", map[string]string{"wa_message_id": "WA2", "body": "Tahsin Reguler 1x — Rp149.000", "sender": "ai"}),
+		leadEvent("evt_stage_WA2", "conversation.stage", "2026-10-24T03:02:00Z", map[string]string{"wa_message_id": "WA2", "stage": "rekomendasi", "paket_kode": "1x"}),
+	)
+	require.Equal(t, 2, events.Accepted)
+	require.Equal(t, LeadStageRekomendasi, f.lead(t).Stage)
+	var payload string
+	require.NoError(t, f.db.QueryRow("SELECT payload FROM lead_events WHERE event_id = 'evt_stage_WA2'").Scan(&payload))
+	require.Contains(t, payload, "stage_source")
+	require.Contains(t, payload, "cs_ai")
+	require.Contains(t, payload, "stage_to")
+
+	// Duplicate event must not generate duplicate transitions.
+	duplicate := f.ingest(t, leadEvent("evt_stage_WA2", "conversation.stage", "2026-10-24T03:02:00Z", map[string]string{"wa_message_id": "WA2", "stage": "rekomendasi", "paket_kode": "1x"}))
+	require.Equal(t, 1, duplicate.Duplicates)
+
+	// Earlier discovery arrives late: the stage must not move backward.
+	f.ingest(t, leadEvent("evt_stage_older", "conversation.stage", "2026-10-24T03:00:00Z", map[string]string{"wa_message_id": "WA0", "stage": "discovery"}))
+	require.Equal(t, LeadStageRekomendasi, f.lead(t).Stage)
+
+	// Higher stage from legitimate registration stays intact.
+	f.ingest(t, leadEvent("evt_form", "form.sent", "2026-10-24T03:04:00Z", map[string]string{}))
+	require.Equal(t, LeadStageFormDikirim, f.lead(t).Stage)
+	f.ingest(t, leadEvent("evt_stage_late", "conversation.stage", "2026-10-24T03:03:00Z", map[string]string{"wa_message_id": "WA3", "stage": "rekomendasi", "paket_kode": "1x"}))
+	require.Equal(t, LeadStageFormDikirim, f.lead(t).Stage)
+}
+
+func TestLeadIngestCSAIStageRequiresEvidenceAndValidSchema(t *testing.T) {
+	f := setupLeadFixture(t)
+	bad := []models.LeadIngestEvent{
+		leadEvent("bad_1", "conversation.stage", "2026-10-24T03:05:00Z", map[string]string{"stage": "rekomendasi", "paket_kode": "1x"}),
+		leadEvent("bad_2", "conversation.stage", "2026-10-24T03:05:00Z", map[string]string{"wa_message_id": "WA2", "stage": "terverifikasi"}),
+		leadEvent("bad_3", "conversation.stage", "2026-10-24T03:05:00Z", map[string]string{"wa_message_id": "WA2", "stage": "rekomendasi"}),
+	}
+	res := f.ingest(t, append(bad, leadEvent("good", "conversation.stage", "2026-10-24T03:05:00Z", map[string]string{"wa_message_id": "WA2", "stage": "rekomendasi", "paket_kode": "2x"}))...)
+	require.Len(t, res.Rejected, 3)
+	require.Equal(t, 1, res.Accepted)
+	require.Equal(t, LeadStageRekomendasi, f.lead(t).Stage)
+
+	// Closed leads cannot be advanced by AI but their timeline stays auditable.
+	l := f.lead(t)
+	_, err := f.db.Exec("UPDATE leads SET status='lost', lost_reason='harga' WHERE id=?", l.ID)
+	require.NoError(t, err)
+	f.ingest(t, leadEvent("lost_stage", "conversation.stage", "2026-10-24T03:06:00Z", map[string]string{"wa_message_id": "WA3", "stage": "discovery"}))
+	require.Equal(t, LeadStageRekomendasi, f.lead(t).Stage)
+}
+
+func TestLeadIngestRegularMessagesDoNotInventConversationStage(t *testing.T) {
+	f := setupLeadFixture(t)
+	f.ingest(t,
+		leadEvent("in", "message.in", "2026-10-24T03:01:00Z", map[string]string{"body": "ingin belajar"}),
+		leadEvent("out", "message.out", "2026-10-24T03:02:00Z", map[string]string{"wa_message_id": "MSG1", "body": "Rekomendasi Tahsin 1x Rp149.000", "sender": "ai"}),
+	)
+	require.Equal(t, LeadStageBaru, f.lead(t).Stage, "plain transcript must not be keyword-classified")
+}
