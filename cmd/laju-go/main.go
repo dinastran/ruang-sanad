@@ -228,6 +228,16 @@ func main() {
 		MCP:                         handlers.NewMCPHandler(aiTokenService, aiAgentService, cfg.AppURL, cfg.AllowedOrigins, Version),
 		AIAkses:                     handlers.NewAIAksesHandler(aiTokenService, aiAgentService, userService, sessionStore, inertiaService, cfg.AppURL),
 		CsAiIngest:                  handlers.NewCsAiIngestHandler(leadService, cfg.CSBridgeIngestToken, cfg.CSBridgeAllowedCIDRs),
+		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService),
+		LeadClosing:                 handlers.NewLeadClosingHandler(leadService, sessionStore, inertiaService),
+		LeadLaporan:                 handlers.NewLeadLaporanHandler(leadService, sessionStore, inertiaService),
+		IntegrasiWhatsApp: handlers.NewIntegrasiWhatsAppHandler(services.NewCRMIntegrationService(querier, services.CRMIntegrationConfig{
+			IngestEnabled: cfg.CSBridgeIngestToken != "",
+			BridgeURL:     cfg.CSBridgeURL,
+			GowaURL:       cfg.GowaURL,
+			GowaUser:      cfg.GowaUser,
+			GowaPass:      cfg.GowaPass,
+		}), sessionStore, inertiaService),
 	}
 
 	// Setup CSRF middleware (Secure cookies only in production with HTTPS)

@@ -192,9 +192,13 @@ func IsLeadStopRequest(body string) bool {
 	return false
 }
 
-// IsLeadFollowupPermission detects the d14 permission-reset reply "boleh kabari".
+var leadPermissionNegation = regexp.MustCompile(`\b(tidak|tdk|jangan|gak|nggak|ngga|ga|enggak|belum)\s+(usah\s+)?boleh kabari`)
+
+// IsLeadFollowupPermission detects the d14 permission-reset reply "boleh
+// kabari", ignoring negations such as "tidak boleh kabari".
 func IsLeadFollowupPermission(body string) bool {
-	return strings.Contains(normalizeChatText(body), "boleh kabari")
+	text := normalizeChatText(body)
+	return strings.Contains(text, "boleh kabari") && !leadPermissionNegation.MatchString(text)
 }
 
 // NormalizeLeadPhone returns international digits (62…) or "" when unknown.

@@ -32,6 +32,9 @@
 		History,
 		ClipboardCheck,
 		Bot,
+		MessageCircle,
+		ChartColumn,
+		Plug,
 	} from "lucide-svelte";
 	import DarkModeToggle from "@components/DarkModeToggle.svelte";
 	import Logo from "@components/Logo.svelte";
@@ -60,6 +63,8 @@
 	let isGuruWorkflow = $derived(isGuru || role === "admin_kelas");
 	let isKoordinator = $derived(role === "koordinator_guru" || isSuperAdmin);
 	// Roles allowed to connect an AI agent (services.AIRoleAllowed).
+	// CRM Leads: cs, keuangan, super_admin (admin_kelas only gets notifications).
+	let canLeads = $derived(role === "cs" || role === "keuangan" || isSuperAdmin);
 	let canAIAkses = $derived(["super_admin", "admin", "keuangan", "cs", "admin_kelas", "koordinator_guru"].includes(role));
 	let homeHref = $derived(role === "guru" ? "/app/guru" : role === "koordinator_guru" ? "/app/koordinator-guru" : role === "user" ? "/app/profile" : "/app");
 
@@ -73,6 +78,8 @@
 		{ href: "/app/santri", label: "Data Santri", group: "santri", category: "Akademik", show: isCS || isAdminKelas, icon: Users },
 		{ href: "/app/perlu-dilengkapi", label: "Perlu Dilengkapi", group: "perlu-dilengkapi", category: "Akademik", show: isAdminKelas, icon: AlertCircle },
 		{ href: "/app/kelas", label: "Kelas", group: "kelas", category: "Akademik", show: isAdminKelas, icon: BookOpen },
+		{ href: "/app/leads", label: "Leads", group: "leads", category: "CRM", show: canLeads, icon: MessageCircle },
+		{ href: "/app/leads/laporan", label: "Laporan Leads", group: "leads-laporan", category: "CRM", show: canLeads, icon: ChartColumn },
 		{ href: "/app/keuangan", label: "Tagihan", group: "keuangan", category: "Keuangan", show: canViewKeuangan, icon: Wallet },
 		{ href: "/app/keuangan/tagihan", label: "Daftar Tagihan", group: "tagihan", category: "Keuangan", show: canViewKeuangan, icon: Receipt },
 		{ href: "/app/keuangan/ujroh", label: "Ujroh Guru", group: "ujroh", category: "Keuangan", show: canViewKeuangan, icon: HandCoins },
@@ -81,6 +88,7 @@
 		{ href: "/app/produk-crm", label: "Produk & CRM", group: "produk-crm", category: "Administrasi", show: isAdminKelas, icon: Boxes },
 		{ href: "/admin/import", label: "Import CSV", group: "import", category: "Administrasi", show: isSuperAdmin, icon: FileSpreadsheet },
 		{ href: "/admin/users", label: "Kelola User", group: "users", category: "Administrasi", show: isSuperAdmin, icon: Shield },
+		{ href: "/app/integrasi-whatsapp", label: "Integrasi WhatsApp", group: "integrasi-whatsapp", category: "Administrasi", show: isSuperAdmin, icon: Plug },
 		{ href: "/app/ai-akses", label: "Akses AI", group: "ai-akses", category: "Administrasi", show: canAIAkses, icon: Bot },
 		{ href: "/app/guru", label: "Dashboard", group: "guru-dashboard", category: "Guru", show: isGuruWorkflow, icon: GraduationCap },
 		{ href: "/app/guru/jadwal-pertemuan", label: "Agenda Mengajar", group: "guru-jadwal", category: "Guru", show: isGuruWorkflow, icon: CalendarClock },
@@ -104,7 +112,7 @@
 	].filter((item) => item.show));
 
 	let menuCategories = $derived(
-		["Utama", "Akademik", "Keuangan", "Administrasi", "Guru", "Koordinator Guru"]
+		["Utama", "CRM", "Akademik", "Keuangan", "Administrasi", "Guru", "Koordinator Guru"]
 			.map((label) => ({ label, items: menuLinks.filter((item) => item.category === label) }))
 			.filter((category) => category.items.length > 0),
 	);
@@ -115,6 +123,9 @@
 		const path = window.location.pathname;
 		if (path === "/app" || path === "/app/") return "dashboard";
 		if (path.startsWith("/app/analitik-santri")) return "analitik-santri";
+		if (path.startsWith("/app/leads/laporan")) return "leads-laporan";
+		if (path.startsWith("/app/leads")) return "leads";
+		if (path.startsWith("/app/integrasi-whatsapp")) return "integrasi-whatsapp";
 		if (path.startsWith("/app/santri")) return "santri";
 		if (path.startsWith("/app/perlu-dilengkapi")) return "perlu-dilengkapi";
 		if (path.startsWith("/app/kelas")) return "kelas";
