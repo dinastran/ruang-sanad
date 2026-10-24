@@ -75,6 +75,20 @@ func (q *Queries) CancelQueuedOutboxForLead(ctx context.Context, arg CancelQueue
 	return result.RowsAffected()
 }
 
+const clearLeadEventNotesForClosedLeads = `-- name: ClearLeadEventNotesForClosedLeads :execrows
+UPDATE lead_events SET payload = '{}'
+WHERE type IN ('handoff', 'payment.verified', 'ai.paused', 'ai.resumed') AND payload <> '{}'
+  AND lead_id IN (SELECT id FROM leads WHERE status IN ('lost', 'do_not_contact') AND updated_at < ?)
+`
+
+func (q *Queries) ClearLeadEventNotesForClosedLeads(ctx context.Context, updatedAt time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, clearLeadEventNotesForClosedLeads, updatedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const countLeadEventsSince = `-- name: CountLeadEventsSince :one
 SELECT COUNT(*) FROM lead_events WHERE actor = 'bridge' AND created_at >= ?
 `
@@ -242,55 +256,6 @@ func (q *Queries) DeleteLeadMessagesForClosedLeads(ctx context.Context, updatedA
 		return 0, err
 	}
 	return result.RowsAffected()
-}
-
-const findSantriByNoWA = `-- name: FindSantriByNoWA :many
-SELECT id, nama, id_mahasantri, no_wa FROM santri WHERE no_wa IN (/*SLICE:numbers*/?) ORDER BY id LIMIT 5
-`
-
-type FindSantriByNoWARow struct {
-	ID           int64
-	Nama         string
-	IDMahasantri string
-	NoWa         string
-}
-
-func (q *Queries) FindSantriByNoWA(ctx context.Context, numbers []string) ([]FindSantriByNoWARow, error) {
-	query := findSantriByNoWA
-	var queryParams []interface{}
-	if len(numbers) > 0 {
-		for _, v := range numbers {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:numbers*/?", strings.Repeat(",?", len(numbers))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:numbers*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []FindSantriByNoWARow
-	for rows.Next() {
-		var i FindSantriByNoWARow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Nama,
-			&i.IDMahasantri,
-			&i.NoWa,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const getCRMSettings = `-- name: GetCRMSettings :one

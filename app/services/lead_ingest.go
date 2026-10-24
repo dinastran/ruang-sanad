@@ -165,6 +165,12 @@ func (s *LeadService) applyLeadEvent(ctx context.Context, q *queries.Querier, le
 	if data.WaMessageID != "" {
 		payload["wa_message_id"] = data.WaMessageID
 	}
+	// A won lead is read-only (PRD 6.2 rule 4): keep the transcript and
+	// timeline, but no automatic event changes its data columns.
+	if lead.Status == LeadStatusWon && ev.Type != "message.in" && ev.Type != "message.out" {
+		payload["ignored"] = "lead sudah menjadi santri"
+		return payload, nil
+	}
 	switch ev.Type {
 	case "message.in":
 		return payload, s.applyMessageIn(ctx, q, lead, ev, occurred, data, now, payload)
@@ -198,6 +204,9 @@ func (s *LeadService) applyLeadEvent(ctx context.Context, q *queries.Querier, le
 
 	case "payment_info.sent":
 		paket := strings.ToLower(strings.TrimSpace(data.PaketKode))
+		if !paketKey.MatchString(paket) {
+			paket = ""
+		}
 		if paket != "" {
 			lead.PaketKode = paket
 			settings, err := q.GetCRMSettings(ctx)
@@ -278,7 +287,7 @@ func (s *LeadService) applyMessageIn(ctx context.Context, q *queries.Querier, le
 			map[string]any{"wa_message_id": data.WaMessageID}, now); err != nil {
 			return err
 		}
-	} else if IsLeadFollowupPermission(data.Body) && lead.Status == LeadStatusOpen {
+	} else if IsLeadFollowupPermission(data.Body) && lead.Status == LeadStatusOpen && lead.FollowupPermission != "no" {
 		lead.FollowupPermission = "yes"
 		payload["followup_permission"] = "yes"
 	}

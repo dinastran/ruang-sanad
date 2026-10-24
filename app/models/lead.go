@@ -58,17 +58,17 @@ type LeadListItem struct {
 }
 
 type LeadListParams struct {
-	Status      string `query:"status"`
-	Stage       string `query:"stage"`
-	LabelID     int64  `query:"label"`
-	Mine        bool   `query:"mine"`
-	NeedsReview bool   `query:"review"`
-	Search      string `query:"q"`
-	From        string `query:"from"`
-	To          string `query:"to"`
-	Cursor      string `query:"cursor"`
+	Status      string `query:"status" json:"status"`
+	Stage       string `query:"stage" json:"stage"`
+	LabelID     int64  `query:"label" json:"label"`
+	Mine        bool   `query:"mine" json:"mine"`
+	NeedsReview bool   `query:"review" json:"review"`
+	Search      string `query:"q" json:"q"`
+	From        string `query:"from" json:"from"`
+	To          string `query:"to" json:"to"`
+	Cursor      string `query:"cursor" json:"cursor"`
 	// Set by the handler from the session, not from the query string.
-	UserID int64 `query:"-"`
+	UserID int64 `query:"-" json:"-"`
 }
 
 type LeadListResponse struct {

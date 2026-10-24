@@ -146,8 +146,21 @@ func (s *SantriService) Create(req models.CreateSantriRequest, createdBy int64) 
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	txQuerier := s.querier.WithTx(tx)
+	resp, err := s.CreateWithQuerier(ctx, s.querier.WithTx(tx), req, createdBy)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
 
+// CreateWithQuerier creates a santri with the same validation and rules as
+// Create, using the caller's transaction querier. The caller commits, so the
+// santri can be created atomically with other writes (e.g. converting a CRM
+// lead).
+func (s *SantriService) CreateWithQuerier(ctx context.Context, txQuerier *queries.Querier, req models.CreateSantriRequest, createdBy int64) (*models.SantriResponse, error) {
 	nama, jenisKelamin, angkatan, parsedDate, err := s.validateSantriInput(ctx, txQuerier, req.Nama, req.JenisKelamin, req.Angkatan, req.TanggalDaftar)
 	if err != nil {
 		return nil, err
@@ -214,9 +227,6 @@ func (s *SantriService) Create(req models.CreateSantriRequest, createdBy int64) 
 		return nil, err
 	}
 	resp := s.santriResponse(santri, duplicates)
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
 	return &resp, nil
 }
 

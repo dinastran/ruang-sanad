@@ -216,5 +216,10 @@ func (s *LeadService) PurgeClosedLeadTranscripts(ctx context.Context) (int64, er
 		return 0, nil
 	}
 	cutoff := s.nowUTC().AddDate(0, 0, -int(settings.TranscriptRetentionDaysLost))
+	// Free-text notes in the timeline (handoff summaries, verification notes)
+	// can repeat chat content, so they expire with the transcript.
+	if _, err := s.querier.ClearLeadEventNotesForClosedLeads(ctx, cutoff); err != nil {
+		return 0, err
+	}
 	return s.querier.DeleteLeadMessagesForClosedLeads(ctx, cutoff)
 }
