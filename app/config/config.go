@@ -33,6 +33,14 @@ type Config struct {
 	FromName  string
 	// Session
 	SessionTTL time.Duration
+	// CRM Leads / CS AI bridge (PRD CRM). Secrets live only in .env.
+	CSBridgeIngestToken   string
+	CSBridgeAllowedCIDRs  []string
+	CSBridgeURL           string
+	CSBridgeOutboundToken string
+	GowaURL               string
+	GowaUser              string
+	GowaPass              string
 }
 
 var AppConfig *Config
@@ -63,6 +71,14 @@ func Load() *Config {
 		FromName:  getEnv("FROM_NAME", "Laju"),
 		// Session
 		SessionTTL: getSessionTTL(),
+		// CRM Leads / CS AI bridge
+		CSBridgeIngestToken:   strings.TrimSpace(getEnv("CS_BRIDGE_INGEST_TOKEN", "")),
+		CSBridgeAllowedCIDRs:  splitList(getEnv("CS_BRIDGE_ALLOWED_CIDRS", "127.0.0.1/32,::1/128,172.16.0.0/12")),
+		CSBridgeURL:           strings.TrimRight(getEnv("CS_BRIDGE_URL", ""), "/"),
+		CSBridgeOutboundToken: strings.TrimSpace(getEnv("CS_BRIDGE_OUTBOUND_TOKEN", "")),
+		GowaURL:               strings.TrimRight(getEnv("GOWA_URL", ""), "/"),
+		GowaUser:              getEnv("GOWA_USER", ""),
+		GowaPass:              getEnv("GOWA_PASS", ""),
 	}
 
 	return AppConfig
@@ -111,6 +127,16 @@ func parseAllowedOrigins() []string {
 		}
 	}
 	return origins
+}
+
+func splitList(val string) []string {
+	var out []string
+	for _, item := range strings.Split(val, ",") {
+		if trimmed := strings.TrimSpace(item); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 func getSessionTTL() time.Duration {
