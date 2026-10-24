@@ -64,10 +64,20 @@ type AITokenCreated struct {
 	Plaintext string         `json:"plaintext"`
 }
 
+// AICRMWriteRoles may own a token with the CRM write permission (PRD CRM 9.1).
+var AICRMWriteRoles = []string{"cs", "keuangan", "super_admin"}
+
+// ErrAITokenWriteDitolak: only super_admin issues tokens that may write.
+var ErrAITokenWriteDitolak = errors.New("hanya super_admin yang bisa membuat token dengan izin menulis analisis CRM")
+
 // Create issues a new token. The plaintext is returned once and never stored.
-func (s *AITokenService) Create(userID int64, role, nama string, masaBerlakuHari int) (*AITokenCreated, error) {
+// canWrite (CRM write tools) is reserved for super_admin.
+func (s *AITokenService) Create(userID int64, role, nama string, masaBerlakuHari int, canWrite bool) (*AITokenCreated, error) {
 	if !AIRoleAllowed(role) {
 		return nil, ErrAIRoleDitolak
+	}
+	if canWrite && role != "super_admin" {
+		return nil, ErrAITokenWriteDitolak
 	}
 	nama = strings.TrimSpace(nama)
 	if nama == "" {
@@ -98,12 +108,12 @@ func (s *AITokenService) Create(userID int64, role, nama string, masaBerlakuHari
 	plain := AITokenPrefix + base64.RawURLEncoding.EncodeToString(raw)
 	expires := now.Add(time.Duration(masaBerlakuHari) * 24 * time.Hour)
 	prefix := plain[:len(AITokenPrefix)+6]
-	id, err := s.querier.CreateAIToken(ctx, userID, nama, hashAIToken(plain), prefix, expires)
+	id, err := s.querier.CreateAIToken(ctx, userID, nama, hashAIToken(plain), prefix, expires, canWrite)
 	if err != nil {
 		return nil, err
 	}
 	return &AITokenCreated{
-		Token:     models.AIToken{ID: id, UserID: userID, Nama: nama, Prefix: prefix, ExpiresAt: expires.UTC(), CreatedAt: now.UTC()},
+		Token:     models.AIToken{ID: id, UserID: userID, Nama: nama, Prefix: prefix, ExpiresAt: expires.UTC(), CreatedAt: now.UTC(), CanWrite: canWrite},
 		Plaintext: plain,
 	}, nil
 }
@@ -148,7 +158,7 @@ func (s *AITokenService) Authenticate(ctx context.Context, plain string) (*model
 	if auth.LastUsedAt == nil || now.Sub(*auth.LastUsedAt) >= aiTokenTouchInterval {
 		_ = s.querier.TouchAIToken(ctx, auth.TokenID, now)
 	}
-	return &models.AIPrincipal{UserID: auth.UserID, TokenID: auth.TokenID, UserName: auth.UserName, Role: auth.Role}, nil
+	return &models.AIPrincipal{UserID: auth.UserID, TokenID: auth.TokenID, UserName: auth.UserName, Role: auth.Role, CanWrite: auth.CanWrite}, nil
 }
 
 // ListAudit returns the caller's own recent AI tool calls; super_admin sees

@@ -173,6 +173,47 @@ func (q *Queries) CreateLead(ctx context.Context, arg CreateLeadParams) (Lead, e
 	return i, err
 }
 
+const createLeadAnalysis = `-- name: CreateLeadAnalysis :one
+INSERT INTO lead_analyses (
+    lead_id, ai_token_id, summary, persona, interest_score, main_objection,
+    suggested_stage, suggested_next_action, confidence, analyzed_until_message_id, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id
+`
+
+type CreateLeadAnalysisParams struct {
+	LeadID                 int64
+	AiTokenID              sql.NullInt64
+	Summary                string
+	Persona                string
+	InterestScore          int64
+	MainObjection          string
+	SuggestedStage         string
+	SuggestedNextAction    string
+	Confidence             string
+	AnalyzedUntilMessageID int64
+	CreatedAt              time.Time
+}
+
+func (q *Queries) CreateLeadAnalysis(ctx context.Context, arg CreateLeadAnalysisParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, createLeadAnalysis,
+		arg.LeadID,
+		arg.AiTokenID,
+		arg.Summary,
+		arg.Persona,
+		arg.InterestScore,
+		arg.MainObjection,
+		arg.SuggestedStage,
+		arg.SuggestedNextAction,
+		arg.Confidence,
+		arg.AnalyzedUntilMessageID,
+		arg.CreatedAt,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const createLeadEvent = `-- name: CreateLeadEvent :exec
 INSERT INTO lead_events (lead_id, event_id, type, actor, payload, created_at)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -197,6 +238,42 @@ func (q *Queries) CreateLeadEvent(ctx context.Context, arg CreateLeadEventParams
 		arg.CreatedAt,
 	)
 	return err
+}
+
+const createLeadFollowup = `-- name: CreateLeadFollowup :one
+INSERT INTO lead_followups (
+    lead_id, step, scheduled_at, draft_text, reason, status, created_by_kind, created_by, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, ?)
+RETURNING id
+`
+
+type CreateLeadFollowupParams struct {
+	LeadID        int64
+	Step          string
+	ScheduledAt   time.Time
+	DraftText     string
+	Reason        string
+	CreatedByKind string
+	CreatedBy     sql.NullInt64
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+func (q *Queries) CreateLeadFollowup(ctx context.Context, arg CreateLeadFollowupParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, createLeadFollowup,
+		arg.LeadID,
+		arg.Step,
+		arg.ScheduledAt,
+		arg.DraftText,
+		arg.Reason,
+		arg.CreatedByKind,
+		arg.CreatedBy,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const createLeadMessage = `-- name: CreateLeadMessage :execrows
@@ -259,7 +336,7 @@ func (q *Queries) DeleteLeadMessagesForClosedLeads(ctx context.Context, updatedA
 }
 
 const getCRMSettings = `-- name: GetCRMSettings :one
-SELECT id, paket_ke_kelas_kode, followup_enabled, followup_send_start, followup_send_end, followup_min_gap_seconds, followup_daily_cap, transcript_retention_days_lost, gowa_devices, payment_verified_template, updated_by, updated_at FROM crm_settings WHERE id = 1
+SELECT id, paket_ke_kelas_kode, followup_enabled, followup_send_start, followup_send_end, followup_min_gap_seconds, followup_daily_cap, transcript_retention_days_lost, gowa_devices, payment_verified_template, updated_by, updated_at, persona_blocked_keywords FROM crm_settings WHERE id = 1
 `
 
 func (q *Queries) GetCRMSettings(ctx context.Context) (CrmSetting, error) {
@@ -278,6 +355,7 @@ func (q *Queries) GetCRMSettings(ctx context.Context) (CrmSetting, error) {
 		&i.PaymentVerifiedTemplate,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
+		&i.PersonaBlockedKeywords,
 	)
 	return i, err
 }
@@ -441,6 +519,22 @@ SELECT id, nama, warna, created_at FROM lead_labels WHERE id = ?
 
 func (q *Queries) GetLeadLabelByID(ctx context.Context, id int64) (LeadLabel, error) {
 	row := q.db.QueryRowContext(ctx, getLeadLabelByID, id)
+	var i LeadLabel
+	err := row.Scan(
+		&i.ID,
+		&i.Nama,
+		&i.Warna,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getLeadLabelByName = `-- name: GetLeadLabelByName :one
+SELECT id, nama, warna, created_at FROM lead_labels WHERE lower(nama) = lower(?1)
+`
+
+func (q *Queries) GetLeadLabelByName(ctx context.Context, nama string) (LeadLabel, error) {
+	row := q.db.QueryRowContext(ctx, getLeadLabelByName, nama)
 	var i LeadLabel
 	err := row.Scan(
 		&i.ID,
@@ -908,11 +1002,26 @@ func (q *Queries) RemoveLeadLabelLink(ctx context.Context, arg RemoveLeadLabelLi
 	return result.RowsAffected()
 }
 
+const setLeadLastAnalyzedMessage = `-- name: SetLeadLastAnalyzedMessage :exec
+UPDATE leads SET last_analyzed_message_id = ?1
+WHERE id = ?2 AND last_analyzed_message_id < ?1
+`
+
+type SetLeadLastAnalyzedMessageParams struct {
+	MessageID int64
+	ID        int64
+}
+
+func (q *Queries) SetLeadLastAnalyzedMessage(ctx context.Context, arg SetLeadLastAnalyzedMessageParams) error {
+	_, err := q.db.ExecContext(ctx, setLeadLastAnalyzedMessage, arg.MessageID, arg.ID)
+	return err
+}
+
 const updateCRMSettings = `-- name: UpdateCRMSettings :exec
 UPDATE crm_settings SET
     paket_ke_kelas_kode = ?, followup_enabled = ?, followup_send_start = ?, followup_send_end = ?,
     followup_min_gap_seconds = ?, followup_daily_cap = ?, transcript_retention_days_lost = ?,
-    payment_verified_template = ?, updated_by = ?, updated_at = ?
+    payment_verified_template = ?, persona_blocked_keywords = ?, updated_by = ?, updated_at = ?
 WHERE id = 1
 `
 
@@ -925,6 +1034,7 @@ type UpdateCRMSettingsParams struct {
 	FollowupDailyCap            int64
 	TranscriptRetentionDaysLost int64
 	PaymentVerifiedTemplate     string
+	PersonaBlockedKeywords      string
 	UpdatedBy                   sql.NullInt64
 	UpdatedAt                   time.Time
 }
@@ -939,6 +1049,7 @@ func (q *Queries) UpdateCRMSettings(ctx context.Context, arg UpdateCRMSettingsPa
 		arg.FollowupDailyCap,
 		arg.TranscriptRetentionDaysLost,
 		arg.PaymentVerifiedTemplate,
+		arg.PersonaBlockedKeywords,
 		arg.UpdatedBy,
 		arg.UpdatedAt,
 	)

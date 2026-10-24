@@ -54,9 +54,10 @@ func (h *AIAksesHandler) Index(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	// super_admin also sees the CRM write tools a write token unlocks.
 	tools := make([]fiber.Map, 0)
-	for _, t := range h.agent.Tools(role) {
-		tools = append(tools, fiber.Map{"name": t.Name, "title": t.Title, "description": t.Description})
+	for _, t := range h.agent.ToolsFor(role, role == "super_admin") {
+		tools = append(tools, fiber.Map{"name": t.Name, "title": t.Title, "description": t.Description, "write": t.Write})
 	}
 	base := h.appURL
 	if base == "" {
@@ -70,6 +71,7 @@ func (h *AIAksesHandler) Index(c *fiber.Ctx) error {
 		"audit":       audit,
 		"audit_semua": role == "super_admin",
 		"tools":       tools,
+		"boleh_tulis": role == "super_admin",
 	})
 }
 
@@ -83,14 +85,15 @@ func (h *AIAksesHandler) Store(c *fiber.Ctx) error {
 	var req struct {
 		Nama            string `json:"nama"`
 		MasaBerlakuHari int    `json:"masa_berlaku_hari"`
+		CanWrite        bool   `json:"can_write"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "data tidak valid"})
 	}
-	created, err := h.tokens.Create(user.ID, string(user.Role), req.Nama, req.MasaBerlakuHari)
+	created, err := h.tokens.Create(user.ID, string(user.Role), req.Nama, req.MasaBerlakuHari, req.CanWrite)
 	if err != nil {
 		status := fiber.StatusUnprocessableEntity
-		if errors.Is(err, services.ErrAIRoleDitolak) {
+		if errors.Is(err, services.ErrAIRoleDitolak) || errors.Is(err, services.ErrAITokenWriteDitolak) {
 			status = fiber.StatusForbidden
 		}
 		return c.Status(status).JSON(fiber.Map{"error": err.Error()})

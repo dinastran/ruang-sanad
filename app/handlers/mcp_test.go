@@ -32,7 +32,8 @@ func setupMCP(t *testing.T) (*fiber.App, *services.AITokenService, *sql.DB) {
 	finance := services.NewKeuanganDashboardService(q, services.NewUjrohService(q))
 	riayah := services.NewRiayahSantriService(q)
 	overview := services.NewOverviewService(q, finance, riayah)
-	agent := services.NewAIAgentService(q, overview, finance, riayah, services.NewTSIService(q), services.NewSantriService(q, services.NewKelasEngineService(q)))
+	santri := services.NewSantriService(q, services.NewKelasEngineService(q))
+	agent := services.NewAIAgentService(q, overview, finance, riayah, services.NewTSIService(q), santri, services.NewLeadService(q, santri))
 	tokens := services.NewAITokenService(q)
 	h := NewMCPHandler(tokens, agent, "https://dashboard.example.test", []string{"http://localhost:5173"}, "test")
 	app := fiber.New()
@@ -63,9 +64,9 @@ func mcpPost(t *testing.T, app *fiber.App, token, body string, headers ...string
 
 func TestMCPEndpointProtocolAndAuth(t *testing.T) {
 	app, tokens, db := setupMCP(t)
-	boss, err := tokens.Create(1, "super_admin", "Claude", 30)
+	boss, err := tokens.Create(1, "super_admin", "Claude", 30, false)
 	require.NoError(t, err)
-	cs, err := tokens.Create(2, "cs", "Hermes", 30)
+	cs, err := tokens.Create(2, "cs", "Hermes", 30, false)
 	require.NoError(t, err)
 
 	// No / bad token → 401 with WWW-Authenticate.
@@ -96,11 +97,31 @@ func TestMCPEndpointProtocolAndAuth(t *testing.T) {
 
 	// tools/list is role-scoped.
 	_, out, _ = mcpPost(t, app, boss.Plaintext, `{"jsonrpc":"2.0","id":3,"method":"tools/list"}`)
-	require.Len(t, out["result"].(map[string]any)["tools"], 15)
+	require.Len(t, out["result"].(map[string]any)["tools"], 18)
 	_, out, _ = mcpPost(t, app, cs.Plaintext, `{"jsonrpc":"2.0","id":3,"method":"tools/list"}`)
 	csTools := out["result"].(map[string]any)["tools"].([]any)
-	require.Len(t, csTools, 3)
+	require.Len(t, csTools, 6)
 	require.Equal(t, true, csTools[0].(map[string]any)["annotations"].(map[string]any)["readOnlyHint"])
+
+	// A write token sees the CRM write tools, annotated as not read-only.
+	writer, err := tokens.Create(1, "super_admin", "Hermes", 30, true)
+	require.NoError(t, err)
+	_, out, _ = mcpPost(t, app, writer.Plaintext, `{"jsonrpc":"2.0","id":3,"method":"tools/list"}`)
+	writeTools := map[string]bool{}
+	for _, raw := range out["result"].(map[string]any)["tools"].([]any) {
+		tool := raw.(map[string]any)
+		writeTools[tool["name"].(string)] = tool["annotations"].(map[string]any)["readOnlyHint"] == false
+	}
+	require.Len(t, writeTools, 21)
+	require.True(t, writeTools["simpan_analisis_lead"])
+	require.True(t, writeTools["usulkan_followup"])
+	require.False(t, writeTools["detail_lead"])
+	_, out, _ = mcpPost(t, app, writer.Plaintext, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`)
+	require.Contains(t, out["result"].(map[string]any)["instructions"], "TULIS TERBATAS")
+	// The read-only token cannot call a write tool.
+	_, out, _ = mcpPost(t, app, boss.Plaintext, `{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"simpan_analisis_lead","arguments":{"lead_ref":"L-1"}}}`)
+	require.Equal(t, true, out["result"].(map[string]any)["isError"])
+	require.Contains(t, out["result"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"], "tidak punya izin menulis")
 
 	// tools/call returns sanitized text content with dashboard links.
 	_, out, _ = mcpPost(t, app, boss.Plaintext, `{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"detail_santri","arguments":{"santri_id":1}}}`)
@@ -137,7 +158,7 @@ func TestMCPEndpointProtocolAndAuth(t *testing.T) {
 	// Tool calls are audited; protocol chatter is not.
 	var n int64
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM ai_audit_log`).Scan(&n))
-	require.EqualValues(t, 2, n)
+	require.EqualValues(t, 3, n)
 
 	// Revoked token is rejected.
 	require.NoError(t, tokens.Revoke(1, boss.Token.ID))

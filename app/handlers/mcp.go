@@ -192,12 +192,12 @@ func (h *MCPHandler) dispatch(c *fiber.Ctx, p *models.AIPrincipal, raw []byte) *
 	case "ping":
 		resp.Result = fiber.Map{}
 	case "tools/list":
-		tools := h.agent.Tools(p.Role)
+		tools := h.agent.ToolsFor(p.Role, p.CanWrite)
 		list := make([]fiber.Map, 0, len(tools))
 		for _, t := range tools {
 			list = append(list, fiber.Map{
 				"name": t.Name, "title": t.Title, "description": t.Description, "inputSchema": t.InputSchema,
-				"annotations": fiber.Map{"title": t.Title, "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+				"annotations": fiber.Map{"title": t.Title, "readOnlyHint": !t.Write, "destructiveHint": false, "idempotentHint": !t.Write, "openWorldHint": false},
 			})
 		}
 		resp.Result = fiber.Map{"tools": list}
