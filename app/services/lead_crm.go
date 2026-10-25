@@ -91,6 +91,10 @@ func (s *LeadService) List(ctx context.Context, p models.LeadListParams) (*model
 	if isValidLeadStage(p.Stage) {
 		f.Stage = p.Stage
 	}
+ if isValidLeadStage(p.ReachedStage) { f.ReachedStage = p.ReachedStage }
+ for _, reason := range LeadLostReasons {
+  if p.LostReason == reason { f.LostReason = reason; break }
+ }
 	f.LabelID = p.LabelID
 	if p.Mine {
 		f.AssignedTo = p.UserID
