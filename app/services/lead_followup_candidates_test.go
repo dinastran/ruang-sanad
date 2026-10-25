@@ -8,7 +8,6 @@ import (
  "testing"
  "time"
 
- "github.com/maulanashalihin/laju-go/app/models"
  "github.com/maulanashalihin/laju-go/app/queries"
  "github.com/stretchr/testify/require"
 )
