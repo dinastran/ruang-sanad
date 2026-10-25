@@ -62,4 +62,10 @@ func TestLeadDashboardClosingUsesConversionDateAndDrilldown(t *testing.T) {
  })
  require.NoError(t, err)
  require.Len(t, list.Items, 2)
+
+ reached, err := f.service.List(t.Context(), models.LeadListParams{
+  Status: "all", ReachedStage: "discovery", From:"2026-10-19", To:"2026-10-25",
+ })
+ require.NoError(t, err)
+ require.Len(t, reached.Items, 1, "won lead from the selected cohort reaches all funnel stages")
 }
