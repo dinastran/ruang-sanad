@@ -437,6 +437,7 @@ func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, u
 	leadRole := middlewares.RoleRequired(store, userService, LeadRoles...)
 	superAdminRole := middlewares.RoleRequired(store, userService, "super_admin")
 	protected.Get("/leads", leadRole, h.Leads.Index)
+	protected.Get("/leads/dashboard", leadRole, h.LeadLaporan.Dashboard)
 	protected.Get("/leads/laporan", leadRole, h.LeadLaporan.Index)
 	protected.Get("/leads/laporan/export", leadRole, h.LeadLaporan.Export)
 	if h.LeadFollowups != nil {
