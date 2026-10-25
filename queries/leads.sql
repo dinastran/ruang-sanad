@@ -208,3 +208,19 @@ WHERE status = 'sending' AND updated_at < sqlc.arg(before);
 -- name: LeadHasLabelNamed :one
 SELECT COUNT(*) FROM lead_label_links k JOIN lead_labels l ON l.id = k.label_id
 WHERE k.lead_id = ? AND lower(l.nama) = lower(sqlc.arg(nama));
+
+-- name: ListLeadPauseEvents :many
+SELECT e.* FROM lead_events e
+WHERE e.lead_id IN (sqlc.slice('lead_ids'))
+AND e.id = (SELECT latest.id FROM lead_events latest
+    WHERE latest.lead_id = e.lead_id AND latest.type IN ('ai.paused', 'ai.resumed')
+    ORDER BY julianday(COALESCE(json_extract(latest.payload, '$.occurred_at'), substr(latest.created_at, 1, 19))) DESC, latest.id DESC LIMIT 1);
+
+-- name: CreateCustomLeadLabel :one
+INSERT INTO lead_labels (nama, warna) VALUES (?, ?) RETURNING *;
+
+-- name: UpdateCustomLeadLabel :exec
+UPDATE lead_labels SET nama = ?, warna = ? WHERE id = ?;
+
+-- name: DeleteCustomLeadLabel :exec
+DELETE FROM lead_labels WHERE id = ?;

@@ -71,6 +71,11 @@ func TestLeadRoutesRoleGuard(t *testing.T) {
 		require.Equal(t, fiber.StatusForbidden, do(guru, http.MethodGet, path), path)
 	}
 	require.Equal(t, fiber.StatusForbidden, do(adminKelas, http.MethodPost, "/app/leads/1/convert"))
+	for _, sid := range []string{adminKelas, guru} {
+		require.Equal(t, fiber.StatusForbidden, do(sid, http.MethodPost, "/app/leads/1/label-catalog"))
+		require.Equal(t, fiber.StatusForbidden, do(sid, http.MethodPut, "/app/leads/1/label-catalog/1"))
+		require.Equal(t, fiber.StatusForbidden, do(sid, http.MethodDelete, "/app/leads/1/label-catalog/1"))
+	}
 	// CSV export renders without Inertia, so it proves the allowed roles pass the guard.
 	require.Equal(t, fiber.StatusOK, do(keuangan, http.MethodGet, "/app/leads/laporan/export"))
 	require.Equal(t, fiber.StatusOK, do(cs, http.MethodGet, "/app/leads/laporan/export"))

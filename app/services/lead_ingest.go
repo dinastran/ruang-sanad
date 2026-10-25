@@ -273,6 +273,7 @@ func (s *LeadService) applyLeadEvent(ctx context.Context, q *queries.Querier, le
 		}
 
 	case "ai.paused", "ai.resumed":
+		payload["occurred_at"] = occurred.Format(time.RFC3339)
 		payload["until"] = data.Until
 		payload["reason"] = truncateRunes(data.Reason, 300)
 	}

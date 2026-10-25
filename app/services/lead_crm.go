@@ -80,7 +80,9 @@ func wibDayStart(date string) (time.Time, bool) {
 
 func (s *LeadService) List(ctx context.Context, p models.LeadListParams) (*models.LeadListResponse, error) {
 	f := queries.LeadListFilter{Limit: leadListPageSize + 1}
-	if p.DateField == "converted" { f.DateField = "converted" }
+	if p.DateField == "converted" {
+		f.DateField = "converted"
+	}
 	switch p.Status {
 	case "", LeadStatusOpen:
 		f.Status = LeadStatusOpen
@@ -91,10 +93,15 @@ func (s *LeadService) List(ctx context.Context, p models.LeadListParams) (*model
 	if isValidLeadStage(p.Stage) {
 		f.Stage = p.Stage
 	}
- if isValidLeadStage(p.ReachedStage) { f.ReachedStage = p.ReachedStage }
- for _, reason := range LeadLostReasons {
-  if p.LostReason == reason { f.LostReason = reason; break }
- }
+	if isValidLeadStage(p.ReachedStage) {
+		f.ReachedStage = p.ReachedStage
+	}
+	for _, reason := range LeadLostReasons {
+		if p.LostReason == reason {
+			f.LostReason = reason
+			break
+		}
+	}
 	f.LabelID = p.LabelID
 	if p.Mine {
 		f.AssignedTo = p.UserID
@@ -138,10 +145,14 @@ func (s *LeadService) List(ctx context.Context, p models.LeadListParams) (*model
 	if err != nil {
 		return nil, err
 	}
+	pauses, err := s.leadPauseStates(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	for _, r := range rows {
 		item := models.LeadListItem{
 			ID: r.ID, Nama: r.Nama, WaName: r.WaName, Phone: r.Phone, Stage: r.Stage, Status: r.Status,
-			PaketKode: r.PaketKode, NeedsReview: r.NeedsReview == 1, AIPaused: r.AIPaused,
+			PaketKode: r.PaketKode, NeedsReview: r.NeedsReview == 1, AIPaused: pauses[r.ID].paused,
 			AssignedUserID: r.AssignedUserID.Int64, AssignedName: r.AssignedName,
 			LastInboundAt: formatLeadNullTime(r.LastInboundAt), Labels: labelResponses(labels[r.ID]),
 		}
@@ -252,7 +263,12 @@ func (s *LeadService) Detail(ctx context.Context, id int64) (*models.LeadDetail,
 	}
 	names := s.actorNames(ctx, events)
 	d.Events = make([]models.LeadEventResponse, 0, len(events))
-	seenPause, seenForm, seenVerify, seenDNC := false, false, false, false
+	pauses, err := s.leadPauseStates(ctx, []int64{id})
+	if err != nil {
+		return nil, err
+	}
+	d.AIPaused, d.AIPausedUntil = pauses[id].paused, pauses[id].until
+	seenForm, seenVerify, seenDNC := false, false, false
 	for _, e := range events {
 		payload := map[string]any{}
 		_ = json.Unmarshal([]byte(e.Payload), &payload)
@@ -260,12 +276,6 @@ func (s *LeadService) Detail(ctx context.Context, id int64) (*models.LeadDetail,
 			ID: e.ID, Type: e.Type, Actor: e.Actor, ActorName: names[e.Actor], Payload: payload, CreatedAt: formatLeadTime(e.CreatedAt),
 		})
 		switch {
-		case !seenPause && (e.Type == "ai.paused" || e.Type == "ai.resumed"):
-			seenPause = true
-			d.AIPaused = e.Type == "ai.paused"
-			if until, _ := payload["until"].(string); d.AIPaused {
-				d.AIPausedUntil = until
-			}
 		case !seenForm && e.Type == "form.parsed":
 			seenForm = true
 			if fields, ok := payload["review_fields"].([]any); ok && l.NeedsReview == 1 {

@@ -1,4 +1,5 @@
 <script lang="ts">
+ import LeadLabelManager from "../../components/LeadLabelManager.svelte";
 	import { inertia, router } from "@inertiajs/svelte";
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
@@ -406,6 +407,10 @@
 								{#each unusedLabels as l}<option value={l.id}>{l.nama}</option>{/each}
 							</select>
 						{/if}
+
+                        <LeadLabelManager labels={allLabels} {busy}
+                            save={(id, nama, warna, done) => send(id ? "put" : "post", `/app/leads/${lead.id}/label-catalog${id ? `/${id}` : ""}`, { nama, warna }, done)}
+                            remove={(id, done) => send("delete", `/app/leads/${lead.id}/label-catalog/${id}`, {}, done)} />
 					</div>
 					<p class="mt-2 text-xs text-neutral-500">
 						Penanggung jawab: <span class="font-medium text-neutral-700 dark:text-neutral-300">{lead.assigned_name || "belum ada"}</span>
