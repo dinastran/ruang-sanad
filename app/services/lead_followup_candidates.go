@@ -22,6 +22,18 @@ const (
 func nextPilotFollowupStep(r queries.DormantFollowupCandidate, now time.Time) (string, time.Time, bool) {
  step := FollowupStepD1
  earliest := r.Anchor.AddDate(0, 0, 1)
+ // A positive reply to D14 cancels the old sequence. After the CS has
+ // answered that reply, a later D30 may be considered from the new anchor,
+ // but only if the D14 consent context is recent and explicit.
+ if !r.LastStep.Valid && r.Permission == "yes" && r.PreviousD14At.Valid &&
+  r.Anchor.After(r.PreviousD14At.Time) &&
+  r.Anchor.Before(r.PreviousD14At.Time.AddDate(0, 0, 45)) {
+  due := r.Anchor.AddDate(0, 0, 30)
+  if due.Before(r.PreviousD14At.Time.AddDate(0, 0, 16)) {
+   due = r.PreviousD14At.Time.AddDate(0, 0, 16)
+  }
+  return FollowupStepD30, due, !now.Before(due)
+ }
  if r.LastStep.Valid {
   switch r.LastStep.String {
   case FollowupStepD1:
