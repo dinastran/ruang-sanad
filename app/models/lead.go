@@ -60,10 +60,13 @@ type LeadListItem struct {
 type LeadListParams struct {
 	Status      string `query:"status" json:"status"`
 	Stage       string `query:"stage" json:"stage"`
+	ReachedStage string `query:"reached_stage" json:"reached_stage"`
+	LostReason string `query:"lost_reason" json:"lost_reason"`
 	LabelID     int64  `query:"label" json:"label"`
 	Mine        bool   `query:"mine" json:"mine"`
 	NeedsReview bool   `query:"review" json:"review"`
 	Search      string `query:"q" json:"q"`
+	DateField   string `query:"date_field" json:"date_field"`
 	From        string `query:"from" json:"from"`
 	To          string `query:"to" json:"to"`
 	Cursor      string `query:"cursor" json:"cursor"`

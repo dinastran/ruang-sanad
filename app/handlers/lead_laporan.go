@@ -58,3 +58,17 @@ func sanitizeDate(v string) string {
 	}
 	return string(out)
 }
+
+ 
+// Dashboard renders the CRM acquisition and daily operational overview.
+func (h *LeadLaporanHandler) Dashboard(c *fiber.Ctx) error {
+ sess, _ := h.store.Get(c)
+ dashboard, err := h.leads.Dashboard(c.UserContext(), c.Query("from"), c.Query("to"))
+ if err != nil {
+  return c.Status(fiber.StatusBadRequest).SendString(err.Error())
+ }
+ return h.inertiaService.Render(c, "app/LeadDashboard", fiber.Map{
+  "user": sessionUser(sess),
+  "dashboard": dashboard,
+ })
+}

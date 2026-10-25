@@ -66,7 +66,7 @@ func TestLeadRoutesRoleGuard(t *testing.T) {
 	keuangan := login("keuangan")
 	cs := login("cs")
 
-	for _, path := range []string{"/app/leads", "/app/leads/laporan", "/app/leads/laporan/export", "/app/leads/1"} {
+	for _, path := range []string{"/app/leads", "/app/leads/dashboard", "/app/leads/laporan", "/app/leads/laporan/export", "/app/leads/1"} {
 		require.Equal(t, fiber.StatusForbidden, do(adminKelas, http.MethodGet, path), path)
 		require.Equal(t, fiber.StatusForbidden, do(guru, http.MethodGet, path), path)
 	}
