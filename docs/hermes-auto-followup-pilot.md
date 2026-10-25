@@ -14,6 +14,7 @@ Aplikasi hanya menyediakan tool MCP baca **`daftar_kandidat_followup`**. Tool tu
 4. Pastikan pengaturan pengiriman WhatsApp, jendela WIB, batas harian, dan koneksi bridge sehat. Pengiriman default bisa dalam keadaan **nonaktif**; jangan aktifkan tanpa approval operasional.
 5. Hermes memakai koneksi MCP Ruang Sanad dengan akun berhak akses CRM. Pemanggilan `usulkan_followup` memerlukan token dengan izin tulis CRM; token baca saja hanya dapat memeriksa kandidat. Jangan simpan kredensial dalam repo, jadwal, log, atau prompt.
 6. Jalankan `daftar_kandidat_followup` secara manual dulu dan periksa hasilnya dengan CS. Konfigurasikan jadwal Hermes (saran: 1 kali tiap pagi WIB) **pada Hermes**, bukan pada server CRM, setelah uji berhasil. Jadwal tidak dibuat oleh perubahan code ini.
+7. Pastikan profil/toolset khusus **cron** pada Hermes dapat menggunakan konektor MCP Ruang Sanad: sesi cron bisa memiliki daftar tool berbeda dari chat/CLI interaktif. Jalankan uji manual cron dan lihat hasil audit sebelum mengaktifkan jadwal rutin. Jadwal dapat dibuat dengan fitur Scheduled Tasks Hermes (misalnya melalui percakapan Hermes atau `hermes cron create`), tetapi jangan memasukkan token ke isi prompt.
 
 ## Instruksi job Hermes yang disarankan
 
