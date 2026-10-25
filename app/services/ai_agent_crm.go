@@ -181,6 +181,19 @@ func (s *AIAgentService) crmTools() []AITool {
 			run:   s.toolDaftarLead,
 		},
 		{
+			Name:  "daftar_kandidat_followup",
+			Title: "Kandidat follow-up pilot",
+			Description: "BACA. Deteksi lead WhatsApp dengan label uji-followup yang belum membalas pesan terakhir CS/AI dan sudah waktunya ditindaklanjuti. " +
+				"Hanya memberikan satu step yang relevan per lead, tanpa nomor kontak. Untuk setiap kandidat, gunakan detail_lead lalu, jika masuk akal, usulkan_followup. " +
+				"AI tidak mengirim pesan dan tidak menyetujui draft. D7/D30 wajib update nyata; D14 wajib opsi izin.",
+			InputSchema: aiSchema(map[string]any{
+				"limit":  aiIntProp("Jumlah lead yang diperiksa per halaman (default 20, maksimal 50).", 1, pilotCandidateMax),
+				"cursor": aiProp("string", "Cursor halaman berikutnya, dari cursor_berikut."),
+			}),
+			Roles: aiRolesCRM,
+			run:   s.toolDaftarKandidatFollowup,
+		},
+		{
 			Name:  "detail_lead",
 			Title: "Detail lead CRM",
 			Description: "Satu lead: data form non-kontak, tahap, label, analisis terakhir, follow-up, dan transkrip chat ter-redaksi (nomor, email, link WA, domisili disensor). " +
