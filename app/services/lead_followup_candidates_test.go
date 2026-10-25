@@ -148,3 +148,11 @@ func TestNextPilotFollowupStepSpacingAndSkipD7(t *testing.T) {
  require.True(t, eligible)
  require.Equal(t, "d30", step)
 }
+
+func TestPilotSuggestedTimeRespectsWIBWindow(t *testing.T) {
+ settings := queries.CrmSetting{FollowupSendStart:"08:00", FollowupSendEnd:"20:00"}
+ require.Equal(t, "2026-10-25 08:00", pilotSuggestedTime(
+  time.Date(2026, 10, 24, 23, 0, 0, 0, time.UTC), settings))
+ require.Equal(t, "2026-10-26 08:00", pilotSuggestedTime(
+  time.Date(2026, 10, 25, 13, 0, 0, 0, time.UTC), settings))
+}
