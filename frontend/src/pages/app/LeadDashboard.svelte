@@ -2,7 +2,7 @@
  import { inertia, router } from "@inertiajs/svelte";
  import AppLayout from "@layouts/AppLayout.svelte";
  import type { User } from "@lib/types";
- import { STAGE_LABELS, STATUS_LABELS, LOST_REASON_LABELS, todayWIB } from "@lib/leads";
+ import { STAGE_LABELS, LOST_REASON_LABELS, todayWIB } from "@lib/leads";
  import { Activity, ArrowUpRight, CalendarDays, CheckCircle2, ChevronRight, CircleAlert, Clock3, MessageCircle, Users } from "lucide-svelte";
 
  interface Count { key: string; count: number }
@@ -29,6 +29,9 @@
  let customTo = $state(props.dashboard.to);
  let customOpen = $state(false);
  let validation = $state("");
+ let loading = $state(false);
+ const presetClass = "rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-brand-500/10 dark:border-neutral-700";
+ const selectedClass = " border-brand-600 bg-brand-600 text-white hover:bg-brand-700 dark:border-brand-600";
  const box = "rounded-xl border border-neutral-200/80 dark:border-white/[0.07] bg-white dark:bg-neutral-925/50 p-4 sm:p-5";
  const fmt = (n: number) => n.toLocaleString("id-ID");
  const pct = (n: number, total: number) => total ? (n / total * 100).toFixed(1).replace(".", ",") + "%" : "N/A";
@@ -37,13 +40,21 @@
   v.setUTCDate(v.getUTCDate() + offset);
   return v.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
  }
+ let activePreset = $derived.by(() => {
+  if (d.from === todayWIB() && d.to === todayWIB()) return 1;
+  if (d.from === dateOffset(-1) && d.to === dateOffset(-1)) return -1;
+  for (const n of [7,14,30]) {
+   if (d.from === dateOffset(1-n) && d.to === todayWIB()) return n;
+  }
+  return 0;
+ });
  function applyRange(from: string, to: string) {
   if (!from || !to || from > to) { validation = "Tanggal mulai harus sebelum atau sama dengan tanggal akhir."; return; }
   const start = new Date(from + "T00:00:00+07:00");
   const end = new Date(to + "T00:00:00+07:00");
   if ((end.getTime() - start.getTime()) / 86400000 >= 366) { validation = "Maksimal 366 hari."; return; }
   validation = "";
-  router.get("/app/leads/dashboard", { from, to }, { preserveScroll: true });
+  router.get("/app/leads/dashboard", { from, to }, { preserveScroll: true, onStart: () => { loading = true; }, onFinish: () => { loading = false; } });
  }
  function preset(days: number) {
   customOpen = false;
@@ -117,12 +128,12 @@
   <section class={box + " space-y-3"} aria-label="Filter periode">
    <div class="flex items-center gap-2 text-sm font-semibold text-neutral-800 dark:text-neutral-100"><CalendarDays size={17} /> Filter periode</div>
    <div class="flex flex-wrap gap-2">
-    <button type="button" onclick={() => preset(1)} class="rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-brand-500/10 dark:border-neutral-700">Hari ini</button>
-    <button type="button" onclick={() => preset(-1)} class="rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-brand-500/10 dark:border-neutral-700">Kemarin</button>
+    <button type="button" onclick={() => preset(1)} aria-pressed={activePreset === 1} class={presetClass + (activePreset === 1 ? selectedClass : "")}>Hari ini</button>
+    <button type="button" onclick={() => preset(-1)} aria-pressed={activePreset === -1} class={presetClass + (activePreset === -1 ? selectedClass : "")}>Kemarin</button>
     {#each [7,14,30] as days}
-     <button type="button" onclick={() => preset(days)} class="rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-brand-500/10 dark:border-neutral-700">{days} hari</button>
+     <button type="button" onclick={() => preset(days)} aria-pressed={activePreset === days} class={presetClass + (activePreset === days ? selectedClass : "")}>{days} hari</button>
     {/each}
-    <button type="button" onclick={() => (customOpen = !customOpen)} aria-expanded={customOpen} class="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700">Custom</button>
+    <button type="button" onclick={() => (customOpen = !customOpen)} aria-expanded={customOpen} aria-pressed={activePreset === 0} class={presetClass + (activePreset === 0 || customOpen ? selectedClass : "")}>Custom</button>
    </div>
    {#if customOpen}
     <form class="flex flex-wrap items-end gap-3" onsubmit={(e) => { e.preventDefault(); applyRange(customFrom, customTo); }}>
@@ -132,6 +143,7 @@
     </form>
    {/if}
    {#if validation}<p role="alert" class="text-sm text-error">{validation}</p>{/if}
+   {#if loading}<p role="status" aria-live="polite" class="text-sm text-neutral-500">Memuat data dashboard...</p>{/if}
   </section>
 
   <section aria-label="Ringkasan performa" class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
