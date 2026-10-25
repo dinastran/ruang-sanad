@@ -137,4 +137,14 @@ func TestNextPilotFollowupStepSpacingAndSkipD7(t *testing.T) {
  step, _, eligible = nextPilotFollowupStep(r, anchor.AddDate(0, 0, 31))
  require.True(t, eligible)
  require.Equal(t, "d30", step)
+
+ // D14 consent reply stops the previous sequence; a subsequent CS response
+ // establishes a new anchor, but the recent consent history permits D30.
+ r.LastStep = sql.NullString{}
+ r.LastSentAt = sql.NullTime{}
+ r.Anchor = anchor.AddDate(0, 0, 16)
+ r.PreviousD14At = sql.NullTime{Time: anchor.AddDate(0, 0, 14), Valid:true}
+ step, _, eligible = nextPilotFollowupStep(r, anchor.AddDate(0, 0, 46))
+ require.True(t, eligible)
+ require.Equal(t, "d30", step)
 }
