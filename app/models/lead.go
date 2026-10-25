@@ -64,6 +64,7 @@ type LeadListParams struct {
 	Mine        bool   `query:"mine" json:"mine"`
 	NeedsReview bool   `query:"review" json:"review"`
 	Search      string `query:"q" json:"q"`
+	DateField   string `query:"date_field" json:"date_field"`
 	From        string `query:"from" json:"from"`
 	To          string `query:"to" json:"to"`
 	Cursor      string `query:"cursor" json:"cursor"`
