@@ -80,6 +80,7 @@ func wibDayStart(date string) (time.Time, bool) {
 
 func (s *LeadService) List(ctx context.Context, p models.LeadListParams) (*models.LeadListResponse, error) {
 	f := queries.LeadListFilter{Limit: leadListPageSize + 1}
+	if p.DateField == "converted" { f.DateField = "converted" }
 	switch p.Status {
 	case "", LeadStatusOpen:
 		f.Status = LeadStatusOpen
