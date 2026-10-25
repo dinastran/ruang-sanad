@@ -13,6 +13,8 @@ import (
 type LeadListFilter struct {
 	Status      string // "" = any
 	Stage       string
+	ReachedStage string
+	LostReason string
 	LabelID     int64
 	AssignedTo  int64
 	NeedsReview bool
@@ -60,6 +62,17 @@ func (q *Queries) ListLeads(ctx context.Context, f LeadListFilter) ([]LeadListRo
 		where = append(where, "l.stage = ?")
 		args = append(args, f.Stage)
 	}
+ if f.ReachedStage != "" {
+  order := map[string]int{"baru":0,"discovery":1,"rekomendasi":2,"form_dikirim":3,"data_terisi":4,"info_bayar_dikirim":5,"bukti_masuk":6,"terverifikasi":7}
+  if at, ok := order[f.ReachedStage]; ok {
+   where = append(where, "(l.status = 'won' OR (CASE l.stage WHEN 'baru' THEN 0 WHEN 'discovery' THEN 1 WHEN 'rekomendasi' THEN 2 WHEN 'form_dikirim' THEN 3 WHEN 'data_terisi' THEN 4 WHEN 'info_bayar_dikirim' THEN 5 WHEN 'bukti_masuk' THEN 6 WHEN 'terverifikasi' THEN 7 ELSE -1 END) >= ?)")
+   args = append(args, at)
+  }
+ }
+ if f.LostReason != "" {
+  where = append(where, "l.status = 'lost' AND l.lost_reason = ?")
+  args = append(args, f.LostReason)
+ }
 	if f.LabelID > 0 {
 		where = append(where, "EXISTS (SELECT 1 FROM lead_label_links k WHERE k.lead_id = l.id AND k.label_id = ?)")
 		args = append(args, f.LabelID)
