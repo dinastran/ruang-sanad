@@ -68,6 +68,21 @@ fi
 
 REMOTE="$SERVER_USER@$SERVER_HOST"
 
+# Reuse one SSH connection for every ssh/rsync call in this deploy (and in
+# update-deploy.sh / first-deploy.sh). Opening a dozen fresh connections in a few
+# seconds makes the server reset some of them (sshd MaxStartups / fail2ban),
+# which used to make a healthy deploy look failed and trigger a rollback.
+# /tmp (not $TMPDIR): macOS $TMPDIR is too long for a unix socket path.
+SSH_CONTROL_DIR=$(mktemp -d /tmp/deploy-ssh.XXXXXX)
+export SSH_MUX_OPTS="-o ControlMaster=auto -o ControlPath=$SSH_CONTROL_DIR/%C -o ControlPersist=120 -o ServerAliveInterval=15"
+ssh() { command ssh $SSH_MUX_OPTS "$@"; }
+export -f ssh
+cleanup_ssh() {
+    command ssh $SSH_MUX_OPTS -O exit "$REMOTE" > /dev/null 2>&1 || true
+    rm -rf "$SSH_CONTROL_DIR"
+}
+trap cleanup_ssh EXIT
+
 echo -e "${GREEN}App:      ${YELLOW}$APP_NAME${NC}"
 echo -e "${GREEN}Server:   ${YELLOW}$REMOTE${NC}"
 echo -e "${GREEN}Path:     ${YELLOW}$SERVER_PATH${NC}"
@@ -77,7 +92,7 @@ fi
 echo ""
 
 # rsync without owner/group so files stay owned by the remote user (like scp did).
-RSYNC_OPTS=(-rlptz --partial)
+RSYNC_OPTS=(-rlptz --partial -e "ssh $SSH_MUX_OPTS")
 if [ "$DRY_RUN" = 1 ]; then
     RSYNC_OPTS+=(--dry-run --itemize-changes)
 fi

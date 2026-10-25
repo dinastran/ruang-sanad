@@ -52,7 +52,9 @@ fi
 # Show recent logs
 echo ""
 echo -e "${BLUE}Recent logs:${NC}"
-ssh "$SERVER_USER@$SERVER_HOST" "sudo journalctl -u $SERVICE_NAME -n 5 --no-pager"
+# Informational only: a failed log fetch must not fail the deploy (and trigger a rollback).
+ssh "$SERVER_USER@$SERVER_HOST" "sudo journalctl -u $SERVICE_NAME -n 5 --no-pager" \
+    || echo -e "${YELLOW}      (could not fetch logs — service is running, skipping)${NC}"
 
 echo ""
 echo -e "${GREEN}═══ UPDATE DEPLOY COMPLETE ═══${NC}"
