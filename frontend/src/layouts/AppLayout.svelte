@@ -81,6 +81,7 @@
 		{ href: "/app/santri", label: "Data Santri", group: "santri", category: "Akademik", show: isCS || isAdminKelas, icon: Users },
 		{ href: "/app/perlu-dilengkapi", label: "Perlu Dilengkapi", group: "perlu-dilengkapi", category: "Akademik", show: isAdminKelas, icon: AlertCircle },
 		{ href: "/app/kelas", label: "Kelas", group: "kelas", category: "Akademik", show: isAdminKelas, icon: BookOpen },
+		{ href: "/app/leads/dashboard", label: "Dashboard CRM", group: "leads-dashboard", category: "CRM", show: canLeads, icon: LayoutDashboard },
 		{ href: "/app/leads", label: "Leads", group: "leads", category: "CRM", show: canLeads, icon: MessageCircle },
 		{ href: "/app/leads/followups", label: "Follow-up", group: "leads-followups", category: "CRM", show: canApproveFollowup, icon: Send },
 		{ href: "/app/leads/laporan", label: "Laporan Leads", group: "leads-laporan", category: "CRM", show: canLeads, icon: ChartColumn },
@@ -127,6 +128,7 @@
 		const path = window.location.pathname;
 		if (path === "/app" || path === "/app/") return "dashboard";
 		if (path.startsWith("/app/analitik-santri")) return "analitik-santri";
+		if (path.startsWith("/app/leads/dashboard")) return "leads-dashboard";
 		if (path.startsWith("/app/leads/laporan")) return "leads-laporan";
 		if (path.startsWith("/app/leads/followups")) return "leads-followups";
 		if (path.startsWith("/app/leads")) return "leads";
