@@ -22,6 +22,7 @@ func enablePilotLead(t *testing.T, c *crmAgentFixture, id int64) {
 
 func pilotCandidateList(t *testing.T, c *crmAgentFixture, args map[string]any) map[string]any {
  t.Helper()
+ if args == nil { args = map[string]any{} }
  txt, isErr := c.call(t, c.writer(), "daftar_kandidat_followup", args)
  require.False(t, isErr, txt)
  var value map[string]any
