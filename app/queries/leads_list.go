@@ -18,6 +18,7 @@ type LeadListFilter struct {
 	NeedsReview bool
 	Search      string
 	PhoneSearch string
+	DateField string // converted only when explicitly requested
 	CreatedFrom time.Time
 	CreatedTo   time.Time
 	// Keyset cursor (exclusive): rows strictly after this position.
@@ -80,12 +81,14 @@ func (q *Queries) ListLeads(ctx context.Context, f LeadListFilter) ([]LeadListRo
 		}
 		where = append(where, cond+")")
 	}
-	if !f.CreatedFrom.IsZero() {
-		where = append(where, "l.created_at >= ?")
+	dateColumn := "l.created_at"
+ if f.DateField == "converted" { dateColumn = "l.converted_at" }
+ if !f.CreatedFrom.IsZero() {
+		where = append(where, dateColumn+" >= ?")
 		args = append(args, f.CreatedFrom.UTC())
 	}
 	if !f.CreatedTo.IsZero() {
-		where = append(where, "l.created_at < ?")
+		where = append(where, dateColumn+" < ?")
 		args = append(args, f.CreatedTo.UTC())
 	}
 	if f.HasCursor {
