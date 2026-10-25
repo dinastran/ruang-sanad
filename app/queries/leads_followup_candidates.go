@@ -38,6 +38,7 @@ func (q *Queries) ListPilotDormantFollowups(ctx context.Context, beforeID int64,
    ORDER BY f.sent_at DESC, f.id DESC LIMIT 1
  )
  WHERE l.status = 'open' AND l.followup_permission <> 'no'
+   AND l.stage NOT IN ('bukti_masuk', 'terverifikasi')
    AND outbound.sent_at <= ?
    AND (l.last_inbound_at IS NULL OR l.last_inbound_at < outbound.sent_at)
    AND (? = 0 OR l.id < ?)
