@@ -17,6 +17,7 @@ type DormantFollowupCandidate struct {
  Anchor time.Time
  LastStep sql.NullString
  LastSentAt sql.NullTime
+ PreviousD14At sql.NullTime
 }
 
 // ListPilotDormantFollowups excludes replied, closed, opted-out and already
@@ -24,7 +25,7 @@ type DormantFollowupCandidate struct {
 func (q *Queries) ListPilotDormantFollowups(ctx context.Context, beforeID int64, now, todayWIBStart, tomorrowWIBStart time.Time, limit int64) ([]DormantFollowupCandidate, error) {
  rows, err := q.db.QueryContext(ctx, `
  SELECT l.id, l.nama, l.wa_name, l.stage, l.followup_permission, outbound.sent_at,
-   last_sent.step, last_sent.sent_at
+   last_sent.step, last_sent.sent_at, prior_d14.sent_at
  FROM leads l
  JOIN lead_messages outbound ON outbound.id = (
    SELECT m.id FROM lead_messages m WHERE m.lead_id = l.id
@@ -35,6 +36,12 @@ func (q *Queries) ListPilotDormantFollowups(ctx context.Context, beforeID int64,
    SELECT f.id FROM lead_followups f
    WHERE f.lead_id = l.id AND f.status = 'sent'
      AND f.step IN ('d1','d3','d7','d14','d30') AND f.sent_at >= outbound.sent_at
+   ORDER BY f.sent_at DESC, f.id DESC LIMIT 1
+ )
+ LEFT JOIN lead_followups prior_d14 ON prior_d14.id = (
+   SELECT f.id FROM lead_followups f
+   WHERE f.lead_id = l.id AND f.status = 'sent'
+     AND f.step = 'd14' AND f.sent_at < outbound.sent_at
    ORDER BY f.sent_at DESC, f.id DESC LIMIT 1
  )
  WHERE l.status = 'open' AND l.followup_permission <> 'no'
@@ -65,7 +72,7 @@ func (q *Queries) ListPilotDormantFollowups(ctx context.Context, beforeID int64,
  for rows.Next() {
   var r DormantFollowupCandidate
   if err := rows.Scan(&r.ID, &r.Nama, &r.WaName, &r.Stage, &r.Permission,
-   &r.Anchor, &r.LastStep, &r.LastSentAt); err != nil { return nil, err }
+   &r.Anchor, &r.LastStep, &r.LastSentAt, &r.PreviousD14At); err != nil { return nil, err }
   result = append(result, r)
  }
  return result, rows.Err()
