@@ -40,6 +40,7 @@
 		q: string;
 		from: string;
 		to: string;
+		date_field?: string;
 	}
 
 	interface Props {
@@ -56,7 +57,7 @@
 	let user = $derived(props.user);
 	let labels = $derived(props.labels ?? []);
 	let stages = $derived(props.stages ?? []);
-	let filters = $derived<Filters>(props.filters ?? { status: "", stage: "", label: 0, mine: false, review: false, q: "", from: "", to: "" });
+	let filters = $derived<Filters>(props.filters ?? { status: "", stage: "", label: 0, mine: false, review: false, q: "", from: "", to: "", date_field: "" });
 	let success = $derived(props.flash?.success);
 	let error = $derived(props.flash?.error);
 
@@ -190,6 +191,9 @@
 			<div class="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm font-medium text-error">{error}</div>
 		{/if}
 
+		{#if filters.date_field === "converted"}
+			<p class="rounded-lg bg-brand-500/10 px-3 py-2 text-sm text-brand-700 dark:text-brand-300">Filter tanggal menggunakan tanggal closing (konversi menjadi santri), bukan tanggal lead pertama masuk.</p>
+		{/if}
 		<form onsubmit={doSearch} class="relative">
 			<Search class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500 pointer-events-none" />
 			<input type="search" bind:value={search} placeholder="Cari nama, nama WA, atau nomor" class="{fieldClass} pl-10" aria-label="Cari lead" />
@@ -238,7 +242,7 @@
 					</select>
 				</label>
 				<label class="block text-xs font-semibold uppercase tracking-wider text-neutral-500">
-					Masuk dari
+					{filters.date_field === "converted" ? "Closing dari" : "Masuk dari"}
 					<input type="date" class="{fieldClass} mt-1" value={filters.from} onchange={(e) => go({ from: (e.currentTarget as HTMLInputElement).value })} />
 				</label>
 				<label class="block text-xs font-semibold uppercase tracking-wider text-neutral-500">
