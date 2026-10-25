@@ -23,6 +23,7 @@
  interface Props { user?: User; dashboard: Dashboard }
  let props: Props = $props();
  let d = $derived(props.dashboard);
+ let canApproveFollowup = $derived(props.user?.role === "cs" || props.user?.role === "super_admin");
  let r = $derived(d.report);
  let customFrom = $state(props.dashboard.from);
  let customTo = $state(props.dashboard.to);
@@ -171,14 +172,14 @@
     <p class="mb-4 mt-1 text-xs text-neutral-500">Estimasi tahap yang dicapai berdasarkan posisi pipeline saat ini, bukan histori transisi terverifikasi.</p>
     <div class="space-y-2.5">
      {#each r.funnel as f, i}
-      <button type="button" onclick={() => f.stage === "won" ? openLeads({status:"won"}) : openLeads({stage:f.stage})} class="grid w-full grid-cols-[6.5rem_1fr_4.5rem] items-center gap-2 text-left text-xs sm:grid-cols-[11rem_1fr_6rem]" aria-label={(STAGE_LABELS[f.stage] || f.stage) + ": " + f.reached + " lead"}>
+      <button type="button" onclick={() => f.stage === "won" ? openLeads({status:"won"}) : openLeads({reached_stage:f.stage})} class="grid w-full grid-cols-[6.5rem_1fr_4.5rem] items-center gap-2 text-left text-xs sm:grid-cols-[11rem_1fr_6rem]" aria-label={(STAGE_LABELS[f.stage] || f.stage) + ": " + f.reached + " lead"}>
        <span class="truncate text-neutral-600 dark:text-neutral-300">{STAGE_LABELS[f.stage] || f.stage}</span>
        <span class="h-3.5 overflow-hidden rounded-sm bg-neutral-100 dark:bg-neutral-800"><span class={"block h-full rounded-sm " + (f.stage === "won" ? "bg-emerald-500" : "bg-brand-500")} style={"width:" + (f.reached / maxFunnel * 100) + "%"}></span></span>
        <span class="text-right font-mono text-neutral-600 dark:text-neutral-300">{fmt(f.reached)}{#if i > 0}<span class="hidden text-neutral-400 sm:inline"> · {Math.round(f.conversion * 100)}%</span>{/if}</span>
       </button>
      {/each}
     </div>
-    <p class="mt-3 text-xs text-neutral-500">Klik tahap untuk melihat posisi lead saat ini. Angka "pernah mencapai" pada funnel bisa lebih besar dari daftar posisi tersebut.</p>
+    <p class="mt-3 text-xs text-neutral-500">Klik tahap untuk melihat seluruh lead dalam cohort yang dianggap sudah mencapainya berdasarkan aturan funnel.</p>
    </section>
    <section class={box + " lg:col-span-2"}>
     <h2 class="font-semibold text-neutral-900 dark:text-white">Komposisi status</h2>
@@ -204,10 +205,10 @@
     {#if r.lost_reasons.length === 0}<p class="py-8 text-sm text-neutral-500">Belum ada lead lost pada cohort ini.</p>{/if}
     <div class="space-y-3">
      {#each r.lost_reasons as x}
-      <div class="space-y-1">
+      <button type="button" onclick={() => openLeads({ status:"lost", lost_reason:x.key })} class="block w-full space-y-1 text-left hover:opacity-80">
        <div class="flex justify-between text-sm"><span class="text-neutral-700 dark:text-neutral-300">{LOST_REASON_LABELS[x.key] || x.key || "Tidak diketahui"}</span><strong class="font-mono">{fmt(x.count)}</strong></div>
        <div class="h-2 rounded-full bg-neutral-100 dark:bg-neutral-800"><div class="h-full rounded-full bg-amber-500" style={"width:" + x.count / maxLost * 100 + "%"}></div></div>
-      </div>
+      </button>
      {/each}
     </div>
    </section>
@@ -228,7 +229,7 @@
 
   <div class="grid gap-4 lg:grid-cols-2">
    <section class={box}>
-    <div class="flex items-center justify-between"><h2 class="font-semibold text-neutral-900 dark:text-white">Monitoring follow-up</h2><a href="/app/leads/followups" use:inertia class="text-xs font-medium text-brand-600 dark:text-brand-400">Buka follow-up <ChevronRight size={13} class="inline" /></a></div>
+    <div class="flex items-center justify-between"><h2 class="font-semibold text-neutral-900 dark:text-white">Monitoring follow-up</h2>{#if canApproveFollowup}<a href="/app/leads/followups" use:inertia class="text-xs font-medium text-brand-600 dark:text-brand-400">Buka follow-up <ChevronRight size={13} class="inline" /></a>{/if}</div>
     <p class="mt-1 text-xs text-neutral-500">Antrean saat ini, terpisah dari filter akuisisi.</p>
     <div class="mt-4 grid grid-cols-3 gap-2 text-center">
      {#each [{title:"Menunggu approval",value:d.followup_pending},{title:"Disetujui",value:d.followup_approved},{title:"Gagal",value:d.followup_failed}] as x}
