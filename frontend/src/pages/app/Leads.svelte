@@ -41,6 +41,8 @@
 		from: string;
 		to: string;
 		date_field?: string;
+		reached_stage?: string;
+		lost_reason?: string;
 	}
 
 	interface Props {
@@ -191,7 +193,13 @@
 			<div class="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm font-medium text-error">{error}</div>
 		{/if}
 
-		{#if filters.date_field === "converted"}
+		{#if filters.reached_stage}
+   <p class="rounded-lg bg-brand-500/10 px-3 py-2 text-sm text-brand-700 dark:text-brand-300">Filter funnel: lead yang diperkirakan telah mencapai tahap {STAGE_LABELS[filters.reached_stage] ?? filters.reached_stage}, termasuk yang sudah closing.</p>
+  {/if}
+  {#if filters.lost_reason}
+   <p class="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">Filter alasan lost: {filters.lost_reason.replaceAll("_", " ")}.</p>
+  {/if}
+  {#if filters.date_field === "converted"}
 			<p class="rounded-lg bg-brand-500/10 px-3 py-2 text-sm text-brand-700 dark:text-brand-300">Filter tanggal menggunakan tanggal closing (konversi menjadi santri), bukan tanggal lead pertama masuk.</p>
 		{/if}
 		<form onsubmit={doSearch} class="relative">
