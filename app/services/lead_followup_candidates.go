@@ -79,16 +79,12 @@ func nextPilotFollowupStep(r queries.DormantFollowupCandidate, now time.Time) (s
 
 // pilotSuggestedTime is a future slot for human approval. This does not
 // promise a send; the existing worker re-checks the configured time window.
-func pilotSuggestedTime(now time.Time) string {
- at := now.In(wib).Add(10 * time.Minute)
- dayStart, _ := wibDayBounds(at)
- tenAM := dayStart.Add(10 * time.Hour)
- if at.Before(tenAM) {
-  at = tenAM
- } else if at.Hour() >= 20 {
-  at = dayStart.AddDate(0, 0, 1).Add(10 * time.Hour)
- }
- return at.Format("2006-01-02 15:04")
+func pilotSuggestedTime(now time.Time, settings queries.CrmSetting) string {
+ at := now.Add(10 * time.Minute)
+ start, end := sendWindow(settings, now)
+ if at.Before(start) { at = start }
+ if !at.Before(end) { at = nextWindowStart(settings, now) }
+ return at.In(wib).Format("2006-01-02 15:04")
 }
 
 // toolDaftarKandidatFollowup is read-only. Hermes still uses detail_lead
@@ -105,6 +101,8 @@ func (s *AIAgentService) toolDaftarKandidatFollowup(ctx context.Context, p *mode
  }
  now := s.leads.nowUTC()
  dayStart, dayEnd := wibDayBounds(now)
+ settings, err := s.querier.GetCRMSettings(ctx)
+ if err != nil { return nil, err }
  rows, err := s.querier.ListPilotDormantFollowups(ctx, beforeID, now, dayStart, dayEnd, limit + 1)
  if err != nil { return nil, err }
  next := ""
@@ -130,7 +128,7 @@ func (s *AIAgentService) toolDaftarKandidatFollowup(ctx context.Context, p *mode
    "hari_sejak_pesan_terakhir_cs": int(now.Sub(r.Anchor).Hours() / 24),
    "pesan_terakhir_cs": aiWIB(r.Anchor),
    "sudah_boleh_sejak": aiWIB(earliest),
-   "jadwal_disarankan": pilotSuggestedTime(now),
+   "jadwal_disarankan": pilotSuggestedTime(now, settings),
    "panduan": guidance,
    "link": s.leadLink(p, r.ID),
   })
