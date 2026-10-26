@@ -49,6 +49,8 @@
 		user?: User;
 		leads?: LeadItem[];
 		next?: string;
+		total?: number;
+		counts?: Record<string, number>;
 		labels?: LeadLabel[];
 		stages?: string[];
 		filters?: Filters;
@@ -67,6 +69,9 @@
 	let earlier = $state<LeadItem[]>([]);
 	let loadingMore = $state(false);
 	let items = $derived([...earlier, ...(props.leads ?? [])]);
+	// Totals for the whole filter (all pages), not only the loaded items.
+	let total = $derived(props.total ?? 0);
+	let counts = $derived(props.counts ?? {});
 
 	// svelte-ignore state_referenced_locally
 	let search = $state(props.filters?.q ?? "");
@@ -136,10 +141,32 @@
 	// Kanban: drag a card to another stage column (manual stage move).
 	let dragId = $state<number | null>(null);
 	let dropStage = $state<string | null>(null);
-	let kanbanStages = $derived(stages);
+	// Open leads sit in their stage column; closed leads (won, lost, do not
+	// contact) get their own columns so the board adds up to the list total.
+	const closedColumns = ["won", "lost", "do_not_contact"];
+	let kanbanColumns = $derived([...stages, ...closedColumns.filter((c) => (counts[c] ?? 0) > 0)]);
+	const columnOf = (l: LeadItem) => (l.status === "open" ? l.stage : l.status);
+	const columnLabel = (c: string) => (closedColumns.includes(c) ? STATUS_LABELS[c] : STAGE_LABELS[c]) ?? c;
 	// Terverifikasi is shown (leads waiting for "Jadikan Santri") but only the
-	// verify action can move a lead there.
-	const canDropOn = (stage: string) => stage !== "terverifikasi";
+	// verify action can move a lead there. Closed leads are not moved here.
+	const canDropOn = (column: string) => column !== "terverifikasi" && !closedColumns.includes(column);
+
+	const fmtDate = (d: string) =>
+		new Date(d + "T12:00:00+07:00").toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
+	let statusSummary = $derived(
+		filters.status === "all" ? "semua status" : filters.status && filters.status !== "open" ? `status ${STATUS_LABELS[filters.status]?.toLowerCase()}` : "status berjalan",
+	);
+	let dateSummary = $derived.by(() => {
+		const what = filters.date_field === "converted" ? "closing" : "masuk";
+		if (filters.from && filters.to) return filters.from === filters.to ? `${what} ${fmtDate(filters.from)}` : `${what} ${fmtDate(filters.from)} – ${fmtDate(filters.to)}`;
+		if (filters.from) return `${what} sejak ${fmtDate(filters.from)}`;
+		if (filters.to) return `${what} sampai ${fmtDate(filters.to)}`;
+		return "semua tanggal";
+	});
+	let hasFilters = $derived(
+		(filters.status !== "" && filters.status !== "open") ||
+			!!(filters.stage || filters.label || filters.mine || filters.review || filters.q || filters.from || filters.to || filters.date_field || filters.reached_stage || filters.lost_reason),
+	);
 
 	function dropOn(stage: string) {
 		const id = dragId;
@@ -202,6 +229,15 @@
   {#if filters.date_field === "converted"}
 			<p class="rounded-lg bg-brand-500/10 px-3 py-2 text-sm text-brand-700 dark:text-brand-300">Filter tanggal menggunakan tanggal closing (konversi menjadi santri), bukan tanggal lead pertama masuk.</p>
 		{/if}
+		<div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+			<p class="text-neutral-600 dark:text-neutral-400" aria-live="polite">
+				<strong class="font-semibold tabular-nums text-neutral-900 dark:text-white">{total.toLocaleString("id-ID")} lead</strong>
+				· {statusSummary} · {dateSummary}{#if items.length < total}<span class="text-neutral-500"> · {items.length.toLocaleString("id-ID")} ditampilkan</span>{/if}
+			</p>
+			{#if hasFilters}
+				<a href="/app/leads" use:inertia class="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">Reset filter</a>
+			{/if}
+		</div>
 		<form onsubmit={doSearch} class="relative">
 			<Search class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500 pointer-events-none" />
 			<input type="search" bind:value={search} placeholder="Cari nama, nama WA, atau nomor" class="{fieldClass} pl-10" aria-label="Cari lead" />
@@ -270,25 +306,25 @@
 			<!-- Kanban is desktop-only; on small screens the list is shown instead. -->
 			<div class="lg:hidden">{@render cardList()}</div>
 			<div class="hidden lg:flex gap-3 overflow-x-auto pb-2">
-				{#each kanbanStages as stage}
-					{@const col = items.filter((l) => l.stage === stage && l.status === "open")}
+				{#each kanbanColumns as stage}
+					{@const col = items.filter((l) => columnOf(l) === stage)}
 					<section
 						class="w-64 shrink-0 rounded-xl border bg-neutral-50 dark:bg-neutral-900/40 {dropStage === stage ? 'border-brand-500' : 'border-neutral-200/80 dark:border-white/[0.06]'}"
-						aria-label={STAGE_LABELS[stage]}
+						aria-label={columnLabel(stage)}
 						ondragover={(e) => { if (!canDropOn(stage)) return; e.preventDefault(); dropStage = stage; }}
 						ondragleave={() => { if (dropStage === stage) dropStage = null; }}
 						ondrop={(e) => { e.preventDefault(); if (canDropOn(stage)) dropOn(stage); }}
 					>
 						<header class="flex items-center justify-between px-3 py-2.5 border-b border-neutral-200/80 dark:border-white/[0.06]">
-							<h2 class="text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">{STAGE_LABELS[stage]}</h2>
-							<span class="text-xs font-mono text-neutral-500">{col.length}</span>
+							<h2 class="text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">{columnLabel(stage)}</h2>
+							<span class="text-xs font-mono text-neutral-500" title={col.length < (counts[stage] ?? 0) ? `${col.length} dimuat dari ${counts[stage]}` : undefined}>{counts[stage] ?? 0}</span>
 						</header>
 						<div class="p-2 space-y-2 min-h-24">
 							{#each col as lead (lead.id)}
 								<a
 									href="/app/leads/{lead.id}"
 									use:inertia
-									draggable="true"
+									draggable={lead.status === "open"}
 									ondragstart={() => (dragId = lead.id)}
 									ondragend={() => { dragId = null; dropStage = null; }}
 									class="block rounded-lg border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925 p-3 hover:border-brand-400/50 {dragId === lead.id ? 'opacity-50' : ''}"
@@ -298,6 +334,9 @@
 									{@render flags(lead)}
 								</a>
 							{/each}
+							{#if col.length < (counts[stage] ?? 0)}
+								<p class="px-1 text-[11px] text-neutral-500">+{(counts[stage] ?? 0) - col.length} lagi, klik Muat lagi</p>
+							{/if}
 						</div>
 					</section>
 				{/each}

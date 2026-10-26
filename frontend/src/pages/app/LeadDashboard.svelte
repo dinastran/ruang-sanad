@@ -122,7 +122,7 @@
     <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">Dashboard CRM Leads</h1>
     <p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Performa lead WhatsApp dan pekerjaan CS · {readableDate(d.from)} sampai {readableDate(d.to)} (WIB)</p>
    </div>
-   <a href="/app/leads" use:inertia class="inline-flex items-center gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800">Buka Leads <ArrowUpRight size={15} /></a>
+   <a href={"/app/leads?" + new URLSearchParams({ status: "all", from: d.from, to: d.to }).toString()} use:inertia class="inline-flex items-center gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800">Buka leads periode ini <ArrowUpRight size={15} /></a>
   </header>
 
   <section class={box + " space-y-3"} aria-label="Filter periode">

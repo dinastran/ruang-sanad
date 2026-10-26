@@ -53,6 +53,8 @@ func (h *LeadHandler) Index(c *fiber.Ctx) error {
 		"user":    user,
 		"leads":   list.Items,
 		"next":    list.NextCursor,
+		"total":   list.Total,
+		"counts":  list.Counts,
 		"labels":  labels,
 		"stages":  services.LeadStages,
 		"filters": params,

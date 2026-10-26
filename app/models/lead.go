@@ -77,6 +77,10 @@ type LeadListParams struct {
 type LeadListResponse struct {
 	Items      []LeadListItem `json:"items"`
 	NextCursor string         `json:"next_cursor"`
+	// Total and Counts cover every page: Counts is keyed by the current stage
+	// for open leads and by status (won, lost, do_not_contact) otherwise.
+	Total  int64            `json:"total"`
+	Counts map[string]int64 `json:"counts"`
 }
 
 type LeadMessageResponse struct {
