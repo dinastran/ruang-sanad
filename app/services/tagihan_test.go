@@ -503,3 +503,83 @@ func TestListTagihanMenyertakanStatusSantri(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Safar", detail.SantriStatusAlasan)
 }
+
+func TestPertemuanSebelumSistemIkutSiklusTagihan(t *testing.T) {
+	// Kelas sudah 2x pertemuan sebelum aplikasi; Ke-3 dan Ke-4 tercatat di
+	// aplikasi. Tagihan bulan ke-2 (periode 5-8) terbit saat Ke-4 selesai.
+	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
+	santriID := firstSantriID(t, db)
+	_, err := db.Exec(`UPDATE kelas SET pertemuan_terakhir = 2 WHERE id = ?`, kelasID)
+	require.NoError(t, err)
+
+	generateMeetings(t, db, service, kelasID, santriID, 3, 1, "hadir")
+	require.Zero(t, tagihanCount(t, db))
+	generateMeetings(t, db, service, kelasID, santriID, 4, 1, "alpa")
+	var bulanKe, pertemuanKe int64
+	require.NoError(t, db.QueryRow(`SELECT bulan_ke, pertemuan_ke FROM tagihan`).Scan(&bulanKe, &pertemuanKe))
+	require.EqualValues(t, 2, bulanKe)
+	require.EqualValues(t, 4, pertemuanKe)
+
+	generateMeetings(t, db, service, kelasID, santriID, 5, 4, "hadir")
+	require.NoError(t, db.QueryRow(`SELECT pertemuan_ke FROM tagihan WHERE bulan_ke = 3`).Scan(&pertemuanKe))
+	require.EqualValues(t, 8, pertemuanKe)
+}
+
+func TestPertemuanSebelumSistemSaatSelesaikanPertemuanPertama(t *testing.T) {
+	// Jalur normal: tagihan dihitung sebelum pertemuan disimpan sebagai selesai.
+	db, service, kelasID := setupTagihanService(t, "2x/pekan", 0)
+	santriID := firstSantriID(t, db)
+	_, err := db.Exec(`UPDATE kelas SET pertemuan_terakhir = 7 WHERE id = ?`, kelasID)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO pertemuan (kelas_id, pertemuan_ke, tanggal, status) VALUES (?, 8, ?, 'berlangsung')`, kelasID, time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	p8, err := lastID(db)
+	require.NoError(t, err)
+	addAbsensi(t, db, p8, santriID, "hadir")
+	require.NoError(t, service.GenerateOnCompletion(p8))
+
+	var bulanKe, pertemuanKe int64
+	require.NoError(t, db.QueryRow(`SELECT bulan_ke, pertemuan_ke FROM tagihan`).Scan(&bulanKe, &pertemuanKe))
+	require.EqualValues(t, 2, bulanKe)
+	require.EqualValues(t, 8, pertemuanKe)
+}
+
+func TestPertemuanSebelumSistemTidakBerlakuUntukSantriBaru(t *testing.T) {
+	// Santri baru masuk saat nomor berikutnya Ke-3: ia tidak ikut Ke-1 dan Ke-2.
+	db, service, kelasID := setupTagihanService(t, "1x/pekan", 3)
+	santriID := firstSantriID(t, db)
+	_, err := db.Exec(`UPDATE kelas SET pertemuan_terakhir = 2 WHERE id = ?`, kelasID)
+	require.NoError(t, err)
+
+	generateMeetings(t, db, service, kelasID, santriID, 3, 3, "hadir")
+	require.Zero(t, tagihanCount(t, db))
+	generateMeetings(t, db, service, kelasID, santriID, 6, 1, "hadir")
+	require.EqualValues(t, 1, tagihanCount(t, db))
+}
+
+func TestMigrasiResetProgressSantriTanpaTagihanDiKelasBeranchor(t *testing.T) {
+	db, service, kelasID := setupTagihanService(t, "1x/pekan", 0)
+	santriID := firstSantriID(t, db)
+	_, err := db.Exec(`UPDATE kelas SET pertemuan_terakhir = 2 WHERE id = ?`, kelasID)
+	require.NoError(t, err)
+	// Simulasikan progress lama yang menghitung tanpa anchor (3 pertemuan).
+	for ke := int64(3); ke <= 5; ke++ {
+		p := createMeetingWithAbsensi(t, db, kelasID, ke, santriID, "hadir")
+		_, err = db.Exec(`INSERT INTO santri_billing_meeting (santri_id, pertemuan_id, frekuensi) VALUES (?, ?, '1x/pekan')`, santriID, p)
+		require.NoError(t, err)
+	}
+	_, err = db.Exec(`INSERT INTO santri_billing_progress (santri_id, meeting_count, last_billed_month) VALUES (?, 3, 1)`, santriID)
+	require.NoError(t, err)
+
+	require.NoError(t, goose.DownTo(db, filepath.Join("..", "..", "migrations"), 83))
+	require.NoError(t, goose.Up(db, filepath.Join("..", "..", "migrations")))
+	require.NoError(t, service.Sync())
+
+	var bulanKe, pertemuanKe, counter int64
+	require.NoError(t, db.QueryRow(`SELECT bulan_ke, pertemuan_ke FROM tagihan`).Scan(&bulanKe, &pertemuanKe))
+	require.EqualValues(t, 2, bulanKe)
+	require.EqualValues(t, 4, pertemuanKe)
+	require.NoError(t, db.QueryRow(`SELECT meeting_count FROM santri_billing_progress WHERE santri_id = ?`, santriID).Scan(&counter))
+	require.EqualValues(t, 1, counter, "Ke-5 menjadi pertemuan pertama periode 5-8")
+}

@@ -139,7 +139,15 @@ func (s *TagihanService) backfillSantriBilling(ctx context.Context, q *queries.Q
 // from month 1. For legacy invoices created one period late, attendance before
 // the previous threshold is marked consumed and the remaining meetings are
 // replayed under the new timing rule.
-func (s *TagihanService) getOrInitializeBillingProgress(ctx context.Context, q *queries.Querier, santriID int64) (queries.SantriBillingProgressRow, error) {
+//
+// A santri with no invoice yet starts from month 1 (prepaid). If their class
+// already ran meetings before the application (kelas.pertemuan_terakhir), those
+// meetings count toward the current period so the cycle follows the real class
+// number: anchor 2 on 1x/pekan bills month 2 when Ke-4 finishes. Thresholds that
+// fell before the application are treated as billed outside the system, so only
+// the remainder is carried. first is the meeting about to be processed, used
+// when it is not yet listed as a completed meeting.
+func (s *TagihanService) getOrInitializeBillingProgress(ctx context.Context, q *queries.Querier, santriID int64, first *queries.SantriBillingMeetingRow) (queries.SantriBillingProgressRow, error) {
 	progress, err := q.GetSantriBillingProgress(ctx, santriID)
 	if err == nil {
 		return progress, nil
@@ -177,15 +185,65 @@ func (s *TagihanService) getOrInitializeBillingProgress(ctx context.Context, q *
 				}
 			}
 		}
-	} else if !errors.Is(anchorErr, sql.ErrNoRows) {
+	} else if errors.Is(anchorErr, sql.ErrNoRows) {
+		carried, err := s.pertemuanSebelumSistem(ctx, q, santriID, first)
+		if err != nil {
+			return queries.SantriBillingProgressRow{}, err
+		}
+		return q.CreateSantriBillingProgressWithCount(ctx, santriID, carried, lastBilledMonth)
+	} else {
 		return queries.SantriBillingProgressRow{}, anchorErr
 	}
 
 	return q.CreateSantriBillingProgress(ctx, santriID, lastBilledMonth)
 }
 
+// pertemuanSebelumSistem returns how many pre-application meetings of the
+// santri's first class still belong to the current billing period. It only
+// applies when the santri's first recorded meeting is that class's first
+// digital meeting; a santri placed later (pertemuan_awal) skips the meetings
+// held before they joined.
+func (s *TagihanService) pertemuanSebelumSistem(ctx context.Context, q *queries.Querier, santriID int64, first *queries.SantriBillingMeetingRow) (int64, error) {
+	events, err := q.ListUnprocessedBillingMeetingsForSantri(ctx, santriID)
+	if err != nil {
+		return 0, err
+	}
+	if len(events) > 0 {
+		first = &events[0]
+	}
+	if first == nil || first.KelasID <= 0 {
+		return 0, nil
+	}
+	threshold, err := frekuensiKePertemuan(first.Frekuensi)
+	if err != nil {
+		return 0, nil
+	}
+	kelas, err := q.GetKelasByID(ctx, first.KelasID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	if kelas.PertemuanTerakhir <= 0 || first.PertemuanKe != kelas.PertemuanTerakhir+1 {
+		return 0, nil
+	}
+	santri, err := q.GetSantriByID(ctx, santriID)
+	if err != nil {
+		return 0, err
+	}
+	sebelum := kelas.PertemuanTerakhir
+	if santri.KelasID.Valid && santri.KelasID.Int64 == first.KelasID && santri.PertemuanAwal > 1 {
+		sebelum -= santri.PertemuanAwal - 1
+	}
+	if sebelum <= 0 {
+		return 0, nil
+	}
+	return sebelum % threshold, nil
+}
+
 func (s *TagihanService) processBillingMeeting(ctx context.Context, q *queries.Querier, santriID int64, event queries.SantriBillingMeetingRow) error {
-	progress, err := s.getOrInitializeBillingProgress(ctx, q, santriID)
+	progress, err := s.getOrInitializeBillingProgress(ctx, q, santriID, &event)
 	if err != nil {
 		return err
 	}
@@ -299,7 +357,7 @@ func (s *TagihanService) ReconcileFrequencyChangeWithQuerier(q *queries.Querier,
 	if err != nil {
 		return nil
 	}
-	progress, err := s.getOrInitializeBillingProgress(ctx, q, santriID)
+	progress, err := s.getOrInitializeBillingProgress(ctx, q, santriID, nil)
 	if err != nil {
 		return err
 	}

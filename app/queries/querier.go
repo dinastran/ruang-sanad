@@ -583,6 +583,25 @@ ON CONFLICT(santri_id) DO NOTHING
 	return q.GetSantriBillingProgress(ctx, santriID)
 }
 
+// CreateSantriBillingProgressWithCount seeds the counter with meetings already
+// accumulated toward the next period (e.g. meetings held before the app).
+func (q *Querier) CreateSantriBillingProgressWithCount(ctx context.Context, santriID, meetingCount, lastBilledMonth int64) (SantriBillingProgressRow, error) {
+	if meetingCount < 0 {
+		meetingCount = 0
+	}
+	if lastBilledMonth < 1 {
+		lastBilledMonth = 1
+	}
+	if _, err := q.Queries.db.ExecContext(ctx, `
+INSERT INTO santri_billing_progress (santri_id, meeting_count, last_billed_month)
+VALUES (?, ?, ?)
+ON CONFLICT(santri_id) DO NOTHING
+`, santriID, meetingCount, lastBilledMonth); err != nil {
+		return SantriBillingProgressRow{}, err
+	}
+	return q.GetSantriBillingProgress(ctx, santriID)
+}
+
 func (q *Querier) GetLatestTagihanBillingAnchor(ctx context.Context, santriID int64) (SantriBillingAnchorRow, error) {
 	var row SantriBillingAnchorRow
 	err := q.Queries.db.QueryRowContext(ctx, `
