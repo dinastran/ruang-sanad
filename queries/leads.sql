@@ -18,7 +18,7 @@ UPDATE leads SET
     untuk_siapa = ?, stage = ?, status = ?, lost_reason = ?, followup_permission = ?,
     assigned_user_id = ?, payment_amount = ?, payment_info_sent_at = ?, proof_received_at = ?,
     verified_at = ?, verified_by = ?, needs_review = ?, last_inbound_at = ?, last_outbound_at = ?,
-    updated_at = ?
+    jadwal_kode = ?, updated_at = ?
 WHERE id = ?;
 
 -- name: LinkLeadSantri :execrows

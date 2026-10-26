@@ -236,10 +236,16 @@ func (s *LeadService) Convert(ctx context.Context, id, actorID int64, req models
 		if err != nil {
 			return err
 		}
+		message := strings.TrimSpace(req.Nama) + " baru mendaftar lewat CS. Lengkapi data dan tempatkan di kelas."
+		if _, label, ok, err := jadwalLabelByKode(ctx, q, l.JadwalKode); err != nil {
+			return err
+		} else if ok {
+			message += " Jadwal pilihan (perlu dikonfirmasi): " + label + "."
+		}
 		return notifyUsers(ctx, q, admins, queries.CreateNotificationParams{
 			Type:          "santri_baru_dari_lead",
 			Title:         "Santri baru perlu penempatan kelas",
-			Message:       strings.TrimSpace(req.Nama) + " baru mendaftar lewat CS. Lengkapi data dan tempatkan di kelas.",
+			Message:       message,
 			ActionUrl:     "/app/perlu-dilengkapi",
 			ReferenceType: "santri",
 			ReferenceID:   sql.NullInt64{Int64: santriID, Valid: true},

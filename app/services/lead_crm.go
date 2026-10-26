@@ -234,7 +234,24 @@ func (s *LeadService) Detail(ctx context.Context, id int64) (*models.LeadDetail,
 		ProofReceivedAt: formatLeadNullTime(l.ProofReceivedAt), VerifiedAt: formatLeadNullTime(l.VerifiedAt),
 		ConvertedAt: formatLeadNullTime(l.ConvertedAt), SantriID: l.SantriID.Int64, NeedsReview: l.NeedsReview == 1,
 		LastInboundAt: formatLeadNullTime(l.LastInboundAt), LastOutboundAt: formatLeadNullTime(l.LastOutboundAt),
-		CreatedAt: formatLeadTime(l.CreatedAt), ReviewFields: []string{},
+		CreatedAt: formatLeadTime(l.CreatedAt), ReviewFields: []string{}, JadwalKode: l.JadwalKode,
+		JadwalOptions: []models.JadwalOption{},
+	}
+	if _, label, ok, err := jadwalLabelByKode(ctx, s.querier, l.JadwalKode); err != nil {
+		return nil, err
+	} else if ok {
+		d.JadwalLabel = label
+	}
+	jadwal, err := s.querier.ListJadwalPenawaran(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, j := range jadwal {
+		label := JadwalLabel(j.Hari, j.JamMulai, j.JamSelesai)
+		if j.Level != "" {
+			label += " (level " + j.Level + ")"
+		}
+		d.JadwalOptions = append(d.JadwalOptions, models.JadwalOption{Kode: j.Kode, Label: label, IsBuka: j.IsBuka == 1})
 	}
 	if l.AssignedUserID.Valid {
 		if u, err := s.querier.GetUserByID(ctx, l.AssignedUserID.Int64); err == nil {
@@ -410,7 +427,21 @@ func (s *LeadService) UpdateData(ctx context.Context, id, actorID int64, req mod
 				return "", nil, fmt.Errorf("kode kelas %q tidak terdaftar", kelasKode)
 			}
 		}
+		if req.JadwalKode != nil {
+			kode := strings.ToLower(strings.TrimSpace(*req.JadwalKode))
+			if kode != "" {
+				if _, _, ok, err := jadwalLabelByKode(ctx, q, kode); err != nil {
+					return "", nil, err
+				} else if !ok {
+					return "", nil, fmt.Errorf("jadwal %q tidak terdaftar", kode)
+				}
+			}
+			req.JadwalKode = &kode
+		}
 		before := *l
+		if req.JadwalKode != nil {
+			l.JadwalKode = *req.JadwalKode
+		}
 		l.Nama = truncateRunes(req.Nama, 200)
 		l.Usia = sql.NullInt64{Int64: req.Usia, Valid: req.Usia > 0}
 		l.Domisili = truncateRunes(req.Domisili, 200)
@@ -441,6 +472,7 @@ func (s *LeadService) UpdateData(ctx context.Context, id, actorID int64, req mod
 		check("riwayat_belajar", before.RiwayatBelajar, l.RiwayatBelajar)
 		check("belajar_dimana", before.BelajarDimana, l.BelajarDimana)
 		check("untuk_siapa", before.UntukSiapa, l.UntukSiapa)
+		check("jadwal_kode", before.JadwalKode, l.JadwalKode)
 		if len(changed) == 0 && before.NeedsReview == l.NeedsReview {
 			return "", nil, nil
 		}

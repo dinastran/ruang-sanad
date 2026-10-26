@@ -21,7 +21,7 @@ const (
 var leadIngestTypes = map[string]bool{
 	"message.in": true, "message.out": true, "form.sent": true, "payment_info.sent": true,
 	"proof.received": true, "handoff": true, "ai.paused": true, "ai.resumed": true,
-	"conversation.stage": true,
+	"conversation.stage": true, "schedule.selected": true,
 }
 
 // errLeadSchema marks an event the bridge must not resend (bad schema).
@@ -42,6 +42,7 @@ type leadEventData struct {
 	Reason      string `json:"reason"`
 	Summary     string `json:"summary"`
 	Until       string `json:"until"`
+	JadwalKode  string `json:"jadwal_kode"`
 }
 
 // IngestEvents applies a batch of bridge events (PRD 7.1). Each event runs in
@@ -97,6 +98,12 @@ func validateLeadIngestEvent(ev models.LeadIngestEvent) (time.Time, leadEventDat
 		}
 		if data.Stage == LeadStageRekomendasi && !paketKey.MatchString(strings.ToLower(strings.TrimSpace(data.PaketKode))) {
 			return time.Time{}, data, errLeadSchema{"conversation.stage rekomendasi memerlukan kode paket valid"}
+		}
+	}
+	if ev.Type == "schedule.selected" {
+		data.JadwalKode = strings.ToLower(strings.TrimSpace(data.JadwalKode))
+		if !jadwalKodeRe.MatchString(data.JadwalKode) {
+			return time.Time{}, data, errLeadSchema{"schedule.selected memerlukan jadwal_kode valid"}
 		}
 	}
 	if len(data.Body) > maxLeadMessageBody {
@@ -270,6 +277,26 @@ func (s *LeadService) applyLeadEvent(ctx context.Context, q *queries.Querier, le
 			if err := s.applyProofReceived(ctx, q, lead, occurred, now, payload); err != nil {
 				return nil, err
 			}
+		}
+
+	case "schedule.selected":
+		// The calon santri chose a schedule in the chat. It is a preference:
+		// Admin Kelas confirms it at placement. After payment is verified the
+		// seat is counted, so only staff may change it from then on.
+		payload["jadwal_kode"] = data.JadwalKode
+		_, label, ok, err := jadwalLabelByKode(ctx, q, data.JadwalKode)
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case !ok:
+			payload["ignored"] = "jadwal tidak dikenal"
+		case lead.VerifiedAt.Valid:
+			payload["ignored"] = "pembayaran sudah diverifikasi; ubah jadwal manual"
+		default:
+			payload["jadwal_from"] = lead.JadwalKode
+			payload["jadwal_label"] = label
+			lead.JadwalKode = data.JadwalKode
 		}
 
 	case "ai.paused", "ai.resumed":
