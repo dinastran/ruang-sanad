@@ -125,6 +125,10 @@ func (s *LeadService) List(ctx context.Context, p models.LeadListParams) (*model
 	if t, ok := wibDayStart(p.To); ok {
 		f.CreatedTo = t.AddDate(0, 0, 1)
 	}
+	counts, err := s.querier.CountLeadsByColumn(ctx, f)
+	if err != nil {
+		return nil, err
+	}
 	if p.Cursor != "" {
 		decodeLeadCursor(p.Cursor, &f)
 	}
@@ -132,7 +136,11 @@ func (s *LeadService) List(ctx context.Context, p models.LeadListParams) (*model
 	if err != nil {
 		return nil, err
 	}
-	resp := &models.LeadListResponse{Items: make([]models.LeadListItem, 0, len(rows))}
+	resp := &models.LeadListResponse{Items: make([]models.LeadListItem, 0, len(rows)), Counts: make(map[string]int64, len(counts))}
+	for _, c := range counts {
+		resp.Counts[c.Column] = c.Count
+		resp.Total += c.Count
+	}
 	if len(rows) > leadListPageSize {
 		rows = rows[:leadListPageSize]
 		resp.NextCursor = encodeLeadCursor(rows[len(rows)-1])

@@ -51,7 +51,9 @@ type LeadListRow struct {
 const leadPrioExpr = `CASE WHEN l.stage = 'bukti_masuk' AND l.status = 'open' THEN 1 ELSE 0 END`
 const leadActExpr = `CAST(COALESCE(l.last_inbound_at, l.created_at) AS TEXT)`
 
-func (q *Queries) ListLeads(ctx context.Context, f LeadListFilter) ([]LeadListRow, error) {
+// leadListWhere builds the filter conditions shared by ListLeads and
+// CountLeadsByColumn. The keyset cursor is not included.
+func leadListWhere(f LeadListFilter) ([]string, []any) {
 	where := []string{"1=1"}
 	args := []any{}
 	if f.Status != "" {
@@ -104,6 +106,11 @@ func (q *Queries) ListLeads(ctx context.Context, f LeadListFilter) ([]LeadListRo
 		where = append(where, dateColumn+" < ?")
 		args = append(args, f.CreatedTo.UTC())
 	}
+	return where, args
+}
+
+func (q *Queries) ListLeads(ctx context.Context, f LeadListFilter) ([]LeadListRow, error) {
+	where, args := leadListWhere(f)
 	if f.HasCursor {
 		where = append(where, "("+leadPrioExpr+" < ? OR ("+leadPrioExpr+" = ? AND "+leadActExpr+" < ?) OR ("+leadPrioExpr+" = ? AND "+leadActExpr+" = ? AND l.id < ?))")
 		args = append(args, f.AfterPrio, f.AfterPrio, f.AfterAct, f.AfterPrio, f.AfterAct, f.AfterID)
@@ -130,6 +137,33 @@ func (q *Queries) ListLeads(ctx context.Context, f LeadListFilter) ([]LeadListRo
 		var r LeadListRow
 		if err := rows.Scan(&r.ID, &r.Nama, &r.WaName, &r.Phone, &r.Stage, &r.Status, &r.PaketKode, &r.NeedsReview,
 			&r.AssignedUserID, &r.AssignedName, &r.LastInboundAt, &r.ActivityRaw, &r.Prio, &r.AIPaused); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// LeadColumnCount is how many leads match the list filter in one column:
+// the current stage for open leads, otherwise the status (won, lost, ...).
+type LeadColumnCount struct {
+	Column string
+	Count  int64
+}
+
+// CountLeadsByColumn counts every lead matching the filter (all pages).
+func (q *Queries) CountLeadsByColumn(ctx context.Context, f LeadListFilter) ([]LeadColumnCount, error) {
+	where, args := leadListWhere(f)
+	rows, err := q.db.QueryContext(ctx, `SELECT CASE WHEN l.status = 'open' THEN l.stage ELSE l.status END AS col, COUNT(*)
+	FROM leads l WHERE `+strings.Join(where, " AND ")+` GROUP BY col`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]LeadColumnCount, 0)
+	for rows.Next() {
+		var r LeadColumnCount
+		if err := rows.Scan(&r.Column, &r.Count); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

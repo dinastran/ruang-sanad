@@ -1,6 +1,7 @@
 package services
 
 import (
+ "fmt"
  "testing"
  "time"
 
@@ -68,4 +69,34 @@ func TestLeadDashboardClosingUsesConversionDateAndDrilldown(t *testing.T) {
  })
  require.NoError(t, err)
  require.Len(t, reached.Items, 1, "won lead from the selected cohort reaches all funnel stages")
+ require.Equal(t, d.Report.Funnel[1].Reached, reached.Total, "list total matches the funnel figure")
+ require.Equal(t, map[string]int64{"won": 1}, reached.Counts)
+}
+
+func TestLeadListTotalAndColumnCountsCoverAllPages(t *testing.T) {
+ f := setupLeadFixture(t)
+ created := time.Date(2026, 10, 24, 2, 0, 0, 0, time.UTC)
+ for i := 0; i < leadListPageSize+5; i++ {
+  _, err := f.db.Exec(`INSERT INTO leads (wa_chat_id, created_at, updated_at, stage, status) VALUES (?, ?, ?, 'discovery', 'open')`, fmt.Sprint("open-", i), created, created)
+  require.NoError(t, err)
+ }
+ for chat, status := range map[string]string{"won": "won", "lost": "lost"} {
+  _, err := f.db.Exec(`INSERT INTO leads (wa_chat_id, created_at, updated_at, stage, status) VALUES (?, ?, ?, 'rekomendasi', ?)`, chat, created, created, status)
+  require.NoError(t, err)
+ }
+
+ all, err := f.service.List(t.Context(), models.LeadListParams{Status: "all", From: "2026-10-24", To: "2026-10-24"})
+ require.NoError(t, err)
+ require.Len(t, all.Items, leadListPageSize)
+ require.Equal(t, int64(leadListPageSize+7), all.Total)
+ require.Equal(t, map[string]int64{"discovery": int64(leadListPageSize + 5), "won": 1, "lost": 1}, all.Counts)
+
+ next, err := f.service.List(t.Context(), models.LeadListParams{Status: "all", From: "2026-10-24", To: "2026-10-24", Cursor: all.NextCursor})
+ require.NoError(t, err)
+ require.Len(t, next.Items, 7)
+ require.Equal(t, all.Total, next.Total, "total ignores the cursor")
+
+ open, err := f.service.List(t.Context(), models.LeadListParams{})
+ require.NoError(t, err)
+ require.Equal(t, int64(leadListPageSize+5), open.Total)
 }
