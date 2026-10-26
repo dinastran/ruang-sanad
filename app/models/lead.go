@@ -139,6 +139,10 @@ type LeadDetail struct {
 	RiwayatBelajar     string                 `json:"riwayat_belajar"`
 	BelajarDimana      string                 `json:"belajar_dimana"`
 	UntukSiapa         string                 `json:"untuk_siapa"`
+	JadwalKode         string                 `json:"jadwal_kode"`
+	JadwalLabel        string                 `json:"jadwal_label"`
+	// JadwalOptions lists every schedule (for the select on the lead page).
+	JadwalOptions []JadwalOption `json:"jadwal_options"`
 	Stage              string                 `json:"stage"`
 	Status             string                 `json:"status"`
 	LostReason         string                 `json:"lost_reason"`
@@ -182,7 +186,16 @@ type LeadUpdateRequest struct {
 	RiwayatBelajar string `json:"riwayat_belajar"`
 	BelajarDimana  string `json:"belajar_dimana"`
 	UntukSiapa     string `json:"untuk_siapa"`
-	MarkReviewed   bool   `json:"mark_reviewed"`
+	// JadwalKode: nil = unchanged, "" = clear, otherwise a jadwal_penawaran kode.
+	JadwalKode   *string `json:"jadwal_kode"`
+	MarkReviewed bool    `json:"mark_reviewed"`
+}
+
+// JadwalOption is one schedule shown in a select.
+type JadwalOption struct {
+	Kode   string `json:"kode"`
+	Label  string `json:"label"`
+	IsBuka bool   `json:"is_buka"`
 }
 
 type LeadStageRequest struct {

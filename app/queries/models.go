@@ -133,6 +133,22 @@ type Jadwal struct {
 	Nama string
 }
 
+type JadwalPenawaran struct {
+	ID             int64
+	Kode           string
+	Hari           string
+	JamMulai       string
+	JamSelesai     string
+	Level          string
+	KuotaPerGender int64
+	IsBuka         int64
+	Urutan         int64
+	Catatan        string
+	PeriodeMulai   time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
 type JadwalPertemuan struct {
 	ID                 int64
 	KelasID            int64
@@ -326,6 +342,7 @@ type Lead struct {
 	LastAnalyzedMessageID int64
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
+	JadwalKode            string
 }
 
 type LeadAnalysis struct {

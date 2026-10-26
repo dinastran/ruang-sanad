@@ -81,6 +81,7 @@
 		{ href: "/app/santri", label: "Data Santri", group: "santri", category: "Akademik", show: isCS || isAdminKelas, icon: Users },
 		{ href: "/app/perlu-dilengkapi", label: "Perlu Dilengkapi", group: "perlu-dilengkapi", category: "Akademik", show: isAdminKelas, icon: AlertCircle },
 		{ href: "/app/kelas", label: "Kelas", group: "kelas", category: "Akademik", show: isAdminKelas, icon: BookOpen },
+		{ href: "/app/jadwal-penawaran", label: "Jadwal Penawaran", group: "jadwal-penawaran", category: "Akademik", show: isCS || isAdminKelas, icon: CalendarClock },
 		{ href: "/app/leads/dashboard", label: "Dashboard CRM", group: "leads-dashboard", category: "CRM", show: canLeads, icon: LayoutDashboard },
 		{ href: "/app/leads", label: "Leads", group: "leads", category: "CRM", show: canLeads, icon: MessageCircle },
 		{ href: "/app/leads/followups", label: "Follow-up", group: "leads-followups", category: "CRM", show: canApproveFollowup, icon: Send },
@@ -136,6 +137,7 @@
 		if (path.startsWith("/app/santri")) return "santri";
 		if (path.startsWith("/app/perlu-dilengkapi")) return "perlu-dilengkapi";
 		if (path.startsWith("/app/kelas")) return "kelas";
+		if (path.startsWith("/app/jadwal-penawaran")) return "jadwal-penawaran";
 		if (path.startsWith("/app/laporan/keuangan")) return "laporan-keuangan";
 		if (path.startsWith("/app/keuangan/tagihan")) return "tagihan";
 		if (path.startsWith("/app/keuangan/ujroh")) return "ujroh";

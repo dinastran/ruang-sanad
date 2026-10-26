@@ -56,6 +56,7 @@ type Handlers struct {
 	LeadLaporan                 *handlers.LeadLaporanHandler
 	LeadFollowups               *handlers.LeadFollowupHandler
 	IntegrasiWhatsApp           *handlers.IntegrasiWhatsAppHandler
+	JadwalPenawaran             *handlers.JadwalPenawaranHandler
 }
 
 func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, mailerService *services.MailerService, csrfMiddleware *middlewares.CSRFMiddleware) {
@@ -75,6 +76,7 @@ func setupIntegrationRoutes(app *fiber.App, csAi *handlers.CsAiIngestHandler) {
 		return
 	}
 	app.Post("/integrations/cs-ai/events", csAi.Guard, middlewares.CSAIIngestRateLimit.Limit(), csAi.Events)
+	app.Get("/integrations/cs-ai/jadwal", csAi.Guard, csAi.Jadwal)
 }
 
 // setupMCPRoutes exposes the read-only AI agent endpoint. It sits outside
@@ -213,6 +215,15 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/kelas/:id/jadwal-rutin", akRole, h.Kelas.SetJadwalRutin)
 	protected.Post("/kelas/:id/ganti-level-santri", akRole, h.Kelas.GantiLevelSantri)
 	protected.Delete("/kelas/:id", akRole, h.Kelas.Delete)
+
+	// Jadwal penawaran untuk calon santri (dibaca CS AI). CS boleh melihat.
+	if h.JadwalPenawaran != nil {
+		protected.Get("/jadwal-penawaran", santriViewRole, h.JadwalPenawaran.Index)
+		protected.Post("/jadwal-penawaran", akRole, h.JadwalPenawaran.Store)
+		protected.Put("/jadwal-penawaran/:id", akRole, h.JadwalPenawaran.Update)
+		protected.Post("/jadwal-penawaran/:id/periode-baru", akRole, h.JadwalPenawaran.ResetPeriode)
+		protected.Delete("/jadwal-penawaran/:id", akRole, h.JadwalPenawaran.Delete)
+	}
 
 	// Produk, stok opname, dan CRM Mahasantri (admin_kelas + super_admin)
 	protected.Get("/produk-crm", akRole, h.ProductCRM.Index)

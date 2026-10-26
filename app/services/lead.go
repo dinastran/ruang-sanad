@@ -101,7 +101,7 @@ func saveLead(ctx context.Context, q *queries.Querier, l queries.Lead, now time.
 		PaymentAmount: l.PaymentAmount, PaymentInfoSentAt: l.PaymentInfoSentAt,
 		ProofReceivedAt: l.ProofReceivedAt, VerifiedAt: l.VerifiedAt, VerifiedBy: l.VerifiedBy,
 		NeedsReview: l.NeedsReview, LastInboundAt: l.LastInboundAt, LastOutboundAt: l.LastOutboundAt,
-		UpdatedAt: now, ID: l.ID,
+		JadwalKode: l.JadwalKode, UpdatedAt: now, ID: l.ID,
 	})
 }
 

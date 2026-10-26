@@ -20,6 +20,7 @@ const csAIIngestMaxBody = 256 * 1024
 // CSRF; the bridge authenticates with a bearer token from .env.
 type CsAiIngestHandler struct {
 	leads     *services.LeadService
+	jadwal    *services.JadwalPenawaranService
 	tokenHash [32]byte
 	enabled   bool
 	allowed   []*net.IPNet
@@ -44,6 +45,27 @@ func NewCsAiIngestHandler(leads *services.LeadService, token string, allowedCIDR
 		h.allowed = append(h.allowed, network)
 	}
 	return h
+}
+
+// WithJadwal enables GET /integrations/cs-ai/jadwal.
+func (h *CsAiIngestHandler) WithJadwal(j *services.JadwalPenawaranService) *CsAiIngestHandler {
+	h.jadwal = j
+	return h
+}
+
+// Jadwal lists the open class schedules with remaining seats per gender, for
+// the CS AI prompt. Guard runs first (token + direct address).
+func (h *CsAiIngestHandler) Jadwal(c *fiber.Ctx) error {
+	if h.jadwal == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
+	}
+	list, err := h.jadwal.Open(c.UserContext())
+	if err != nil {
+		slog.Error("cs-ai jadwal gagal", "error", err)
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "gagal membaca jadwal"})
+	}
+	c.Set(fiber.HeaderCacheControl, "no-store")
+	return c.JSON(fiber.Map{"jadwal": list})
 }
 
 func (h *CsAiIngestHandler) ipAllowed(ip net.IP) bool {

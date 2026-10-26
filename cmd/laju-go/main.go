@@ -140,6 +140,7 @@ func main() {
 
 	// CRM Leads (lead → closing) fed by the CS AI bridge.
 	leadService := services.NewLeadService(querier, santriService)
+	jadwalService := services.NewJadwalPenawaranService(querier)
 	startLeadRetention(leadService)
 	// Follow-up and confirmation sends through the CS AI bridge (PRD CRM 10).
 	waOutboxService := services.NewWAOutboxService(querier, services.NewCSBridgeClient(cfg.CSBridgeURL, cfg.CSBridgeOutboundToken))
@@ -230,7 +231,8 @@ func main() {
 		ProductOrders:               productOrderHandler,
 		MCP:                         handlers.NewMCPHandler(aiTokenService, aiAgentService, cfg.AppURL, cfg.AllowedOrigins, Version),
 		AIAkses:                     handlers.NewAIAksesHandler(aiTokenService, aiAgentService, userService, sessionStore, inertiaService, cfg.AppURL),
-		CsAiIngest:                  handlers.NewCsAiIngestHandler(leadService, cfg.CSBridgeIngestToken, cfg.CSBridgeAllowedCIDRs),
+		CsAiIngest:                  handlers.NewCsAiIngestHandler(leadService, cfg.CSBridgeIngestToken, cfg.CSBridgeAllowedCIDRs).WithJadwal(jadwalService),
+		JadwalPenawaran:             handlers.NewJadwalPenawaranHandler(jadwalService, sessionStore, inertiaService),
 		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService),
 		LeadClosing:                 handlers.NewLeadClosingHandler(leadService, sessionStore, inertiaService),
 		LeadLaporan:                 handlers.NewLeadLaporanHandler(leadService, sessionStore, inertiaService),
