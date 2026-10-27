@@ -1,30 +1,46 @@
 <script lang="ts">
 	import { inertia, router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
-	import type { AbsenRow, Pembinaan, User } from "@lib/types";
+	import type { AbsenRow, Kehadiran, Pembinaan, User } from "@lib/types";
 	import { ArrowLeft, Save, Download, MessageCircle, Copy, X } from "lucide-svelte";
 
-	interface LaporanAbsensi { jenis_kegiatan: string; judul: string; tanggal: string; keterangan: string; total: number; hadir: number; tidak_hadir: number; absen: AbsenRow[]; }
+	interface LaporanAbsensi { jenis_kegiatan: string; judul: string; tanggal: string; keterangan: string; total: number; hadir: number; tidak_hadir: number; izin: number; sakit: number; alfa: number; absen: AbsenRow[]; }
 	interface Props { user?: User; pembinaan: Pembinaan; absen?: AbsenRow[]; laporan?: LaporanAbsensi; flash?: { success?: string; error?: string }; }
 	let { user, pembinaan, absen = [], laporan, flash }: Props = $props();
+
+	const PILIHAN: { value: Kehadiran; label: string; aktif: string }[] = [
+		{ value: "hadir", label: "Hadir", aktif: "bg-green-600 text-white" },
+		{ value: "izin", label: "Izin", aktif: "bg-sky-600 text-white" },
+		{ value: "sakit", label: "Sakit", aktif: "bg-amber-500 text-white" },
+		{ value: "alfa", label: "Alfa", aktif: "bg-red-600 text-white" },
+	];
+	const LABEL: Record<Kehadiran, string> = { hadir: "Hadir", izin: "Izin", sakit: "Sakit", alfa: "Alfa" };
 
 	let rows = $state(absen.map((a) => ({ ...a })));
 	let saving = $state(false);
 	let showExport = $state(false);
 	let copied = $state(false);
 	function save() {
-		const invalid = rows.find((r) => (r.hadir && !r.jam_masuk) || (!r.hadir && !r.alasan.trim()));
-		if (invalid) { alert(`Lengkapi absensi ${invalid.nama}: jam masuk untuk hadir atau alasan untuk tidak hadir.`); return; }
+		const belum = rows.find((r) => !r.kehadiran);
+		if (belum) { alert(`Pilih status kehadiran ${belum.nama}.`); return; }
+		const invalid = rows.find((r) => (r.kehadiran === "hadir" && !r.jam_masuk) || ((r.kehadiran === "izin" || r.kehadiran === "sakit") && !r.alasan.trim()));
+		if (invalid) { alert(`Lengkapi absensi ${invalid.nama}: jam masuk untuk hadir atau alasan untuk izin/sakit.`); return; }
 		saving = true;
-		router.post(`/app/koordinator-guru/pembinaan/${pembinaan.id}/absen`, { absen: rows.map((r) => ({ guru_id: r.guru_id, hadir: r.hadir, jam_masuk: r.jam_masuk, keterangan: r.keterangan, alasan: r.alasan })) }, { preserveScroll: true, onFinish: () => (saving = false) });
+		router.post(`/app/koordinator-guru/pembinaan/${pembinaan.id}/absen`, { absen: rows.map((r) => ({ guru_id: r.guru_id, hadir: r.kehadiran === "hadir", kehadiran: r.kehadiran, jam_masuk: r.jam_masuk, keterangan: r.keterangan, alasan: r.alasan })) }, { preserveScroll: true, onFinish: () => (saving = false) });
 	}
-	function setAttendance(guruID: number, hadir: boolean) { rows = rows.map((r) => r.guru_id === guruID ? { ...r, hadir, jam_masuk: hadir ? r.jam_masuk : "", alasan: hadir ? "" : r.alasan } : r); }
-	function toggleAll(hadir: boolean) { rows = rows.map((r) => ({ ...r, hadir, jam_masuk: hadir ? r.jam_masuk : "", alasan: hadir ? "" : r.alasan })); }
-	const hadirCount = $derived(rows.filter((r) => r.hadir).length);
+	function terapkan<T extends (typeof rows)[number]>(r: T, kehadiran: Kehadiran | ""): T {
+		const hadir = kehadiran === "hadir";
+		return { ...r, kehadiran, hadir, jam_masuk: hadir ? r.jam_masuk : "", alasan: hadir ? "" : r.alasan };
+	}
+	function setAttendance(guruID: number, kehadiran: Kehadiran) { rows = rows.map((r) => (r.guru_id === guruID ? terapkan(r, kehadiran) : r)); }
+	function setAll(kehadiran: Kehadiran | "") { rows = rows.map((r) => terapkan(r, kehadiran)); }
+	const hadirCount = $derived(rows.filter((r) => r.kehadiran === "hadir").length);
+	const belumDiisi = $derived(rows.filter((r) => !r.kehadiran).length);
+	function labelLaporan(r: AbsenRow): string { return r.hadir ? "Hadir" : r.kehadiran ? LABEL[r.kehadiran] : "Alfa"; }
 	const waText = $derived(laporan ? [
 		`*ABSENSI ${laporan.jenis_kegiatan.toUpperCase()}*`, "", `Kegiatan: ${laporan.judul || "-"}`, `Tanggal: ${laporan.tanggal}`,
-		laporan.keterangan ? `Keterangan: ${laporan.keterangan}` : "", "", "*REKAP KEHADIRAN*", `Total: ${laporan.total} guru`, `Hadir: ${laporan.hadir} guru`, `Tidak hadir: ${laporan.tidak_hadir} guru`, "",
-		"*DETAIL ABSENSI*", ...laporan.absen.map((r, i) => `${i + 1}. ${r.nama} - ${r.hadir ? "Hadir" : "Tidak Hadir"}${r.hadir ? `\n   Jam masuk: ${r.jam_masuk || "-"}` : `\n   Alasan: ${r.alasan || "-"}`}\n   Keterangan: ${r.keterangan || "-"}`)
+		laporan.keterangan ? `Keterangan: ${laporan.keterangan}` : "", "", "*REKAP KEHADIRAN*", `Total: ${laporan.total} guru`, `Hadir: ${laporan.hadir} guru`, `Izin: ${laporan.izin} guru`, `Sakit: ${laporan.sakit} guru`, `Alfa: ${laporan.alfa} guru`, "",
+		"*DETAIL ABSENSI*", ...laporan.absen.map((r, i) => `${i + 1}. ${r.nama} - ${labelLaporan(r)}${r.hadir ? `\n   Jam masuk: ${r.jam_masuk || "-"}` : `\n   Alasan: ${r.alasan || "-"}`}\n   Keterangan: ${r.keterangan || "-"}`)
 	].filter(Boolean).join("\n") : "");
 	async function copyReport() {
 		try { await navigator.clipboard.writeText(waText); copied = true; setTimeout(() => (copied = false), 2000); }
@@ -47,10 +63,10 @@
 		{#if flash?.error}<div class="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-sm font-medium text-red-700 dark:text-red-400">{flash.error}</div>{/if}
 
 		<div class="flex items-center justify-between gap-3 flex-wrap">
-			<p class="text-sm text-neutral-600 dark:text-neutral-400">Hadir: <span class="font-semibold text-neutral-900 dark:text-white">{hadirCount}</span> / {rows.length}</p>
+			<p class="text-sm text-neutral-600 dark:text-neutral-400">Hadir: <span class="font-semibold text-neutral-900 dark:text-white">{hadirCount}</span> / {rows.length}{#if belumDiisi > 0}<span class="ml-2 text-amber-700 dark:text-amber-400">· {belumDiisi} belum diisi</span>{/if}</p>
 			<div class="flex gap-2">
-				<button onclick={() => toggleAll(true)} class="px-3 py-1.5 rounded-lg bg-green-500/10 text-green-700 dark:text-green-400 text-xs font-semibold">Tandai semua hadir</button>
-				<button onclick={() => toggleAll(false)} class="px-3 py-1.5 rounded-lg bg-neutral-500/10 text-neutral-600 dark:text-neutral-400 text-xs font-semibold">Kosongkan</button>
+				<button onclick={() => setAll("hadir")} class="px-3 py-1.5 rounded-lg bg-green-500/10 text-green-700 dark:text-green-400 text-xs font-semibold">Tandai semua hadir</button>
+				<button onclick={() => setAll("")} class="px-3 py-1.5 rounded-lg bg-neutral-500/10 text-neutral-600 dark:text-neutral-400 text-xs font-semibold">Kosongkan</button>
 			</div>
 		</div>
 		{#if laporan}
@@ -62,11 +78,11 @@
 
 		<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 divide-y divide-neutral-200/80 dark:divide-white/[0.04]">
 			{#each rows as r (r.guru_id)}
-				<div class="grid sm:grid-cols-[minmax(0,1fr)_auto_9rem] gap-3 p-4">
+				<div class="grid sm:grid-cols-[minmax(0,1fr)_auto_9rem] gap-3 p-4 {r.kehadiran ? '' : 'bg-amber-500/[0.04]'}">
 					<div class="min-w-0"><p class="text-sm font-medium text-neutral-900 dark:text-white truncate">{r.nama}</p><p class="text-xs text-neutral-500">{r.status === "tetap" ? "Guru Tetap" : "Part Time"}</p></div>
-					<div class="inline-flex rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 text-xs font-semibold"><button onclick={() => setAttendance(r.guru_id, true)} class="px-3 py-1.5 rounded-md {r.hadir ? 'bg-green-600 text-white' : 'text-neutral-600 dark:text-neutral-300'}">Hadir</button><button onclick={() => setAttendance(r.guru_id, false)} class="px-3 py-1.5 rounded-md {!r.hadir ? 'bg-red-600 text-white' : 'text-neutral-600 dark:text-neutral-300'}">Tidak hadir</button></div>
-					{#if r.hadir}<label class="text-xs text-neutral-500">Jam masuk Zoom<input type="time" bind:value={r.jam_masuk} class="mt-1 w-full px-2 py-1.5 rounded-lg bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700 text-sm outline-none focus:border-brand-400" /></label>{/if}
-					<div class="sm:col-span-3 grid sm:grid-cols-2 gap-3"><input bind:value={r.keterangan} placeholder="Keterangan (opsional)" class="px-3 py-2 rounded-lg bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700 text-sm outline-none focus:border-brand-400" />{#if !r.hadir}<input bind:value={r.alasan} placeholder="Alasan tidak hadir (wajib)" class="px-3 py-2 rounded-lg bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700 text-sm outline-none focus:border-brand-400" />{/if}</div>
+					<div class="inline-flex self-start rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 text-xs font-semibold" role="radiogroup" aria-label={`Kehadiran ${r.nama}`}>{#each PILIHAN as opsi (opsi.value)}<button type="button" role="radio" aria-checked={r.kehadiran === opsi.value} onclick={() => setAttendance(r.guru_id, opsi.value)} class="px-3 py-1.5 rounded-md {r.kehadiran === opsi.value ? opsi.aktif : 'text-neutral-600 dark:text-neutral-300'}">{opsi.label}</button>{/each}</div>
+					{#if r.kehadiran === "hadir"}<label class="text-xs text-neutral-500">Jam masuk Zoom<input type="time" bind:value={r.jam_masuk} class="mt-1 w-full px-2 py-1.5 rounded-lg bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700 text-sm outline-none focus:border-brand-400" /></label>{/if}
+					<div class="sm:col-span-3 grid sm:grid-cols-2 gap-3"><input bind:value={r.keterangan} placeholder="Keterangan (opsional)" class="px-3 py-2 rounded-lg bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700 text-sm outline-none focus:border-brand-400" />{#if r.kehadiran && r.kehadiran !== "hadir"}<input bind:value={r.alasan} placeholder={r.kehadiran === "alfa" ? "Catatan alfa (opsional)" : `Alasan ${LABEL[r.kehadiran].toLowerCase()} (wajib)`} class="px-3 py-2 rounded-lg bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700 text-sm outline-none focus:border-brand-400" />{/if}</div>
 				</div>
 			{/each}
 		</div>

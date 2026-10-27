@@ -253,14 +253,57 @@ export interface Riayah {
 	created_at: string;
 }
 
+export type Kehadiran = "hadir" | "izin" | "sakit" | "alfa";
+
 export interface AbsenRow {
 	guru_id: number;
 	nama: string;
 	status: string;
 	hadir: boolean;
+	/** Kosong bila absensi guru ini belum pernah diisi. */
+	kehadiran: Kehadiran | "";
 	jam_masuk: string;
 	keterangan: string;
 	alasan: string;
+}
+
+export interface AnalisisKehadiranSesi {
+	id: number;
+	tanggal: string;
+	judul: string;
+}
+
+export interface AnalisisKehadiranGuru {
+	guru_id: number;
+	nama: string;
+	no_wa: string;
+	alfa_beruntun: number;
+	level: "merah" | "oranye" | "";
+	/** Sejajar dengan AnalisisKehadiran.sesi (terbaru dulu); "" = tidak ada catatan absen. */
+	riwayat: (Kehadiran | "")[];
+	hadir_terakhir: number;
+	dicatat_terakhir: number;
+	terakhir_hadir: string;
+}
+
+export interface AnalisisKehadiran {
+	ambang_alfa: number;
+	ambang_waspada: number;
+	sesi: AnalisisKehadiranSesi[];
+	guru: AnalisisKehadiranGuru[];
+	merah: number;
+	waspada: number;
+	persen_hadir: number | null;
+}
+
+export type FilterAlfa = "merah" | "waspada" | "semua";
+
+export interface RingkasanAlfaBeruntun {
+	ambang_alfa: number;
+	pembinaan_merah: number;
+	pembinaan_waspada: number;
+	rapat_merah: number;
+	rapat_waspada: number;
 }
 
 export interface Pembinaan {

@@ -3,8 +3,8 @@
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import PertemuanBelumDitutupList from "@components/PertemuanBelumDitutup.svelte";
 	import { formatJadwalSemula } from "@lib/utils/jadwal";
-	import type { Flash, KoordinatorDashboard, MonitoringKelasItem, PertemuanBelumDitutup, User } from "@lib/types";
-	import { AlertTriangle, ArrowRight, BellRing, CalendarDays, CheckCircle2, ClipboardCheck, ListTodo, Users, BookOpen, UserRoundCheck, Award, RotateCcw } from "lucide-svelte";
+	import type { Flash, KoordinatorDashboard, MonitoringKelasItem, PertemuanBelumDitutup, RingkasanAlfaBeruntun, User } from "@lib/types";
+	import { AlertTriangle, ArrowRight, UserX, BellRing, CalendarDays, CheckCircle2, ClipboardCheck, ListTodo, Users, BookOpen, UserRoundCheck, Award, RotateCcw } from "lucide-svelte";
 
 	interface Props {
 		user?: User;
@@ -15,8 +15,9 @@
 		kelas_error?: string;
 		belum_ditutup?: PertemuanBelumDitutup[];
 		belum_ditutup_error?: string;
+		alfa_beruntun?: RingkasanAlfaBeruntun;
 	}
-	let { user, flash, error, dashboard, kelas_hari_ini = [], kelas_error, belum_ditutup = [], belum_ditutup_error }: Props = $props();
+	let { user, flash, error, dashboard, kelas_hari_ini = [], kelas_error, belum_ditutup = [], belum_ditutup_error, alfa_beruntun }: Props = $props();
 
 	const KELAS_TAMPIL = 8;
 	const statusOrder: Record<string, number> = { terlambat: 0, tidak_terlaksana: 1, berlangsung: 2, belum_mulai: 3, selesai: 4, dibatalkan: 5 };
@@ -43,6 +44,15 @@
 	const kelasSelesai = $derived(kelasAktif.filter((k) => k.status === "selesai").length);
 	const progres = $derived(kelasAktif.length ? Math.round((kelasSelesai / kelasAktif.length) * 100) : 0);
 	const kelasTelat = $derived(kelas_hari_ini.filter((k) => k.status === "terlambat").length);
+	const alfaBaris = $derived(
+		alfa_beruntun
+			? [
+					{ href: "/app/koordinator-guru/pembinaan?tab=analisis", label: "Pembinaan", merah: alfa_beruntun.pembinaan_merah, waspada: alfa_beruntun.pembinaan_waspada },
+					{ href: "/app/koordinator-guru/rapat?tab=analisis", label: "Rapat guru", merah: alfa_beruntun.rapat_merah, waspada: alfa_beruntun.rapat_waspada },
+				]
+			: [],
+	);
+	const adaAlfa = $derived(alfaBaris.some((b) => b.merah > 0 || b.waspada > 0));
 	const totalAksi = $derived(kelasTelat + belum_ditutup.length + tindakLanjut.length + todo.length);
 
 	let mengirim = $state<number | null>(null);
@@ -132,6 +142,25 @@
 						<a href={s.href} class="rounded-xl bg-white px-3 py-2.5 text-center transition-colors hover:bg-neutral-50 dark:bg-neutral-925/60 dark:hover:bg-neutral-900">
 							<p class="text-xl font-bold {s.n > 0 ? s.tone : 'text-neutral-400 dark:text-neutral-600'}">{s.n}</p>
 							<p class="text-xs text-neutral-600 dark:text-neutral-400">{s.label}</p>
+						</a>
+					{/each}
+				</div>
+			</section>
+		{/if}
+
+		<!-- Guru alfa berturut-turut di pembinaan & rapat -->
+		{#if alfa_beruntun && adaAlfa}
+			<section class="{card} p-4 sm:p-5">
+				<h2 class="{sectionTitle} flex items-center gap-2"><UserX class="h-4 w-4 text-red-500" /> Guru alfa berturut-turut</h2>
+				<div class="mt-3 divide-y divide-neutral-200/80 dark:divide-white/[0.06]">
+					{#each alfaBaris as b (b.href)}
+						<a href={b.href} use:inertia class="flex items-center justify-between gap-3 py-2.5 text-sm hover:text-brand-700 dark:hover:text-brand-300">
+							<span class="font-medium text-neutral-800 dark:text-neutral-200">{b.label}</span>
+							<span class="flex items-center gap-3">
+								<span class="tabular-nums {b.merah > 0 ? 'font-semibold text-red-600 dark:text-red-400' : 'text-neutral-400'}">{b.merah} alfa ≥{alfa_beruntun.ambang_alfa}×</span>
+								<span class="tabular-nums {b.waspada > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-neutral-400'}">{b.waspada} waspada</span>
+								<ArrowRight class="h-4 w-4 text-neutral-400" />
+							</span>
 						</a>
 					{/each}
 				</div>

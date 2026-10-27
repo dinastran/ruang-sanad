@@ -482,6 +482,7 @@ type PembinaanAbsen struct {
 	UpdatedAt   time.Time
 	JamMasuk    string
 	Keterangan  string
+	Kehadiran   string
 }
 
 type Pertemuan struct {
@@ -567,6 +568,7 @@ type RapatAbsen struct {
 	UpdatedAt  time.Time
 	JamMasuk   string
 	Keterangan string
+	Kehadiran  string
 }
 
 type RapatGuru struct {

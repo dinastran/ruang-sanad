@@ -38,7 +38,13 @@ func (h *KoordinatorFeaturesHandler) PembinaanList(c *fiber.Ctx) error {
 		h.store.Flash(c, "error", "Gagal memuat pembinaan")
 		return h.inertiaService.Redirect(c, "/app/koordinator-guru")
 	}
-	return h.inertiaService.Render(c, "koordinator/Pembinaan", fiber.Map{"user": sessionUser(sess), "pembinaan": list})
+	props := fiber.Map{"user": sessionUser(sess), "pembinaan": list}
+	if analisis, err := h.svc.AnalisisAlfaPembinaan(); err != nil {
+		props["analisis_error"] = "Gagal memuat analisis kehadiran"
+	} else {
+		props["analisis"] = analisis
+	}
+	return h.inertiaService.Render(c, "koordinator/Pembinaan", props)
 }
 
 func (h *KoordinatorFeaturesHandler) PembinaanCreate(c *fiber.Ctx) error {
@@ -118,7 +124,13 @@ func (h *KoordinatorFeaturesHandler) RapatList(c *fiber.Ctx) error {
 		h.store.Flash(c, "error", "Gagal memuat rapat")
 		return h.inertiaService.Redirect(c, "/app/koordinator-guru")
 	}
-	return h.inertiaService.Render(c, "koordinator/Rapat", fiber.Map{"user": sessionUser(sess), "rapat": list})
+	props := fiber.Map{"user": sessionUser(sess), "rapat": list}
+	if analisis, err := h.svc.AnalisisAlfaRapat(); err != nil {
+		props["analisis_error"] = "Gagal memuat analisis kehadiran"
+	} else {
+		props["analisis"] = analisis
+	}
+	return h.inertiaService.Render(c, "koordinator/Rapat", props)
 }
 
 func (h *KoordinatorFeaturesHandler) RapatCreate(c *fiber.Ctx) error {
@@ -197,7 +209,7 @@ func (h *KoordinatorFeaturesHandler) RiwayatAbsensi(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, "/app/koordinator-guru")
 	}
 	guru, _ := h.svc.ListGuruSimple()
-	return h.inertiaService.Render(c, "koordinator/RiwayatAbsensi", fiber.Map{"user": sessionUser(sess), "riwayat": riwayat, "guruList": guru})
+	return h.inertiaService.Render(c, "koordinator/RiwayatAbsensi", fiber.Map{"user": sessionUser(sess), "riwayat": riwayat, "guruList": guru, "guruID": c.QueryInt("guru")})
 }
 
 // ============ Kalam Bersanad ============
@@ -442,7 +454,7 @@ func (h *KoordinatorFeaturesHandler) RiayahGuruCreate(c *fiber.Ctx) error {
 	}
 	if err := c.BodyParser(&req); err != nil || strings.TrimSpace(req.Catatan) == "" {
 		h.store.Flash(c, "error", "Catatan tidak boleh kosong")
-		return h.inertiaService.Redirect(c, "/app/koordinator-guru/guru/"+strconv.FormatInt(targetGuruID, 10))
+		return h.inertiaService.Back(c, "/app/koordinator-guru/guru/"+strconv.FormatInt(targetGuruID, 10))
 	}
 	input := models.RiayahInput{TargetType: "guru", TargetID: targetGuruID, Catatan: req.Catatan}
 	author, err := h.guruService.GetGuruByUserID(userID)
@@ -451,10 +463,12 @@ func (h *KoordinatorFeaturesHandler) RiayahGuruCreate(c *fiber.Ctx) error {
 	} else {
 		_, err = h.riayahService.CreateUserRiayah(userID, input)
 	}
+	// Back: catatan bisa dibuat dari detail guru maupun analisis pembinaan/rapat.
+	detailPath := "/app/koordinator-guru/guru/" + strconv.FormatInt(targetGuruID, 10)
 	if err != nil {
 		h.store.Flash(c, "error", "Gagal menyimpan catatan")
-		return h.inertiaService.Redirect(c, "/app/koordinator-guru/guru/"+strconv.FormatInt(targetGuruID, 10))
+		return h.inertiaService.Back(c, detailPath)
 	}
 	h.store.Flash(c, "success", "Catatan riayah tersimpan")
-	return h.inertiaService.Redirect(c, "/app/koordinator-guru/guru/"+strconv.FormatInt(targetGuruID, 10))
+	return h.inertiaService.Back(c, detailPath)
 }

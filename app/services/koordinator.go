@@ -295,7 +295,7 @@ func (s *KoordinatorService) GetPembinaanAbsen(pembinaanID int64) ([]models.Abse
 	}
 	out := make([]models.AbsenRow, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, models.AbsenRow{GuruID: r.GuruID, Nama: r.Nama, Status: r.Status, Hadir: r.Hadir == 1, JamMasuk: r.JamMasuk, Keterangan: r.Keterangan, Alasan: r.Alasan})
+		out = append(out, models.AbsenRow{GuruID: r.GuruID, Nama: r.Nama, Status: r.Status, Hadir: r.Hadir == 1, Kehadiran: r.Kehadiran, JamMasuk: r.JamMasuk, Keterangan: r.Keterangan, Alasan: r.Alasan})
 	}
 	return out, nil
 }
@@ -324,13 +324,14 @@ func (s *KoordinatorService) SavePembinaanAbsen(pembinaanID int64, inputs []mode
 	querier := s.querier.WithTx(tx)
 	for _, in := range inputs {
 		hadir := int64(0)
-		if in.Hadir {
+		if in.Kehadiran == models.KehadiranHadir {
 			hadir = 1
 		}
 		if err := querier.UpsertPembinaanAbsen(ctx, queries.UpsertPembinaanAbsenParams{
 			PembinaanID: pembinaanID,
 			GuruID:      in.GuruID,
 			Hadir:       hadir,
+			Kehadiran:   in.Kehadiran,
 			JamMasuk:    in.JamMasuk,
 			Keterangan:  in.Keterangan,
 			Alasan:      in.Alasan,
@@ -355,7 +356,7 @@ func (s *KoordinatorService) GetLaporanPembinaanAbsensi(pembinaanID int64) (*mod
 	}
 	absen := make([]models.AbsenRow, 0, len(rows))
 	for _, row := range rows {
-		absen = append(absen, models.AbsenRow{GuruID: row.GuruID, Nama: row.Nama, Status: row.Status, Hadir: row.Hadir == 1, JamMasuk: row.JamMasuk, Keterangan: row.Keterangan, Alasan: row.Alasan})
+		absen = append(absen, models.AbsenRow{GuruID: row.GuruID, Nama: row.Nama, Status: row.Status, Hadir: row.Hadir == 1, Kehadiran: row.Kehadiran, JamMasuk: row.JamMasuk, Keterangan: row.Keterangan, Alasan: row.Alasan})
 	}
 	return buildLaporanAbsensi("Pembinaan Guru", pembinaan.Topik, pembinaan.Tanggal, pembinaan.Keterangan, absen)
 }
@@ -442,7 +443,7 @@ func (s *KoordinatorService) GetRapatAbsen(rapatID int64) ([]models.AbsenRow, er
 	}
 	out := make([]models.AbsenRow, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, models.AbsenRow{GuruID: r.GuruID, Nama: r.Nama, Status: r.Status, Hadir: r.Hadir == 1, JamMasuk: r.JamMasuk, Keterangan: r.Keterangan, Alasan: r.Alasan})
+		out = append(out, models.AbsenRow{GuruID: r.GuruID, Nama: r.Nama, Status: r.Status, Hadir: r.Hadir == 1, Kehadiran: r.Kehadiran, JamMasuk: r.JamMasuk, Keterangan: r.Keterangan, Alasan: r.Alasan})
 	}
 	return out, nil
 }
@@ -471,13 +472,14 @@ func (s *KoordinatorService) SaveRapatAbsen(rapatID int64, inputs []models.Absen
 	querier := s.querier.WithTx(tx)
 	for _, in := range inputs {
 		hadir := int64(0)
-		if in.Hadir {
+		if in.Kehadiran == models.KehadiranHadir {
 			hadir = 1
 		}
 		if err := querier.UpsertRapatAbsen(ctx, queries.UpsertRapatAbsenParams{
 			RapatID:    rapatID,
 			GuruID:     in.GuruID,
 			Hadir:      hadir,
+			Kehadiran:  in.Kehadiran,
 			JamMasuk:   in.JamMasuk,
 			Keterangan: in.Keterangan,
 			Alasan:     in.Alasan,
@@ -502,7 +504,7 @@ func (s *KoordinatorService) GetLaporanRapatAbsensi(rapatID int64) (*models.Lapo
 	}
 	absen := make([]models.AbsenRow, 0, len(rows))
 	for _, row := range rows {
-		absen = append(absen, models.AbsenRow{GuruID: row.GuruID, Nama: row.Nama, Status: row.Status, Hadir: row.Hadir == 1, JamMasuk: row.JamMasuk, Keterangan: row.Keterangan, Alasan: row.Alasan})
+		absen = append(absen, models.AbsenRow{GuruID: row.GuruID, Nama: row.Nama, Status: row.Status, Hadir: row.Hadir == 1, Kehadiran: row.Kehadiran, JamMasuk: row.JamMasuk, Keterangan: row.Keterangan, Alasan: row.Alasan})
 	}
 	return buildLaporanAbsensi("Rapat Guru", rapat.Judul, rapat.Tanggal, rapat.Catatan, absen)
 }
@@ -513,23 +515,52 @@ func buildLaporanAbsensi(jenis, judul, tanggal, keterangan string, absen []model
 	}
 	laporan := &models.LaporanAbsensi{JenisKegiatan: jenis, Judul: judul, Tanggal: tanggal, Keterangan: keterangan, Total: len(absen), Absen: absen}
 	for _, row := range absen {
-		if row.Hadir {
+		switch {
+		case row.Hadir:
 			laporan.Hadir++
+		case row.Kehadiran == models.KehadiranIzin:
+			laporan.Izin++
+		case row.Kehadiran == models.KehadiranSakit:
+			laporan.Sakit++
+		default:
+			laporan.Alfa++
 		}
 	}
 	laporan.TidakHadir = laporan.Total - laporan.Hadir
 	return laporan, nil
 }
 
+// normalizeAbsenInput mengisi Kehadiran dari Hadir untuk klien lama dan
+// menyelaraskan Hadir dengan Kehadiran.
+func normalizeAbsenInput(in *models.AbsenInput) error {
+	in.Kehadiran = strings.ToLower(strings.TrimSpace(in.Kehadiran))
+	switch in.Kehadiran {
+	case "":
+		in.Kehadiran = models.KehadiranAlfa
+		if in.Hadir {
+			in.Kehadiran = models.KehadiranHadir
+		}
+	case models.KehadiranHadir, models.KehadiranIzin, models.KehadiranSakit, models.KehadiranAlfa:
+	default:
+		return fmt.Errorf("status kehadiran tidak valid")
+	}
+	in.Hadir = in.Kehadiran == models.KehadiranHadir
+	return nil
+}
+
 func validateAbsenInput(in models.AbsenInput) error {
 	if in.GuruID <= 0 {
 		return fmt.Errorf("guru tidak valid")
 	}
-	if in.Hadir && strings.TrimSpace(in.JamMasuk) == "" {
-		return fmt.Errorf("jam masuk Zoom wajib diisi untuk guru hadir")
-	}
-	if !in.Hadir && strings.TrimSpace(in.Alasan) == "" {
-		return fmt.Errorf("alasan ketidakhadiran wajib diisi")
+	switch in.Kehadiran {
+	case models.KehadiranHadir:
+		if strings.TrimSpace(in.JamMasuk) == "" {
+			return fmt.Errorf("jam masuk Zoom wajib diisi untuk guru hadir")
+		}
+	case models.KehadiranIzin, models.KehadiranSakit:
+		if strings.TrimSpace(in.Alasan) == "" {
+			return fmt.Errorf("alasan izin/sakit wajib diisi")
+		}
 	}
 	return nil
 }
@@ -543,7 +574,11 @@ func validateAbsenBatch(expected []models.AbsenRow, inputs []models.AbsenInput) 
 		expectedIDs[row.GuruID] = struct{}{}
 	}
 	seen := make(map[int64]struct{}, len(inputs))
-	for _, in := range inputs {
+	for i := range inputs {
+		if err := normalizeAbsenInput(&inputs[i]); err != nil {
+			return err
+		}
+		in := inputs[i]
 		if _, ok := expectedIDs[in.GuruID]; !ok {
 			return fmt.Errorf("guru pada absensi tidak valid")
 		}
@@ -565,7 +600,7 @@ func (s *KoordinatorService) ListRiwayatAbsensiGuru() ([]models.RiwayatAbsensiGu
 	}
 	out := make([]models.RiwayatAbsensiGuru, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, models.RiwayatAbsensiGuru{GuruID: r.GuruID, GuruNama: r.GuruNama, Kegiatan: r.Kegiatan, KegiatanID: r.KegiatanID, Tanggal: r.Tanggal.Format("2006-01-02"), Judul: r.Judul, Hadir: r.Hadir == 1, JamMasuk: r.JamMasuk, Keterangan: r.Keterangan, Alasan: r.Alasan})
+		out = append(out, models.RiwayatAbsensiGuru{GuruID: r.GuruID, GuruNama: r.GuruNama, Kegiatan: r.Kegiatan, KegiatanID: r.KegiatanID, Tanggal: r.Tanggal.Format("2006-01-02"), Judul: r.Judul, Hadir: r.Hadir == 1, Kehadiran: r.Kehadiran, JamMasuk: r.JamMasuk, Keterangan: r.Keterangan, Alasan: r.Alasan})
 	}
 	return out, nil
 }

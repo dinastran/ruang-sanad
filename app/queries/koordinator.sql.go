@@ -810,7 +810,7 @@ func (q *Queries) ListGuruWithKalamShare(ctx context.Context, kalamID int64) ([]
 
 const listGuruWithPembinaanAbsen = `-- name: ListGuruWithPembinaanAbsen :many
 SELECT g.id AS guru_id, g.nama, g.status,
-    COALESCE(pa.hadir, 0) AS hadir, COALESCE(pa.jam_masuk, '') AS jam_masuk,
+    COALESCE(pa.hadir, 0) AS hadir, COALESCE(pa.kehadiran, '') AS kehadiran, COALESCE(pa.jam_masuk, '') AS jam_masuk,
     COALESCE(pa.keterangan, '') AS keterangan, COALESCE(pa.alasan, '') AS alasan
 FROM guru g
 LEFT JOIN pembinaan_absen pa ON pa.guru_id = g.id AND pa.pembinaan_id = ?
@@ -823,6 +823,7 @@ type ListGuruWithPembinaanAbsenRow struct {
 	Nama       string
 	Status     string
 	Hadir      int64
+	Kehadiran  string
 	JamMasuk   string
 	Keterangan string
 	Alasan     string
@@ -842,6 +843,7 @@ func (q *Queries) ListGuruWithPembinaanAbsen(ctx context.Context, pembinaanID in
 			&i.Nama,
 			&i.Status,
 			&i.Hadir,
+			&i.Kehadiran,
 			&i.JamMasuk,
 			&i.Keterangan,
 			&i.Alasan,
@@ -861,7 +863,7 @@ func (q *Queries) ListGuruWithPembinaanAbsen(ctx context.Context, pembinaanID in
 
 const listGuruWithRapatAbsen = `-- name: ListGuruWithRapatAbsen :many
 SELECT g.id AS guru_id, g.nama, g.status,
-    COALESCE(ra.hadir, 0) AS hadir, COALESCE(ra.jam_masuk, '') AS jam_masuk,
+    COALESCE(ra.hadir, 0) AS hadir, COALESCE(ra.kehadiran, '') AS kehadiran, COALESCE(ra.jam_masuk, '') AS jam_masuk,
     COALESCE(ra.keterangan, '') AS keterangan, COALESCE(ra.alasan, '') AS alasan
 FROM guru g
 LEFT JOIN rapat_absen ra ON ra.guru_id = g.id AND ra.rapat_id = ?
@@ -874,6 +876,7 @@ type ListGuruWithRapatAbsenRow struct {
 	Nama       string
 	Status     string
 	Hadir      int64
+	Kehadiran  string
 	JamMasuk   string
 	Keterangan string
 	Alasan     string
@@ -893,6 +896,7 @@ func (q *Queries) ListGuruWithRapatAbsen(ctx context.Context, rapatID int64) ([]
 			&i.Nama,
 			&i.Status,
 			&i.Hadir,
+			&i.Kehadiran,
 			&i.JamMasuk,
 			&i.Keterangan,
 			&i.Alasan,
@@ -944,6 +948,96 @@ func (q *Queries) ListKalam(ctx context.Context) ([]ListKalamRow, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TotalShare,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listKehadiranPembinaanTerlaksana = `-- name: ListKehadiranPembinaanTerlaksana :many
+SELECT pa.guru_id, p.id AS kegiatan_id, p.tanggal, pa.kehadiran
+FROM pembinaan_absen pa
+JOIN pembinaan p ON p.id = pa.pembinaan_id
+JOIN guru g ON g.id = pa.guru_id
+WHERE p.status = 'terlaksana' AND g.is_aktif = 1
+ORDER BY pa.guru_id ASC, p.tanggal DESC, p.id DESC
+`
+
+type ListKehadiranPembinaanTerlaksanaRow struct {
+	GuruID     int64
+	KegiatanID int64
+	Tanggal    time.Time
+	Kehadiran  string
+}
+
+// Bahan analisis alfa berturut-turut: semua absen guru aktif di sesi terlaksana, terbaru dulu.
+func (q *Queries) ListKehadiranPembinaanTerlaksana(ctx context.Context) ([]ListKehadiranPembinaanTerlaksanaRow, error) {
+	rows, err := q.db.QueryContext(ctx, listKehadiranPembinaanTerlaksana)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListKehadiranPembinaanTerlaksanaRow
+	for rows.Next() {
+		var i ListKehadiranPembinaanTerlaksanaRow
+		if err := rows.Scan(
+			&i.GuruID,
+			&i.KegiatanID,
+			&i.Tanggal,
+			&i.Kehadiran,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listKehadiranRapatTerlaksana = `-- name: ListKehadiranRapatTerlaksana :many
+SELECT ra.guru_id, r.id AS kegiatan_id, r.tanggal, ra.kehadiran
+FROM rapat_absen ra
+JOIN rapat_guru r ON r.id = ra.rapat_id
+JOIN guru g ON g.id = ra.guru_id
+WHERE r.status = 'terlaksana' AND g.is_aktif = 1
+ORDER BY ra.guru_id ASC, r.tanggal DESC, r.id DESC
+`
+
+type ListKehadiranRapatTerlaksanaRow struct {
+	GuruID     int64
+	KegiatanID int64
+	Tanggal    time.Time
+	Kehadiran  string
+}
+
+// Bahan analisis alfa berturut-turut: semua absen guru aktif di rapat terlaksana, terbaru dulu.
+func (q *Queries) ListKehadiranRapatTerlaksana(ctx context.Context) ([]ListKehadiranRapatTerlaksanaRow, error) {
+	rows, err := q.db.QueryContext(ctx, listKehadiranRapatTerlaksana)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListKehadiranRapatTerlaksanaRow
+	for rows.Next() {
+		var i ListKehadiranRapatTerlaksanaRow
+		if err := rows.Scan(
+			&i.GuruID,
+			&i.KegiatanID,
+			&i.Tanggal,
+			&i.Kehadiran,
 		); err != nil {
 			return nil, err
 		}
@@ -1029,7 +1123,7 @@ func (q *Queries) ListPembinaan(ctx context.Context) ([]Pembinaan, error) {
 }
 
 const listPembinaanAbsenTersimpan = `-- name: ListPembinaanAbsenTersimpan :many
-SELECT g.id AS guru_id, g.nama, g.status, pa.hadir, pa.jam_masuk, pa.keterangan, pa.alasan
+SELECT g.id AS guru_id, g.nama, g.status, pa.hadir, pa.kehadiran, pa.jam_masuk, pa.keterangan, pa.alasan
 FROM pembinaan_absen pa
 JOIN guru g ON g.id = pa.guru_id
 WHERE pa.pembinaan_id = ?
@@ -1041,6 +1135,7 @@ type ListPembinaanAbsenTersimpanRow struct {
 	Nama       string
 	Status     string
 	Hadir      int64
+	Kehadiran  string
 	JamMasuk   string
 	Keterangan string
 	Alasan     string
@@ -1060,6 +1155,7 @@ func (q *Queries) ListPembinaanAbsenTersimpan(ctx context.Context, pembinaanID i
 			&i.Nama,
 			&i.Status,
 			&i.Hadir,
+			&i.Kehadiran,
 			&i.JamMasuk,
 			&i.Keterangan,
 			&i.Alasan,
@@ -1113,7 +1209,7 @@ func (q *Queries) ListRapat(ctx context.Context) ([]RapatGuru, error) {
 }
 
 const listRapatAbsenTersimpan = `-- name: ListRapatAbsenTersimpan :many
-SELECT g.id AS guru_id, g.nama, g.status, ra.hadir, ra.jam_masuk, ra.keterangan, ra.alasan
+SELECT g.id AS guru_id, g.nama, g.status, ra.hadir, ra.kehadiran, ra.jam_masuk, ra.keterangan, ra.alasan
 FROM rapat_absen ra
 JOIN guru g ON g.id = ra.guru_id
 WHERE ra.rapat_id = ?
@@ -1125,6 +1221,7 @@ type ListRapatAbsenTersimpanRow struct {
 	Nama       string
 	Status     string
 	Hadir      int64
+	Kehadiran  string
 	JamMasuk   string
 	Keterangan string
 	Alasan     string
@@ -1144,6 +1241,7 @@ func (q *Queries) ListRapatAbsenTersimpan(ctx context.Context, rapatID int64) ([
 			&i.Nama,
 			&i.Status,
 			&i.Hadir,
+			&i.Kehadiran,
 			&i.JamMasuk,
 			&i.Keterangan,
 			&i.Alasan,
@@ -1163,13 +1261,13 @@ func (q *Queries) ListRapatAbsenTersimpan(ctx context.Context, rapatID int64) ([
 
 const listRiwayatAbsensiGuru = `-- name: ListRiwayatAbsensiGuru :many
 SELECT pa.guru_id, g.nama AS guru_nama, 'pembinaan' AS kegiatan, p.id AS kegiatan_id,
-       p.tanggal, p.topik AS judul, pa.hadir, pa.jam_masuk, pa.keterangan, pa.alasan
+       p.tanggal, p.topik AS judul, pa.hadir, pa.kehadiran, pa.jam_masuk, pa.keterangan, pa.alasan
 FROM pembinaan_absen pa
 JOIN pembinaan p ON p.id = pa.pembinaan_id
 JOIN guru g ON g.id = pa.guru_id
 UNION ALL
 SELECT ra.guru_id, g.nama AS guru_nama, 'rapat' AS kegiatan, r.id AS kegiatan_id,
-       r.tanggal, r.judul, ra.hadir, ra.jam_masuk, ra.keterangan, ra.alasan
+       r.tanggal, r.judul, ra.hadir, ra.kehadiran, ra.jam_masuk, ra.keterangan, ra.alasan
 FROM rapat_absen ra
 JOIN rapat_guru r ON r.id = ra.rapat_id
 JOIN guru g ON g.id = ra.guru_id
@@ -1177,6 +1275,7 @@ UNION ALL
 SELECT k.guru_id, g.nama AS guru_nama, 'kunjungan' AS kegiatan, k.id AS kegiatan_id,
        k.tanggal, COALESCE(kl.nama_kelas, '') AS judul,
        CASE WHEN k.status = 'terlaksana' THEN 1 ELSE 0 END AS hadir,
+       '' AS kehadiran,
        k.jam AS jam_masuk, k.catatan AS keterangan,
        CASE WHEN k.status = 'terlaksana' THEN '' ELSE k.status END AS alasan
 FROM kunjungan_kelas k
@@ -1194,6 +1293,7 @@ type ListRiwayatAbsensiGuruRow struct {
 	Tanggal    time.Time
 	Judul      string
 	Hadir      int64
+	Kehadiran  string
 	JamMasuk   string
 	Keterangan string
 	Alasan     string
@@ -1216,6 +1316,7 @@ func (q *Queries) ListRiwayatAbsensiGuru(ctx context.Context) ([]ListRiwayatAbse
 			&i.Tanggal,
 			&i.Judul,
 			&i.Hadir,
+			&i.Kehadiran,
 			&i.JamMasuk,
 			&i.Keterangan,
 			&i.Alasan,
@@ -1470,15 +1571,16 @@ func (q *Queries) UpsertGuruKompetensi(ctx context.Context, arg UpsertGuruKompet
 }
 
 const upsertPembinaanAbsen = `-- name: UpsertPembinaanAbsen :exec
-INSERT INTO pembinaan_absen (pembinaan_id, guru_id, hadir, jam_masuk, keterangan, alasan, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-ON CONFLICT(pembinaan_id, guru_id) DO UPDATE SET hadir = excluded.hadir, jam_masuk = excluded.jam_masuk, keterangan = excluded.keterangan, alasan = excluded.alasan, updated_at = CURRENT_TIMESTAMP
+INSERT INTO pembinaan_absen (pembinaan_id, guru_id, hadir, kehadiran, jam_masuk, keterangan, alasan, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT(pembinaan_id, guru_id) DO UPDATE SET hadir = excluded.hadir, kehadiran = excluded.kehadiran, jam_masuk = excluded.jam_masuk, keterangan = excluded.keterangan, alasan = excluded.alasan, updated_at = CURRENT_TIMESTAMP
 `
 
 type UpsertPembinaanAbsenParams struct {
 	PembinaanID int64
 	GuruID      int64
 	Hadir       int64
+	Kehadiran   string
 	JamMasuk    string
 	Keterangan  string
 	Alasan      string
@@ -1489,6 +1591,7 @@ func (q *Queries) UpsertPembinaanAbsen(ctx context.Context, arg UpsertPembinaanA
 		arg.PembinaanID,
 		arg.GuruID,
 		arg.Hadir,
+		arg.Kehadiran,
 		arg.JamMasuk,
 		arg.Keterangan,
 		arg.Alasan,
@@ -1497,15 +1600,16 @@ func (q *Queries) UpsertPembinaanAbsen(ctx context.Context, arg UpsertPembinaanA
 }
 
 const upsertRapatAbsen = `-- name: UpsertRapatAbsen :exec
-INSERT INTO rapat_absen (rapat_id, guru_id, hadir, jam_masuk, keterangan, alasan, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-ON CONFLICT(rapat_id, guru_id) DO UPDATE SET hadir = excluded.hadir, jam_masuk = excluded.jam_masuk, keterangan = excluded.keterangan, alasan = excluded.alasan, updated_at = CURRENT_TIMESTAMP
+INSERT INTO rapat_absen (rapat_id, guru_id, hadir, kehadiran, jam_masuk, keterangan, alasan, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT(rapat_id, guru_id) DO UPDATE SET hadir = excluded.hadir, kehadiran = excluded.kehadiran, jam_masuk = excluded.jam_masuk, keterangan = excluded.keterangan, alasan = excluded.alasan, updated_at = CURRENT_TIMESTAMP
 `
 
 type UpsertRapatAbsenParams struct {
 	RapatID    int64
 	GuruID     int64
 	Hadir      int64
+	Kehadiran  string
 	JamMasuk   string
 	Keterangan string
 	Alasan     string
@@ -1516,6 +1620,7 @@ func (q *Queries) UpsertRapatAbsen(ctx context.Context, arg UpsertRapatAbsenPara
 		arg.RapatID,
 		arg.GuruID,
 		arg.Hadir,
+		arg.Kehadiran,
 		arg.JamMasuk,
 		arg.Keterangan,
 		arg.Alasan,

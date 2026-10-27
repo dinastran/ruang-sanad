@@ -55,6 +55,12 @@ func downloadLaporanAbsensiExcel(c *fiber.Ctx, laporan *models.LaporanAbsensi, f
 	f.SetCellValue(sheet, "D5", laporan.Hadir)
 	f.SetCellValue(sheet, "E5", "Tidak Hadir")
 	f.SetCellValue(sheet, "F5", laporan.TidakHadir)
+	f.SetCellValue(sheet, "A6", "Izin")
+	f.SetCellValue(sheet, "B6", laporan.Izin)
+	f.SetCellValue(sheet, "C6", "Sakit")
+	f.SetCellValue(sheet, "D6", laporan.Sakit)
+	f.SetCellValue(sheet, "E6", "Alfa")
+	f.SetCellValue(sheet, "F6", laporan.Alfa)
 
 	headers := []string{"No.", "Nama Guru", "Status Kehadiran", "Jam Masuk", "Alasan Tidak Hadir", "Keterangan"}
 	for i, header := range headers {
@@ -63,10 +69,7 @@ func downloadLaporanAbsensiExcel(c *fiber.Ctx, laporan *models.LaporanAbsensi, f
 	}
 	for i, row := range laporan.Absen {
 		excelRow := i + 8
-		status := "Tidak Hadir"
-		if row.Hadir {
-			status = "Hadir"
-		}
+		status := labelKehadiran(row)
 		f.SetSheetRow(sheet, fmt.Sprintf("A%d", excelRow), &[]interface{}{i + 1, row.Nama, status, row.JamMasuk, row.Alasan, row.Keterangan})
 	}
 	titleStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 14}, Alignment: &excelize.Alignment{Horizontal: "center"}})
@@ -88,4 +91,17 @@ func downloadLaporanAbsensiExcel(c *fiber.Ctx, laporan *models.LaporanAbsensi, f
 	c.Set(fiber.HeaderContentType, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	c.Set(fiber.HeaderContentDisposition, fmt.Sprintf("attachment; filename=%s-%s.xlsx", filenamePrefix, laporan.Tanggal))
 	return c.Send(buffer.Bytes())
+}
+
+func labelKehadiran(row models.AbsenRow) string {
+	switch {
+	case row.Hadir:
+		return "Hadir"
+	case row.Kehadiran == models.KehadiranIzin:
+		return "Izin"
+	case row.Kehadiran == models.KehadiranSakit:
+		return "Sakit"
+	default:
+		return "Alfa"
+	}
 }
