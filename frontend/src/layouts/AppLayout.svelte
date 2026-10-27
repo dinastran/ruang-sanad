@@ -118,7 +118,8 @@
 		{ href: "/app/guru/jadwal-pertemuan", label: "Agenda Mengajar", group: "guru-jadwal", category: "Guru", show: isGuruWorkflow, icon: CalendarClock },
 		{ href: "/app/guru/riwayat-mengajar", label: "Riwayat Mengajar", group: "guru-riwayat-mengajar", category: "Guru", show: isGuruWorkflow, icon: History },
 		{ href: "/app/guru/kelas", label: "Kelas Saya", group: "guru-kelas", category: "Guru", show: isGuruWorkflow, icon: ClipboardList },
-		{ href: "/app/guru/riayah", label: "Riayah Santri", group: "guru-riayah", category: "Guru", show: isGuruWorkflow, icon: HeartHandshake },
+		// Sementara disembunyikan dari Guru & Admin Kelas (halaman tetap bisa dibuka lewat link).
+		{ href: "/app/guru/riayah", label: "Riayah Santri", group: "guru-riayah", category: "Guru", show: isSuperAdmin, icon: HeartHandshake },
 		{ href: "/app/guru/tsi", label: "Nilai TSI Saya", group: "guru-tsi", category: "Guru", show: isGuru, icon: Award },
 		{ href: "/app/guru/kunjungan", label: "Hasil Kunjungan", group: "guru-kunjungan", category: "Guru", show: isGuru, icon: ClipboardCheck },
 		{ href: "/app/koordinator-guru", label: "Dashboard Koordinator", group: "koordinator", category: "Koordinator Guru", show: isKoordinator, icon: UserCheck },
