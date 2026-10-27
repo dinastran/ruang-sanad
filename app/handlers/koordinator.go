@@ -54,5 +54,9 @@ func (h *KoordinatorGuruHandler) Dashboard(c *fiber.Ctx) error {
 		props["belum_ditutup"] = belumDitutup
 	}
 
+	if alfa, err := h.svc.RingkasanAlfaBeruntun(); err == nil {
+		props["alfa_beruntun"] = alfa
+	}
+
 	return h.inertiaService.Render(c, "koordinator/Dashboard", props)
 }

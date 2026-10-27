@@ -2,11 +2,27 @@
 	import { inertia, router } from "@inertiajs/svelte";
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
-	import type { Rapat, User } from "@lib/types";
+	import AnalisisAlfa from "@components/koordinator/AnalisisAlfa.svelte";
+	import AnalisisAlfaRingkasan from "@components/koordinator/AnalisisAlfaRingkasan.svelte";
+	import type { AnalisisKehadiran, FilterAlfa, Flash, Rapat, User } from "@lib/types";
 	import { Plus, X, Pencil, Trash2, ClipboardCheck, Users } from "lucide-svelte";
 
-	interface Props { user?: User; rapat?: Rapat[]; success?: string; error?: string; }
-	let { user, rapat = [], success, error }: Props = $props();
+	interface Props { user?: User; rapat?: Rapat[]; analisis?: AnalisisKehadiran; analisis_error?: string; flash?: Flash; success?: string; error?: string; }
+	let { user, rapat = [], analisis, analisis_error, flash, success, error }: Props = $props();
+
+	type Tab = "sesi" | "analisis";
+	// ?tab=analisis dipakai tautan dari dashboard koordinator.
+	let tab = $state<Tab>(new URLSearchParams(window.location.search).get("tab") === "analisis" ? "analisis" : "sesi");
+	// Buka di filter paling mendesak yang punya isi; sesudahnya dikendalikan koordinator.
+	const filterAwal = (): FilterAlfa => (analisis && analisis.merah > 0 ? "merah" : analisis && analisis.waspada > 0 ? "waspada" : "semua");
+	let filterAlfa = $state<FilterAlfa>(filterAwal());
+	const pesanSukses = $derived(flash?.success ?? success);
+	const pesanError = $derived(flash?.error ?? error);
+
+	function pilihAnalisis(filter: FilterAlfa) {
+		filterAlfa = filter;
+		tab = "analisis";
+	}
 
 	const inputClass = "w-full px-3.5 py-2.5 rounded-xl bg-neutral-100/80 dark:bg-neutral-800/50 border border-neutral-300 dark:border-neutral-700 text-sm text-neutral-900 dark:text-white outline-none focus:border-brand-400";
 	const STATUS: Record<string, string> = { dijadwalkan: "Dijadwalkan", terlaksana: "Terlaksana", batal: "Batal" };
@@ -42,9 +58,21 @@
 	</div>
 
 	<div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-4">
-		{#if success}<div class="rounded-xl bg-green-500/10 border border-green-500/20 p-4 text-sm font-medium text-green-700 dark:text-green-400" in:fly={{ y: 10, duration: 200 }}>{success}</div>{/if}
-		{#if error}<div class="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-sm font-medium text-red-700 dark:text-red-400">{error}</div>{/if}
+		{#if pesanSukses}<div class="rounded-xl bg-green-500/10 border border-green-500/20 p-4 text-sm font-medium text-green-700 dark:text-green-400" in:fly={{ y: 10, duration: 200 }}>{pesanSukses}</div>{/if}
+		{#if pesanError}<div class="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-sm font-medium text-red-700 dark:text-red-400">{pesanError}</div>{/if}
 
+		{#if analisis}<AnalisisAlfaRingkasan {analisis} onpilih={pilihAnalisis} />{/if}
+		{#if analisis_error}<div class="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-sm font-medium text-red-700 dark:text-red-400">{analisis_error}</div>{/if}
+
+		<div class="flex gap-1 border-b border-neutral-200/80 dark:border-white/[0.06]" role="tablist">
+			{#each [{ key: "sesi" as Tab, label: "Daftar sesi" }, { key: "analisis" as Tab, label: "Analisis kehadiran" }] as t (t.key)}
+				<button type="button" role="tab" aria-selected={tab === t.key} onclick={() => (tab = t.key)} class="-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors {tab === t.key ? 'border-brand-500 text-brand-700 dark:text-brand-300' : 'border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'}">{t.label}</button>
+			{/each}
+		</div>
+
+		{#if tab === "analisis"}
+			{#if analisis}<AnalisisAlfa {analisis} kegiatan="rapat" bind:filter={filterAlfa} />{/if}
+		{:else}
 		<div class="space-y-3">
 			{#each rapat as r (r.id)}
 				<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-5">
@@ -65,6 +93,7 @@
 				<div class="rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-700 p-12 text-center text-sm text-neutral-500"><Users class="w-8 h-8 mx-auto mb-2 opacity-40" /> Belum ada rapat.</div>
 			{/each}
 		</div>
+		{/if}
 	</div>
 
 	{#if showForm}

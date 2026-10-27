@@ -87,14 +87,24 @@ type AbsenRow struct {
 	Nama       string `json:"nama"`
 	Status     string `json:"status"`
 	Hadir      bool   `json:"hadir"`
+	Kehadiran  string `json:"kehadiran"` // hadir/izin/sakit/alfa; kosong = belum diisi
 	JamMasuk   string `json:"jam_masuk"`
 	Keterangan string `json:"keterangan"`
 	Alasan     string `json:"alasan"`
 }
 
+// Status kehadiran absensi pembinaan & rapat.
+const (
+	KehadiranHadir = "hadir"
+	KehadiranIzin  = "izin"
+	KehadiranSakit = "sakit"
+	KehadiranAlfa  = "alfa"
+)
+
 type AbsenInput struct {
 	GuruID     int64  `json:"guru_id"`
 	Hadir      bool   `json:"hadir"`
+	Kehadiran  string `json:"kehadiran"`
 	JamMasuk   string `json:"jam_masuk"`
 	Keterangan string `json:"keterangan"`
 	Alasan     string `json:"alasan"`
@@ -108,6 +118,9 @@ type LaporanAbsensi struct {
 	Total         int        `json:"total"`
 	Hadir         int        `json:"hadir"`
 	TidakHadir    int        `json:"tidak_hadir"`
+	Izin          int        `json:"izin"`
+	Sakit         int        `json:"sakit"`
+	Alfa          int        `json:"alfa"`
 	Absen         []AbsenRow `json:"absen"`
 }
 
@@ -119,6 +132,7 @@ type RiwayatAbsensiGuru struct {
 	Tanggal    string `json:"tanggal"`
 	Judul      string `json:"judul"`
 	Hadir      bool   `json:"hadir"`
+	Kehadiran  string `json:"kehadiran"`
 	JamMasuk   string `json:"jam_masuk"`
 	Keterangan string `json:"keterangan"`
 	Alasan     string `json:"alasan"`
@@ -236,4 +250,46 @@ type TodoResponse struct {
 	Recurring     string `json:"recurring"`
 	LinkPendukung string `json:"link_pendukung"`
 	Catatan       string `json:"catatan"`
+}
+
+// ============ Analisis alfa berturut-turut ============
+
+// AnalisisKehadiranSesi adalah satu sesi terlaksana pada strip riwayat.
+type AnalisisKehadiranSesi struct {
+	ID      int64  `json:"id"`
+	Tanggal string `json:"tanggal"`
+	Judul   string `json:"judul"`
+}
+
+type AnalisisKehadiranGuru struct {
+	GuruID       int64  `json:"guru_id"`
+	Nama         string `json:"nama"`
+	NoWa         string `json:"no_wa"`
+	AlfaBeruntun int    `json:"alfa_beruntun"`
+	Level        string `json:"level"` // merah / oranye / "" (aman)
+	// Riwayat sejajar dengan AnalisisKehadiran.Sesi; "" = tidak ada catatan absen.
+	Riwayat         []string `json:"riwayat"`
+	HadirTerakhir   int      `json:"hadir_terakhir"`
+	DicatatTerakhir int      `json:"dicatat_terakhir"`
+	TerakhirHadir   string   `json:"terakhir_hadir"`
+}
+
+type AnalisisKehadiran struct {
+	AmbangAlfa    int                     `json:"ambang_alfa"`
+	AmbangWaspada int                     `json:"ambang_waspada"`
+	Sesi          []AnalisisKehadiranSesi `json:"sesi"`
+	Guru          []AnalisisKehadiranGuru `json:"guru"`
+	Merah         int                     `json:"merah"`
+	Waspada       int                     `json:"waspada"`
+	// Persentase hadir dari seluruh catatan absen pada sesi di strip; nil bila belum ada catatan.
+	PersenHadir *float64 `json:"persen_hadir"`
+}
+
+// RingkasanAlfaBeruntun dipakai kartu dashboard koordinator.
+type RingkasanAlfaBeruntun struct {
+	AmbangAlfa       int `json:"ambang_alfa"`
+	PembinaanMerah   int `json:"pembinaan_merah"`
+	PembinaanWaspada int `json:"pembinaan_waspada"`
+	RapatMerah       int `json:"rapat_merah"`
+	RapatWaspada     int `json:"rapat_waspada"`
 }
