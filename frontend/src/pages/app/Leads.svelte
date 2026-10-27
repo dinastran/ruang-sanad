@@ -3,47 +3,14 @@
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import type { Flash, User } from "@lib/types";
 	import { Toast } from "@lib/notifications/toast";
-	import {
-		STAGE_LABELS,
-		STATUS_LABELS,
-		stageTone,
-		leadName,
-		relativeTime,
-		labelTone,
-		type LeadLabel,
-	} from "@lib/leads";
-	import { Search, List, Kanban, AlertTriangle, PauseCircle, ChartColumn, Inbox } from "lucide-svelte";
-
-	interface LeadItem {
-		id: number;
-		nama: string;
-		wa_name: string;
-		phone: string;
-		stage: string;
-		status: string;
-		paket_kode: string;
-		needs_review: boolean;
-		ai_paused: boolean;
-		assigned_user_id: number;
-		assigned_name: string;
-		last_inbound_at: string;
-		last_activity_at: string;
-		labels: LeadLabel[];
-	}
-
-	interface Filters {
-		status: string;
-		stage: string;
-		label: number;
-		mine: boolean;
-		review: boolean;
-		q: string;
-		from: string;
-		to: string;
-		date_field?: string;
-		reached_stage?: string;
-		lost_reason?: string;
-	}
+	import type { LeadLabel } from "@lib/leads";
+	import { ChartColumn, Inbox, Kanban, LayoutDashboard, List } from "lucide-svelte";
+	import { fmt } from "@components/lead-dashboard/types";
+	import PipelineStrip from "@components/leads/PipelineStrip.svelte";
+	import LeadFilters from "@components/leads/LeadFilters.svelte";
+	import LeadTable from "@components/leads/LeadTable.svelte";
+	import LeadKanban from "@components/leads/LeadKanban.svelte";
+	import type { FilterChange, Filters, LeadItem } from "@components/leads/types";
 
 	interface Props {
 		user?: User;
@@ -73,8 +40,10 @@
 	let total = $derived(props.total ?? 0);
 	let counts = $derived(props.counts ?? {});
 
-	// svelte-ignore state_referenced_locally
-	let search = $state(props.filters?.q ?? "");
+	let hasFilters = $derived(
+		(filters.status !== "" && filters.status !== "open") ||
+			!!(filters.stage || filters.label || filters.mine || filters.review || filters.q || filters.from || filters.to || filters.date_field || filters.reached_stage || filters.lost_reason),
+	);
 	let view = $state<"list" | "kanban">(readView());
 
 	function readView(): "list" | "kanban" {
@@ -93,7 +62,7 @@
 		}
 	}
 
-	function go(changes: Partial<Record<keyof Filters, string | number | boolean>>) {
+	function go(changes: FilterChange) {
 		const params = new URLSearchParams(window.location.search);
 		params.delete("cursor");
 		for (const [k, v] of Object.entries(changes)) {
@@ -102,11 +71,6 @@
 		}
 		const qs = params.toString();
 		router.get(`/app/leads${qs ? "?" + qs : ""}`);
-	}
-
-	function doSearch(e: Event) {
-		e.preventDefault();
-		go({ q: search.trim() });
 	}
 
 	function loadMore() {
@@ -134,46 +98,7 @@
 		});
 	}
 
-	let quick = $derived(
-		filters.mine ? "mine" : filters.stage === "bukti_masuk" ? "bukti" : filters.review ? "review" : filters.status === "" || filters.status === "open" ? "open" : "",
-	);
-
-	// Kanban: drag a card to another stage column (manual stage move).
-	let dragId = $state<number | null>(null);
-	let dropStage = $state<string | null>(null);
-	// Open leads sit in their stage column; closed leads (won, lost, do not
-	// contact) get their own columns so the board adds up to the list total.
-	const closedColumns = ["won", "lost", "do_not_contact"];
-	let kanbanColumns = $derived([...stages, ...closedColumns.filter((c) => (counts[c] ?? 0) > 0)]);
-	const columnOf = (l: LeadItem) => (l.status === "open" ? l.stage : l.status);
-	const columnLabel = (c: string) => (closedColumns.includes(c) ? STATUS_LABELS[c] : STAGE_LABELS[c]) ?? c;
-	// Terverifikasi is shown (leads waiting for "Jadikan Santri") but only the
-	// verify action can move a lead there. Closed leads are not moved here.
-	const canDropOn = (column: string) => column !== "terverifikasi" && !closedColumns.includes(column);
-
-	const fmtDate = (d: string) =>
-		new Date(d + "T12:00:00+07:00").toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
-	let statusSummary = $derived(
-		filters.status === "all" ? "semua status" : filters.status && filters.status !== "open" ? `status ${STATUS_LABELS[filters.status]?.toLowerCase()}` : "status berjalan",
-	);
-	let dateSummary = $derived.by(() => {
-		const what = filters.date_field === "converted" ? "closing" : "masuk";
-		if (filters.from && filters.to) return filters.from === filters.to ? `${what} ${fmtDate(filters.from)}` : `${what} ${fmtDate(filters.from)} – ${fmtDate(filters.to)}`;
-		if (filters.from) return `${what} sejak ${fmtDate(filters.from)}`;
-		if (filters.to) return `${what} sampai ${fmtDate(filters.to)}`;
-		return "semua tanggal";
-	});
-	let hasFilters = $derived(
-		(filters.status !== "" && filters.status !== "open") ||
-			!!(filters.stage || filters.label || filters.mine || filters.review || filters.q || filters.from || filters.to || filters.date_field || filters.reached_stage || filters.lost_reason),
-	);
-
-	function dropOn(stage: string) {
-		const id = dragId;
-		dragId = null;
-		dropStage = null;
-		const lead = items.find((l) => l.id === id);
-		if (!lead || lead.stage === stage) return;
+	function moveStage(lead: LeadItem, stage: string) {
 		router.put(`/app/leads/${lead.id}/stage?back=list`, { stage }, {
 			preserveScroll: true,
 			onSuccess: (p) => {
@@ -183,217 +108,68 @@
 		});
 	}
 
-	const fieldClass =
-		"w-full px-3 py-2.5 rounded-xl bg-white dark:bg-neutral-925/50 border border-neutral-200/80 dark:border-white/[0.06] text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-400/40";
+	const seg = "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
+	const segOn = " bg-white text-neutral-900 shadow-[0_0_0_1px_rgba(15,23,42,.08),0_1px_2px_rgba(15,23,42,.08)] dark:bg-neutral-800 dark:text-white dark:shadow-[0_0_0_1px_rgba(255,255,255,.08)]";
+	const segIdle = " text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white";
+	const ghost = "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-neutral-300 dark:hover:bg-white/[0.05]";
 </script>
 
 <AppLayout {user}>
-	<div class="pt-8 pb-6 border-b border-neutral-200/80 dark:border-white/[0.04]">
-		<div class="max-w-7xl mx-auto px-4 sm:px-6">
-			<div class="flex items-start justify-between gap-4 flex-wrap">
-				<div class="min-w-0">
-					<h1 class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">Leads</h1>
-					<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Calon santri dari chat CS, dari pertanyaan pertama sampai jadi santri.</p>
-				</div>
-				<div class="flex items-center gap-2">
-					<a href="/app/leads/laporan" use:inertia class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200/80 dark:border-white/[0.06] text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800">
-						<ChartColumn class="w-4 h-4" /> Laporan
-					</a>
-					<div class="hidden lg:inline-flex rounded-lg border border-neutral-200/80 dark:border-white/[0.06] p-0.5" role="group" aria-label="Tampilan">
-						<button type="button" onclick={() => setView("list")} aria-pressed={view === "list"} class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm {view === 'list' ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'text-neutral-600 dark:text-neutral-400'}">
-							<List class="w-4 h-4" /> Daftar
-						</button>
-						<button type="button" onclick={() => setView("kanban")} aria-pressed={view === "kanban"} class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm {view === 'kanban' ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'text-neutral-600 dark:text-neutral-400'}">
-							<Kanban class="w-4 h-4" /> Kanban
-						</button>
-					</div>
+	<div class="mx-auto max-w-7xl space-y-4 px-4 py-6 sm:px-6 lg:py-8">
+		<header class="flex flex-col gap-3 pb-1 sm:flex-row sm:items-end sm:justify-between">
+			<div class="min-w-0">
+				<p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-700 dark:text-brand-400">CRM Leads</p>
+				<h1 class="mt-1 text-[28px] font-semibold leading-tight tracking-[-0.02em] text-neutral-950 dark:text-white">Leads</h1>
+				<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Calon santri dari chat CS, dari pertanyaan pertama sampai jadi santri.</p>
+			</div>
+			<div class="flex flex-wrap items-center gap-1">
+				<a href="/app/leads/dashboard" use:inertia class={ghost}><LayoutDashboard size={15} /> Dashboard</a>
+				<a href="/app/leads/laporan" use:inertia class={ghost}><ChartColumn size={15} /> Laporan</a>
+				<div class="ml-1 hidden gap-0.5 rounded-lg bg-neutral-100 p-1 lg:inline-flex dark:bg-neutral-900" role="group" aria-label="Tampilan">
+					<button type="button" onclick={() => setView("list")} aria-pressed={view === "list"} class={seg + (view === "list" ? segOn : segIdle)}><List size={15} /> Daftar</button>
+					<button type="button" onclick={() => setView("kanban")} aria-pressed={view === "kanban"} class={seg + (view === "kanban" ? segOn : segIdle)}><Kanban size={15} /> Kanban</button>
 				</div>
 			</div>
-		</div>
-	</div>
+		</header>
 
-	<div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4">
 		{#if success}
-			<div class="rounded-xl border border-success/20 bg-success/10 px-4 py-3 text-sm font-medium text-success">{success}</div>
+			<div role="status" class="rounded-lg border border-success/20 bg-success/10 px-4 py-3 text-sm font-medium text-emerald-800 dark:text-emerald-300">{success}</div>
 		{/if}
 		{#if error}
-			<div class="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm font-medium text-error">{error}</div>
+			<div role="alert" class="rounded-lg border border-error/20 bg-error/10 px-4 py-3 text-sm font-medium text-red-700 dark:text-red-300">{error}</div>
 		{/if}
 
-		{#if filters.reached_stage}
-   <p class="rounded-lg bg-brand-500/10 px-3 py-2 text-sm text-brand-700 dark:text-brand-300">Filter funnel: lead yang diperkirakan telah mencapai tahap {STAGE_LABELS[filters.reached_stage] ?? filters.reached_stage}, termasuk yang sudah closing.</p>
-  {/if}
-  {#if filters.lost_reason}
-   <p class="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">Filter alasan lost: {filters.lost_reason.replaceAll("_", " ")}.</p>
-  {/if}
-  {#if filters.date_field === "converted"}
-			<p class="rounded-lg bg-brand-500/10 px-3 py-2 text-sm text-brand-700 dark:text-brand-300">Filter tanggal menggunakan tanggal closing (konversi menjadi santri), bukan tanggal lead pertama masuk.</p>
-		{/if}
-		<div class="flex flex-wrap items-center justify-between gap-2 text-sm">
-			<p class="text-neutral-600 dark:text-neutral-400" aria-live="polite">
-				<strong class="font-semibold tabular-nums text-neutral-900 dark:text-white">{total.toLocaleString("id-ID")} lead</strong>
-				· {statusSummary} · {dateSummary}{#if items.length < total}<span class="text-neutral-500"> · {items.length.toLocaleString("id-ID")} ditampilkan</span>{/if}
-			</p>
-			{#if hasFilters}
-				<a href="/app/leads" use:inertia class="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">Reset filter</a>
-			{/if}
-		</div>
-		<form onsubmit={doSearch} class="relative">
-			<Search class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500 pointer-events-none" />
-			<input type="search" bind:value={search} placeholder="Cari nama, nama WA, atau nomor" class="{fieldClass} pl-10" aria-label="Cari lead" />
-		</form>
+		<PipelineStrip {stages} {counts} {total} {filters} onfilter={go} />
 
-		<div class="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
-			{#each [
-				{ key: "open", label: "Semua berjalan", apply: { status: "", stage: "", mine: false, review: false } },
-				{ key: "mine", label: "Lead saya", apply: { mine: true, stage: "", review: false } },
-				{ key: "bukti", label: "Bukti masuk", apply: { stage: "bukti_masuk", mine: false, review: false } },
-				{ key: "review", label: "Perlu dicek", apply: { review: true, stage: "", mine: false } },
-			] as chip}
-				<button type="button" onclick={() => go(chip.apply)} class="shrink-0 px-3 py-1.5 rounded-full border text-sm font-medium whitespace-nowrap transition-colors {quick === chip.key ? 'border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'border-neutral-200/80 dark:border-white/[0.08] text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'}">
-					{chip.label}
-				</button>
-			{/each}
-		</div>
+		<LeadFilters {filters} {stages} {labels} onfilter={go} />
 
-		<details class="rounded-xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50">
-			<summary class="cursor-pointer px-4 py-3 text-sm font-medium text-neutral-700 dark:text-neutral-300">Filter lainnya</summary>
-			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 px-4 pb-4">
-				<label class="block text-xs font-semibold uppercase tracking-wider text-neutral-500">
-					Status
-					<select class="{fieldClass} mt-1" value={filters.status || "open"} onchange={(e) => go({ status: (e.currentTarget as HTMLSelectElement).value === "open" ? "" : (e.currentTarget as HTMLSelectElement).value })}>
-						{#each ["open", "won", "lost", "do_not_contact", "all"] as s}
-							<option value={s}>{s === "all" ? "Semua status" : STATUS_LABELS[s]}</option>
-						{/each}
-					</select>
-				</label>
-				<label class="block text-xs font-semibold uppercase tracking-wider text-neutral-500">
-					Tahap
-					<select class="{fieldClass} mt-1" value={filters.stage} onchange={(e) => go({ stage: (e.currentTarget as HTMLSelectElement).value })}>
-						<option value="">Semua tahap</option>
-						{#each stages as s}
-							<option value={s}>{STAGE_LABELS[s] ?? s}</option>
-						{/each}
-					</select>
-				</label>
-				<label class="block text-xs font-semibold uppercase tracking-wider text-neutral-500">
-					Label
-					<select class="{fieldClass} mt-1" value={String(filters.label || "")} onchange={(e) => go({ label: Number((e.currentTarget as HTMLSelectElement).value) || 0 })}>
-						<option value="">Semua label</option>
-						{#each labels as l}
-							<option value={String(l.id)}>{l.nama}</option>
-						{/each}
-					</select>
-				</label>
-				<label class="block text-xs font-semibold uppercase tracking-wider text-neutral-500">
-					{filters.date_field === "converted" ? "Closing dari" : "Masuk dari"}
-					<input type="date" class="{fieldClass} mt-1" value={filters.from} onchange={(e) => go({ from: (e.currentTarget as HTMLInputElement).value })} />
-				</label>
-				<label class="block text-xs font-semibold uppercase tracking-wider text-neutral-500">
-					Sampai
-					<input type="date" class="{fieldClass} mt-1" value={filters.to} onchange={(e) => go({ to: (e.currentTarget as HTMLInputElement).value })} />
-				</label>
-			</div>
-		</details>
+		<p class="text-sm text-neutral-600 dark:text-neutral-400" aria-live="polite">
+			<strong class="font-semibold tabular-nums text-neutral-950 dark:text-white">{fmt(total)} lead</strong>
+			{#if items.length < total}<span class="tabular-nums"> · {fmt(items.length)} ditampilkan</span>{/if}
+			<span class="text-neutral-400 dark:text-neutral-500"> · urut aktivitas terbaru</span>
+		</p>
 
 		{#if items.length === 0}
-			<div class="rounded-xl border border-dashed border-neutral-300 dark:border-neutral-700 px-6 py-14 text-center">
-				<Inbox class="w-8 h-8 mx-auto text-neutral-400" />
+			<div class="rounded-xl border border-dashed border-neutral-300 px-6 py-14 text-center dark:border-white/10">
+				<Inbox size={28} class="mx-auto text-neutral-400" />
 				<p class="mt-3 text-sm font-medium text-neutral-700 dark:text-neutral-300">Belum ada lead untuk filter ini</p>
-				<p class="mt-1 text-xs text-neutral-500">Lead baru muncul otomatis saat ada chat masuk ke nomor CS.</p>
+				<p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Lead baru muncul otomatis saat ada chat masuk ke nomor CS.</p>
+				{#if hasFilters}<a href="/app/leads" use:inertia class="mt-4 inline-block text-sm font-medium text-brand-700 hover:underline dark:text-brand-400">Reset filter</a>{/if}
 			</div>
 		{:else if view === "kanban"}
 			<!-- Kanban is desktop-only; on small screens the list is shown instead. -->
-			<div class="lg:hidden">{@render cardList()}</div>
-			<div class="hidden lg:flex gap-3 overflow-x-auto pb-2">
-				{#each kanbanColumns as stage}
-					{@const col = items.filter((l) => columnOf(l) === stage)}
-					<section
-						class="w-64 shrink-0 rounded-xl border bg-neutral-50 dark:bg-neutral-900/40 {dropStage === stage ? 'border-brand-500' : 'border-neutral-200/80 dark:border-white/[0.06]'}"
-						aria-label={columnLabel(stage)}
-						ondragover={(e) => { if (!canDropOn(stage)) return; e.preventDefault(); dropStage = stage; }}
-						ondragleave={() => { if (dropStage === stage) dropStage = null; }}
-						ondrop={(e) => { e.preventDefault(); if (canDropOn(stage)) dropOn(stage); }}
-					>
-						<header class="flex items-center justify-between px-3 py-2.5 border-b border-neutral-200/80 dark:border-white/[0.06]">
-							<h2 class="text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">{columnLabel(stage)}</h2>
-							<span class="text-xs font-mono text-neutral-500" title={col.length < (counts[stage] ?? 0) ? `${col.length} dimuat dari ${counts[stage]}` : undefined}>{counts[stage] ?? 0}</span>
-						</header>
-						<div class="p-2 space-y-2 min-h-24">
-							{#each col as lead (lead.id)}
-								<a
-									href="/app/leads/{lead.id}"
-									use:inertia
-									draggable={lead.status === "open"}
-									ondragstart={() => (dragId = lead.id)}
-									ondragend={() => { dragId = null; dropStage = null; }}
-									class="block rounded-lg border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925 p-3 hover:border-brand-400/50 {dragId === lead.id ? 'opacity-50' : ''}"
-								>
-									<p class="text-sm font-medium text-neutral-900 dark:text-white truncate">{leadName(lead)}</p>
-									<p class="mt-0.5 text-xs text-neutral-500">{relativeTime(lead.last_activity_at)}{lead.paket_kode ? ` · ${lead.paket_kode}` : ""}</p>
-									{@render flags(lead)}
-								</a>
-							{/each}
-							{#if col.length < (counts[stage] ?? 0)}
-								<p class="px-1 text-[11px] text-neutral-500">+{(counts[stage] ?? 0) - col.length} lagi, klik Muat lagi</p>
-							{/if}
-						</div>
-					</section>
-				{/each}
-			</div>
-			<p class="hidden lg:block text-xs text-neutral-500">Seret kartu ke kolom lain untuk mengubah tahap. Tahap Terverifikasi hanya lewat tombol Verifikasi pembayaran di halaman lead.</p>
+			<div class="lg:hidden"><LeadTable {items} /></div>
+			<div class="hidden space-y-2 lg:block"><LeadKanban {items} {stages} {counts} onmove={moveStage} /></div>
 		{:else}
-			{@render cardList()}
+			<LeadTable {items} />
 		{/if}
 
 		{#if props.next}
 			<div class="flex justify-center pt-2">
-				<button type="button" onclick={loadMore} disabled={loadingMore} class="px-4 py-2 rounded-lg border border-neutral-200/80 dark:border-white/[0.06] text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50">
-					{loadingMore ? "Memuat..." : "Muat lagi"}
+				<button type="button" onclick={loadMore} disabled={loadingMore} class="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/[0.04]">
+					{loadingMore ? "Memuat…" : `Muat lagi · ${fmt(total - items.length)} tersisa`}
 				</button>
 			</div>
 		{/if}
 	</div>
 </AppLayout>
-
-{#snippet flags(lead: LeadItem)}
-	{#if lead.needs_review || lead.ai_paused || lead.labels.length > 0}
-		<div class="mt-2 flex flex-wrap gap-1">
-			{#if lead.needs_review}
-				<span class="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning"><AlertTriangle class="w-3 h-3" /> Perlu dicek</span>
-			{/if}
-			{#if lead.ai_paused}
-				<span class="inline-flex items-center gap-1 rounded-full bg-info/10 px-2 py-0.5 text-[11px] font-medium text-info"><PauseCircle class="w-3 h-3" /> AI dijeda</span>
-			{/if}
-			{#each lead.labels as l}
-				<span class="rounded-full border px-2 py-0.5 text-[11px] {labelTone(l.warna)}">{l.nama}</span>
-			{/each}
-		</div>
-	{/if}
-{/snippet}
-
-{#snippet cardList()}
-	<ul class="divide-y divide-neutral-200/80 dark:divide-white/[0.05] rounded-xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50">
-		{#each items as lead (lead.id)}
-			<li>
-				<a href="/app/leads/{lead.id}" use:inertia class="flex items-start gap-3 px-4 py-3.5 hover:bg-neutral-50 dark:hover:bg-white/[0.02]">
-					<div class="min-w-0 flex-1">
-						<div class="flex items-center gap-2">
-							<p class="font-medium text-neutral-900 dark:text-white truncate">{leadName(lead)}</p>
-							{#if lead.nama && lead.wa_name && lead.nama !== lead.wa_name}
-								<span class="hidden sm:inline text-xs text-neutral-500 truncate">({lead.wa_name})</span>
-							{/if}
-						</div>
-						<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-500">
-							<span class="rounded-full px-2 py-0.5 font-medium {stageTone(lead.stage, lead.status)}">{lead.status === "open" ? STAGE_LABELS[lead.stage] : STATUS_LABELS[lead.status]}</span>
-							{#if lead.paket_kode}<span>Paket {lead.paket_kode}</span>{/if}
-							{#if lead.assigned_name}<span>· {lead.assigned_name}</span>{/if}
-						</div>
-						{@render flags(lead)}
-					</div>
-					<span class="shrink-0 text-xs text-neutral-500 whitespace-nowrap">{relativeTime(lead.last_activity_at)}</span>
-				</a>
-			</li>
-		{/each}
-	</ul>
-{/snippet}
