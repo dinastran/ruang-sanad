@@ -242,6 +242,60 @@ func (q *Queries) ListKontakTerakhirRiayah(ctx context.Context, guruID interface
 	return items, nil
 }
 
+const listKontakTindakLanjutTerakhir = `-- name: ListKontakTindakLanjutTerakhir :many
+SELECT rk.santri_id, rk.tanggal, rk.media, COALESCE(u.name, '') AS penulis_nama
+FROM riayah_kontak rk
+JOIN santri s ON s.id = rk.santri_id
+LEFT JOIN kelas k ON k.id = s.kelas_id
+LEFT JOIN users u ON u.id = rk.author_user_id
+WHERE s.status = 'aktif'
+  AND rk.jenis <> 'rapor'
+  AND (?1 IS NULL OR k.guru_id = ?1)
+  AND rk.id = (
+      SELECT r2.id FROM riayah_kontak r2
+      WHERE r2.santri_id = rk.santri_id AND r2.jenis <> 'rapor'
+      ORDER BY r2.tanggal DESC, r2.id DESC
+      LIMIT 1
+  )
+`
+
+type ListKontakTindakLanjutTerakhirRow struct {
+	SantriID    int64
+	Tanggal     string
+	Media       string
+	PenulisNama string
+}
+
+// Kontak non-rapor terakhir per santri (siapa pun pencatatnya), untuk menutup
+// penanda alpa berturut-turut yang ditangani Admin Kelas.
+func (q *Queries) ListKontakTindakLanjutTerakhir(ctx context.Context, guruID interface{}) ([]ListKontakTindakLanjutTerakhirRow, error) {
+	rows, err := q.db.QueryContext(ctx, listKontakTindakLanjutTerakhir, guruID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListKontakTindakLanjutTerakhirRow
+	for rows.Next() {
+		var i ListKontakTindakLanjutTerakhirRow
+		if err := rows.Scan(
+			&i.SantriID,
+			&i.Tanggal,
+			&i.Media,
+			&i.PenulisNama,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRaporTerkirimSantri = `-- name: ListRaporTerkirimSantri :many
 SELECT periode, tanggal
 FROM riayah_kontak

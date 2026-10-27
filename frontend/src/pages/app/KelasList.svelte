@@ -4,7 +4,7 @@
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import GenderBadge from "@components/GenderBadge.svelte";
 	import type { User } from "@lib/types";
-	import { BookOpen, Users, Calendar, Clock, UserCheck, ArrowRight, Filter, Search, School, Power, Trash2, RotateCcw } from "lucide-svelte";
+	import { BookOpen, Users, Calendar, Clock, UserCheck, ArrowRight, Filter, Search, School, Power, Trash2, RotateCcw, PhoneCall } from "lucide-svelte";
 
 	interface KelasResponse {
 		id: number;
@@ -181,6 +181,21 @@
 			onFinish: () => { busyId = null; },
 		});
 	}
+
+	// Santri alpa berturut-turut yang belum dihubungi Admin Kelas.
+	let jumlahAlpa = $state(0);
+	$effect(() => {
+		let batal = false;
+		fetch("/app/kelas/tindak-lanjut-alpa/jumlah", { headers: { Accept: "application/json" } })
+			.then((r) => (r.ok ? r.json() : null))
+			.then((d: { perlu?: number } | null) => {
+				if (!batal && d) jumlahAlpa = d.perlu ?? 0;
+			})
+			.catch(() => {});
+		return () => {
+			batal = true;
+		};
+	});
 </script>
 
 <AppLayout {user} group="dashboard">
@@ -207,6 +222,17 @@
 	</div>
 
 	<div class="relative max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+		{#if jumlahAlpa > 0}
+			<a href="/app/kelas/tindak-lanjut-alpa" use:inertia class="flex items-center gap-3 rounded-2xl border border-red-500/25 bg-red-500/[0.06] p-4 transition-colors hover:bg-red-500/10">
+				<PhoneCall class="h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
+				<div class="min-w-0 flex-1">
+					<p class="font-semibold text-neutral-900 dark:text-white">{jumlahAlpa} santri perlu dihubungi</p>
+					<p class="text-sm text-neutral-600 dark:text-neutral-400">Alpa 2 pertemuan atau lebih berturut-turut dan belum dihubungi.</p>
+				</div>
+				<ArrowRight class="h-4 w-4 shrink-0 text-neutral-400" />
+			</a>
+		{/if}
+
 		{#if success}
 			<div class="bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-400 rounded-2xl p-4 flex items-center gap-3" in:fly={{ y: 20, duration: 300 }}>
 				<div class="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">

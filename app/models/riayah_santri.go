@@ -6,6 +6,14 @@ const (
 	PenandaKontak    = "kontak"    // oranye: lama tidak dikontak
 	PenandaProgres   = "progres"   // kuning: batas materi tidak bergerak
 
+	// PenanggungAdminKelas: penanda alpa berturut-turut ditindaklanjuti Admin Kelas,
+	// bukan tugas guru; tetap tampil di guru sebagai info.
+	PenanggungAdminKelas = "admin_kelas"
+
+	// Status tindak lanjut alpa berturut-turut.
+	TindakLanjutPerlu   = "perlu"   // belum ada kontak sejak alpa terakhir
+	TindakLanjutSelesai = "selesai" // sudah dihubungi setelah alpa terakhir
+
 	LevelMerah  = "merah"
 	LevelOranye = "oranye"
 	LevelKuning = "kuning"
@@ -15,42 +23,68 @@ type RiayahPenanda struct {
 	Kode   string `json:"kode"`
 	Level  string `json:"level"`
 	Alasan string `json:"alasan"`
+	// Penanggung kosong = tugas guru; "admin_kelas" = ditangani Admin Kelas.
+	Penanggung string `json:"penanggung,omitempty"`
+}
+
+// RiayahTindakLanjutAlpa adalah status tindak lanjut santri yang alpa
+// berturut-turut. Diisi selama rangkaian alpa masih berjalan.
+type RiayahTindakLanjutAlpa struct {
+	Status       string `json:"status"` // perlu / selesai
+	AlpaBeruntun int    `json:"alpa_beruntun"`
+	AlpaTerakhir string `json:"alpa_terakhir"`
+	// Status 5 pertemuan terakhir, terbaru dulu.
+	AbsenTerakhir []string `json:"absen_terakhir"`
+	KontakTanggal string   `json:"kontak_tanggal"`
+	KontakMedia   string   `json:"kontak_media"`
+	KontakOleh    string   `json:"kontak_oleh"`
 }
 
 // RiayahSantriItem adalah satu baris di halaman Riayah Santri.
 type RiayahSantriItem struct {
-	ID                    int64           `json:"id"`
-	Nama                  string          `json:"nama"`
-	IDMahasantri          string          `json:"id_mahasantri"`
-	NoWa                  string          `json:"no_wa"`
-	KelasID               int64           `json:"kelas_id"`
-	NamaKelas             string          `json:"nama_kelas"`
-	Level                 string          `json:"level"`
-	Jadwal                string          `json:"jadwal"`
-	GuruID                int64           `json:"guru_id"`
-	GuruNama              string          `json:"guru_nama"`
-	PersenHadir30         *float64        `json:"persen_hadir_30"`
-	TotalPertemuan30      int64           `json:"total_pertemuan_30"`
-	BatasMateriTerakhir   string          `json:"batas_materi_terakhir"`
-	KontakTerakhir        string          `json:"kontak_terakhir"`
-	KontakGuruTerakhir    string          `json:"kontak_guru_terakhir"`
-	GuruBelumDisapa       bool            `json:"guru_belum_disapa"`
-	GuruBelumPernahDisapa bool            `json:"guru_belum_pernah_disapa"`
-	GuruRaporTerkirim     bool            `json:"guru_rapor_terkirim"`
-	RaporTerkirim         bool            `json:"rapor_terkirim"`
-	Penanda               []RiayahPenanda `json:"penanda"`
+	ID                    int64                   `json:"id"`
+	Nama                  string                  `json:"nama"`
+	IDMahasantri          string                  `json:"id_mahasantri"`
+	NoWa                  string                  `json:"no_wa"`
+	KelasID               int64                   `json:"kelas_id"`
+	NamaKelas             string                  `json:"nama_kelas"`
+	Level                 string                  `json:"level"`
+	Jadwal                string                  `json:"jadwal"`
+	GuruID                int64                   `json:"guru_id"`
+	GuruNama              string                  `json:"guru_nama"`
+	PersenHadir30         *float64                `json:"persen_hadir_30"`
+	TotalPertemuan30      int64                   `json:"total_pertemuan_30"`
+	BatasMateriTerakhir   string                  `json:"batas_materi_terakhir"`
+	KontakTerakhir        string                  `json:"kontak_terakhir"`
+	KontakGuruTerakhir    string                  `json:"kontak_guru_terakhir"`
+	GuruBelumDisapa       bool                    `json:"guru_belum_disapa"`
+	GuruBelumPernahDisapa bool                    `json:"guru_belum_pernah_disapa"`
+	GuruRaporTerkirim     bool                    `json:"guru_rapor_terkirim"`
+	RaporTerkirim         bool                    `json:"rapor_terkirim"`
+	Penanda               []RiayahPenanda         `json:"penanda"`
+	TindakLanjutAlpa      *RiayahTindakLanjutAlpa `json:"tindak_lanjut_alpa"`
+}
+
+// PerluPerhatianGuru: ada penanda yang menjadi tugas guru (bukan Admin Kelas).
+func (i RiayahSantriItem) PerluPerhatianGuru() bool {
+	for _, p := range i.Penanda {
+		if p.Penanggung == "" {
+			return true
+		}
+	}
+	return false
 }
 
 type RiayahGuruMonitoring struct {
-	GuruID               int64   `json:"guru_id"`
-	GuruNama             string  `json:"guru_nama"`
-	TotalSantri           int     `json:"total_santri"`
-	PerluPerhatian       int     `json:"perlu_perhatian"`
-	BelumDisapa          int     `json:"belum_disapa"`
-	BelumPernahDisapa    int     `json:"belum_pernah_disapa"`
-	CoverageRiayah       float64 `json:"coverage_riayah"`
-	RaporBelum           int     `json:"rapor_belum"`
-	AktivitasTerakhir    string  `json:"aktivitas_terakhir"`
+	GuruID            int64   `json:"guru_id"`
+	GuruNama          string  `json:"guru_nama"`
+	TotalSantri       int     `json:"total_santri"`
+	PerluPerhatian    int     `json:"perlu_perhatian"`
+	BelumDisapa       int     `json:"belum_disapa"`
+	BelumPernahDisapa int     `json:"belum_pernah_disapa"`
+	CoverageRiayah    float64 `json:"coverage_riayah"`
+	RaporBelum        int     `json:"rapor_belum"`
+	AktivitasTerakhir string  `json:"aktivitas_terakhir"`
 }
 
 type RiayahRingkasan struct {
@@ -59,6 +93,8 @@ type RiayahRingkasan struct {
 	Kehadiran      int `json:"kehadiran"`
 	Kontak         int `json:"kontak"`
 	Progres        int `json:"progres"`
+	// Santri alpa berturut-turut yang belum dihubungi (tugas Admin Kelas).
+	AlpaPerluDihubungi int `json:"alpa_perlu_dihubungi"`
 	// Rapor bulan lalu yang sudah dikirim, untuk memantau pengiriman rapor.
 	RaporPeriode  string `json:"rapor_periode"`
 	RaporTerkirim int    `json:"rapor_terkirim"`

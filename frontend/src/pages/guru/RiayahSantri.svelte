@@ -6,7 +6,7 @@
 	import CatatKontakDialog from "@components/riayah/CatatKontakDialog.svelte";
 	import SapaWADialog from "@components/riayah/SapaWADialog.svelte";
 	import { hariLalu, labelPeriode } from "@lib/riayah";
-	import type { Flash, User, RiayahSantriItem, RiayahRingkasan, RiayahPenandaKode, RiayahWATemplate, RiayahGuruMonitoring } from "@lib/types";
+	import type { Flash, User, RiayahSantriItem, RiayahRingkasan, RiayahPenanda, RiayahPenandaKode, RiayahWATemplate, RiayahGuruMonitoring } from "@lib/types";
 	import { HeartHandshake, Search, ChevronRight, Users, Eye, NotebookPen, MessageCircle, FileText } from "lucide-svelte";
 
 	interface Props {
@@ -54,8 +54,14 @@
 
 	let guruOptions = $derived(guru_monitoring.slice().sort((a, b) => a.guru_nama.localeCompare(b.guru_nama)));
 
+	// Alpa berturut-turut ditangani Admin Kelas: bagi guru & koordinator hanya info,
+	// bagi Admin Kelas/Super Admin (is_semua) tetap tugas.
+	function tugasViewer(p: RiayahPenanda): boolean {
+		return !p.penanggung || (is_semua && !is_koordinator);
+	}
+
 	function needsCoordinatorAttention(s: RiayahSantriItem): boolean {
-		return s.guru_belum_disapa || s.penanda.some((p) => p.kode !== "kontak");
+		return s.guru_belum_disapa || s.penanda.some((p) => p.kode !== "kontak" && tugasViewer(p));
 	}
 
 	let scopedSantri = $derived.by(() => santri.filter((s) => !guruID || String(s.guru_id) === guruID));
@@ -69,7 +75,7 @@
 				if (filter === "kontak" && !s.guru_belum_disapa) return false;
 				if (filter !== "semua" && filter !== "perhatian" && filter !== "rapor" && filter !== "kontak" && !s.penanda.some((p) => p.kode === filter)) return false;
 			} else {
-				if (filter === "perhatian" && s.penanda.length === 0) return false;
+				if (filter === "perhatian" && !s.penanda.some(tugasViewer)) return false;
 				if (filter === "rapor" && s.rapor_terkirim) return false;
 				if (filter !== "semua" && filter !== "perhatian" && filter !== "rapor" && !s.penanda.some((p) => p.kode === filter)) return false;
 			}
@@ -301,6 +307,9 @@
 
 										<div class="mt-2 flex flex-wrap gap-1.5">
 											{#each s.penanda.filter((p) => !is_koordinator || p.kode !== "kontak") as p (p.kode)}<PenandaBadge penanda={p} showAlasan />{/each}
+											{#if s.tindak_lanjut_alpa?.status === "selesai"}
+												<span class="rounded-lg border border-neutral-200 px-2 py-1 text-xs text-neutral-600 dark:border-neutral-700 dark:text-neutral-400">Alpa {s.tindak_lanjut_alpa.alpa_beruntun}× · dihubungi {hariLalu(s.tindak_lanjut_alpa.kontak_tanggal)}{s.tindak_lanjut_alpa.kontak_oleh ? ` oleh ${s.tindak_lanjut_alpa.kontak_oleh}` : ""}</span>
+											{/if}
 											{#if is_koordinator && s.guru_belum_pernah_disapa}
 												<span class="rounded-full bg-orange-500/10 px-2.5 py-1 text-xs font-medium text-orange-700 dark:text-orange-300">Belum pernah disapa guru</span>
 											{:else if is_koordinator && s.guru_belum_disapa}

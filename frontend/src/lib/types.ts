@@ -774,6 +774,20 @@ export interface RiayahPenanda {
 	kode: RiayahPenandaKode;
 	level: RiayahPenandaLevel;
 	alasan: string;
+	/** "admin_kelas" = ditangani Admin Kelas (info bagi guru); kosong = tugas guru. */
+	penanggung?: "admin_kelas";
+}
+
+/** Status tindak lanjut santri yang alpa berturut-turut (tugas Admin Kelas). */
+export interface RiayahTindakLanjutAlpa {
+	status: "perlu" | "selesai";
+	alpa_beruntun: number;
+	alpa_terakhir: string;
+	/** Status 5 pertemuan terakhir, terbaru dulu. */
+	absen_terakhir: string[];
+	kontak_tanggal: string;
+	kontak_media: string;
+	kontak_oleh: string;
 }
 
 export interface RiayahSantriItem {
@@ -797,6 +811,7 @@ export interface RiayahSantriItem {
 	guru_rapor_terkirim: boolean;
 	rapor_terkirim: boolean;
 	penanda: RiayahPenanda[];
+	tindak_lanjut_alpa: RiayahTindakLanjutAlpa | null;
 }
 
 export interface RiayahGuruMonitoring {
@@ -817,6 +832,7 @@ export interface RiayahRingkasan {
 	kehadiran: number;
 	kontak: number;
 	progres: number;
+	alpa_perlu_dihubungi: number;
 	rapor_periode: string;
 	rapor_terkirim: number;
 }
