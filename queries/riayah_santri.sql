@@ -113,3 +113,21 @@ WHERE rk.jenis = 'rapor'
   AND rk.periode = sqlc.arg('periode')
   AND s.status = 'aktif'
   AND (sqlc.narg('guru_id') IS NULL OR k.guru_id = sqlc.narg('guru_id'));
+
+-- name: ListKontakTindakLanjutTerakhir :many
+-- Kontak non-rapor terakhir per santri (siapa pun pencatatnya), untuk menutup
+-- penanda alpa berturut-turut yang ditangani Admin Kelas.
+SELECT rk.santri_id, rk.tanggal, rk.media, COALESCE(u.name, '') AS penulis_nama
+FROM riayah_kontak rk
+JOIN santri s ON s.id = rk.santri_id
+LEFT JOIN kelas k ON k.id = s.kelas_id
+LEFT JOIN users u ON u.id = rk.author_user_id
+WHERE s.status = 'aktif'
+  AND rk.jenis <> 'rapor'
+  AND (sqlc.narg('guru_id') IS NULL OR k.guru_id = sqlc.narg('guru_id'))
+  AND rk.id = (
+      SELECT r2.id FROM riayah_kontak r2
+      WHERE r2.santri_id = rk.santri_id AND r2.jenis <> 'rapor'
+      ORDER BY r2.tanggal DESC, r2.id DESC
+      LIMIT 1
+  );

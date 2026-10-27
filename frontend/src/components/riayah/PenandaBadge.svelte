@@ -30,6 +30,6 @@
 <span class="inline-flex max-w-full items-start gap-1.5 rounded-lg border px-2 py-1 text-xs font-medium {warna[penanda.level]}" title={penanda.alasan}>
 	<span class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full {titik[penanda.level]}" aria-hidden="true"></span>
 	<span class="min-w-0">
-		<span class="font-semibold">{label[penanda.kode]}</span>{#if showAlasan}<span class="font-normal"> · {penanda.alasan}</span>{/if}
+		<span class="font-semibold">{label[penanda.kode]}</span>{#if showAlasan}<span class="font-normal"> · {penanda.alasan}</span>{/if}{#if penanda.penanggung === "admin_kelas"}<span class="font-normal opacity-80"> · ditangani Admin Kelas</span>{/if}
 	</span>
 </span>

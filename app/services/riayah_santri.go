@@ -47,6 +47,8 @@ var ErrRiayahAksesDitolak = errors.New("anda tidak memiliki akses ke santri ini"
 
 type RiayahSantriService struct {
 	querier *queries.Querier
+	// Jumlah antrian tindak lanjut alpa untuk badge menu Admin Kelas.
+	jumlahAlpa jumlahAlpaCache
 }
 
 func NewRiayahSantriService(querier *queries.Querier) *RiayahSantriService {
@@ -87,6 +89,14 @@ func (s *RiayahSantriService) ListPerhatian(viewer models.RiayahViewer, today ti
 	kontakBySantri := make(map[int64]string, len(kontakRows))
 	for _, row := range kontakRows {
 		kontakBySantri[row.SantriID] = row.KontakTerakhir
+	}
+	tindakLanjutRows, err := s.querier.ListKontakTindakLanjutTerakhir(ctx, scope)
+	if err != nil {
+		return nil, models.RiayahRingkasan{}, err
+	}
+	tindakLanjutBySantri := make(map[int64]queries.ListKontakTindakLanjutTerakhirRow, len(tindakLanjutRows))
+	for _, row := range tindakLanjutRows {
+		tindakLanjutBySantri[row.SantriID] = row
 	}
 	raporPeriode := periodeBulanLalu(today)
 	raporRows, err := s.querier.ListSantriRaporTerkirimPeriode(ctx, queries.ListSantriRaporTerkirimPeriodeParams{Periode: raporPeriode, GuruID: scope})
@@ -145,6 +155,15 @@ func (s *RiayahSantriService) ListPerhatian(viewer models.RiayahViewer, today ti
 			ringkasan.RaporTerkirim++
 		}
 		item.Penanda = hitungPenandaRiayah(absen, r.total, r.hadir)
+		if kontak, ok := tindakLanjutBySantri[row.ID]; ok {
+			item.TindakLanjutAlpa = hitungTindakLanjutAlpa(absen, &kontak)
+		} else {
+			item.TindakLanjutAlpa = hitungTindakLanjutAlpa(absen, nil)
+		}
+		if item.TindakLanjutAlpa != nil && item.TindakLanjutAlpa.Status == models.TindakLanjutSelesai {
+			// Sudah dihubungi setelah alpa terakhir: penanda Admin Kelas selesai.
+			item.Penanda = tanpaPenandaAdminKelas(item.Penanda)
+		}
 		mulai := ""
 		if row.MulaiBelajar.Valid {
 			mulai = row.MulaiBelajar.Time.Format("2006-01-02")
@@ -158,10 +177,21 @@ func (s *RiayahSantriService) ListPerhatian(viewer models.RiayahViewer, today ti
 			})
 		}
 
-		if len(item.Penanda) > 0 {
+		// Bagi guru, penanda Admin Kelas hanya info dan tidak dihitung tugas.
+		perlu := len(item.Penanda) > 0
+		if viewer.GuruID != nil {
+			perlu = item.PerluPerhatianGuru()
+		}
+		if perlu {
 			ringkasan.PerluPerhatian++
 		}
 		for _, p := range item.Penanda {
+			if p.Penanggung == models.PenanggungAdminKelas {
+				ringkasan.AlpaPerluDihubungi++
+				if viewer.GuruID != nil {
+					continue
+				}
+			}
 			switch p.Kode {
 			case models.PenandaKehadiran:
 				ringkasan.Kehadiran++
@@ -283,7 +313,7 @@ func (s *RiayahSantriService) MonitoringGuru(items []models.RiayahSantriItem, to
 
 		needsAttention := contactMarker != nil
 		for _, marker := range items[i].Penanda {
-			if marker.Kode != models.PenandaKontak {
+			if marker.Kode != models.PenandaKontak && marker.Penanggung == "" {
 				needsAttention = true
 				break
 			}
@@ -326,9 +356,10 @@ func hitungPenandaRiayah(absen []queries.ListAbsensiTerakhirRiayahRow, total30, 
 	switch {
 	case alpaBerturut >= riayahAlpaBerturut:
 		penanda = append(penanda, models.RiayahPenanda{
-			Kode:   models.PenandaKehadiran,
-			Level:  models.LevelMerah,
-			Alasan: fmt.Sprintf("Alpa %d pertemuan terakhir berturut-turut", alpaBerturut),
+			Kode:       models.PenandaKehadiran,
+			Level:      models.LevelMerah,
+			Alasan:     fmt.Sprintf("Alpa %d pertemuan terakhir berturut-turut", alpaBerturut),
+			Penanggung: models.PenanggungAdminKelas,
 		})
 	case total30 >= riayahMinPertemuan && float64(hadir30)/float64(total30)*100 < riayahBatasPersenHadir:
 		penanda = append(penanda, models.RiayahPenanda{
@@ -370,6 +401,48 @@ func hitungPenandaRiayah(absen []queries.ListAbsensiTerakhirRiayahRow, total30, 
 		}
 	}
 	return penanda
+}
+
+// hitungTindakLanjutAlpa menerima absensi terbaru lebih dulu dan kontak
+// non-rapor terakhir. Nil bila santri tidak sedang alpa berturut-turut.
+// Kontak pada/sesudah alpa terakhir menutup penanda; alpa baru sesudah kontak
+// membukanya lagi selama rangkaiannya masih memenuhi ambang.
+func hitungTindakLanjutAlpa(absen []queries.ListAbsensiTerakhirRiayahRow, kontak *queries.ListKontakTindakLanjutTerakhirRow) *models.RiayahTindakLanjutAlpa {
+	alpa := 0
+	for _, a := range absen {
+		if a.Status != "alpa" {
+			break
+		}
+		alpa++
+	}
+	if alpa < riayahAlpaBerturut {
+		return nil
+	}
+	tl := &models.RiayahTindakLanjutAlpa{
+		Status:       models.TindakLanjutPerlu,
+		AlpaBeruntun: alpa,
+		AlpaTerakhir: absen[0].Tanggal.Format("2006-01-02"),
+	}
+	for i := 0; i < len(absen) && i < 5; i++ {
+		tl.AbsenTerakhir = append(tl.AbsenTerakhir, absen[i].Status)
+	}
+	if kontak != nil && kontak.Tanggal >= tl.AlpaTerakhir {
+		tl.Status = models.TindakLanjutSelesai
+		tl.KontakTanggal = kontak.Tanggal
+		tl.KontakMedia = kontak.Media
+		tl.KontakOleh = kontak.PenulisNama
+	}
+	return tl
+}
+
+func tanpaPenandaAdminKelas(penanda []models.RiayahPenanda) []models.RiayahPenanda {
+	out := penanda[:0]
+	for _, p := range penanda {
+		if p.Penanggung != models.PenanggungAdminKelas {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // hitungPenandaKontak menandai santri yang belum disapa lebih dari 14 hari.
@@ -484,6 +557,7 @@ func (s *RiayahSantriService) GetProfil(viewer models.RiayahViewer, santriID int
 			for _, it := range list {
 				if it.ID == santri.ID {
 					item.Penanda = it.Penanda
+					item.TindakLanjutAlpa = it.TindakLanjutAlpa
 					item.PersenHadir30 = it.PersenHadir30
 					item.TotalPertemuan30 = it.TotalPertemuan30
 					item.KontakTerakhir = it.KontakTerakhir
@@ -716,6 +790,9 @@ func (s *RiayahSantriService) CatatKontak(viewer models.RiayahViewer, santriID i
 		}
 	}
 	_, err = s.querier.CreateRiayahKontak(context.Background(), params)
+	if err == nil {
+		s.jumlahAlpa.reset()
+	}
 	return err
 }
 
@@ -735,7 +812,11 @@ func (s *RiayahSantriService) HapusKontak(viewer models.RiayahViewer, santriID, 
 	if !bisaKelolaCatatan(viewer, k.GuruID) {
 		return ErrRiayahAksesDitolak
 	}
-	return s.querier.DeleteRiayahKontakByID(ctx, kontakID)
+	if err := s.querier.DeleteRiayahKontakByID(ctx, kontakID); err != nil {
+		return err
+	}
+	s.jumlahAlpa.reset()
+	return nil
 }
 
 func periodeBulanLalu(today time.Time) string {

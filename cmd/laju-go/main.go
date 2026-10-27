@@ -181,6 +181,7 @@ func main() {
 	jadwalPertemuanHandler := handlers.NewJadwalPertemuanHandler(guruService, jadwalPertemuanService, pertemuanService, sessionStore, inertiaService)
 	riayahHandler := handlers.NewRiayahHandler(guruService, riayahService, sessionStore, inertiaService)
 	riayahSantriHandler := handlers.NewRiayahSantriHandler(guruService, riayahSantriService, sessionStore, inertiaService)
+	riayahTindakLanjutHandler := handlers.NewRiayahTindakLanjutHandler(riayahSantriService, sessionStore, inertiaService)
 	koordinatorGuruHandler := handlers.NewKoordinatorGuruHandler(koordinatorService, koordinatorMonitoringService, pertemuanService, sessionStore, inertiaService)
 	koordinatorGuruDirectoryHandler := handlers.NewKoordinatorGuruDirectoryHandler(guruService, koordinatorService, riayahService, sessionStore, inertiaService)
 	koordinatorMonitoringHandler := handlers.NewKoordinatorMonitoringHandler(koordinatorMonitoringService, koordinatorService, pertemuanService, sessionStore, inertiaService)
@@ -213,6 +214,7 @@ func main() {
 		JadwalPertemuan:             jadwalPertemuanHandler,
 		Riayah:                      riayahHandler,
 		RiayahSantri:                riayahSantriHandler,
+		RiayahTindakLanjut:          riayahTindakLanjutHandler,
 		KoordinatorGuru:             koordinatorGuruHandler,
 		KoordinatorGuruDirectory:    koordinatorGuruDirectoryHandler,
 		KoordinatorMonitoring:       koordinatorMonitoringHandler,

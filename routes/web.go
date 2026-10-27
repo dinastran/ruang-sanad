@@ -32,6 +32,7 @@ type Handlers struct {
 	JadwalPertemuan             *handlers.JadwalPertemuanHandler
 	Riayah                      *handlers.RiayahHandler
 	RiayahSantri                *handlers.RiayahSantriHandler
+	RiayahTindakLanjut          *handlers.RiayahTindakLanjutHandler
 	KoordinatorGuru             *handlers.KoordinatorGuruHandler
 	KoordinatorGuruDirectory    *handlers.KoordinatorGuruDirectoryHandler
 	KoordinatorMonitoring       *handlers.KoordinatorMonitoringHandler
@@ -202,6 +203,8 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Post("/santri/:id/pindah", akRole, h.Santri.PindahKelas)
 	protected.Put("/santri/:id/status", akRole, h.SantriStatus.Update)
 	protected.Get("/kelas", akRole, h.Kelas.Index)
+	protected.Get("/kelas/tindak-lanjut-alpa", akRole, h.RiayahTindakLanjut.Index)
+	protected.Get("/kelas/tindak-lanjut-alpa/jumlah", akRole, h.RiayahTindakLanjut.Jumlah)
 	protected.Get("/kelas/:id", akRole, h.Kelas.Show)
 	protected.Put("/kelas/:id/guru", akRole, h.Kelas.AssignGuru)
 	protected.Put("/kelas/:id/pertemuan-terakhir", akRole, h.Kelas.SetPertemuanTerakhir)

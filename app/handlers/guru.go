@@ -93,11 +93,14 @@ func (h *GuruHandler) Dashboard(c *fiber.Ctx) error {
 		if viewer, err := riayahViewer(c, h.guruService, userID, user); err == nil {
 			if items, ringkasan, err := h.riayahSantriService.ListPerhatian(viewer, services.HariIniRiayah()); err == nil {
 				riayah = &ringkasan
+				// Alpa berturut-turut ditangani Admin Kelas, jadi tidak masuk daftar tugas guru.
 				for _, item := range items {
-					if len(item.Penanda) == 0 || len(riayahTeratas) == 5 {
+					if len(riayahTeratas) == 5 {
 						break
 					}
-					riayahTeratas = append(riayahTeratas, item)
+					if item.PerluPerhatianGuru() {
+						riayahTeratas = append(riayahTeratas, item)
+					}
 				}
 				waTemplates = h.riayahSantriService.ListTemplateWA()
 			} else {

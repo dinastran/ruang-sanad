@@ -36,6 +36,7 @@
 		Send,
 		ChartColumn,
 		Plug,
+		PhoneCall,
 	} from "lucide-svelte";
 	import DarkModeToggle from "@components/DarkModeToggle.svelte";
 	import Logo from "@components/Logo.svelte";
@@ -59,6 +60,22 @@
 	let isCS = $derived(role === "cs" || isSuperAdmin);
 	let isAdminKelas = $derived(role === "admin_kelas" || isSuperAdmin);
 	let isKeuangan = $derived(role === "keuangan" || isSuperAdmin);
+
+	// Badge menu Tindak Lanjut Alpa: santri alpa berturut-turut yang belum dihubungi.
+	let jumlahAlpa = $state(0);
+	$effect(() => {
+		if (!isAdminKelas) return;
+		let batal = false;
+		fetch("/app/kelas/tindak-lanjut-alpa/jumlah", { headers: { Accept: "application/json" } })
+			.then((r) => (r.ok ? r.json() : null))
+			.then((d: { perlu?: number } | null) => {
+				if (!batal && d) jumlahAlpa = d.perlu ?? 0;
+			})
+			.catch(() => {});
+		return () => {
+			batal = true;
+		};
+	});
 	let canViewKeuangan = $derived(isKeuangan || role === "admin");
 	let isGuru = $derived(role === "guru" || isSuperAdmin);
 	let isGuruWorkflow = $derived(isGuru || role === "admin_kelas");
@@ -81,6 +98,7 @@
 		{ href: "/app/santri", label: "Data Santri", group: "santri", category: "Akademik", show: isCS || isAdminKelas, icon: Users },
 		{ href: "/app/perlu-dilengkapi", label: "Perlu Dilengkapi", group: "perlu-dilengkapi", category: "Akademik", show: isAdminKelas, icon: AlertCircle },
 		{ href: "/app/kelas", label: "Kelas", group: "kelas", category: "Akademik", show: isAdminKelas, icon: BookOpen },
+		{ href: "/app/kelas/tindak-lanjut-alpa", label: "Tindak Lanjut Alpa", group: "tindak-lanjut-alpa", category: "Akademik", show: isAdminKelas, icon: PhoneCall, badge: jumlahAlpa },
 		{ href: "/app/jadwal-penawaran", label: "Jadwal Penawaran", group: "jadwal-penawaran", category: "Akademik", show: isCS || isAdminKelas, icon: CalendarClock },
 		{ href: "/app/leads/dashboard", label: "Dashboard CRM", group: "leads-dashboard", category: "CRM", show: canLeads, icon: LayoutDashboard },
 		{ href: "/app/leads", label: "Leads", group: "leads", category: "CRM", show: canLeads, icon: MessageCircle },
@@ -136,6 +154,7 @@
 		if (path.startsWith("/app/integrasi-whatsapp")) return "integrasi-whatsapp";
 		if (path.startsWith("/app/santri")) return "santri";
 		if (path.startsWith("/app/perlu-dilengkapi")) return "perlu-dilengkapi";
+		if (path.startsWith("/app/kelas/tindak-lanjut-alpa")) return "tindak-lanjut-alpa";
 		if (path.startsWith("/app/kelas")) return "kelas";
 		if (path.startsWith("/app/jadwal-penawaran")) return "jadwal-penawaran";
 		if (path.startsWith("/app/laporan/keuangan")) return "laporan-keuangan";
@@ -233,8 +252,9 @@
 		{#each menuCategories as category}
 			{#if category.items.length === 1}
 				{@const item = category.items[0]}
-				<a href={item.href} use:inertia class="px-3 py-2 rounded-lg text-sm font-medium transition-colors {item.group === activeGroup ? 'bg-brand-400/10 text-brand-600 dark:text-brand-400' : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white'}">
+				<a href={item.href} use:inertia class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors {item.group === activeGroup ? 'bg-brand-400/10 text-brand-600 dark:text-brand-400' : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white'}">
 					{item.label}
+					{#if item.badge}<span class="ml-auto rounded-full bg-red-500 px-1.5 text-[11px] font-semibold leading-5 text-white tabular-nums" aria-label="{item.badge} perlu dihubungi">{item.badge}</span>{/if}
 				</a>
 			{:else}
 				<div class="relative">
@@ -253,6 +273,7 @@
 								<a href={item.href} use:inertia onclick={() => (openNavCategory = null)} class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors {item.group === activeGroup ? 'bg-brand-400/10 text-brand-600 dark:text-brand-400' : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'}">
 									<Icon size="16" />
 									{item.label}
+									{#if item.badge}<span class="ml-auto rounded-full bg-red-500 px-1.5 text-[11px] font-semibold leading-5 text-white tabular-nums" aria-label="{item.badge} perlu dihubungi">{item.badge}</span>{/if}
 								</a>
 							{/each}
 						</div>
@@ -346,7 +367,8 @@
 						<Icon size="20" class={item.group === activeGroup ? 'text-brand-400 shrink-0' : 'text-neutral-500 dark:text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white shrink-0'} />
 						{#if showLabel}
 							<span class="truncate">{item.label}</span>
-							{#if item.group === activeGroup}<div class="ml-auto w-1.5 h-1.5 rounded-full bg-brand-400 shrink-0"></div>{/if}
+							{#if item.badge}<span class="ml-auto rounded-full bg-red-500 px-1.5 text-[11px] font-semibold leading-5 text-white tabular-nums" aria-label="{item.badge} perlu dihubungi">{item.badge}</span>{/if}
+							{#if item.group === activeGroup && !item.badge}<div class="ml-auto w-1.5 h-1.5 rounded-full bg-brand-400 shrink-0"></div>{/if}
 						{/if}
 					</a>
 				{/each}
@@ -449,6 +471,7 @@
 								<a href={item.href} use:inertia class="flex items-center gap-3 ml-2 px-4 py-3 rounded-xl text-sm font-medium transition-all {item.group === activeGroup ? 'bg-brand-400/10 text-brand-600 dark:text-brand-400' : 'text-neutral-700 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'}" onclick={() => (isMenuOpen = false)}>
 									<Icon size="20" />
 									{item.label}
+									{#if item.badge}<span class="ml-auto rounded-full bg-red-500 px-1.5 text-[11px] font-semibold leading-5 text-white tabular-nums" aria-label="{item.badge} perlu dihubungi">{item.badge}</span>{/if}
 								</a>
 							{/each}
 						</div>

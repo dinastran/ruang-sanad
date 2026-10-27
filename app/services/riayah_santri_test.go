@@ -151,8 +151,11 @@ func TestRiayahPenandaKehadiranDanProgres(t *testing.T) {
 	require.Equal(t, macet, items[2].ID)
 
 	require.Equal(t, 5, ringkasan.TotalSantri)
-	require.Equal(t, 3, ringkasan.PerluPerhatian)
-	require.Equal(t, 2, ringkasan.Kehadiran)
+	// Alpa berturut-turut ditangani Admin Kelas: tidak dihitung tugas guru.
+	require.Equal(t, models.PenanggungAdminKelas, findItem(items, alpa).Penanda[0].Penanggung)
+	require.Equal(t, 2, ringkasan.PerluPerhatian)
+	require.Equal(t, 1, ringkasan.Kehadiran)
+	require.Equal(t, 1, ringkasan.AlpaPerluDihubungi)
 	require.Equal(t, 1, ringkasan.Progres)
 }
 
