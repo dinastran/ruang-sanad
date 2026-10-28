@@ -3,10 +3,18 @@
 
 	interface Props {
 		buckets: BucketTren[];
-		mingguan: boolean;
+		/** true = satu batang per tanggal sesi; false = per bulan. */
+		perTanggal: boolean;
 	}
 
-	let { buckets, mingguan }: Props = $props();
+	let { buckets, perTanggal }: Props = $props();
+
+	// Banyak batang: persentase disembunyikan dan label tanggal dijarangkan agar tidak bertumpuk.
+	const padat = $derived(buckets.length > 16);
+	function labelTampil(i: number, layarSempit: boolean): boolean {
+		const jarak = layarSempit ? 3 : padat ? 2 : 1;
+		return i % jarak === 0 || i === buckets.length - 1;
+	}
 
 </script>
 
@@ -14,7 +22,7 @@
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h2 class="text-sm font-semibold text-neutral-900 dark:text-white">Tren kehadiran</h2>
-			<p class="mt-0.5 text-xs text-neutral-500">Komposisi status absen pembinaan &amp; rapat per {mingguan ? "pekan" : "bulan"}<span class="hidden sm:inline">; angka = persentase hadir</span></p>
+			<p class="mt-0.5 text-xs text-neutral-500">Komposisi status absen pembinaan &amp; rapat per {perTanggal ? "tanggal sesi" : "bulan"}<span class="hidden sm:inline">; angka = persentase hadir</span></p>
 		</div>
 		<ul class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-600 dark:text-neutral-400" aria-label="Keterangan warna">
 			{#each STATUS_KEHADIRAN as s (s)}
@@ -30,19 +38,18 @@
 			{#each buckets as b, i (b.key)}
 				<div class="flex h-full min-w-0 flex-1 flex-col items-center gap-1.5" role="listitem" aria-label="{b.label}: hadir {b.rekap.hadir}, izin {b.rekap.izin}, sakit {b.rekap.sakit}, alfa {b.rekap.alfa}">
 					<div class="flex w-full flex-1 flex-col items-center justify-end gap-1">
-						<span class="hidden text-[11px] font-semibold tabular-nums text-neutral-700 sm:block dark:text-neutral-300">{formatPersen(b.rekap.persen === null ? null : Math.round(b.rekap.persen))}</span>
+						<span class="hidden text-[11px] font-semibold tabular-nums text-neutral-700 dark:text-neutral-300 {padat ? '' : 'sm:block'}">{formatPersen(b.rekap.persen === null ? null : Math.round(b.rekap.persen))}</span>
 						<div
 							class="flex w-full max-w-12 flex-col-reverse overflow-hidden rounded-md"
 							style="height: calc(100% - 1.25rem)"
-							title="{b.label} · {b.rekap.total} catatan · hadir {b.rekap.hadir}, izin {b.rekap.izin}, sakit {b.rekap.sakit}, alfa {b.rekap.alfa}"
+							title="{b.label} · {b.kegiatan.join(', ')} · {b.rekap.total} catatan · hadir {b.rekap.hadir}, izin {b.rekap.izin}, sakit {b.rekap.sakit}, alfa {b.rekap.alfa}"
 						>
 							{#each STATUS_KEHADIRAN as s (s)}
 								{#if b.rekap[s] > 0}<div class="{WARNA_STATUS[s].bar} w-full" style="height: {(b.rekap[s] / b.rekap.total) * 100}%"></div>{/if}
 							{/each}
 						</div>
 					</div>
-					<!-- Di layar sempit hanya tiap label ketiga (dan terakhir) yang tampil agar tidak terpotong. -->
-					<span class="w-full whitespace-nowrap text-center text-[11px] text-neutral-500 {i % 3 === 0 || i === buckets.length - 1 ? '' : 'max-sm:invisible'}">{b.label}</span>
+					<span class="w-full whitespace-nowrap text-center text-[11px] text-neutral-500 {labelTampil(i, true) ? '' : 'max-sm:invisible'} {labelTampil(i, false) ? '' : 'sm:invisible'}">{b.label}</span>
 				</div>
 			{/each}
 		</div>

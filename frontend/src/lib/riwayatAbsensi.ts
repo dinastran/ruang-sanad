@@ -148,24 +148,38 @@ export function rekapKehadiran(rows: RiwayatAbsensi[]): RekapKehadiran {
 export interface BucketTren {
 	key: string;
 	label: string;
+	/** Judul kegiatan dalam bucket, untuk tooltip. */
+	kegiatan: string[];
 	rekap: RekapKehadiran;
 }
 
-/** Kelompokkan absensi per pekan (rentang ≤ ~3 bulan) atau per bulan; maks. 14 bucket terbaru. */
+/**
+ * Batang per tanggal sesi untuk rentang ≤ ~3 bulan (label = tanggal kegiatan
+ * yang sebenarnya, sama dengan daftar sesi), selain itu per bulan.
+ */
+export function trenPerTanggal(rentang: Rentang): boolean {
+	return rentang.mulai !== null && hariRentang(rentang) <= 93;
+}
+
+/** Kelompokkan absensi per tanggal sesi atau per bulan; maks. 24 bucket terbaru. */
 export function trenKehadiran(rows: RiwayatAbsensi[], rentang: Rentang): BucketTren[] {
-	const mingguan = rentang.mulai !== null && hariRentang(rentang) <= 93;
+	const perTanggal = trenPerTanggal(rentang);
 	const groups = new Map<string, RiwayatAbsensi[]>();
 	for (const r of rows) {
 		if (!isAbsensi(r)) continue;
-		const key = mingguan ? awalPekan(r.tanggal) : r.tanggal.slice(0, 7);
+		const key = perTanggal ? r.tanggal.slice(0, 10) : r.tanggal.slice(0, 7);
 		const list = groups.get(key);
 		if (list) list.push(r);
 		else groups.set(key, [r]);
 	}
 	return [...groups.keys()]
 		.sort()
-		.slice(-14)
-		.map((key) => ({ key, label: mingguan ? labelPekan(key) : labelBulan(key), rekap: rekapKehadiran(groups.get(key) ?? []) }));
+		.slice(-24)
+		.map((key) => {
+			const list = groups.get(key) ?? [];
+			const kegiatan = [...new Set(list.map((r) => r.judul || LABEL_KEGIATAN[r.kegiatan as Kegiatan] || r.kegiatan))];
+			return { key, label: perTanggal ? labelTanggal(key) : labelBulan(key), kegiatan, rekap: rekapKehadiran(list) };
+		});
 }
 
 function hariRentang(r: Rentang): number {
@@ -173,14 +187,7 @@ function hariRentang(r: Rentang): number {
 	return Math.round((new Date(`${r.sampai}T00:00:00`).getTime() - new Date(`${r.mulai}T00:00:00`).getTime()) / 86_400_000) + 1;
 }
 
-function awalPekan(tanggal: string): string {
-	const d = new Date(`${tanggal.slice(0, 10)}T00:00:00`);
-	const geser = (d.getDay() + 6) % 7; // Senin = 0
-	d.setDate(d.getDate() - geser);
-	return isoLokal(d);
-}
-
-function labelPekan(iso: string): string {
+function labelTanggal(iso: string): string {
 	return new Date(`${iso}T00:00:00`).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
 }
 
