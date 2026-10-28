@@ -6,6 +6,7 @@
 | Tanggal | 28 Oktober 2026 |
 | Owner dokumen | Dashboard Ruang Sanad — dinastran/ruang-sanad |
 | Repo pendamping | ruangsanadindonesia-art/go-whatsapp-web-multidevice |
+| PRD implementasi GoWA | [GoWA MCP Agent Gateway — PR #14 (draft)](https://github.com/ruangsanadindonesia-art/go-whatsapp-web-multidevice/pull/14) |
 | UI GoWA saat audit | aldinokemal/gowa-ui (separate release asset) |
 | Baseline Dashboard main | 65fc33e79e1819fef01a495c2fcfd98bd272dc0f |
 | Baseline GoWA main | 3031d9a4163f5013963b7d52e8e442f65bd48890 |
