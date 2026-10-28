@@ -43,7 +43,7 @@ func (s *OverviewService) Get(ctx context.Context, month, role string) (*models.
 		end = now
 	}
 	from, until, today := start.Format(time.DateOnly), end.Format(time.DateOnly), now.Format(time.DateOnly)
-	out := &models.Overview{Bulan: month, BulanLabel: labelBulanID(start), UpdatedAt: now.Format(time.RFC3339), CurrentMonth: month == now.Format("2006-01"), Errors: []string{}, Priorities: []models.OverviewPriority{}, Growth: []models.SantriAnalyticsGrowthPoint{}, Programs: []models.OverviewProgram{}}
+	out := &models.Overview{Bulan: month, BulanLabel: labelBulanID(start), UpdatedAt: now.Format(time.RFC3339), CurrentMonth: month == now.Format("2006-01"), Errors: []string{}, Priorities: []models.OverviewPriority{}, Growth: []models.SantriAnalyticsGrowthPoint{}, Attendance: []models.OverviewAttendanceMonth{}, Programs: []models.OverviewProgram{}}
 	add := func(title, detail, href string, count int64) {
 		if count > 0 {
 			out.Priorities = append(out.Priorities, models.OverviewPriority{Title: title, Detail: detail, Href: href, Count: count})
@@ -67,6 +67,16 @@ func (s *OverviewService) Get(ctx context.Context, month, role string) (*models.
 			fail("Tren pendaftaran")
 		} else {
 			out.Growth = fillAnalyticsMonths(growth, growthFrom, until)
+		}
+		attendance, e := s.querier.OverviewAttendance(ctx, growthFrom, until)
+		if e != nil {
+			fail("Kehadiran santri")
+		} else {
+			out.Attendance = fillAttendanceMonths(attendance, start.AddDate(0, -5, 0), start)
+		}
+		out.Leads, e = s.overviewLeads(ctx, start)
+		if e != nil {
+			fail("Lead WhatsApp")
 		}
 		out.Programs, e = s.querier.OverviewPrograms(ctx)
 		if e != nil {
@@ -110,4 +120,49 @@ func (s *OverviewService) Get(ctx context.Context, month, role string) (*models.
 		}
 	}
 	return out, nil
+}
+
+// fillAttendanceMonths returns one row per month from first to last month
+// (inclusive), with zero rows for months without finished meetings.
+func fillAttendanceMonths(rows []models.OverviewAttendanceMonth, first, last time.Time) []models.OverviewAttendanceMonth {
+	byMonth := make(map[string]models.OverviewAttendanceMonth, len(rows))
+	for _, r := range rows {
+		byMonth[r.Month] = r
+	}
+	out := make([]models.OverviewAttendanceMonth, 0, 6)
+	for m := first; !m.After(last); m = m.AddDate(0, 1, 0) {
+		key := m.Format("2006-01")
+		r, ok := byMonth[key]
+		if !ok {
+			r = models.OverviewAttendanceMonth{Month: key}
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// overviewLeads counts leads and closings in the month starting at start and
+// in the month before, with WIB month boundaries like the leads dashboard.
+func (s *OverviewService) overviewLeads(ctx context.Context, start time.Time) (*models.OverviewLeads, error) {
+	end, prev := start.AddDate(0, 1, 0), start.AddDate(0, -1, 0)
+	var out models.OverviewLeads
+	var err error
+	if out.Masuk, err = s.querier.LeadDashboardCreatedCount(ctx, start, end); err != nil {
+		return nil, err
+	}
+	if out.MasukSebelumnya, err = s.querier.LeadDashboardCreatedCount(ctx, prev, start); err != nil {
+		return nil, err
+	}
+	closings, err := s.querier.ListLeadDashboardClosings(ctx, prev, end)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range closings {
+		if c.Before(start) {
+			out.ClosingSebelumnya++
+		} else {
+			out.Closing++
+		}
+	}
+	return &out, nil
 }

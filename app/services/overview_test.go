@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/maulanashalihin/laju-go/app/models"
 	"github.com/maulanashalihin/laju-go/app/queries"
 	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/require"
@@ -82,6 +83,52 @@ func TestOverviewSnapshotsPeriodAndReadOnly(t *testing.T) {
 	require.EqualValues(t, 1, old.Growth[5].Total)
 	require.NoError(t, db.QueryRow(`SELECT total_changes()`).Scan(&after))
 	require.Equal(t, before, after, "opening the overview must not mutate the database")
+}
+
+func TestOverviewAttendanceAndLeads(t *testing.T) {
+	s, db := setupOverview(t)
+	for _, statement := range []string{
+		`INSERT INTO kelas (id,kunci_kelas,angkatan,tipe,jenis_kelamin,level,frekuensi,nama_kelas,kapasitas,is_aktif) VALUES (1,'A','2026','Reguler','L','Dasar','1x/pekan','A',10,1)`,
+		`INSERT INTO santri (id,nama,tipe,status,kelas_id) VALUES (1,'A','Reguler','aktif',1),(2,'B','Reguler','aktif',1),(3,'C','Reguler','aktif',1)`,
+		`INSERT INTO pertemuan (id,kelas_id,pertemuan_ke,tanggal,status) VALUES (1,1,1,'2026-03-03','selesai'),(2,1,2,'2026-03-10','selesai'),(3,1,3,'2026-03-14','berlangsung'),(4,1,4,'2026-01-20','selesai'),(5,1,5,'2025-09-20','selesai')`,
+		`INSERT INTO absensi (pertemuan_id,santri_id,status) VALUES (1,1,'hadir'),(1,2,'izin'),(1,3,'alpa'),(2,1,'hadir'),(2,2,'hadir'),(2,3,'sakit'),(3,1,'hadir'),(4,1,'hadir'),(5,1,'alpa')`,
+	} {
+		_, err := db.Exec(statement)
+		require.NoError(t, err)
+	}
+	seedLead := func(chat string, created time.Time, converted *time.Time) {
+		t.Helper()
+		status := "open"
+		var conv any
+		if converted != nil {
+			status, conv = "won", *converted
+		}
+		_, err := db.Exec(`INSERT INTO leads (wa_chat_id, created_at, updated_at, converted_at, stage, status) VALUES (?, ?, ?, ?, 'baru', ?)`, chat, created, created, conv, status)
+		require.NoError(t, err)
+	}
+	wib := func(month time.Month, day, hour int) time.Time { return time.Date(2026, month, day, hour, 0, 0, 0, ZonaWaktuRiayah) }
+	closed := wib(3, 2, 10)
+	closedFeb := wib(2, 27, 10)
+	// 1 March 01:00 WIB is still 28 February in UTC: it belongs to March.
+	seedLead("march-early", wib(3, 1, 1), &closed)
+	seedLead("march", wib(3, 12, 9), nil)
+	seedLead("feb", wib(2, 10, 9), &closedFeb)
+
+	d, err := s.Get(context.Background(), "", "super_admin")
+	require.NoError(t, err)
+	require.Empty(t, d.Errors)
+	require.Len(t, d.Attendance, 6)
+	require.Equal(t, "2025-10", d.Attendance[0].Month)
+	require.Equal(t, "2026-03", d.Attendance[5].Month)
+	require.Equal(t, models.OverviewAttendanceMonth{Month: "2026-03", Meetings: 2, Hadir: 3, Izin: 1, Sakit: 1, Alpa: 1}, d.Attendance[5], "ongoing meetings are excluded")
+	require.Equal(t, models.OverviewAttendanceMonth{Month: "2026-01", Meetings: 1, Hadir: 1}, d.Attendance[3])
+	require.Equal(t, models.OverviewAttendanceMonth{Month: "2026-02"}, d.Attendance[4], "empty months are filled with zero")
+	require.Equal(t, &models.OverviewLeads{Masuk: 2, Closing: 1, MasukSebelumnya: 1, ClosingSebelumnya: 1}, d.Leads)
+
+	fin, err := s.Get(context.Background(), "", "keuangan")
+	require.NoError(t, err)
+	require.Empty(t, fin.Attendance)
+	require.Nil(t, fin.Leads)
 }
 
 func TestOverviewPermissionsAndValidation(t *testing.T) {
