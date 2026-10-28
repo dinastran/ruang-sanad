@@ -40,7 +40,7 @@ func TestJadwalSeededAndValidated(t *testing.T) {
 	require.NoError(t, svc.Create(t.Context(), models.JadwalPenawaranRequest{
 		Kode: "senin-pagi", Hari: "1", JamMulai: "06:00", JamSelesai: "07:30", KuotaPerGender: 10, IsBuka: false,
 	}))
-	open, err := svc.Open(t.Context())
+	open, err := svc.Open(t.Context(), "")
 	require.NoError(t, err)
 	require.Len(t, open, 4, "a closed schedule is not offered")
 }
@@ -119,4 +119,76 @@ func TestLeadUpdateDataJadwalKode(t *testing.T) {
 	wrong := "tidak-ada"
 	base.JadwalKode = &wrong
 	require.Error(t, f.service.UpdateData(t.Context(), l.ID, f.csID, base))
+}
+
+func TestJadwalGenderKhusus(t *testing.T) {
+	f := setupLeadFixture(t)
+	svc := NewJadwalPenawaranService(f.querier)
+	svc.now = func() time.Time { return f.clock }
+
+	require.Error(t, svc.Create(t.Context(), models.JadwalPenawaranRequest{
+		Kode: "kamis-x", Hari: "4", JamMulai: "19:30", JamSelesai: "21:00", Gender: "X", KuotaPerGender: 10,
+	}), "gender must be L, P, or empty")
+	for _, req := range []models.JadwalPenawaranRequest{
+		{Kode: "kamis-ikhwan", Hari: "4", JamMulai: "19:30", JamSelesai: "21:00", Gender: "l", KuotaPerGender: 8, IsBuka: true},
+		{Kode: "kamis-akhwat", Hari: "4", JamMulai: "20:00", JamSelesai: "21:30", Gender: "P", KuotaPerGender: 12, IsBuka: true},
+	} {
+		require.NoError(t, svc.Create(t.Context(), req))
+	}
+	byKode := func(list []models.JadwalPenawaranResponse) map[string]models.JadwalPenawaranResponse {
+		out := map[string]models.JadwalPenawaranResponse{}
+		for _, j := range list {
+			out[j.Kode] = j
+		}
+		return out
+	}
+	list, err := svc.List(t.Context())
+	require.NoError(t, err)
+	all := byKode(list)
+	ikhwan := all["kamis-ikhwan"]
+	require.Equal(t, "L", ikhwan.Gender)
+	require.Equal(t, "Ikhwan", ikhwan.Untuk)
+	require.EqualValues(t, 8, ikhwan.SisaIkhwan)
+	require.Zero(t, ikhwan.SisaAkhwat, "no seats for akhwat on an ikhwan schedule")
+	require.Equal(t, "Ikhwan & Akhwat", all["selasa-malam"].Untuk, "existing schedules stay shared")
+
+	openL, err := svc.Open(t.Context(), "L")
+	require.NoError(t, err)
+	require.Contains(t, byKode(openL), "kamis-ikhwan")
+	require.NotContains(t, byKode(openL), "kamis-akhwat")
+	require.Contains(t, byKode(openL), "selasa-malam")
+	openAll, err := svc.Open(t.Context(), "")
+	require.NoError(t, err)
+	require.Len(t, openAll, 6)
+
+	// CS form: a schedule for the other gender is rejected.
+	f.ingest(t, leadEvent("evt_g1", "message.in", "2026-10-24T03:00:00Z", map[string]string{"wa_message_id": "G1", "body": "halo"}))
+	l := f.lead(t)
+	akhwat := "kamis-akhwat"
+	err = f.service.UpdateData(t.Context(), l.ID, f.csID, models.LeadUpdateRequest{Nama: "Fulan", JenisKelamin: "L", JadwalKode: &akhwat})
+	require.ErrorContains(t, err, "khusus akhwat")
+	ikh := "kamis-ikhwan"
+	require.NoError(t, f.service.UpdateData(t.Context(), l.ID, f.csID, models.LeadUpdateRequest{Nama: "Fulan", JenisKelamin: "L", JadwalKode: &ikh}))
+	// Changing only the gender to a mismatch is rejected too.
+	require.Error(t, f.service.UpdateData(t.Context(), l.ID, f.csID, models.LeadUpdateRequest{Nama: "Fulan", JenisKelamin: "P"}))
+	d, err := f.service.Detail(t.Context(), l.ID)
+	require.NoError(t, err)
+	require.Equal(t, "Kamis 19.30–21.00 WIB · khusus ikhwan", d.JadwalLabel)
+
+	// CS AI: the choice is still recorded, but the lead goes to review.
+	_, err = f.db.Exec(`UPDATE leads SET needs_review = 0 WHERE id = ?`, l.ID)
+	require.NoError(t, err)
+	f.ingest(t, leadEvent("evt_g2", "schedule.selected", "2026-10-24T03:05:00Z", map[string]string{"jadwal_kode": "kamis-akhwat"}))
+	got := f.lead(t)
+	require.Equal(t, "kamis-akhwat", got.JadwalKode)
+	require.EqualValues(t, 1, got.NeedsReview)
+
+	// A verified lead of the other gender is reported, not counted in quota.
+	_, err = f.db.Exec(`UPDATE leads SET verified_at = ?, stage = 'terverifikasi' WHERE id = ?`, f.clock.Add(time.Hour), l.ID)
+	require.NoError(t, err)
+	list, err = svc.List(t.Context())
+	require.NoError(t, err)
+	k := byKode(list)["kamis-akhwat"]
+	require.EqualValues(t, 1, k.TidakSesuai)
+	require.EqualValues(t, 12, k.SisaAkhwat)
 }

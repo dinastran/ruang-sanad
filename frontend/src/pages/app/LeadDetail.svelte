@@ -82,7 +82,7 @@
 		untuk_siapa: string;
 		jadwal_kode: string;
 		jadwal_label: string;
-		jadwal_options: { kode: string; label: string; is_buka: boolean }[];
+		jadwal_options: { kode: string; label: string; is_buka: boolean; gender: string }[];
 		stage: string;
 		status: string;
 		lost_reason: string;
@@ -232,6 +232,15 @@
 		untuk_siapa: lead.untuk_siapa,
 		jadwal_kode: lead.jadwal_kode,
 		mark_reviewed: false,
+	});
+	// Single-gender schedules are offered only for the matching gender. The
+	// saved choice stays listed so an older mismatch (from the CS AI) shows.
+	let jadwalOptions = $derived(
+		lead.jadwal_options.filter((j) => !j.gender || !form.jenis_kelamin || j.gender === form.jenis_kelamin || j.kode === lead.jadwal_kode),
+	);
+	let jadwalMismatch = $derived.by(() => {
+		const j = lead.jadwal_options.find((o) => o.kode === form.jadwal_kode);
+		return j && j.gender && form.jenis_kelamin && j.gender !== form.jenis_kelamin ? j.gender : "";
 	});
 	function saveData(e: Event) {
 		e.preventDefault();
@@ -546,8 +555,9 @@
 								<span class="block font-normal text-neutral-500">Dipilih calon santri lewat CS AI atau diisi CS. Kuota terhitung saat pembayaran diverifikasi; Admin Kelas tetap mengonfirmasi saat penempatan.</span>
 								<select class="{field} mt-1" bind:value={form.jadwal_kode} disabled={isWon}>
 									<option value="">Belum dipilih</option>
-									{#each lead.jadwal_options as j}<option value={j.kode}>{j.label}{j.is_buka ? "" : " — ditutup"}</option>{/each}
+									{#each jadwalOptions as j}<option value={j.kode}>{j.label}{j.is_buka ? "" : " — ditutup"}</option>{/each}
 								</select>
+								{#if jadwalMismatch}<span class="mt-1 block font-normal text-warning">Jadwal ini khusus {jadwalMismatch === "L" ? "ikhwan" : "akhwat"}, tidak sesuai dengan Ikhwan/Akhwat lead. Pilih jadwal lain sebelum menyimpan.</span>{/if}
 							</label>
 							<label class={labelCls}>Waktu belajar<input class="{field} mt-1" bind:value={form.waktu_belajar} disabled={isWon} /></label>
 							<label class={labelCls}>Untuk siapa

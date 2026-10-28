@@ -108,6 +108,10 @@ func normalizeJadwalInput(req *models.JadwalPenawaranRequest) error {
 	if req.Level != "" && req.Level != "1" && req.Level != "2" {
 		return errors.New("level harus kosong (semua level), 1, atau 2")
 	}
+	req.Gender = strings.ToUpper(strings.TrimSpace(req.Gender))
+	if req.Gender != "" && req.Gender != "L" && req.Gender != "P" {
+		return errors.New("jadwal untuk harus ikhwan, akhwat, atau keduanya")
+	}
 	if req.KuotaPerGender < 1 || req.KuotaPerGender > 500 {
 		return errors.New("kuota per gender harus 1–500")
 	}
@@ -142,14 +146,26 @@ func (s *JadwalPenawaranService) seats(ctx context.Context, rows []queries.Jadwa
 
 func toJadwalResponse(r queries.JadwalPenawaran, taken map[string]int64) models.JadwalPenawaranResponse {
 	days, _ := parseHari(r.Hari)
-	sisa := func(g string) int64 { return max(r.KuotaPerGender-taken[g], 0) }
+	sisa := func(g string) int64 {
+		if r.Gender != "" && r.Gender != g {
+			return 0
+		}
+		return max(r.KuotaPerGender-taken[g], 0)
+	}
+	var tidakSesuai int64
+	switch r.Gender {
+	case "L":
+		tidakSesuai = taken["P"]
+	case "P":
+		tidakSesuai = taken["L"]
+	}
 	return models.JadwalPenawaranResponse{
 		ID: r.ID, Kode: r.Kode, Hari: r.Hari, HariList: days, Frekuensi: len(days),
 		JamMulai: r.JamMulai, JamSelesai: r.JamSelesai, Label: JadwalLabel(r.Hari, r.JamMulai, r.JamSelesai),
-		Level: r.Level, KuotaPerGender: r.KuotaPerGender, IsBuka: r.IsBuka == 1, Urutan: r.Urutan,
+		Level: r.Level, Gender: r.Gender, Untuk: jadwalUntuk(r.Gender), KuotaPerGender: r.KuotaPerGender, IsBuka: r.IsBuka == 1, Urutan: r.Urutan,
 		Catatan: r.Catatan, PeriodeMulai: r.PeriodeMulai.UTC().Format(time.RFC3339),
 		TerisiIkhwan: taken["L"], TerisiAkhwat: taken["P"], SisaIkhwan: sisa("L"), SisaAkhwat: sisa("P"),
-		TanpaGender: taken[""],
+		TanpaGender: taken[""], TidakSesuai: tidakSesuai,
 	}
 }
 
@@ -171,15 +187,17 @@ func (s *JadwalPenawaranService) List(ctx context.Context) ([]models.JadwalPenaw
 }
 
 // Open returns the schedules the CS AI may offer: is_buka, with seat counts.
-// Full schedules stay in the list (sisa 0) so the AI can say so.
-func (s *JadwalPenawaranService) Open(ctx context.Context) ([]models.JadwalPenawaranResponse, error) {
+// Full schedules stay in the list (sisa 0) so the AI can say so. gender "L"
+// or "P" keeps only schedules for that gender (and the shared ones).
+func (s *JadwalPenawaranService) Open(ctx context.Context, gender string) ([]models.JadwalPenawaranResponse, error) {
+	gender = strings.ToUpper(strings.TrimSpace(gender))
 	all, err := s.List(ctx)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]models.JadwalPenawaranResponse, 0, len(all))
 	for _, j := range all {
-		if j.IsBuka {
+		if j.IsBuka && (gender == "" || j.Gender == "" || j.Gender == gender) {
 			out = append(out, j)
 		}
 	}
@@ -201,7 +219,7 @@ func (s *JadwalPenawaranService) Create(ctx context.Context, req models.JadwalPe
 	}
 	now := s.now().UTC().Truncate(time.Second)
 	_, err := s.querier.CreateJadwalPenawaran(ctx, queries.CreateJadwalPenawaranParams{
-		Kode: req.Kode, Hari: req.Hari, JamMulai: req.JamMulai, JamSelesai: req.JamSelesai, Level: req.Level,
+		Kode: req.Kode, Hari: req.Hari, JamMulai: req.JamMulai, JamSelesai: req.JamSelesai, Level: req.Level, Gender: req.Gender,
 		KuotaPerGender: req.KuotaPerGender, IsBuka: boolInt(req.IsBuka), Urutan: req.Urutan, Catatan: req.Catatan,
 		PeriodeMulai: now, CreatedAt: now, UpdatedAt: now,
 	})
@@ -217,7 +235,7 @@ func (s *JadwalPenawaranService) Update(ctx context.Context, id int64, req model
 		return err
 	}
 	return s.querier.UpdateJadwalPenawaran(ctx, queries.UpdateJadwalPenawaranParams{
-		Hari: req.Hari, JamMulai: req.JamMulai, JamSelesai: req.JamSelesai, Level: req.Level,
+		Hari: req.Hari, JamMulai: req.JamMulai, JamSelesai: req.JamSelesai, Level: req.Level, Gender: req.Gender,
 		KuotaPerGender: req.KuotaPerGender, IsBuka: boolInt(req.IsBuka), Urutan: req.Urutan, Catatan: req.Catatan,
 		UpdatedAt: s.now().UTC().Truncate(time.Second), ID: id,
 	})
@@ -269,9 +287,41 @@ func jadwalLabelByKode(ctx context.Context, q *queries.Querier, kode string) (qu
 	if err != nil {
 		return j, "", false, err
 	}
+	return j, jadwalFullLabel(j), true, nil
+}
+
+// jadwalFullLabel is the label with level and gender, e.g.
+// "Selasa 19.30–21.00 WIB (level 2) · khusus ikhwan".
+func jadwalFullLabel(j queries.JadwalPenawaran) string {
 	label := JadwalLabel(j.Hari, j.JamMulai, j.JamSelesai)
 	if j.Level != "" {
 		label += " (level " + j.Level + ")"
 	}
-	return j, label, true, nil
+	if j.Gender != "" {
+		label += " · khusus " + strings.ToLower(jadwalUntuk(j.Gender))
+	}
+	return label
+}
+
+func jadwalUntuk(gender string) string {
+	switch gender {
+	case "L":
+		return "Ikhwan"
+	case "P":
+		return "Akhwat"
+	}
+	return "Ikhwan & Akhwat"
+}
+
+// jadwalGenderMismatch is true when a single-gender schedule is chosen for a
+// lead of the other gender. An unknown lead gender is not a mismatch.
+func jadwalGenderMismatch(j queries.JadwalPenawaran, leadGender string) bool {
+	return j.Gender != "" && leadGender != "" && j.Gender != leadGender
+}
+
+func genderNama(g string) string {
+	if g == "P" {
+		return "akhwat"
+	}
+	return "ikhwan"
 }

@@ -147,6 +147,7 @@ type JadwalPenawaran struct {
 	PeriodeMulai   time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	Gender         string
 }
 
 type JadwalPertemuan struct {

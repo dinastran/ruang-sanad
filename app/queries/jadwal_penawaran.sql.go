@@ -23,9 +23,9 @@ func (q *Queries) CountLeadsByJadwalKode(ctx context.Context, jadwalKode string)
 }
 
 const createJadwalPenawaran = `-- name: CreateJadwalPenawaran :one
-INSERT INTO jadwal_penawaran (kode, hari, jam_mulai, jam_selesai, level, kuota_per_gender, is_buka, urutan, catatan, periode_mulai, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, kode, hari, jam_mulai, jam_selesai, level, kuota_per_gender, is_buka, urutan, catatan, periode_mulai, created_at, updated_at
+INSERT INTO jadwal_penawaran (kode, hari, jam_mulai, jam_selesai, level, gender, kuota_per_gender, is_buka, urutan, catatan, periode_mulai, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, kode, hari, jam_mulai, jam_selesai, level, kuota_per_gender, is_buka, urutan, catatan, periode_mulai, created_at, updated_at, gender
 `
 
 type CreateJadwalPenawaranParams struct {
@@ -34,6 +34,7 @@ type CreateJadwalPenawaranParams struct {
 	JamMulai       string
 	JamSelesai     string
 	Level          string
+	Gender         string
 	KuotaPerGender int64
 	IsBuka         int64
 	Urutan         int64
@@ -50,6 +51,7 @@ func (q *Queries) CreateJadwalPenawaran(ctx context.Context, arg CreateJadwalPen
 		arg.JamMulai,
 		arg.JamSelesai,
 		arg.Level,
+		arg.Gender,
 		arg.KuotaPerGender,
 		arg.IsBuka,
 		arg.Urutan,
@@ -73,6 +75,7 @@ func (q *Queries) CreateJadwalPenawaran(ctx context.Context, arg CreateJadwalPen
 		&i.PeriodeMulai,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Gender,
 	)
 	return i, err
 }
@@ -90,7 +93,7 @@ func (q *Queries) DeleteJadwalPenawaran(ctx context.Context, id int64) (int64, e
 }
 
 const getJadwalPenawaranByID = `-- name: GetJadwalPenawaranByID :one
-SELECT id, kode, hari, jam_mulai, jam_selesai, level, kuota_per_gender, is_buka, urutan, catatan, periode_mulai, created_at, updated_at FROM jadwal_penawaran WHERE id = ?
+SELECT id, kode, hari, jam_mulai, jam_selesai, level, kuota_per_gender, is_buka, urutan, catatan, periode_mulai, created_at, updated_at, gender FROM jadwal_penawaran WHERE id = ?
 `
 
 func (q *Queries) GetJadwalPenawaranByID(ctx context.Context, id int64) (JadwalPenawaran, error) {
@@ -110,12 +113,13 @@ func (q *Queries) GetJadwalPenawaranByID(ctx context.Context, id int64) (JadwalP
 		&i.PeriodeMulai,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Gender,
 	)
 	return i, err
 }
 
 const getJadwalPenawaranByKode = `-- name: GetJadwalPenawaranByKode :one
-SELECT id, kode, hari, jam_mulai, jam_selesai, level, kuota_per_gender, is_buka, urutan, catatan, periode_mulai, created_at, updated_at FROM jadwal_penawaran WHERE kode = ?
+SELECT id, kode, hari, jam_mulai, jam_selesai, level, kuota_per_gender, is_buka, urutan, catatan, periode_mulai, created_at, updated_at, gender FROM jadwal_penawaran WHERE kode = ?
 `
 
 func (q *Queries) GetJadwalPenawaranByKode(ctx context.Context, kode string) (JadwalPenawaran, error) {
@@ -135,12 +139,13 @@ func (q *Queries) GetJadwalPenawaranByKode(ctx context.Context, kode string) (Ja
 		&i.PeriodeMulai,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Gender,
 	)
 	return i, err
 }
 
 const listJadwalPenawaran = `-- name: ListJadwalPenawaran :many
-SELECT id, kode, hari, jam_mulai, jam_selesai, level, kuota_per_gender, is_buka, urutan, catatan, periode_mulai, created_at, updated_at FROM jadwal_penawaran ORDER BY urutan, id
+SELECT id, kode, hari, jam_mulai, jam_selesai, level, kuota_per_gender, is_buka, urutan, catatan, periode_mulai, created_at, updated_at, gender FROM jadwal_penawaran ORDER BY urutan, id
 `
 
 func (q *Queries) ListJadwalPenawaran(ctx context.Context) ([]JadwalPenawaran, error) {
@@ -166,6 +171,7 @@ func (q *Queries) ListJadwalPenawaran(ctx context.Context) ([]JadwalPenawaran, e
 			&i.PeriodeMulai,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Gender,
 		); err != nil {
 			return nil, err
 		}
@@ -233,7 +239,7 @@ func (q *Queries) ResetPeriodeJadwalPenawaran(ctx context.Context, arg ResetPeri
 
 const updateJadwalPenawaran = `-- name: UpdateJadwalPenawaran :exec
 UPDATE jadwal_penawaran SET
-    hari = ?, jam_mulai = ?, jam_selesai = ?, level = ?, kuota_per_gender = ?,
+    hari = ?, jam_mulai = ?, jam_selesai = ?, level = ?, gender = ?, kuota_per_gender = ?,
     is_buka = ?, urutan = ?, catatan = ?, updated_at = ?
 WHERE id = ?
 `
@@ -243,6 +249,7 @@ type UpdateJadwalPenawaranParams struct {
 	JamMulai       string
 	JamSelesai     string
 	Level          string
+	Gender         string
 	KuotaPerGender int64
 	IsBuka         int64
 	Urutan         int64
@@ -257,6 +264,7 @@ func (q *Queries) UpdateJadwalPenawaran(ctx context.Context, arg UpdateJadwalPen
 		arg.JamMulai,
 		arg.JamSelesai,
 		arg.Level,
+		arg.Gender,
 		arg.KuotaPerGender,
 		arg.IsBuka,
 		arg.Urutan,
