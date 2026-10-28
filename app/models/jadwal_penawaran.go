@@ -6,7 +6,8 @@ type JadwalPenawaranRequest struct {
 	Hari           string `json:"hari"` // "3,6" (1=Senin .. 7=Ahad)
 	JamMulai       string `json:"jam_mulai"`
 	JamSelesai     string `json:"jam_selesai"`
-	Level          string `json:"level"` // "" = semua level
+	Level          string `json:"level"`  // "" = semua level
+	Gender         string `json:"gender"` // "" = ikhwan & akhwat, "L" = ikhwan, "P" = akhwat
 	KuotaPerGender int64  `json:"kuota_per_gender"`
 	IsBuka         bool   `json:"is_buka"`
 	Urutan         int64  `json:"urutan"`
@@ -16,15 +17,20 @@ type JadwalPenawaranRequest struct {
 // JadwalPenawaranResponse is one schedule with its seat counts. It is also
 // what the CS AI bridge reads from GET /integrations/cs-ai/jadwal.
 type JadwalPenawaranResponse struct {
-	ID             int64  `json:"id"`
-	Kode           string `json:"kode"`
-	Hari           string `json:"hari"`
-	HariList       []int  `json:"hari_list"`
-	Frekuensi      int    `json:"frekuensi"` // kali per pekan
-	JamMulai       string `json:"jam_mulai"`
-	JamSelesai     string `json:"jam_selesai"`
-	Label          string `json:"label"`
-	Level          string `json:"level"`
+	ID         int64  `json:"id"`
+	Kode       string `json:"kode"`
+	Hari       string `json:"hari"`
+	HariList   []int  `json:"hari_list"`
+	Frekuensi  int    `json:"frekuensi"` // kali per pekan
+	JamMulai   string `json:"jam_mulai"`
+	JamSelesai string `json:"jam_selesai"`
+	Label      string `json:"label"`
+	Level      string `json:"level"`
+	// Gender: "" = ikhwan & akhwat (kuota per gender), "L" khusus ikhwan,
+	// "P" khusus akhwat. A single-gender schedule has no seats for the other
+	// gender (its sisa is 0), so it is never offered to them.
+	Gender         string `json:"gender"`
+	Untuk          string `json:"untuk"` // "Ikhwan", "Akhwat", "Ikhwan & Akhwat"
 	KuotaPerGender int64  `json:"kuota_per_gender"`
 	IsBuka         bool   `json:"is_buka"`
 	Urutan         int64  `json:"urutan"`
@@ -36,4 +42,7 @@ type JadwalPenawaranResponse struct {
 	SisaAkhwat     int64  `json:"sisa_akhwat"`
 	// TanpaGender counts verified leads whose gender is empty (not in quota).
 	TanpaGender int64 `json:"tanpa_gender"`
+	// TidakSesuai counts verified leads of the other gender on a
+	// single-gender schedule (not in quota; a human should move them).
+	TidakSesuai int64 `json:"tidak_sesuai"`
 }

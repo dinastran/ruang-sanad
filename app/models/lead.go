@@ -200,6 +200,7 @@ type JadwalOption struct {
 	Kode   string `json:"kode"`
 	Label  string `json:"label"`
 	IsBuka bool   `json:"is_buka"`
+	Gender string `json:"gender"` // "" = ikhwan & akhwat
 }
 
 type LeadStageRequest struct {

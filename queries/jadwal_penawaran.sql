@@ -8,13 +8,13 @@ SELECT * FROM jadwal_penawaran WHERE id = ?;
 SELECT * FROM jadwal_penawaran WHERE kode = ?;
 
 -- name: CreateJadwalPenawaran :one
-INSERT INTO jadwal_penawaran (kode, hari, jam_mulai, jam_selesai, level, kuota_per_gender, is_buka, urutan, catatan, periode_mulai, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO jadwal_penawaran (kode, hari, jam_mulai, jam_selesai, level, gender, kuota_per_gender, is_buka, urutan, catatan, periode_mulai, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateJadwalPenawaran :exec
 UPDATE jadwal_penawaran SET
-    hari = ?, jam_mulai = ?, jam_selesai = ?, level = ?, kuota_per_gender = ?,
+    hari = ?, jam_mulai = ?, jam_selesai = ?, level = ?, gender = ?, kuota_per_gender = ?,
     is_buka = ?, urutan = ?, catatan = ?, updated_at = ?
 WHERE id = ?;
 

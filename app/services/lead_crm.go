@@ -255,11 +255,7 @@ func (s *LeadService) Detail(ctx context.Context, id int64) (*models.LeadDetail,
 		return nil, err
 	}
 	for _, j := range jadwal {
-		label := JadwalLabel(j.Hari, j.JamMulai, j.JamSelesai)
-		if j.Level != "" {
-			label += " (level " + j.Level + ")"
-		}
-		d.JadwalOptions = append(d.JadwalOptions, models.JadwalOption{Kode: j.Kode, Label: label, IsBuka: j.IsBuka == 1})
+		d.JadwalOptions = append(d.JadwalOptions, models.JadwalOption{Kode: j.Kode, Label: jadwalFullLabel(j), IsBuka: j.IsBuka == 1, Gender: j.Gender})
 	}
 	if l.AssignedUserID.Valid {
 		if u, err := s.querier.GetUserByID(ctx, l.AssignedUserID.Int64); err == nil {
@@ -449,6 +445,18 @@ func (s *LeadService) UpdateData(ctx context.Context, id, actorID int64, req mod
 		before := *l
 		if req.JadwalKode != nil {
 			l.JadwalKode = *req.JadwalKode
+		}
+		// A single-gender schedule cannot be set for the other gender. Only
+		// checked when the schedule or gender changes, so older mismatches
+		// (e.g. from the CS AI) do not block editing other fields.
+		if l.JadwalKode != "" && (l.JadwalKode != before.JadwalKode || jk != before.JenisKelamin) {
+			j, _, _, err := jadwalLabelByKode(ctx, q, l.JadwalKode)
+			if err != nil {
+				return "", nil, err
+			}
+			if jadwalGenderMismatch(j, jk) {
+				return "", nil, fmt.Errorf("jadwal %s khusus %s, sedangkan lead ini %s", JadwalLabel(j.Hari, j.JamMulai, j.JamSelesai), genderNama(j.Gender), genderNama(jk))
+			}
 		}
 		l.Nama = truncateRunes(req.Nama, 200)
 		l.Usia = sql.NullInt64{Int64: req.Usia, Valid: req.Usia > 0}

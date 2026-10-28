@@ -282,9 +282,11 @@ func (s *LeadService) applyLeadEvent(ctx context.Context, q *queries.Querier, le
 	case "schedule.selected":
 		// The calon santri chose a schedule in the chat. It is a preference:
 		// Admin Kelas confirms it at placement. After payment is verified the
-		// seat is counted, so only staff may change it from then on.
+		// seat is counted, so only staff may change it from then on. A
+		// schedule for the other gender is still recorded (the choice is not
+		// lost) but the lead goes to review.
 		payload["jadwal_kode"] = data.JadwalKode
-		_, label, ok, err := jadwalLabelByKode(ctx, q, data.JadwalKode)
+		j, label, ok, err := jadwalLabelByKode(ctx, q, data.JadwalKode)
 		if err != nil {
 			return nil, err
 		}
@@ -297,6 +299,10 @@ func (s *LeadService) applyLeadEvent(ctx context.Context, q *queries.Querier, le
 			payload["jadwal_from"] = lead.JadwalKode
 			payload["jadwal_label"] = label
 			lead.JadwalKode = data.JadwalKode
+			if jadwalGenderMismatch(j, lead.JenisKelamin) {
+				payload["jadwal_gender_mismatch"] = true
+				lead.NeedsReview = 1
+			}
 		}
 
 	case "ai.paused", "ai.resumed":
@@ -374,6 +380,7 @@ func (s *LeadService) applyFormParse(ctx context.Context, q *queries.Querier, le
 	}
 	setStr(&lead.Nama, parsed.Nama)
 	setStr(&lead.Domisili, parsed.Domisili)
+	genderBefore := lead.JenisKelamin
 	setStr(&lead.JenisKelamin, parsed.JenisKelamin)
 	setStr(&lead.WaktuBelajar, parsed.WaktuBelajar)
 	setStr(&lead.RiwayatBelajar, parsed.RiwayatBelajar)
@@ -395,6 +402,17 @@ func (s *LeadService) applyFormParse(ctx context.Context, q *queries.Querier, le
 		lead.NeedsReview = 1
 	}
 	payload := map[string]any{"fields": parsed.Recognized, "review_fields": parsed.Review}
+	// The form may reveal a gender that does not fit the schedule chosen earlier.
+	if lead.JadwalKode != "" && lead.JenisKelamin != genderBefore {
+		j, _, ok, err := jadwalLabelByKode(ctx, q, lead.JadwalKode)
+		if err != nil {
+			return err
+		}
+		if ok && jadwalGenderMismatch(j, lead.JenisKelamin) {
+			payload["jadwal_gender_mismatch"] = true
+			lead.NeedsReview = 1
+		}
+	}
 	if from, ok := advanceLeadStage(lead, LeadStageDataTerisi); ok {
 		stageChange(payload, from, lead.Stage)
 	}

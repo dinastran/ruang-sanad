@@ -59,7 +59,7 @@ func (h *CsAiIngestHandler) Jadwal(c *fiber.Ctx) error {
 	if h.jadwal == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
 	}
-	list, err := h.jadwal.Open(c.UserContext())
+	list, err := h.jadwal.Open(c.UserContext(), c.Query("gender"))
 	if err != nil {
 		slog.Error("cs-ai jadwal gagal", "error", err)
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "gagal membaca jadwal"})
