@@ -17,6 +17,7 @@
 		rentangSebelumnya,
 		statusRiwayat,
 		trenKehadiran,
+		trenPerTanggal,
 		type Kegiatan,
 		type Periode,
 		type RiwayatAbsensi,
@@ -64,7 +65,7 @@
 	const kunjungan = $derived(terfilter.filter((r) => r.kegiatan === "kunjungan"));
 	const kunjunganTerlaksana = $derived(kunjungan.filter((r) => r.hadir).length);
 	const tren = $derived(trenKehadiran(terfilter, rentang));
-	const mingguan = $derived(periode === "30h" || periode === "3b");
+	const perTanggal = $derived(trenPerTanggal(rentang));
 	const guruAlfa = $derived(guruAlfaTerbanyak(terfilter));
 	const barisTabel = $derived(statusTabel ? terfilter.filter((r) => statusRiwayat(r) === statusTabel) : terfilter);
 
@@ -189,7 +190,7 @@
 
 	<!-- Grafik -->
 	<div class="grid gap-3 lg:grid-cols-5">
-		<div class="min-w-0 lg:col-span-3"><TrenKehadiran buckets={tren} {mingguan} /></div>
+		<div class="min-w-0 lg:col-span-3"><TrenKehadiran buckets={tren} {perTanggal} /></div>
 		<div class="min-w-0 lg:col-span-2"><GuruAlfaTerbanyak items={guruAlfa} aktif={guruID} onpilih={pilihGuru} /></div>
 	</div>
 
