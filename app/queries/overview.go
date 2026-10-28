@@ -62,3 +62,30 @@ func (q *Queries) OverviewPrograms(ctx context.Context) ([]models.OverviewProgra
 	}
 	return out, rows.Err()
 }
+
+// OverviewAttendance groups attendance of finished meetings between from and
+// until (inclusive, YYYY-MM-DD) by meeting month. Months without meetings are
+// not returned.
+func (q *Queries) OverviewAttendance(ctx context.Context, from, until string) ([]models.OverviewAttendanceMonth, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT substr(p.tanggal, 1, 7) AS bulan, COUNT(DISTINCT p.id),
+	 COALESCE(SUM(CASE WHEN a.status = 'hadir' THEN 1 ELSE 0 END), 0),
+	 COALESCE(SUM(CASE WHEN a.status = 'izin' THEN 1 ELSE 0 END), 0),
+	 COALESCE(SUM(CASE WHEN a.status = 'sakit' THEN 1 ELSE 0 END), 0),
+	 COALESCE(SUM(CASE WHEN a.status = 'alpa' THEN 1 ELSE 0 END), 0)
+	 FROM pertemuan p LEFT JOIN absensi a ON a.pertemuan_id = p.id
+	 WHERE p.status = 'selesai' AND date(substr(p.tanggal, 1, 10)) BETWEEN date(?) AND date(?)
+	 GROUP BY bulan ORDER BY bulan`, from, until)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]models.OverviewAttendanceMonth, 0)
+	for rows.Next() {
+		var r models.OverviewAttendanceMonth
+		if err := rows.Scan(&r.Month, &r.Meetings, &r.Hadir, &r.Izin, &r.Sakit, &r.Alpa); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

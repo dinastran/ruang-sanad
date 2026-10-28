@@ -12,6 +12,8 @@ type Overview struct {
 	Programs     []OverviewProgram            `json:"programs"`
 	Operations   *OverviewOperations          `json:"operations,omitempty"`
 	Riayah       *RiayahRingkasan             `json:"riayah,omitempty"`
+	Attendance   []OverviewAttendanceMonth    `json:"attendance"`
+	Leads        *OverviewLeads               `json:"leads,omitempty"`
 	Priorities   []OverviewPriority           `json:"priorities"`
 	Products     *ProductCRMDashboardSummary  `json:"products,omitempty"`
 	Finance      *KeuanganDashboard           `json:"finance,omitempty"`
@@ -40,6 +42,26 @@ type OverviewOperations struct {
 	Finished       int64 `json:"finished"`
 	Badal          int64 `json:"badal"`
 	Rescheduled    int64 `json:"rescheduled"`
+}
+
+// OverviewAttendanceMonth counts attendance records of finished meetings,
+// grouped by meeting month.
+type OverviewAttendanceMonth struct {
+	Month    string `json:"month"`
+	Meetings int64  `json:"meetings"`
+	Hadir    int64  `json:"hadir"`
+	Izin     int64  `json:"izin"`
+	Sakit    int64  `json:"sakit"`
+	Alpa     int64  `json:"alpa"`
+}
+
+// OverviewLeads compares WhatsApp leads of the selected month with the month
+// before: leads by first message date, closings by conversion date.
+type OverviewLeads struct {
+	Masuk             int64 `json:"masuk"`
+	Closing           int64 `json:"closing"`
+	MasukSebelumnya   int64 `json:"masuk_sebelumnya"`
+	ClosingSebelumnya int64 `json:"closing_sebelumnya"`
 }
 
 type OverviewPriority struct {

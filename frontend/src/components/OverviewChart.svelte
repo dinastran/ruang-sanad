@@ -125,6 +125,9 @@
     stroke: var(--color-neutral-50);
     stroke-width: 2;
   }
+  :global(.dark) circle {
+    stroke: var(--color-neutral-925);
+  }
   polyline.secondary {
     stroke: var(--color-neutral-400);
     stroke-dasharray: 5 4;

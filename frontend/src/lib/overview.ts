@@ -44,6 +44,13 @@ export interface Overview {
     rapor_periode: string;
     rapor_terkirim: number;
   };
+  attendance: AttendanceMonth[];
+  leads?: {
+    masuk: number;
+    closing: number;
+    masuk_sebelumnya: number;
+    closing_sebelumnya: number;
+  };
   priorities: { title: string; detail: string; href: string; count: number }[];
   products?: {
     active_products: number;
@@ -65,7 +72,15 @@ export interface Overview {
     produk: { jumlah_order: number; jumlah_qty: number; omzet: number };
   };
 }
-interface FinanceMonth {
+export interface AttendanceMonth {
+  month: string;
+  meetings: number;
+  hadir: number;
+  izin: number;
+  sakit: number;
+  alpa: number;
+}
+export interface FinanceMonth {
   bulan: string;
   label: string;
   kas_masuk: number;
