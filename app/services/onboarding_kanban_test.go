@@ -111,3 +111,54 @@ func TestOnboardingKanbanDateValidation(t *testing.T) {
 	_, err := onboardingReason(string(make([]byte, 301)))
 	require.True(t, errors.Is(err, ErrOnboardingInvalid))
 }
+
+
+func TestOnboardingKanbanFullStageSequenceRequiresQuotaAndActualStart(t *testing.T) {
+    db, service, caseID, picID, actorID := onboardingFixture(t)
+    ctx := context.Background()
+
+    _, err := db.Exec("INSERT INTO guru (nama, jenis_kelamin, is_aktif) VALUES ('Guru Onboarding', 'L', 1)")
+    require.NoError(t,err)
+    var guruID int64
+    require.NoError(t,db.QueryRow("SELECT id FROM guru WHERE nama='Guru Onboarding'").Scan(&guruID))
+    result, err := db.Exec(`INSERT INTO kelas (
+        kunci_kelas, angkatan, tipe, jenis_kelamin, level, frekuensi,
+        jadwal, sub_index, nama_kelas, guru_id, kapasitas, jumlah_santri, is_aktif
+    ) VALUES ('PR2-TEST','AKA38','Reguler','L','Dasar','1x','Senin',1,'Kelas Onboarding',?,10,0,1)`,guruID)
+    require.NoError(t,err)
+    kelasID, err := result.LastInsertId()
+    require.NoError(t,err)
+
+    _, err = db.Exec(`UPDATE santri SET kelas_id=?, is_lengkap=1
+        WHERE id=(SELECT santri_id FROM onboarding_cases WHERE id=?)`,kelasID,caseID)
+    require.NoError(t,err)
+
+    require.NoError(t,service.AssignPIC(ctx,caseID,picID,actorID))
+    require.NoError(t,service.Move(ctx,caseID,actorID,"matching_kelas","",""))
+    require.NoError(t,service.Move(ctx,caseID,actorID,"waiting_kuota","",""))
+    require.ErrorIs(t,service.Move(ctx,caseID,actorID,"siap_mulai","",""),ErrOnboardingInvalid,
+        "PR 3 quota must be explicitly configured")
+    _, err = db.Exec(`INSERT INTO onboarding_class_controls (
+        kelas_id,target_kuota,first_candidate_at,created_at,updated_at
+    ) VALUES (?,2,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,kelasID)
+    require.NoError(t,err)
+    require.ErrorIs(t,service.Move(ctx,caseID,actorID,"siap_mulai","",""),ErrOnboardingInvalid,
+        "below-target class must not become ready")
+    _, err = db.Exec("UPDATE onboarding_class_controls SET target_kuota=1 WHERE kelas_id=?",kelasID)
+    require.NoError(t,err)
+    require.NoError(t,service.Move(ctx,caseID,actorID,"siap_mulai","",""))
+    require.ErrorIs(t,service.Move(ctx,caseID,actorID,"masuk_kelas","",""),ErrOnboardingInvalid,
+        "actual start date is mandatory")
+    require.ErrorIs(t,service.Move(ctx,caseID,actorID,"masuk_kelas","","2099-01-01"),ErrOnboardingInvalid)
+    today := time.Now().In(onboardingWIB).Format(time.DateOnly)
+    require.NoError(t,service.Move(ctx,caseID,actorID,"masuk_kelas","",""+today))
+    var stage string
+    var actual sql.NullTime
+    require.NoError(t,db.QueryRow("SELECT stage,actual_started_at FROM onboarding_cases WHERE id=?",caseID).Scan(&stage,&actual))
+    require.Equal(t,"masuk_kelas",stage)
+    require.True(t,actual.Valid)
+    require.ErrorIs(t,service.Move(ctx,caseID,actorID,"siap_mulai","Koreksi",""),ErrOnboardingInvalid)
+    history,err:=service.Activity(ctx,caseID)
+    require.NoError(t,err)
+    require.Equal(t,"masuk_kelas",history[0].ToStage)
+}
