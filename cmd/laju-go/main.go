@@ -112,6 +112,7 @@ func main() {
 
 	// Initialize new services
 	santriService := services.NewSantriService(querier, kelasEngine)
+	onboardingService := services.NewOnboardingService(querier)
 	santriAnalyticsService := services.NewSantriAnalyticsService(querier)
 	kelasService := services.NewKelasService(querier)
 	masterService := services.NewMasterService(querier)
@@ -163,6 +164,7 @@ func main() {
 	// Initialize handlers
 	uploadHandler := handlers.NewUploadHandler(sessionStore, userService, "storage/uploads")
 	santriHandler := handlers.NewSantriHandler(santriService, masterService, kelasService, productCRMService, sessionStore, inertiaService)
+	onboardingHandler := handlers.NewOnboardingHandler(onboardingService)
 	santriAnalyticsHandler := handlers.NewSantriAnalyticsHandler(santriAnalyticsService, masterService, sessionStore, inertiaService)
 	kelasHandler := handlers.NewKelasHandler(kelasService, services.NewKelasPerubahanService(querier, kelasEngine), santriStatusService, masterService, sessionStore, inertiaService)
 	masterHandler := handlers.NewMasterHandler(masterService, sessionStore, inertiaService)
@@ -201,6 +203,7 @@ func main() {
 		App:                         handlers.NewAppHandler(userService, sessionStore, inertiaService),
 		Upload:                      uploadHandler,
 		Santri:                      santriHandler,
+		Onboarding:                  onboardingHandler,
 		SantriStatus:                handlers.NewSantriStatusHandler(santriStatusService, sessionStore, inertiaService),
 		SantriAnalytics:             santriAnalyticsHandler,
 		Kelas:                       kelasHandler,

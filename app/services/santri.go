@@ -140,13 +140,22 @@ func (s *SantriService) santriResponse(santri queries.Santri, duplicates map[str
 }
 
 func (s *SantriService) Create(req models.CreateSantriRequest, createdBy int64) (*models.SantriResponse, error) {
+	return s.create(req, createdBy, true)
+}
+
+// CreateImported imports legacy CSV rows without opening onboarding SLA cases.
+func (s *SantriService) CreateImported(req models.CreateSantriRequest, createdBy int64) (*models.SantriResponse, error) {
+	return s.create(req, createdBy, false)
+}
+
+func (s *SantriService) create(req models.CreateSantriRequest, createdBy int64, withOnboarding bool) (*models.SantriResponse, error) {
 	ctx := context.Background()
 	tx, err := s.querier.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	resp, err := s.CreateWithQuerier(ctx, s.querier.WithTx(tx), req, createdBy)
+	resp, err := s.createWithQuerier(ctx, s.querier.WithTx(tx), req, createdBy, withOnboarding)
 	if err != nil {
 		return nil, err
 	}
@@ -161,6 +170,10 @@ func (s *SantriService) Create(req models.CreateSantriRequest, createdBy int64) 
 // santri can be created atomically with other writes (e.g. converting a CRM
 // lead).
 func (s *SantriService) CreateWithQuerier(ctx context.Context, txQuerier *queries.Querier, req models.CreateSantriRequest, createdBy int64) (*models.SantriResponse, error) {
+	return s.createWithQuerier(ctx, txQuerier, req, createdBy, true)
+}
+
+func (s *SantriService) createWithQuerier(ctx context.Context, txQuerier *queries.Querier, req models.CreateSantriRequest, createdBy int64, withOnboarding bool) (*models.SantriResponse, error) {
 	nama, jenisKelamin, angkatan, parsedDate, err := s.validateSantriInput(ctx, txQuerier, req.Nama, req.JenisKelamin, req.Angkatan, req.TanggalDaftar)
 	if err != nil {
 		return nil, err
@@ -227,6 +240,12 @@ func (s *SantriService) CreateWithQuerier(ctx context.Context, txQuerier *querie
 		return nil, err
 	}
 	resp := s.santriResponse(santri, duplicates)
+	// Shared creation path for CS and CRM: onboarding joins the same DB transaction.
+	if withOnboarding {
+		if err := OpenInitialOnboarding(ctx, txQuerier, id, createdBy, now); err != nil {
+			return nil, fmt.Errorf("create onboarding case: %w", err)
+		}
+	}
 	return &resp, nil
 }
 

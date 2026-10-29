@@ -91,6 +91,11 @@ func TestLeadConvertCreatesOneSantriAndNotifiesAdminKelas(t *testing.T) {
 	require.Equal(t, santriID, l.SantriID.Int64)
 	require.True(t, l.ConvertedAt.Valid)
 
+	// CRM conversion must enter the same onboarding pipeline as manual CS creation.
+	var onboardingCount int
+	require.NoError(t, f.db.QueryRow("SELECT COUNT(*) FROM onboarding_cases WHERE santri_id = ?", santriID).Scan(&onboardingCount))
+	require.Equal(t, 1, onboardingCount)
+
 	var nama, noWA string
 	var lengkap int
 	require.NoError(t, f.db.QueryRow(`SELECT nama, no_wa, is_lengkap FROM santri WHERE id = ?`, santriID).Scan(&nama, &noWA, &lengkap))
@@ -172,6 +177,9 @@ func TestLeadConvertWarnsOnDuplicateNoWA(t *testing.T) {
 	var notif int
 	require.NoError(t, f.db.QueryRow(`SELECT COUNT(*) FROM notifications WHERE type = 'santri_baru_dari_lead'`).Scan(&notif))
 	require.Zero(t, notif)
+	var cases int
+	require.NoError(t, f.db.QueryRow("SELECT COUNT(*) FROM onboarding_cases WHERE santri_id = ?", existingID).Scan(&cases))
+	require.Zero(t, cases, "linking a historical santri must not create onboarding")
 }
 
 func TestLeadConvertForceNewDespiteDuplicate(t *testing.T) {

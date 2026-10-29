@@ -1,0 +1,77 @@
+// Provisional sqlc-compatible query methods for PR 1 review.
+// Regenerate from queries/onboarding.sql using sqlc v1.31.1 before merge.
+
+package queries
+
+import (
+ "context"
+ "database/sql"
+ "time"
+)
+
+const createOnboardingCase = `-- name: CreateOnboardingCase :execresult
+INSERT INTO onboarding_cases (santri_id, stage, registered_at, deadline_at, created_at, updated_at)
+VALUES (?, 'onboarding_baru', ?, ?, ?, ?)
+`
+
+type CreateOnboardingCaseParams struct {
+ SantriID int64
+ RegisteredAt time.Time
+ DeadlineAt time.Time
+ CreatedAt time.Time
+ UpdatedAt time.Time
+}
+
+func (q *Queries) CreateOnboardingCase(ctx context.Context, arg CreateOnboardingCaseParams) (sql.Result, error) {
+ return q.db.ExecContext(ctx, createOnboardingCase, arg.SantriID, arg.RegisteredAt, arg.DeadlineAt, arg.CreatedAt, arg.UpdatedAt)
+}
+
+const createOnboardingActivity = `-- name: CreateOnboardingActivity :exec
+INSERT INTO onboarding_activity_logs (case_id, actor_user_id, event_type, to_stage, created_at)
+VALUES (?, ?, ?, ?, ?)
+`
+
+type CreateOnboardingActivityParams struct {
+ CaseID int64
+ ActorUserID sql.NullInt64
+ EventType string
+ ToStage string
+ CreatedAt time.Time
+}
+
+func (q *Queries) CreateOnboardingActivity(ctx context.Context, arg CreateOnboardingActivityParams) error {
+ _, err := q.db.ExecContext(ctx, createOnboardingActivity, arg.CaseID, arg.ActorUserID, arg.EventType, arg.ToStage, arg.CreatedAt)
+ return err
+}
+
+const listOnboardingCases = `-- name: ListOnboardingCases :many
+SELECT oc.id, oc.santri_id, s.nama, s.id_mahasantri, oc.stage, oc.registered_at, oc.deadline_at
+FROM onboarding_cases oc
+JOIN santri s ON s.id = oc.santri_id
+ORDER BY oc.registered_at DESC, oc.id DESC
+LIMIT ?
+`
+
+type ListOnboardingCasesRow struct {
+ ID int64
+ SantriID int64
+ Nama string
+ IDMahasantri string
+ Stage string
+ RegisteredAt time.Time
+ DeadlineAt time.Time
+}
+
+func (q *Queries) ListOnboardingCases(ctx context.Context, limit int64) ([]ListOnboardingCasesRow, error) {
+ rows, err := q.db.QueryContext(ctx, listOnboardingCases, limit)
+ if err != nil { return nil, err }
+ defer rows.Close()
+ items := []ListOnboardingCasesRow{}
+ for rows.Next() {
+  var i ListOnboardingCasesRow
+  if err := rows.Scan(&i.ID, &i.SantriID, &i.Nama, &i.IDMahasantri, &i.Stage, &i.RegisteredAt, &i.DeadlineAt); err != nil { return nil, err }
+  items = append(items, i)
+ }
+ if err := rows.Err(); err != nil { return nil, err }
+ return items, nil
+}

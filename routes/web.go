@@ -19,6 +19,7 @@ type Handlers struct {
 	Upload                      *handlers.UploadHandler
 	PasswordReset               *handlers.PasswordResetHandler
 	Santri                      *handlers.SantriHandler
+	Onboarding                 *handlers.OnboardingHandler
 	SantriStatus                *handlers.SantriStatusHandler
 	SantriAnalytics             *handlers.SantriAnalyticsHandler
 	Kelas                       *handlers.KelasHandler
@@ -192,6 +193,9 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/santri/:id/cs", csRole, h.Santri.UpdateCS)
 	protected.Put("/santri/:id/registration-identity", superAdminRole, h.Santri.CorrectRegistrationIdentity)
 	protected.Delete("/santri/:id", superAdminRole, h.Santri.Delete)
+
+	// Read-only onboarding API, restricted to Admin Kelas and Super Admin.
+	protected.Get("/onboarding/cases", akRole, h.Onboarding.List)
 
 	// Admin Kelas routes (admin_kelas + super_admin)
 	protected.Get("/perlu-dilengkapi", akRole, h.Santri.PerluDilengkapi)
