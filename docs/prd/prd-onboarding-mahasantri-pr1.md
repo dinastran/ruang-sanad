@@ -6,7 +6,7 @@ Locked rules:
 - One case per santri enforced by UNIQUE(santri_id).
 - Day 0 is actual creation timestamp, not historical tanggal_daftar.
 - Deadline is exclusive 00:00 WIB on Day 15; Day 14 is still on time.
-- Existing santri never receive a backfilled case.
+- Existing santri never receive a backfilled case; historical CSV import through ImportService is explicitly exempted, including imports after this PR ships.
 - No edits to existing santri.status, kelas_id, billing, class engine, or CRM stage.
 - Linked-existing-santri conversion must not open another case.
 - New cases start in onboarding_baru with empty PIC until PR 2.
