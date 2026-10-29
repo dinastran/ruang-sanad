@@ -85,7 +85,7 @@ func (q *Querier) CreateOnboardingQuota(ctx context.Context, id, target int64, a
 }
 func (q *Querier) ChangeOnboardingQuota(ctx context.Context, id, target int64, now time.Time) (int64, error) {
 	result, err := q.Queries.db.ExecContext(ctx, `UPDATE onboarding_class_controls
- SET target_kuota=?,updated_at=?,exception_approved_by=NULL,
+ SET target_kuota=?,updated_at=?,vacancy_alert_sent_at=NULL,exception_approved_by=NULL,
  exception_approved_at=NULL,exception_reason=''
  WHERE kelas_id=?`, target, now, id)
 	if err != nil {
