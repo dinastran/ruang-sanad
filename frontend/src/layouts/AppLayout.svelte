@@ -37,6 +37,7 @@
 		ChartColumn,
 		Plug,
 		PhoneCall,
+		Kanban,
 	} from "lucide-svelte";
 	import DarkModeToggle from "@components/DarkModeToggle.svelte";
 	import Logo from "@components/Logo.svelte";
@@ -97,6 +98,7 @@
 		{ href: "/app/analitik-santri", label: "Analisis Santri", group: "analitik-santri", category: "Utama", show: isSuperAdmin, icon: Users },
 		{ href: "/app/santri", label: "Data Santri", group: "santri", category: "Akademik", show: isCS || isAdminKelas, icon: Users },
 		{ href: "/app/perlu-dilengkapi", label: "Perlu Dilengkapi", group: "perlu-dilengkapi", category: "Akademik", show: isAdminKelas, icon: AlertCircle },
+		{ href: "/app/onboarding", label: "Onboarding", group: "onboarding", category: "Akademik", show: isAdminKelas, icon: Kanban },
 		{ href: "/app/kelas", label: "Kelas", group: "kelas", category: "Akademik", show: isAdminKelas, icon: BookOpen },
 		{ href: "/app/kelas/tindak-lanjut-alpa", label: "Tindak Lanjut Alpa", group: "tindak-lanjut-alpa", category: "Akademik", show: isAdminKelas, icon: PhoneCall, badge: jumlahAlpa },
 		{ href: "/app/jadwal-penawaran", label: "Jadwal Penawaran", group: "jadwal-penawaran", category: "Akademik", show: isCS || isAdminKelas, icon: CalendarClock },

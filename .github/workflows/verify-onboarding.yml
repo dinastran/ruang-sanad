@@ -1,9 +1,10 @@
-name: Verify onboarding PR 1
+name: Verify onboarding
 
 on:
   pull_request:
     paths:
       - 'app/**'
+      - 'frontend/**'
       - 'cmd/**'
       - 'queries/**'
       - 'migrations/**'
@@ -34,7 +35,7 @@ jobs:
       - name: Regenerate sqlc
         run: $(go env GOPATH)/bin/sqlc generate
       - name: Format Go sources in runner for verification
-        run: gofmt -w app/handlers/onboarding.go app/models/onboarding.go app/queries/onboarding.sql.go app/services/onboarding.go app/services/onboarding_test.go app/services/santri.go app/services/import.go app/services/lead_closing_test.go routes/web.go cmd/laju-go/main.go
+        run: gofmt -w app/handlers/onboarding.go app/models/onboarding.go app/models/onboarding_kanban.go app/queries/onboarding.sql.go app/services/onboarding.go app/services/onboarding_kanban.go app/services/onboarding_test.go app/services/onboarding_kanban_test.go app/services/santri.go app/services/import.go app/services/lead_closing_test.go routes/web.go cmd/laju-go/main.go
       - name: Targeted onboarding and CRM tests
         run: |
           GOFLAGS=-mod=mod go test ./app/services -run '^(TestOnboarding|TestSantriCreationOpensOnboarding|TestInvalidSantriCreation|TestImportedHistoricalSantri|TestLeadConvert|TestSantriCreate)' -count=1
@@ -48,7 +49,7 @@ jobs:
       - name: Check gofmt
         if: always()
         run: |
-          files=$(gofmt -l app/handlers/onboarding.go app/models/onboarding.go app/queries/onboarding.sql.go app/services/onboarding.go app/services/onboarding_test.go app/services/santri.go app/services/import.go app/services/lead_closing_test.go routes/web.go cmd/laju-go/main.go)
+          files=$(gofmt -l app/handlers/onboarding.go app/models/onboarding.go app/models/onboarding_kanban.go app/queries/onboarding.sql.go app/services/onboarding.go app/services/onboarding_kanban.go app/services/onboarding_test.go app/services/onboarding_kanban_test.go app/services/santri.go app/services/import.go app/services/lead_closing_test.go routes/web.go cmd/laju-go/main.go)
           if [ -n "$files" ]; then
             echo "Unformatted files:"
             printf '%s\n' "$files"
@@ -56,4 +57,4 @@ jobs:
           fi
       - name: Check generated queries are committed
         if: always()
-        run: git diff --exit-code -- app/queries/ app/handlers/onboarding.go app/models/onboarding.go app/services/onboarding.go app/services/onboarding_test.go app/services/santri.go app/services/import.go app/services/lead_closing_test.go routes/web.go cmd/laju-go/main.go
+        run: git diff --exit-code -- app/queries/ app/handlers/onboarding.go app/models/onboarding.go app/models/onboarding_kanban.go app/services/onboarding.go app/services/onboarding_kanban.go app/services/onboarding_test.go app/services/onboarding_kanban_test.go app/services/santri.go app/services/import.go app/services/lead_closing_test.go routes/web.go cmd/laju-go/main.go
