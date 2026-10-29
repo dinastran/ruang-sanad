@@ -71,7 +71,7 @@ func (s *ImportService) ProcessCSV(r io.Reader, userID int64, namaFile string) (
 		}
 
 		usia := parseInt64(strings.TrimSpace(row[usiaIndex]))
-		_, err := s.santri.Create(models.CreateSantriRequest{
+		_, err := s.santri.CreateImported(models.CreateSantriRequest{
 			KelasKode:     strings.TrimSpace(row[0]),
 			Nama:          row[1],
 			JenisKelamin:  row[genderIndex],
