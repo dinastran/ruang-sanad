@@ -11,6 +11,193 @@ import (
 	"time"
 )
 
+const cancelOnboardingCase = `-- name: CancelOnboardingCase :execrows
+UPDATE onboarding_cases
+SET stage = 'batal', cancelled_at = ?1,
+    cancellation_reason = ?2, updated_at = ?3
+WHERE id = ?4 AND stage = ?5
+  AND stage NOT IN ('masuk_kelas', 'batal')
+`
+
+type CancelOnboardingCaseParams struct {
+	CancelledAt        sql.NullTime
+	CancellationReason string
+	UpdatedAt          time.Time
+	ID                 int64
+	ExpectedStage      string
+}
+
+func (q *Queries) CancelOnboardingCase(ctx context.Context, arg CancelOnboardingCaseParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, cancelOnboardingCase,
+		arg.CancelledAt,
+		arg.CancellationReason,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.ExpectedStage,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const countOnboardingBoard = `-- name: CountOnboardingBoard :one
+SELECT COUNT(*) FROM onboarding_cases
+`
+
+func (q *Queries) CountOnboardingBoard(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countOnboardingBoard)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countOnboardingStages = `-- name: CountOnboardingStages :many
+SELECT stage, COUNT(*) AS total FROM onboarding_cases GROUP BY stage
+`
+
+type CountOnboardingStagesRow struct {
+	Stage string
+	Total int64
+}
+
+func (q *Queries) CountOnboardingStages(ctx context.Context) ([]CountOnboardingStagesRow, error) {
+	rows, err := q.db.QueryContext(ctx, countOnboardingStages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountOnboardingStagesRow
+	for rows.Next() {
+		var i CountOnboardingStagesRow
+		if err := rows.Scan(&i.Stage, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOnboardingPICs = `-- name: ListOnboardingPICs :many
+SELECT id, name FROM users WHERE role IN ('admin_kelas', 'super_admin') ORDER BY name, id
+`
+
+type ListOnboardingPICsRow struct {
+	ID   int64
+	Name string
+}
+
+func (q *Queries) ListOnboardingPICs(ctx context.Context) ([]ListOnboardingPICsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listOnboardingPICs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOnboardingPICsRow
+	for rows.Next() {
+		var i ListOnboardingPICsRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const logOnboardingActivity = `-- name: LogOnboardingActivity :exec
+INSERT INTO onboarding_activity_logs
+(case_id, actor_user_id, event_type, from_stage, to_stage, note, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+`
+
+type LogOnboardingActivityParams struct {
+	CaseID      int64
+	ActorUserID sql.NullInt64
+	EventType   string
+	FromStage   string
+	ToStage     string
+	Note        string
+	CreatedAt   time.Time
+}
+
+func (q *Queries) LogOnboardingActivity(ctx context.Context, arg LogOnboardingActivityParams) error {
+	_, err := q.db.ExecContext(ctx, logOnboardingActivity,
+		arg.CaseID,
+		arg.ActorUserID,
+		arg.EventType,
+		arg.FromStage,
+		arg.ToStage,
+		arg.Note,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const setOnboardingPIC = `-- name: SetOnboardingPIC :execrows
+UPDATE onboarding_cases
+SET pic_user_id = ?1, updated_at = ?2
+WHERE id = ?3 AND stage NOT IN ('masuk_kelas','batal')
+  AND pic_user_id IS ?4
+`
+
+type SetOnboardingPICParams struct {
+	PicUserID     sql.NullInt64
+	UpdatedAt     time.Time
+	ID            int64
+	ExpectedPicID sql.NullInt64
+}
+
+func (q *Queries) SetOnboardingPIC(ctx context.Context, arg SetOnboardingPICParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setOnboardingPIC,
+		arg.PicUserID,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.ExpectedPicID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setOnboardingStage = `-- name: SetOnboardingStage :execrows
+UPDATE onboarding_cases
+SET stage = ?1, updated_at = ?2
+WHERE id = ?3 AND stage = ?4
+`
+
+type SetOnboardingStageParams struct {
+	Stage         string
+	UpdatedAt     time.Time
+	ID            int64
+	ExpectedStage string
+}
+
+func (q *Queries) SetOnboardingStage(ctx context.Context, arg SetOnboardingStageParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setOnboardingStage,
+		arg.Stage,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.ExpectedStage,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const createOnboardingActivity = `-- name: CreateOnboardingActivity :exec
 INSERT INTO onboarding_activity_logs (case_id, actor_user_id, event_type, to_stage, created_at)
 VALUES (?, ?, ?, ?, ?)
@@ -56,6 +243,198 @@ func (q *Queries) CreateOnboardingCase(ctx context.Context, arg CreateOnboarding
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
+}
+
+const finishOnboardingCase = `-- name: FinishOnboardingCase :execrows
+UPDATE onboarding_cases
+SET stage = 'masuk_kelas', actual_started_at = ?1,
+    updated_at = ?2
+WHERE id = ?3 AND stage = 'siap_mulai'
+`
+
+type FinishOnboardingCaseParams struct {
+	ActualStartedAt sql.NullTime
+	UpdatedAt       time.Time
+	ID              int64
+}
+
+func (q *Queries) FinishOnboardingCase(ctx context.Context, arg FinishOnboardingCaseParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, finishOnboardingCase, arg.ActualStartedAt, arg.UpdatedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const getOnboardingCaseState = `-- name: GetOnboardingCaseState :one
+SELECT id, santri_id, stage, pic_user_id, registered_at, deadline_at
+FROM onboarding_cases WHERE id = ?
+`
+
+type GetOnboardingCaseStateRow struct {
+	ID           int64
+	SantriID     int64
+	Stage        string
+	PicUserID    sql.NullInt64
+	RegisteredAt time.Time
+	DeadlineAt   time.Time
+}
+
+func (q *Queries) GetOnboardingCaseState(ctx context.Context, id int64) (GetOnboardingCaseStateRow, error) {
+	row := q.db.QueryRowContext(ctx, getOnboardingCaseState, id)
+	var i GetOnboardingCaseStateRow
+	err := row.Scan(
+		&i.ID,
+		&i.SantriID,
+		&i.Stage,
+		&i.PicUserID,
+		&i.RegisteredAt,
+		&i.DeadlineAt,
+	)
+	return i, err
+}
+
+const getOnboardingPICRole = `-- name: GetOnboardingPICRole :one
+SELECT role FROM users WHERE id = ?
+`
+
+func (q *Queries) GetOnboardingPICRole(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getOnboardingPICRole, id)
+	var role string
+	err := row.Scan(&role)
+	return role, err
+}
+
+const getOnboardingQuotaTarget = `-- name: GetOnboardingQuotaTarget :one
+SELECT target_kuota FROM onboarding_class_controls WHERE kelas_id = ?
+`
+
+func (q *Queries) GetOnboardingQuotaTarget(ctx context.Context, kelasID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getOnboardingQuotaTarget, kelasID)
+	var target_kuota int64
+	err := row.Scan(&target_kuota)
+	return target_kuota, err
+}
+
+const listOnboardingActivity = `-- name: ListOnboardingActivity :many
+SELECT l.id, l.event_type, l.from_stage, l.to_stage, l.note, l.created_at,
+       COALESCE(u.name, 'Sistem') AS actor_name
+FROM onboarding_activity_logs l
+LEFT JOIN users u ON u.id = l.actor_user_id
+WHERE l.case_id = ?
+ORDER BY l.id DESC LIMIT 100
+`
+
+type ListOnboardingActivityRow struct {
+	ID        int64
+	EventType string
+	FromStage string
+	ToStage   string
+	Note      string
+	CreatedAt time.Time
+	ActorName string
+}
+
+func (q *Queries) ListOnboardingActivity(ctx context.Context, caseID int64) ([]ListOnboardingActivityRow, error) {
+	rows, err := q.db.QueryContext(ctx, listOnboardingActivity, caseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOnboardingActivityRow
+	for rows.Next() {
+		var i ListOnboardingActivityRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventType,
+			&i.FromStage,
+			&i.ToStage,
+			&i.Note,
+			&i.CreatedAt,
+			&i.ActorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOnboardingBoard = `-- name: ListOnboardingBoard :many
+SELECT oc.id, oc.santri_id, s.nama, s.id_mahasantri, oc.stage,
+       oc.pic_user_id, COALESCE(u.name, '') AS pic_name,
+       oc.registered_at, oc.deadline_at, oc.actual_started_at,
+       s.kelas_id, COALESCE(k.nama_kelas, '') AS kelas_nama
+FROM onboarding_cases oc
+JOIN santri s ON s.id = oc.santri_id
+LEFT JOIN users u ON u.id = oc.pic_user_id
+LEFT JOIN kelas k ON k.id = s.kelas_id
+ORDER BY CASE WHEN oc.stage = 'batal' THEN 1 ELSE 0 END, oc.registered_at DESC, oc.id DESC
+LIMIT ? OFFSET ?
+`
+
+type ListOnboardingBoardParams struct {
+	Limit  int64
+	Offset int64
+}
+
+type ListOnboardingBoardRow struct {
+	ID              int64
+	SantriID        int64
+	Nama            string
+	IDMahasantri    string
+	Stage           string
+	PicUserID       sql.NullInt64
+	PicName         string
+	RegisteredAt    time.Time
+	DeadlineAt      time.Time
+	ActualStartedAt sql.NullTime
+	KelasID         sql.NullInt64
+	KelasNama       string
+}
+
+// PR 2: Paginated Kanban read model. No parallel class roster:
+// santri.kelas_id remains the single source of truth.
+func (q *Queries) ListOnboardingBoard(ctx context.Context, arg ListOnboardingBoardParams) ([]ListOnboardingBoardRow, error) {
+	rows, err := q.db.QueryContext(ctx, listOnboardingBoard, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOnboardingBoardRow
+	for rows.Next() {
+		var i ListOnboardingBoardRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SantriID,
+			&i.Nama,
+			&i.IDMahasantri,
+			&i.Stage,
+			&i.PicUserID,
+			&i.PicName,
+			&i.RegisteredAt,
+			&i.DeadlineAt,
+			&i.ActualStartedAt,
+			&i.KelasID,
+			&i.KelasNama,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listOnboardingCases = `-- name: ListOnboardingCases :many
