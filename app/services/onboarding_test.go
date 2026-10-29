@@ -73,3 +73,13 @@ func TestOnboardingRegisteredAtUsesActualCreationNotHistoricalInput(t *testing.T
  require.False(t, registered.Before(before))
  require.True(t, registered.Before(time.Now().UTC().Add(time.Second)))
 }
+
+func TestImportedHistoricalSantriSkipsOnboarding(t *testing.T) {
+ db, _, service, userID := setupSantriIntegrityService(t)
+ santri, err := service.CreateImported(validCreateSantriRequest(), userID)
+ require.NoError(t, err)
+ require.NotZero(t, santri.ID)
+ var count int
+ require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM onboarding_cases").Scan(&count))
+ require.Zero(t, count)
+}
