@@ -84,120 +84,6 @@ func (q *Queries) CountOnboardingStages(ctx context.Context) ([]CountOnboardingS
 	return items, nil
 }
 
-const listOnboardingPICs = `-- name: ListOnboardingPICs :many
-SELECT id, name FROM users WHERE role IN ('admin_kelas', 'super_admin') ORDER BY name, id
-`
-
-type ListOnboardingPICsRow struct {
-	ID   int64
-	Name string
-}
-
-func (q *Queries) ListOnboardingPICs(ctx context.Context) ([]ListOnboardingPICsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listOnboardingPICs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListOnboardingPICsRow
-	for rows.Next() {
-		var i ListOnboardingPICsRow
-		if err := rows.Scan(&i.ID, &i.Name); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const logOnboardingActivity = `-- name: LogOnboardingActivity :exec
-INSERT INTO onboarding_activity_logs
-(case_id, actor_user_id, event_type, from_stage, to_stage, note, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-`
-
-type LogOnboardingActivityParams struct {
-	CaseID      int64
-	ActorUserID sql.NullInt64
-	EventType   string
-	FromStage   string
-	ToStage     string
-	Note        string
-	CreatedAt   time.Time
-}
-
-func (q *Queries) LogOnboardingActivity(ctx context.Context, arg LogOnboardingActivityParams) error {
-	_, err := q.db.ExecContext(ctx, logOnboardingActivity,
-		arg.CaseID,
-		arg.ActorUserID,
-		arg.EventType,
-		arg.FromStage,
-		arg.ToStage,
-		arg.Note,
-		arg.CreatedAt,
-	)
-	return err
-}
-
-const setOnboardingPIC = `-- name: SetOnboardingPIC :execrows
-UPDATE onboarding_cases
-SET pic_user_id = ?1, updated_at = ?2
-WHERE id = ?3 AND stage NOT IN ('masuk_kelas','batal')
-  AND pic_user_id IS ?4
-`
-
-type SetOnboardingPICParams struct {
-	PicUserID     sql.NullInt64
-	UpdatedAt     time.Time
-	ID            int64
-	ExpectedPicID sql.NullInt64
-}
-
-func (q *Queries) SetOnboardingPIC(ctx context.Context, arg SetOnboardingPICParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, setOnboardingPIC,
-		arg.PicUserID,
-		arg.UpdatedAt,
-		arg.ID,
-		arg.ExpectedPicID,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const setOnboardingStage = `-- name: SetOnboardingStage :execrows
-UPDATE onboarding_cases
-SET stage = ?1, updated_at = ?2
-WHERE id = ?3 AND stage = ?4
-`
-
-type SetOnboardingStageParams struct {
-	Stage         string
-	UpdatedAt     time.Time
-	ID            int64
-	ExpectedStage string
-}
-
-func (q *Queries) SetOnboardingStage(ctx context.Context, arg SetOnboardingStageParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, setOnboardingStage,
-		arg.Stage,
-		arg.UpdatedAt,
-		arg.ID,
-		arg.ExpectedStage,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
 const createOnboardingActivity = `-- name: CreateOnboardingActivity :exec
 INSERT INTO onboarding_activity_logs (case_id, actor_user_id, event_type, to_stage, created_at)
 VALUES (?, ?, ?, ?, ?)
@@ -484,4 +370,118 @@ func (q *Queries) ListOnboardingCases(ctx context.Context, limit int64) ([]ListO
 		return nil, err
 	}
 	return items, nil
+}
+
+const listOnboardingPICs = `-- name: ListOnboardingPICs :many
+SELECT id, name FROM users WHERE role IN ('admin_kelas', 'super_admin') ORDER BY name, id
+`
+
+type ListOnboardingPICsRow struct {
+	ID   int64
+	Name string
+}
+
+func (q *Queries) ListOnboardingPICs(ctx context.Context) ([]ListOnboardingPICsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listOnboardingPICs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOnboardingPICsRow
+	for rows.Next() {
+		var i ListOnboardingPICsRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const logOnboardingActivity = `-- name: LogOnboardingActivity :exec
+INSERT INTO onboarding_activity_logs
+(case_id, actor_user_id, event_type, from_stage, to_stage, note, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+`
+
+type LogOnboardingActivityParams struct {
+	CaseID      int64
+	ActorUserID sql.NullInt64
+	EventType   string
+	FromStage   string
+	ToStage     string
+	Note        string
+	CreatedAt   time.Time
+}
+
+func (q *Queries) LogOnboardingActivity(ctx context.Context, arg LogOnboardingActivityParams) error {
+	_, err := q.db.ExecContext(ctx, logOnboardingActivity,
+		arg.CaseID,
+		arg.ActorUserID,
+		arg.EventType,
+		arg.FromStage,
+		arg.ToStage,
+		arg.Note,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const setOnboardingPIC = `-- name: SetOnboardingPIC :execrows
+UPDATE onboarding_cases
+SET pic_user_id = ?1, updated_at = ?2
+WHERE id = ?3 AND stage NOT IN ('masuk_kelas','batal')
+  AND pic_user_id IS ?4
+`
+
+type SetOnboardingPICParams struct {
+	PicUserID     sql.NullInt64
+	UpdatedAt     time.Time
+	ID            int64
+	ExpectedPicID sql.NullInt64
+}
+
+func (q *Queries) SetOnboardingPIC(ctx context.Context, arg SetOnboardingPICParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setOnboardingPIC,
+		arg.PicUserID,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.ExpectedPicID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setOnboardingStage = `-- name: SetOnboardingStage :execrows
+UPDATE onboarding_cases
+SET stage = ?1, updated_at = ?2
+WHERE id = ?3 AND stage = ?4
+`
+
+type SetOnboardingStageParams struct {
+	Stage         string
+	UpdatedAt     time.Time
+	ID            int64
+	ExpectedStage string
+}
+
+func (q *Queries) SetOnboardingStage(ctx context.Context, arg SetOnboardingStageParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setOnboardingStage,
+		arg.Stage,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.ExpectedStage,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
