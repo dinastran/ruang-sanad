@@ -186,7 +186,7 @@ func (s *OnboardingService) SetClassQuota(ctx context.Context, kelasID, actorID,
 			return ErrOnboardingConflict
 		}
 	}
-	note := fmt.Sprintf("Target kuota %d → %d dari kapasitas %d; exception sebelumnya dibatalkan jika ada", r.TargetKuota.Int64, target, r.Kapasitas)
+	note := fmt.Sprintf("Target kuota %d → %d dari kapasitas %d; exception dan status alert lama dibatalkan jika ada", r.TargetKuota.Int64, target, r.Kapasitas)
 	if err := q.CreateOnboardingClassAction(ctx, kelasID, actorID, "quota_set", note, now); err != nil {
 		return err
 	}
