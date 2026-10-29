@@ -288,13 +288,13 @@ func (s *SantriService) ListAdminNotes(id int64) ([]models.SantriAdminNoteRespon
 	out := make([]models.SantriAdminNoteResponse, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, models.SantriAdminNoteResponse{
-			ID: row.ID,
-			SantriID: row.SantriID,
-			Catatan: row.Catatan,
-			AuthorName: row.AuthorName,
+			ID:            row.ID,
+			SantriID:      row.SantriID,
+			Catatan:       row.Catatan,
+			AuthorName:    row.AuthorName,
 			UpdatedByName: row.UpdatedByName,
-			CreatedAt: row.CreatedAt.Format(time.RFC3339),
-			UpdatedAt: row.UpdatedAt.Format(time.RFC3339),
+			CreatedAt:     row.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:     row.UpdatedAt.Format(time.RFC3339),
 		})
 	}
 	return out, nil
