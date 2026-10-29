@@ -67,8 +67,7 @@ func (h *OnboardingHandler) UpdatePIC(c *fiber.Ctx) error {
     if err := h.service.AssignPIC(c.UserContext(),id,request.PICUserID,c.Locals("user_id").(int64)); err != nil {
         return onboardingHTTPError(c,err)
     }
-    h.store.Flash(c,"success","PIC onboarding berhasil diperbarui")
-    return h.inertia.Redirect(c,"/app/onboarding")
+    return c.JSON(fiber.Map{"ok":true})
 }
 
 func (h *OnboardingHandler) Move(c *fiber.Ctx) error {
@@ -85,8 +84,7 @@ func (h *OnboardingHandler) Move(c *fiber.Ctx) error {
     if err := h.service.Move(c.UserContext(),id,c.Locals("user_id").(int64),request.Stage,request.Reason,request.ActualStartedAt); err != nil {
         return onboardingHTTPError(c,err)
     }
-    h.store.Flash(c,"success","Status onboarding berhasil diperbarui")
-    return h.inertia.Redirect(c,"/app/onboarding")
+    return c.JSON(fiber.Map{"ok":true})
 }
 
 func (h *OnboardingHandler) Activity(c *fiber.Ctx) error {
