@@ -177,6 +177,9 @@ func TestLeadConvertWarnsOnDuplicateNoWA(t *testing.T) {
 	var notif int
 	require.NoError(t, f.db.QueryRow(`SELECT COUNT(*) FROM notifications WHERE type = 'santri_baru_dari_lead'`).Scan(&notif))
 	require.Zero(t, notif)
+	var cases int
+	require.NoError(t, f.db.QueryRow("SELECT COUNT(*) FROM onboarding_cases WHERE santri_id = ?", existingID).Scan(&cases))
+	require.Zero(t, cases, "linking a historical santri must not create onboarding")
 }
 
 func TestLeadConvertForceNewDespiteDuplicate(t *testing.T) {
