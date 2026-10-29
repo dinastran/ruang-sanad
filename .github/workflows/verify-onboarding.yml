@@ -1,0 +1,57 @@
+name: Verify onboarding PR 1
+
+on:
+  push:
+    branches: [fix/onboarding-pr1-verification]
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'cmd/**'
+      - 'queries/**'
+      - 'migrations/**'
+      - 'routes/**'
+      - '.github/workflows/verify-onboarding.yml'
+      - 'go.mod'
+      - 'package*.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install sqlc v1.31.1
+        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+      - name: Regenerate sqlc
+        run: $(go env GOPATH)/bin/sqlc generate
+      - name: Targeted Go tests
+        run: go test ./app/services ./app/queries ./routes -count=1
+      - name: Frontend build
+        run: |
+          npm ci
+          npm run build
+      - name: Backend build
+        run: go build -o /tmp/ruang-sanad-verify ./cmd/laju-go
+      - name: Check gofmt
+        if: always()
+        run: |
+          files=$(gofmt -l app/handlers/onboarding.go app/models/onboarding.go app/queries/onboarding.sql.go app/services/onboarding.go app/services/onboarding_test.go app/services/santri.go app/services/import.go app/services/lead_closing_test.go routes/web.go cmd/laju-go/main.go)
+          if [ -n "$files" ]; then
+            echo "Unformatted files:"
+            printf '%s\n' "$files"
+            exit 1
+          fi
+      - name: Check generated queries are committed
+        if: always()
+        run: git diff --exit-code -- app/queries/
