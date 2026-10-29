@@ -194,8 +194,12 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/santri/:id/registration-identity", superAdminRole, h.Santri.CorrectRegistrationIdentity)
 	protected.Delete("/santri/:id", superAdminRole, h.Santri.Delete)
 
-	// Read-only onboarding API, restricted to Admin Kelas and Super Admin.
+	// Admin Kelas onboarding Kanban with CSRF-protected mutations.
+	protected.Get("/onboarding", akRole, h.Onboarding.Index)
 	protected.Get("/onboarding/cases", akRole, h.Onboarding.List)
+	protected.Get("/onboarding/cases/:id/activity", akRole, h.Onboarding.Activity)
+	protected.Put("/onboarding/cases/:id/stage", akRole, h.Onboarding.Move)
+	protected.Put("/onboarding/cases/:id/pic", akRole, h.Onboarding.UpdatePIC)
 
 	// Admin Kelas routes (admin_kelas + super_admin)
 	protected.Get("/perlu-dilengkapi", akRole, h.Santri.PerluDilengkapi)
