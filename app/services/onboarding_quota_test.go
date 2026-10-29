@@ -97,10 +97,11 @@ func TestOnboardingQuotaVacancyAlertAndFollowupsAudited(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, actions, 4)
 	require.Equal(t, "cs_followup", actions[0].EventType)
- require.NoError(t,s.SetClassQuota(ctx,kelasID,superID,4))
- updated,err:=s.ClassControls(ctx);require.NoError(t,err)
- require.Empty(t,updated.Classes[0].VacancySentAt,"changed threshold needs a fresh Vacancy Alert")
- require.True(t,updated.Classes[0].CanSendAlert)
+	require.NoError(t, s.SetClassQuota(ctx, kelasID, superID, 4))
+	updated, err := s.ClassControls(ctx)
+	require.NoError(t, err)
+	require.Empty(t, updated.Classes[0].VacancySentAt, "changed threshold needs a fresh Vacancy Alert")
+	require.True(t, updated.Classes[0].CanSendAlert)
 }
 
 func TestOnboardingQuotaPrivateExemptAndExceptionRoleGate(t *testing.T) {
