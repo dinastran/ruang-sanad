@@ -50,3 +50,26 @@ func TestOnboardingListDoesNotBackfillOldSantri(t *testing.T) {
  require.Len(t, rows, 1)
  require.Equal(t, created.ID, rows[0].SantriID)
 }
+
+func TestOnboardingInsertFailureRollsBackSantri(t *testing.T) {
+ db, _, service, userID := setupSantriIntegrityService(t)
+ _, err := db.Exec(`CREATE TRIGGER reject_onboarding BEFORE INSERT ON onboarding_cases
+ BEGIN SELECT RAISE(ABORT, 'onboarding unavailable'); END`)
+ require.NoError(t, err)
+ _, err = service.Create(validCreateSantriRequest(), userID)
+ require.ErrorContains(t, err, "onboarding unavailable")
+ var count int
+ require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM santri").Scan(&count))
+ require.Zero(t, count, "santri write must roll back when onboarding fails")
+}
+
+func TestOnboardingRegisteredAtUsesActualCreationNotHistoricalInput(t *testing.T) {
+ db, _, service, userID := setupSantriIntegrityService(t)
+ before := time.Now().UTC().Add(-time.Second)
+ santri, err := service.Create(validCreateSantriRequest(), userID)
+ require.NoError(t, err)
+ var registered time.Time
+ require.NoError(t, db.QueryRow("SELECT registered_at FROM onboarding_cases WHERE santri_id = ?", santri.ID).Scan(&registered))
+ require.False(t, registered.Before(before))
+ require.True(t, registered.Before(time.Now().UTC().Add(time.Second)))
+}
