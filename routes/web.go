@@ -19,7 +19,7 @@ type Handlers struct {
 	Upload                      *handlers.UploadHandler
 	PasswordReset               *handlers.PasswordResetHandler
 	Santri                      *handlers.SantriHandler
-	Onboarding                 *handlers.OnboardingHandler
+	Onboarding                  *handlers.OnboardingHandler
 	SantriStatus                *handlers.SantriStatusHandler
 	SantriAnalytics             *handlers.SantriAnalyticsHandler
 	Kelas                       *handlers.KelasHandler

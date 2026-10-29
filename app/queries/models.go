@@ -452,6 +452,44 @@ type Notification struct {
 	CreatedAt     time.Time
 }
 
+type OnboardingActivityLog struct {
+	ID          int64
+	CaseID      int64
+	ActorUserID sql.NullInt64
+	EventType   string
+	FromStage   string
+	ToStage     string
+	Note        string
+	CreatedAt   time.Time
+}
+
+type OnboardingCase struct {
+	ID                 int64
+	SantriID           int64
+	Stage              string
+	PicUserID          sql.NullInt64
+	RegisteredAt       time.Time
+	DeadlineAt         time.Time
+	ActualStartedAt    sql.NullTime
+	CancelledAt        sql.NullTime
+	CancellationReason string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+type OnboardingClassControl struct {
+	ID                  int64
+	KelasID             int64
+	TargetKuota         int64
+	FirstCandidateAt    time.Time
+	VacancyAlertSentAt  sql.NullTime
+	ExceptionApprovedBy sql.NullInt64
+	ExceptionApprovedAt sql.NullTime
+	ExceptionReason     string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
 type PasswordReset struct {
 	Token     string
 	UserID    int64

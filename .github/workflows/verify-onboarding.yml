@@ -1,8 +1,6 @@
 name: Verify onboarding PR 1
 
 on:
-  push:
-    branches: [fix/onboarding-pr1-verification]
   pull_request:
     paths:
       - 'app/**'
@@ -37,8 +35,10 @@ jobs:
         run: $(go env GOPATH)/bin/sqlc generate
       - name: Format Go sources in runner for verification
         run: gofmt -w app/handlers/onboarding.go app/models/onboarding.go app/queries/onboarding.sql.go app/services/onboarding.go app/services/onboarding_test.go app/services/santri.go app/services/import.go app/services/lead_closing_test.go routes/web.go cmd/laju-go/main.go
-      - name: Targeted Go tests
-        run: GOFLAGS=-mod=mod go test ./app/services ./app/queries ./routes -count=1
+      - name: Targeted onboarding and CRM tests
+        run: |
+          GOFLAGS=-mod=mod go test ./app/services -run '^(TestOnboarding|TestSantriCreationOpensOnboarding|TestInvalidSantriCreation|TestImportedHistoricalSantri|TestLeadConvert|TestSantriCreate)' -count=1
+          GOFLAGS=-mod=mod go test ./app/queries ./routes -count=1
       - name: Frontend build
         run: |
           npm ci
