@@ -227,6 +227,10 @@ func (s *SantriService) CreateWithQuerier(ctx context.Context, txQuerier *querie
 		return nil, err
 	}
 	resp := s.santriResponse(santri, duplicates)
+	// Shared creation path for CS and CRM: onboarding joins the same DB transaction.
+	if err := OpenInitialOnboarding(ctx, txQuerier, id, createdBy, now); err != nil {
+		return nil, fmt.Errorf("create onboarding case: %w", err)
+	}
 	return &resp, nil
 }
 
