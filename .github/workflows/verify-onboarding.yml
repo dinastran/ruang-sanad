@@ -35,14 +35,16 @@ jobs:
         run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
       - name: Regenerate sqlc
         run: $(go env GOPATH)/bin/sqlc generate
+      - name: Format Go sources in runner for verification
+        run: gofmt -w app/handlers/onboarding.go app/models/onboarding.go app/queries/onboarding.sql.go app/services/onboarding.go app/services/onboarding_test.go app/services/santri.go app/services/import.go app/services/lead_closing_test.go routes/web.go cmd/laju-go/main.go
       - name: Targeted Go tests
-        run: go test ./app/services ./app/queries ./routes -count=1
+        run: GOFLAGS=-mod=mod go test ./app/services ./app/queries ./routes -count=1
       - name: Frontend build
         run: |
           npm ci
           npm run build
       - name: Backend build
-        run: go build -o /tmp/ruang-sanad-verify ./cmd/laju-go
+        run: GOFLAGS=-mod=mod go build -o /tmp/ruang-sanad-verify ./cmd/laju-go
       - name: Check gofmt
         if: always()
         run: |
@@ -54,4 +56,4 @@ jobs:
           fi
       - name: Check generated queries are committed
         if: always()
-        run: git diff --exit-code -- app/queries/
+        run: git diff --exit-code -- app/queries/ app/handlers/onboarding.go app/models/onboarding.go app/services/onboarding.go app/services/onboarding_test.go app/services/santri.go app/services/import.go app/services/lead_closing_test.go routes/web.go cmd/laju-go/main.go
