@@ -575,24 +575,25 @@ func customErrorHandler(c *fiber.Ctx, err error) error {
 	})
 }
 
-
- // startOnboardingMonitoring delivers in-app notifications on startup and then
- // hourly. Milestones are deduplicated in SQLite and never send external WA.
- func startOnboardingMonitoring(service *services.OnboardingService) {
-     go func() {
-         run := func() {
-             ctx,cancel:=context.WithTimeout(context.Background(),30*time.Second)
-             defer cancel()
-             result,err:=service.TickOnboardingNotifications(ctx,time.Now().UTC())
-             if err!=nil {
-                 slog.Error("notifikasi onboarding gagal","error",err)
-             } else if result.NotificationsCreated>0 {
-                 slog.Info("notifikasi onboarding dibuat","jumlah",result.NotificationsCreated)
-             }
-         }
-         run()
-         ticker:=time.NewTicker(time.Hour)
-         defer ticker.Stop()
-         for range ticker.C {run()}
-     }()
- }
+// startOnboardingMonitoring delivers in-app notifications on startup and then
+// hourly. Milestones are deduplicated in SQLite and never send external WA.
+func startOnboardingMonitoring(service *services.OnboardingService) {
+	go func() {
+		run := func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			result, err := service.TickOnboardingNotifications(ctx, time.Now().UTC())
+			if err != nil {
+				slog.Error("notifikasi onboarding gagal", "error", err)
+			} else if result.NotificationsCreated > 0 {
+				slog.Info("notifikasi onboarding dibuat", "jumlah", result.NotificationsCreated)
+			}
+		}
+		run()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			run()
+		}
+	}()
+}
