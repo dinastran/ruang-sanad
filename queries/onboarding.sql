@@ -35,7 +35,7 @@ SELECT COUNT(*) FROM onboarding_cases;
 SELECT stage, COUNT(*) AS total FROM onboarding_cases GROUP BY stage;
 
 -- name: ListOnboardingPICs :many
-SELECT id, name FROM users WHERE role IN ('admin_kelas', 'super_admin') ORDER BY name, id;
+SELECT id, name, email FROM users WHERE role IN ('admin_kelas', 'super_admin') ORDER BY name, email, id;
 
 -- name: GetOnboardingPICRole :one
 SELECT role FROM users WHERE id = ?;

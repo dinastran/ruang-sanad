@@ -373,12 +373,13 @@ func (q *Queries) ListOnboardingCases(ctx context.Context, limit int64) ([]ListO
 }
 
 const listOnboardingPICs = `-- name: ListOnboardingPICs :many
-SELECT id, name FROM users WHERE role IN ('admin_kelas', 'super_admin') ORDER BY name, id
+SELECT id, name, email FROM users WHERE role IN ('admin_kelas', 'super_admin') ORDER BY name, email, id
 `
 
 type ListOnboardingPICsRow struct {
-	ID   int64
-	Name string
+	ID    int64
+	Name  string
+	Email string
 }
 
 func (q *Queries) ListOnboardingPICs(ctx context.Context) ([]ListOnboardingPICsRow, error) {
@@ -390,7 +391,7 @@ func (q *Queries) ListOnboardingPICs(ctx context.Context) ([]ListOnboardingPICsR
 	var items []ListOnboardingPICsRow
 	for rows.Next() {
 		var i ListOnboardingPICsRow
-		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+		if err := rows.Scan(&i.ID, &i.Name, &i.Email); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
