@@ -98,9 +98,7 @@
 		{ href: "/app/analitik-santri", label: "Analisis Santri", group: "analitik-santri", category: "Utama", show: isSuperAdmin, icon: Users },
 		{ href: "/app/santri", label: "Data Santri", group: "santri", category: "Akademik", show: isCS || isAdminKelas, icon: Users },
 		{ href: "/app/perlu-dilengkapi", label: "Perlu Dilengkapi", group: "perlu-dilengkapi", category: "Akademik", show: isAdminKelas, icon: AlertCircle },
-		{ href: "/app/onboarding", label: "Onboarding", group: "onboarding", category: "Akademik", show: isAdminKelas, icon: Kanban },
-		{ href: "/app/onboarding/monitoring", label: "KPI Onboarding", group: "onboarding-monitoring", category: "Akademik", show: isAdminKelas, icon: CalendarClock },
-		{ href: "/app/onboarding/classes", label: "Kontrol Kuota", group: "onboarding-classes", category: "Akademik", show: isCS || isAdminKelas, icon: CalendarClock },
+		{ href: isAdminKelas ? "/app/onboarding" : "/app/onboarding/classes", label: "Onboarding", group: "onboarding", category: "Akademik", show: isCS || isAdminKelas, icon: Kanban },
 		{ href: "/app/kelas", label: "Kelas", group: "kelas", category: "Akademik", show: isAdminKelas, icon: BookOpen },
 		{ href: "/app/kelas/tindak-lanjut-alpa", label: "Tindak Lanjut Alpa", group: "tindak-lanjut-alpa", category: "Akademik", show: isAdminKelas, icon: PhoneCall, badge: jumlahAlpa },
 		{ href: "/app/jadwal-penawaran", label: "Jadwal Penawaran", group: "jadwal-penawaran", category: "Akademik", show: isCS || isAdminKelas, icon: CalendarClock },
@@ -159,6 +157,7 @@
 		if (path.startsWith("/app/integrasi-whatsapp")) return "integrasi-whatsapp";
 		if (path.startsWith("/app/santri")) return "santri";
 		if (path.startsWith("/app/perlu-dilengkapi")) return "perlu-dilengkapi";
+		if (path === "/app/onboarding" || path.startsWith("/app/onboarding/")) return "onboarding";
 		if (path.startsWith("/app/kelas/tindak-lanjut-alpa")) return "tindak-lanjut-alpa";
 		if (path.startsWith("/app/kelas")) return "kelas";
 		if (path.startsWith("/app/jadwal-penawaran")) return "jadwal-penawaran";

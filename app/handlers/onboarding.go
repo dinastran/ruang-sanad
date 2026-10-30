@@ -39,7 +39,15 @@ func (h *OnboardingHandler) Index(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString("Gagal memuat onboarding")
 	}
-	return h.inertia.Render(c, "app/OnboardingKanban", fiber.Map{"user": user, "board": board})
+	summary, err := h.service.Monitoring(c.UserContext())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString("Gagal memuat ringkasan onboarding")
+	}
+	notices, err := h.service.UserNotices(c.UserContext(), c.Locals("user_id").(int64))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString("Gagal memuat notifikasi onboarding")
+	}
+	return h.inertia.Render(c, "app/OnboardingKanban", fiber.Map{"user": user, "board": board, "summary": summary, "notices": notices})
 }
 
 func onboardingCaseID(c *fiber.Ctx) (int64, error) {
