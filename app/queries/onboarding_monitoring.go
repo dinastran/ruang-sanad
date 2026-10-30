@@ -73,3 +73,35 @@ func (q *Querier) NotifyOnboardingUser(ctx context.Context,userID int64,kind,tit
  if err!=nil{return 0,err}
  return result.RowsAffected()
 }
+
+
+type OnboardingUserNoticeRow struct {
+ ID int64
+ Type string
+ Title string
+ Message string
+ ActionURL string
+ ReadAt sql.NullTime
+ CreatedAt time.Time
+}
+func (q *Querier) ListOnboardingUserNotices(ctx context.Context,userID int64)([]OnboardingUserNoticeRow,error){
+ rows,err:=q.Queries.db.QueryContext(ctx,`SELECT id,type,title,message,action_url,read_at,created_at
+ FROM notifications WHERE user_id=? AND type LIKE 'onboarding_%'
+ ORDER BY created_at DESC,id DESC LIMIT 30`,userID)
+ if err!=nil{return nil,err}
+ defer rows.Close()
+ out:=make([]OnboardingUserNoticeRow,0)
+ for rows.Next(){
+  var r OnboardingUserNoticeRow
+  if err:=rows.Scan(&r.ID,&r.Type,&r.Title,&r.Message,&r.ActionURL,&r.ReadAt,&r.CreatedAt);err!=nil{return nil,err}
+  out=append(out,r)
+ }
+ return out,rows.Err()
+}
+
+func (q *Querier) MarkOnboardingUserNoticeRead(ctx context.Context,userID,noticeID int64,now time.Time)(int64,error){
+ result,err:=q.Queries.db.ExecContext(ctx,`UPDATE notifications SET read_at=?
+ WHERE id=? AND user_id=? AND type LIKE 'onboarding_%' AND read_at IS NULL`,now,noticeID,userID)
+ if err!=nil{return 0,err}
+ return result.RowsAffected()
+}
