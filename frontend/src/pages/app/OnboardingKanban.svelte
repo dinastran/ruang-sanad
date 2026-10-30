@@ -42,6 +42,10 @@
     const stageLabels: Record<string,string> = Object.fromEntries(stages.map(x=>[x.key,x.label]));
     const index = (stage:string) => stages.findIndex(s => s.key===stage);
     const canMove = (card:Case, target:string) => index(card.stage)>=0 && Math.abs(index(target)-index(card.stage))===1;
+    // Backend rejects forward progress without a designated PIC. Reflect that
+    // prerequisite in the confirmation UI without changing backward/cancel flow.
+    const needsPIC = (card:Case,target:string):boolean =>
+        target!=="batal" && index(target)>index(card.stage) && card.pic_user_id<=0;
 
     function dateWIB(value:string):string {
         if (!value) return "-";
@@ -91,6 +95,10 @@
     }
     function saveMove() {
         if(!pending) return;
+        if(needsPIC(pending.card,pending.target)) {
+            errorMessage="Tetapkan PIC Admin Kelas pada kartu sebelum melanjutkan.";
+            return;
+        }
         void updateCase(`/app/onboarding/cases/${pending.card.id}/stage`,{
             stage:pending.target,reason,actual_started_at:actualStartedAt
         });
@@ -213,6 +221,11 @@
       <div class="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl dark:bg-neutral-900" role="dialog" aria-modal="true" aria-label="Konfirmasi perpindahan onboarding">
         <h2 class="text-lg font-semibold">Konfirmasi {pending.target==="batal"?"pembatalan":stageLabels[pending.target]}</h2>
         <p class="mt-1 text-sm text-neutral-500">{pending.card.nama} · {stageLabels[pending.card.stage]} → {stageLabels[pending.target]??"Batal"}</p>
+        {#if needsPIC(pending.card,pending.target)}
+          <p role="status" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+            PIC belum ditetapkan. Tutup dialog ini, lalu pilih PIC Admin Kelas pada kartu sebelum melanjutkan.
+          </p>
+        {/if}
         {#if pending.target==="masuk_kelas"}
           <label for="actual-start" class="mt-4 block text-sm font-medium">Tanggal mulai kelas aktual (WIB)</label>
           <input id="actual-start" type="date" bind:value={actualStartedAt} required class="mt-1 w-full rounded-md border border-neutral-300 p-2 text-sm dark:border-white/20 dark:bg-neutral-800"/>
@@ -222,7 +235,7 @@
         {#if errorMessage}<p role="alert" class="mt-2 text-sm text-red-600">{errorMessage}</p>{/if}
         <div class="mt-4 flex justify-end gap-2">
           <button type="button" disabled={busy} class={btnClass} onclick={()=>{pending=null;errorMessage="";}}>Tutup</button>
-          <button type="button" disabled={busy||(pending.target==="masuk_kelas"&&!actualStartedAt)||((pending.target==="batal"||index(pending.target)<index(pending.card.stage))&&!reason.trim())} class="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40" onclick={saveMove}>{busy?"Menyimpan…":"Konfirmasi"}</button>
+          <button type="button" disabled={busy||needsPIC(pending.card,pending.target)||(pending.target==="masuk_kelas"&&!actualStartedAt)||((pending.target==="batal"||index(pending.target)<index(pending.card.stage))&&!reason.trim())} class="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40" onclick={saveMove}>{busy?"Menyimpan…":"Konfirmasi"}</button>
         </div>
       </div>
     </div>
