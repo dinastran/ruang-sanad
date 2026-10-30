@@ -26,3 +26,13 @@ type OnboardingKPIReport struct {
 type OnboardingMonitoringResult struct {
  NotificationsCreated int64 `json:"notifications_created"`
 }
+
+type OnboardingUserNotice struct {
+ ID int64 `json:"id"`
+ Type string `json:"type"`
+ Title string `json:"title"`
+ Message string `json:"message"`
+ ActionURL string `json:"action_url"`
+ Read bool `json:"read"`
+ CreatedAt string `json:"created_at"`
+}
