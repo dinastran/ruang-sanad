@@ -183,6 +183,40 @@ func (s *OnboardingService) AssignPIC(ctx context.Context, caseID, picID, actorI
 	return tx.Commit()
 }
 
+// validateOnboardingClassReady is shared by the readiness and final-start
+// transitions. A previously approved exception can be revoked, or the target
+// quota, guru, jadwal, and class status can change before actual start.
+func validateOnboardingClassReady(ctx context.Context, q *queries.Querier, kelasID int64) error {
+	kelas, err := q.GetKelasByID(ctx, kelasID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return onboardingInputError("kelas kandidat tidak ditemukan")
+	}
+	if err != nil {
+		return err
+	}
+	if kelas.IsAktif != 1 || !kelas.GuruID.Valid || strings.TrimSpace(kelas.Jadwal) == "" {
+		return onboardingInputError("kelas aktif, guru, dan jadwal harus dikonfirmasi")
+	}
+	control, err := q.GetOnboardingClassControl(ctx, kelasID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return onboardingInputError("target kuota belum dikonfigurasi oleh Super Admin")
+	}
+	if err != nil {
+		return err
+	}
+	if !control.TargetKuota.Valid {
+		return onboardingInputError("target kuota belum dikonfigurasi oleh Super Admin")
+	}
+	targetKuota := control.TargetKuota.Int64
+	if targetKuota < 1 || targetKuota > kelas.Kapasitas {
+		return onboardingInputError("target kuota kelas tidak valid")
+	}
+	if kelas.JumlahSantri < targetKuota && !control.ExceptionApprovedAt.Valid {
+		return onboardingInputError("kuota belum terpenuhi; diperlukan exception Super Admin")
+	}
+	return nil
+}
+
 // Move enforces validated, adjacent stage transitions. Backward movement
 // requires a recorded reason. 'Batal' is terminal, not a Kanban column.
 func (s *OnboardingService) Move(ctx context.Context, caseID, actorID int64, target, rawReason, actualDate string) error {
@@ -264,33 +298,17 @@ func (s *OnboardingService) Move(ctx context.Context, caseID, actorID int64, tar
 				if !santri.KelasID.Valid {
 					return onboardingInputError("kelas kandidat belum ditetapkan")
 				}
-				kelas, err := q.GetKelasByID(ctx, santri.KelasID.Int64)
-				if err != nil {
-					return onboardingInputError("kelas kandidat tidak ditemukan")
-				}
-				if kelas.IsAktif != 1 || !kelas.GuruID.Valid || strings.TrimSpace(kelas.Jadwal) == "" {
-					return onboardingInputError("kelas aktif, guru, dan jadwal harus dikonfirmasi")
-				}
-				control, err := q.GetOnboardingClassControl(ctx, santri.KelasID.Int64)
-				if errors.Is(err, sql.ErrNoRows) || !control.TargetKuota.Valid {
-					return onboardingInputError("target kuota belum dikonfigurasi oleh Super Admin")
-				}
-				if err != nil {
+				if err := validateOnboardingClassReady(ctx, q, santri.KelasID.Int64); err != nil {
 					return err
-				}
-				targetKuota := control.TargetKuota.Int64
-				if targetKuota < 1 || targetKuota > kelas.Kapasitas {
-					return onboardingInputError("target kuota kelas tidak valid")
-				}
-				if kelas.JumlahSantri < targetKuota && !control.ExceptionApprovedAt.Valid {
-					return onboardingInputError("kuota belum terpenuhi; diperlukan exception Super Admin")
 				}
 			case "masuk_kelas":
 				if !santri.KelasID.Valid {
 					return onboardingInputError("kelas belum ditetapkan")
 				}
-				if _, err := q.GetKelasByID(ctx, santri.KelasID.Int64); err != nil {
-					return onboardingInputError("kelas tidak ditemukan")
+				// Class conditions can change after a case reaches Siap Mulai.
+				// Recheck live quota, exception, guru, and jadwal before finalizing.
+				if err := validateOnboardingClassReady(ctx, q, santri.KelasID.Int64); err != nil {
+					return err
 				}
 				date, err := time.ParseInLocation(time.DateOnly, strings.TrimSpace(actualDate), onboardingWIB)
 				if err != nil {

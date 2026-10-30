@@ -205,3 +205,73 @@ func TestOnboardingKanbanPICDuplicateNamesRemainUnambiguous(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, board.Cases[0].PICUserID)
 }
+
+func TestOnboardingFinalStartRechecksQuotaAfterReady(t *testing.T) {
+	db, service, kelasID, caseID, picID, superID := quotaFixture(t, "Reguler")
+	ctx := context.Background()
+	require.NoError(t, service.SetClassQuota(ctx, kelasID, superID, 1))
+	require.NoError(t, service.AssignPIC(ctx, caseID, picID, superID))
+	require.NoError(t, service.Move(ctx, caseID, superID, "matching_kelas", "", ""))
+	require.NoError(t, service.Move(ctx, caseID, superID, "waiting_kuota", "", ""))
+	require.NoError(t, service.Move(ctx, caseID, superID, "siap_mulai", "", ""))
+
+	// A new quota target invalidates the readiness decision after it was made.
+	require.NoError(t, service.SetClassQuota(ctx, kelasID, superID, 2))
+	today := time.Now().In(onboardingWIB).Format(time.DateOnly)
+	require.ErrorIs(t, service.Move(ctx, caseID, superID, "masuk_kelas", "", today), ErrOnboardingInvalid)
+	var stage string
+	var actualStarted sql.NullTime
+	require.NoError(t, db.QueryRow("SELECT stage,actual_started_at FROM onboarding_cases WHERE id=?", caseID).Scan(&stage, &actualStarted))
+	require.Equal(t, "siap_mulai", stage)
+	require.False(t, actualStarted.Valid)
+
+	// Once the class actually meets its current target, final start is allowed.
+	require.NoError(t, service.SetClassQuota(ctx, kelasID, superID, 1))
+	require.NoError(t, service.Move(ctx, caseID, superID, "masuk_kelas", "", today))
+	require.NoError(t, db.QueryRow("SELECT stage,actual_started_at FROM onboarding_cases WHERE id=?", caseID).Scan(&stage, &actualStarted))
+	require.Equal(t, "masuk_kelas", stage)
+	require.True(t, actualStarted.Valid)
+}
+
+func TestOnboardingFinalStartRechecksRevokedExceptionAndClassReadiness(t *testing.T) {
+	db, service, kelasID, caseID, picID, superID := quotaFixture(t, "Reguler")
+	ctx := context.Background()
+	require.NoError(t, service.SetClassQuota(ctx, kelasID, superID, 3))
+	_, err := db.Exec("UPDATE onboarding_class_controls SET first_candidate_at=? WHERE kelas_id=?", time.Now().UTC().AddDate(0, 0, -12), kelasID)
+	require.NoError(t, err)
+	require.NoError(t, service.AssignPIC(ctx, caseID, picID, superID))
+	require.NoError(t, service.Move(ctx, caseID, superID, "matching_kelas", "", ""))
+	require.NoError(t, service.Move(ctx, caseID, superID, "waiting_kuota", "", ""))
+	require.NoError(t, service.ClassAction(ctx, kelasID, superID, "exception_approved", "Mulai sebelum kuota terpenuhi"))
+	require.NoError(t, service.Move(ctx, caseID, superID, "siap_mulai", "", ""))
+	today := time.Now().In(onboardingWIB).Format(time.DateOnly)
+
+	require.NoError(t, service.ClassAction(ctx, kelasID, superID, "exception_revoked", "Izin dicabut"))
+	require.ErrorIs(t, service.Move(ctx, caseID, superID, "masuk_kelas", "", today), ErrOnboardingInvalid)
+	require.NoError(t, service.ClassAction(ctx, kelasID, superID, "exception_approved", "Persetujuan ulang"))
+	_, err = db.Exec("UPDATE kelas SET jadwal='' WHERE id=?", kelasID)
+	require.NoError(t, err)
+	require.ErrorIs(t, service.Move(ctx, caseID, superID, "masuk_kelas", "", today), ErrOnboardingInvalid)
+
+	_, err = db.Exec("UPDATE kelas SET jadwal='Senin' WHERE id=?", kelasID)
+	require.NoError(t, err)
+	require.NoError(t, service.Move(ctx, caseID, superID, "masuk_kelas", "", today))
+}
+
+func TestOnboardingMoveAuditFailureRollsBackStage(t *testing.T) {
+	db, service, caseID, picID, actorID := onboardingFixture(t)
+	ctx := context.Background()
+	require.NoError(t, service.AssignPIC(ctx, caseID, picID, actorID))
+	_, err := db.Exec(`CREATE TRIGGER block_onboarding_stage_audit
+		BEFORE INSERT ON onboarding_activity_logs
+		WHEN NEW.event_type='onboarding.stage_changed'
+		BEGIN SELECT RAISE(ABORT,'stage audit unavailable'); END`)
+	require.NoError(t, err)
+	require.ErrorContains(t, service.Move(ctx, caseID, actorID, "matching_kelas", "", ""), "stage audit unavailable")
+	var stage string
+	require.NoError(t, db.QueryRow("SELECT stage FROM onboarding_cases WHERE id=?", caseID).Scan(&stage))
+	require.Equal(t, "onboarding_baru", stage)
+	var events int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM onboarding_activity_logs WHERE case_id=? AND event_type='onboarding.stage_changed'", caseID).Scan(&events))
+	require.Zero(t, events)
+}
