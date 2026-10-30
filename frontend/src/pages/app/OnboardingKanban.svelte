@@ -1,8 +1,9 @@
 <script lang="ts">
     import { inertia, router } from "@inertiajs/svelte";
     import AppLayout from "@layouts/AppLayout.svelte";
+    import OnboardingWorkspaceHeader from "@components/OnboardingWorkspaceHeader.svelte";
     import type { User, Flash } from "@lib/types";
-    import { Kanban, CalendarClock, History, ArrowLeft, ArrowRight, Ban } from "lucide-svelte";
+    import { CalendarClock, History, ArrowLeft, ArrowRight, Ban } from "lucide-svelte";
 
     type Stage = "onboarding_baru" | "matching_kelas" | "waiting_kuota" | "siap_mulai" | "masuk_kelas";
     interface PIC { id: number; name: string }
@@ -14,7 +15,7 @@
     }
     interface Activity { id: number; event_type: string; from_stage: string; to_stage: string; note: string; actor_name: string; created_at: string }
     interface Board { cases: Case[]; counts: Record<string, number>; pics: PIC[]; total: number; page: number; page_size: number }
-    interface Props { user?: User; board: Board; flash?: Flash }
+    interface Props { user?: User; board: Board; flash?: Flash; summary: {total:number;at_risk:number;overdue:number;alert_pending:number}; notices: {id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}[] }
 
     let props: Props = $props();
     let board = $derived(props.board);
@@ -110,14 +111,16 @@
 
 <AppLayout {user}>
   <div class="mx-auto max-w-[1700px] space-y-5 px-4 py-6 sm:px-6">
-    <header class="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <p class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-brand-700 dark:text-brand-400"><Kanban size={15}/> Operasional Admin Kelas</p>
-        <h1 class="mt-1 text-2xl font-semibold text-neutral-950 dark:text-white">Onboarding Santri</h1>
-        <p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Status dipindahkan secara manual. SLA 14 hari kalender dihitung dari tanggal registrasi dan tidak berubah saat kartu dipindah.</p>
+    <OnboardingWorkspaceHeader role={user?.role??""} active="kanban" summary={props.summary} notices={props.notices??[]}/>
+    <p class="text-sm text-neutral-500 dark:text-neutral-400">Papan Kanban: status dipindahkan manual. SLA 14 hari dihitung dari registrasi dan tidak berubah ketika kartu dipindah.</p>
+    {#if board.total===0}
+      <div class="rounded-xl border border-dashed border-neutral-300 bg-white p-6 text-sm dark:border-white/15 dark:bg-neutral-900">
+        <p class="font-semibold">Belum ada kasus onboarding</p>
+        <p class="mt-1 text-neutral-500">Kasus baru muncul setelah pendaftaran santri baru atau konversi lead CRM. Data santri lama tidak dimasukkan otomatis.</p>
+        <a href="/app/santri" use:inertia class="mt-3 inline-flex font-medium text-brand-700 hover:underline dark:text-brand-300">Lihat Data Santri</a>
       </div>
-      <span class="rounded-lg bg-neutral-100 px-3 py-2 text-sm font-medium tabular-nums dark:bg-white/10">{board.total} kasus</span>
-    </header>
+    {/if}
+
 
     {#if feedback}<p role="status" class="rounded-lg border border-emerald-200 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{feedback}</p>{/if}
     {#if props.flash?.success}<p role="status" class="text-sm text-emerald-700">{props.flash.success}</p>{/if}
@@ -195,7 +198,7 @@
       </nav>
     {/if}
 
-    <p class="text-xs text-neutral-500">Seret kartu ke kolom bersebelahan atau gunakan tombol Lanjut/Mundur. Perpindahan ke Siap Mulai memerlukan target kuota dan kesiapan kelas; konfigurasi kuota tersedia pada PR 3.</p>
+    <p class="text-xs text-neutral-500">Seret kartu ke kolom bersebelahan atau gunakan tombol Lanjut/Mundur. Perpindahan ke Siap Mulai memerlukan target kuota dan kesiapan kelas; atur target melalui tab Kelas & Kuota.</p>
   </div>
 
   {#if pending}
