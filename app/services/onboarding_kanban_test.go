@@ -161,3 +161,47 @@ func TestOnboardingKanbanFullStageSequenceRequiresQuotaAndActualStart(t *testing
 	require.NoError(t, err)
 	require.Equal(t, "masuk_kelas", history[0].ToStage)
 }
+
+// Identical display names are distinct staff accounts. Preserve both IDs and
+// supply email labels so operators can select the intended person.
+func TestOnboardingKanbanPICDuplicateNamesRemainUnambiguous(t *testing.T) {
+	db, service, caseID, picID, actorID := onboardingFixture(t)
+	ctx := context.Background()
+	var picName string
+	require.NoError(t, db.QueryRow("SELECT name FROM users WHERE id=?", picID).Scan(&picName))
+	result, err := db.Exec(
+		"INSERT INTO users(email,name,role) VALUES(?,?,?)",
+		"pic-second@example.com", picName, "admin_kelas",
+	)
+	require.NoError(t, err)
+	otherID, err := result.LastInsertId()
+	require.NoError(t, err)
+
+	board, err := service.Board(ctx, 1)
+	require.NoError(t, err)
+	found := map[int64]string{}
+	for _, pic := range board.PICs {
+		if pic.Name == picName {
+			found[pic.ID] = pic.Email
+		}
+	}
+	require.Equal(t, map[int64]string{
+		picID: "pic@example.com",
+		otherID: "pic-second@example.com",
+	}, found)
+
+	require.NoError(t, service.AssignPIC(ctx, caseID, picID, actorID))
+	board, err = service.Board(ctx, 1)
+	require.NoError(t, err)
+	require.Equal(t, picID, board.Cases[0].PICUserID)
+
+	require.NoError(t, service.AssignPIC(ctx, caseID, otherID, actorID))
+	board, err = service.Board(ctx, 1)
+	require.NoError(t, err)
+	require.Equal(t, otherID, board.Cases[0].PICUserID)
+
+	require.NoError(t, service.AssignPIC(ctx, caseID, 0, actorID))
+	board, err = service.Board(ctx, 1)
+	require.NoError(t, err)
+	require.Zero(t, board.Cases[0].PICUserID)
+}

@@ -6,7 +6,7 @@
     import { CalendarClock, History, ArrowLeft, ArrowRight, Ban } from "lucide-svelte";
 
     type Stage = "onboarding_baru" | "matching_kelas" | "waiting_kuota" | "siap_mulai" | "masuk_kelas";
-    interface PIC { id: number; name: string }
+    interface PIC { id: number; name: string; email: string }
     interface Case {
         id: number; santri_id: number; nama: string; id_mahasantri: string;
         stage: string; pic_user_id: number; pic_name: string;
@@ -62,8 +62,8 @@
         const cookie=document.cookie.split("; ").find(c=>c.startsWith("XSRF-TOKEN="));
         return cookie ? decodeURIComponent(cookie.split("=").slice(1).join("=")) : "";
     }
-    async function updateCase(url:string,body:Record<string,string|number>):Promise<void> {
-        if(busy) return;
+    async function updateCase(url:string,body:Record<string,string|number>):Promise<boolean> {
+        if(busy) return false;
         busy=true; errorMessage="";
         try {
             const res=await fetch(url,{
@@ -75,14 +75,19 @@
             if (!res.ok || !data.ok) throw new Error(data.error ?? "Permintaan gagal. Silakan muat ulang.");
             pending=null; feedback="Perubahan onboarding berhasil disimpan.";
             router.get("/app/onboarding?page="+board.page,{}, {preserveScroll:true});
+            return true;
         } catch (e) {
             errorMessage=e instanceof Error ? e.message : "Terjadi kesalahan";
+            return false;
         } finally { busy=false; }
     }
-    function assignPIC(card:Case,e:Event) {
-        const id=Number((e.currentTarget as HTMLSelectElement).value);
+    async function assignPIC(card:Case,e:Event) {
+        const select=e.currentTarget as HTMLSelectElement;
+        const id=Number(select.value);
         if(id===card.pic_user_id) return;
-        void updateCase(`/app/onboarding/cases/${card.id}/pic`,{pic_user_id:id});
+        const saved=await updateCase(`/app/onboarding/cases/${card.id}/pic`,{pic_user_id:id});
+        // If the API rejects the update, restore the server-confirmed PIC.
+        if(!saved) select.value=String(card.pic_user_id);
     }
     function saveMove() {
         if(!pending) return;
@@ -152,11 +157,13 @@
                   </span>
                 </div>
                 <label class="mt-3 block text-xs text-neutral-500" for={`pic-${card.id}`}>PIC Admin Kelas</label>
-                <select id={`pic-${card.id}`} value={String(card.pic_user_id)} disabled={busy||card.stage==="masuk_kelas"}
+                <select id={`pic-${card.id}`} value={card.pic_user_id} disabled={busy||card.stage==="masuk_kelas"}
                   onchange={(e)=>assignPIC(card,e)}
                   class="mt-1 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-900 disabled:opacity-50 dark:border-white/15 dark:bg-neutral-800 dark:text-white">
-                  <option value="0">Belum ditetapkan</option>
-                  {#each board.pics as pic}<option value={pic.id}>{pic.name}</option>{/each}
+                  <option value={0}>Belum ditetapkan</option>
+                  {#each board.pics as pic (pic.id)}
+                    <option value={pic.id}>{pic.name} ({pic.email})</option>
+                  {/each}
                 </select>
                 <div class="mt-3 flex flex-wrap gap-1">
                   {#if index(card.stage)>0&&card.stage!=="masuk_kelas"}
