@@ -81,7 +81,7 @@ func (s *OnboardingService) Board(ctx context.Context, page int64) (models.Onboa
 		result.Counts[row.Stage] = row.Total
 	}
 	for _, user := range users {
-		result.PICs = append(result.PICs, models.OnboardingPICOption{ID: user.ID, Name: user.Name})
+		result.PICs = append(result.PICs, models.OnboardingPICOption{ID: user.ID, Name: user.Name, Email: user.Email})
 	}
 	for _, r := range rows {
 		card := models.OnboardingBoardCard{

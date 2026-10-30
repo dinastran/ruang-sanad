@@ -27,8 +27,9 @@ type OnboardingBoardCard struct {
 }
 
 type OnboardingPICOption struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 type OnboardingActivityItem struct {
