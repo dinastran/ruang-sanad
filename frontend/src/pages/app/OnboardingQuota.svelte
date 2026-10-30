@@ -1,7 +1,7 @@
 <script lang="ts">
- import { inertia, router } from "@inertiajs/svelte";
+ import { router } from "@inertiajs/svelte";
  import AppLayout from "@layouts/AppLayout.svelte";
- import OnboardingNotices from "../../components/OnboardingNotices.svelte";
+ import OnboardingWorkspaceHeader from "@components/OnboardingWorkspaceHeader.svelte";
  import type { User } from "@lib/types";
  import { ClipboardCopy, History, CalendarClock, ShieldCheck } from "lucide-svelte";
 
@@ -81,17 +81,14 @@
 
 <AppLayout {user}>
  <div class="mx-auto max-w-[1500px] space-y-5 px-4 py-6 sm:px-6">
-  <header class="flex flex-wrap justify-between gap-3">
-   <div>
-    <p class="text-xs font-semibold uppercase tracking-wider text-brand-700 dark:text-brand-400">Operasional Kelas · PR 3</p>
-    <h1 class="mt-1 text-2xl font-semibold">Kontrol Kuota & Vacancy Alert</h1>
-    <p class="mt-1 text-sm text-neutral-500">Fase D0–D15+ dihitung otomatis dari tanggal kandidat pertama (WIB). Status Kanban dan SLA santri tetap terpisah.</p>
-   </div>
-   {#if adminKelas}<a href="/app/onboarding" use:inertia class={btn}>Kembali ke Kanban</a>{/if}
-  </header>
+  <OnboardingWorkspaceHeader role={user?.role??""} active="classes" classes={classes} notices={props.notices??[]}/>
+  <div>
+    <h2 class="text-lg font-semibold">Kelas & Kuota</h2>
+    <p class="mt-1 text-sm text-neutral-500">Atur target operasional, pantau kebutuhan Vacancy Alert, dan catat tindak lanjut. Fase D0–D15+ dihitung otomatis dalam WIB.</p>
+  </div>
   {#if success}<p role="status" class="rounded-lg border border-emerald-200 p-3 text-sm text-emerald-700">{success}</p>{/if}
   {#if errorMessage}<p role="alert" class="rounded-lg border border-red-200 p-3 text-sm text-red-700">{errorMessage}</p>{/if}
-  <OnboardingNotices items={props.notices??[]}/>
+
 
   {#if classes.length===0}
    <section class="rounded-xl border border-dashed border-neutral-300 p-10 text-center dark:border-white/15">
@@ -107,7 +104,7 @@
        <span class="shrink-0 rounded-md bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">{c.phase} · D{c.day}</span>
       </div>
       <div class="grid grid-cols-3 gap-2 text-center text-xs">
-       <div class="rounded-lg bg-neutral-50 p-2 dark:bg-white/5"><p class="text-lg font-semibold tabular-nums">{c.jumlah_santri}</p><p class="text-neutral-500">Terisi</p></div>
+       <div class="rounded-lg bg-neutral-50 p-2 dark:bg-white/5"><p class="text-lg font-semibold tabular-nums">{c.jumlah_santri}</p><p class="text-neutral-500">Santri di kelas</p></div>
        <div class="rounded-lg bg-neutral-50 p-2 dark:bg-white/5"><p class="text-lg font-semibold tabular-nums">{c.target_kuota||"—"}</p><p class="text-neutral-500">Target</p></div>
        <div class="rounded-lg bg-neutral-50 p-2 dark:bg-white/5"><p class="text-lg font-semibold tabular-nums">{c.kapasitas}</p><p class="text-neutral-500">Maks.</p></div>
       </div>
