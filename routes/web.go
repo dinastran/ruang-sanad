@@ -196,6 +196,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 
 	// Admin Kelas onboarding Kanban with CSRF-protected mutations.
 	protected.Get("/onboarding", akRole, h.Onboarding.Index)
+	protected.Get("/onboarding/monitoring", akRole, h.Onboarding.Monitoring)
 	// PR 3: class quota visibility for CS; updates restricted by role and service.
 	protected.Get("/onboarding/classes", santriViewRole, h.Onboarding.ClassControls)
 	protected.Get("/onboarding/classes/:id/actions", santriViewRole, h.Onboarding.ClassHistory)
