@@ -1,6 +1,7 @@
 <script lang="ts">
  import { inertia } from "@inertiajs/svelte";
  import AppLayout from "@layouts/AppLayout.svelte";
+ import OnboardingNotices from "../../components/OnboardingNotices.svelte";
  import type { User } from "@lib/types";
  import { CalendarClock, TriangleAlert, CheckCircle2, Bell, Users, BookOpen, ArrowRight, ChartColumnIncreasing } from "lucide-svelte";
 
@@ -12,7 +13,7 @@
   alert_pending:number;alert_late:number;alert_on_time_rate:number|null;
   stages:Record<string,number>;
  }
- interface Props {user?:User;report:Report}
+ interface Props {user?:User;report:Report;notices:{id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}[]}
  let props:Props=$props();
  let report=$derived(props.report);
  let user=$derived(props.user);
@@ -43,6 +44,8 @@
     <a href="/app/onboarding/classes" use:inertia class="inline-flex items-center gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-50 dark:border-white/15 dark:hover:bg-white/10"><BookOpen size={15}/> Kontrol Kuota</a>
    </div>
   </header>
+
+  <OnboardingNotices items={props.notices??[]}/>
 
   <section aria-label="KPI utama" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
    <div class="rounded-xl border border-neutral-200 bg-white p-4 dark:border-white/10 dark:bg-neutral-900">
