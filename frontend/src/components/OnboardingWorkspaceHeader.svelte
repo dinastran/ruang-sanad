@@ -86,9 +86,9 @@
       <div class="rounded-xl border border-neutral-200 bg-white p-3 dark:border-white/10 dark:bg-neutral-900">
         <p class="text-xs text-neutral-500">Vacancy Alert tertunda</p><p class="mt-1 text-xl font-semibold tabular-nums">{number(summary.alert_pending)}</p>
       </div>
-    {:else if !canOperate}
+    {:else}
       <div class="rounded-xl border border-neutral-200 bg-white p-3 dark:border-white/10 dark:bg-neutral-900">
-        <p class="text-xs text-neutral-500">Kelas onboarding</p><p class="mt-1 text-xl font-semibold tabular-nums">{number(classes.length)}</p>
+        <p class="text-xs text-neutral-500">Kelas ditampilkan</p><p class="mt-1 text-xl font-semibold tabular-nums">{number(classes.length)}</p>
       </div>
       <div class="rounded-xl border border-neutral-200 bg-white p-3 dark:border-white/10 dark:bg-neutral-900">
         <p class="text-xs text-neutral-500">Target belum diatur</p><p class="mt-1 text-xl font-semibold tabular-nums">{number(missingQuota)}</p>
