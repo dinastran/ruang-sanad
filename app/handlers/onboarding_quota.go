@@ -14,7 +14,9 @@ func (h *OnboardingHandler) ClassControls(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString("Gagal memuat kontrol kuota")
 	}
-	return h.inertia.Render(c, "app/OnboardingQuota", fiber.Map{"user": user, "board": board})
+	notices,err:=h.service.UserNotices(c.UserContext(),c.Locals("user_id").(int64))
+ if err!=nil{return c.Status(fiber.StatusInternalServerError).SendString("Gagal memuat notifikasi onboarding")}
+ return h.inertia.Render(c, "app/OnboardingQuota", fiber.Map{"user": user, "board": board, "notices": notices})
 }
 
 func onboardingClassID(c *fiber.Ctx) (int64, error) {
