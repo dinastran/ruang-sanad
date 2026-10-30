@@ -206,7 +206,6 @@ func TestOnboardingKanbanPICDuplicateNamesRemainUnambiguous(t *testing.T) {
 	require.Zero(t, board.Cases[0].PICUserID)
 }
 
-
 func TestOnboardingFinalStartRechecksQuotaAfterReady(t *testing.T) {
 	db, service, kelasID, caseID, picID, superID := quotaFixture(t, "Reguler")
 	ctx := context.Background()
