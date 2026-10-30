@@ -3,8 +3,8 @@
  import { Bell, Check } from "lucide-svelte";
 
  interface Notice {id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}
- interface Props {items:Notice[]}
- let {items}:Props=$props();
+ interface Props {items:Notice[];onRead?:(id:number)=>void}
+ let {items,onRead}:Props=$props();
  let marked=$state<number[]>([]);
  let busy=$state<number|null>(null);
  let errorMessage=$state("");
@@ -26,6 +26,7 @@
    const body:{error?:string;ok?:boolean}=await res.json().catch(()=>({}));
    if(!res.ok||!body.ok)throw new Error(body.error??"Gagal menandai notifikasi");
    marked=[...marked,id];
+   onRead?.(id);
   }catch(e){errorMessage=e instanceof Error?e.message:"Gagal menandai notifikasi"}
   finally{busy=null}
  }
