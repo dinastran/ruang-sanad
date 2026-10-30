@@ -186,7 +186,7 @@ func TestOnboardingKanbanPICDuplicateNamesRemainUnambiguous(t *testing.T) {
 		}
 	}
 	require.Equal(t, map[int64]string{
-		picID: "pic@example.com",
+		picID:   "pic@example.com",
 		otherID: "pic-second@example.com",
 	}, found)
 
