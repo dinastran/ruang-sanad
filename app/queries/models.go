@@ -477,6 +477,15 @@ type OnboardingCase struct {
 	UpdatedAt          time.Time
 }
 
+type OnboardingClassActionLog struct {
+	ID          int64
+	KelasID     int64
+	ActorUserID sql.NullInt64
+	EventType   string
+	Note        string
+	CreatedAt   time.Time
+}
+
 type OnboardingClassControl struct {
 	ID                  int64
 	KelasID             int64

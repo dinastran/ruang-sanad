@@ -271,15 +271,19 @@ func (s *OnboardingService) Move(ctx context.Context, caseID, actorID int64, tar
 				if kelas.IsAktif != 1 || !kelas.GuruID.Valid || strings.TrimSpace(kelas.Jadwal) == "" {
 					return onboardingInputError("kelas aktif, guru, dan jadwal harus dikonfirmasi")
 				}
-				targetKuota, err := q.GetOnboardingQuotaTarget(ctx, santri.KelasID.Int64)
-				if errors.Is(err, sql.ErrNoRows) {
-					return onboardingInputError("target kuota belum dikonfigurasi; menunggu kontrol kuota PR 3")
+				control, err := q.GetOnboardingClassControl(ctx, santri.KelasID.Int64)
+				if errors.Is(err, sql.ErrNoRows) || !control.TargetKuota.Valid {
+					return onboardingInputError("target kuota belum dikonfigurasi oleh Super Admin")
 				}
 				if err != nil {
 					return err
 				}
-				if targetKuota < 1 || targetKuota > kelas.Kapasitas || kelas.JumlahSantri < targetKuota {
-					return onboardingInputError("kuota kelas belum terpenuhi atau tidak valid")
+				targetKuota := control.TargetKuota.Int64
+				if targetKuota < 1 || targetKuota > kelas.Kapasitas {
+					return onboardingInputError("target kuota kelas tidak valid")
+				}
+				if kelas.JumlahSantri < targetKuota && !control.ExceptionApprovedAt.Valid {
+					return onboardingInputError("kuota belum terpenuhi; diperlukan exception Super Admin")
 				}
 			case "masuk_kelas":
 				if !santri.KelasID.Valid {
