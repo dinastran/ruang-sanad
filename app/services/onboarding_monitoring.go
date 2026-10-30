@@ -168,3 +168,25 @@ func (s *OnboardingService) TickOnboardingNotifications(ctx context.Context, now
  }
  return models.OnboardingMonitoringResult{NotificationsCreated:count},nil
 }
+
+func (s *OnboardingService) UserNotices(ctx context.Context,userID int64)([]models.OnboardingUserNotice,error){
+ if userID<=0 {return nil,onboardingInputError("akun tidak valid")}
+ rows,err:=s.querier.ListOnboardingUserNotices(ctx,userID)
+ if err!=nil{return nil,err}
+ out:=make([]models.OnboardingUserNotice,0,len(rows))
+ for _,r:=range rows {
+  out=append(out,models.OnboardingUserNotice{
+   ID:r.ID,Type:r.Type,Title:r.Title,Message:r.Message,
+   ActionURL:r.ActionURL,Read:r.ReadAt.Valid,
+   CreatedAt:r.CreatedAt.In(onboardingWIB).Format(time.RFC3339),
+  })
+ }
+ return out,nil
+}
+func (s *OnboardingService) ReadUserNotice(ctx context.Context,userID,id int64) error {
+ if userID<=0||id<=0{return ErrOnboardingNotFound}
+ affected,err:=s.querier.MarkOnboardingUserNoticeRead(ctx,userID,id,time.Now().UTC())
+ if err!=nil{return err}
+ if affected!=1{return ErrOnboardingNotFound}
+ return nil
+}
