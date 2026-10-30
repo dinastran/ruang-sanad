@@ -1,6 +1,7 @@
 <script lang="ts">
  import { inertia, router } from "@inertiajs/svelte";
  import AppLayout from "@layouts/AppLayout.svelte";
+ import OnboardingNotices from "../../components/OnboardingNotices.svelte";
  import type { User } from "@lib/types";
  import { ClipboardCopy, History, CalendarClock, ShieldCheck } from "lucide-svelte";
 
@@ -14,7 +15,7 @@
   can_start:boolean; is_active:boolean; vacancy_text:string;
  }
  interface Action {id:number;event_type:string;note:string;actor_name:string;created_at:string}
- interface Props {user?:User;board:{classes:ClassControl[]}}
+ interface Props {user?:User;board:{classes:ClassControl[]};notices:{id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}[]}
  let props:Props=$props();
  let user=$derived(props.user);
  let classes=$derived(props.board.classes??[]);
@@ -90,6 +91,8 @@
   </header>
   {#if success}<p role="status" class="rounded-lg border border-emerald-200 p-3 text-sm text-emerald-700">{success}</p>{/if}
   {#if errorMessage}<p role="alert" class="rounded-lg border border-red-200 p-3 text-sm text-red-700">{errorMessage}</p>{/if}
+  <OnboardingNotices items={props.notices??[]}/>
+
   {#if classes.length===0}
    <section class="rounded-xl border border-dashed border-neutral-300 p-10 text-center dark:border-white/15">
     <h2 class="font-semibold">Belum ada kelas dengan kasus onboarding baru</h2>
