@@ -150,7 +150,7 @@
   {#if errorMessage}<p role="alert" class="rounded-lg border border-red-200 p-3 text-sm text-red-700">{errorMessage}</p>{/if}
 
 
-  {#if adminKelas}<ClassPlanApprovalInbox mode="admin"/>{/if}
+  {#if adminKelas}<ClassPlanApprovalInbox mode={superAdmin?"super_admin":"admin"}/>{/if}
 
   {#if adminKelas}
    <section class="rounded-xl border border-neutral-200 bg-white p-4 dark:border-white/10 dark:bg-neutral-900" aria-label="Kesiapan data rekomendasi kelas">
