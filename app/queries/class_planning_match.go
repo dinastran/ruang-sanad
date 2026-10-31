@@ -37,6 +37,7 @@ type PlanningClassSlot struct {
 
 type PlanningTeacherWindow struct {
 	GuruID    int64
+	GuruName  string
 	Gender    string
 	Status    string
 	Day       int64
@@ -137,7 +138,7 @@ func (q *Querier) ListPlanningCurrentClassSlots(ctx context.Context, asOf string
 }
 
 func (q *Querier) ListPlanningTeacherWindows(ctx context.Context, asOf string) ([]PlanningTeacherWindow,error) {
-	const statement = `SELECT g.id,g.jenis_kelamin,g.status,a.hari,a.jam_mulai,a.jam_selesai
+	const statement = `SELECT g.id,g.nama,g.jenis_kelamin,g.status,a.hari,a.jam_mulai,a.jam_selesai
 	FROM guru_availability a
 	JOIN guru g ON g.id=a.guru_id
 	WHERE g.is_aktif=1 AND a.confirmed_at IS NOT NULL
@@ -149,7 +150,7 @@ func (q *Querier) ListPlanningTeacherWindows(ctx context.Context, asOf string) (
 	out:=make([]PlanningTeacherWindow,0)
 	for rows.Next(){
 		var r PlanningTeacherWindow
-		if err:=rows.Scan(&r.GuruID,&r.Gender,&r.Status,&r.Day,&r.Start,&r.End);err!=nil{return nil,err}
+		if err:=rows.Scan(&r.GuruID,&r.GuruName,&r.Gender,&r.Status,&r.Day,&r.Start,&r.End);err!=nil{return nil,err}
 		out=append(out,r)
 	}
 	return out,rows.Err()
