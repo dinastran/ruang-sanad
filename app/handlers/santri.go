@@ -133,7 +133,7 @@ func (h *SantriHandler) New(c *fiber.Ctx) error {
 	kodeKelasList, _ := h.masterService.ListKodeKelas()
 
 	var altOffers interface{} = []queries.ScheduleAlternativeOffer{}
-	var altChoices interface{} = []queries.SantriScheduleAlternative{}
+	var altChoices interface{} = []queries.SantriScheduleAlternativeRecord{}
 	if (role == models.RoleAdminKelas || role == models.RoleSuperAdmin) && h.scheduleAlternatives != nil {
 		offers,choices,alternativesErr := h.scheduleAlternatives.List(c.UserContext(), id)
 		if alternativesErr != nil {return c.Status(fiber.StatusServiceUnavailable).SendString("Gagal memuat pilihan alternatif jadwal")}
