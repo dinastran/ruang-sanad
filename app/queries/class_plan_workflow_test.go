@@ -21,7 +21,7 @@ func workflowQueryDB(t *testing.T) *sql.DB {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,source TEXT NOT NULL,status TEXT NOT NULL,
 			tipe TEXT NOT NULL,angkatan TEXT NOT NULL,gender TEXT NOT NULL,guru_id INTEGER,
 			frequency INTEGER NOT NULL,min_quota INTEGER NOT NULL,capacity INTEGER NOT NULL,
-			target_kelas_id INTEGER,version INTEGER NOT NULL DEFAULT 1,
+			target_kelas_id INTEGER,activated_kelas_id INTEGER,version INTEGER NOT NULL DEFAULT 1,
 			ruleset_version TEXT NOT NULL,created_by INTEGER NOT NULL,
 			coordinator_confirmed_by INTEGER,coordinator_confirmed_at DATETIME,
 			coordinator_confirmed_version INTEGER,

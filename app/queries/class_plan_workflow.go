@@ -23,6 +23,7 @@ type ClassPlanWorkflowRow struct {
 	ConfirmedVersion int64  `json:"coordinator_confirmed_version"`
 	ApprovedBy       int64  `json:"admin_approved_by"`
 	StudentCount     int64  `json:"student_count"`
+	ReservedCount    int64  `json:"reserved_count"`
 	LevelCode        string `json:"level_code"`
 	SlotsLabel       string `json:"slots_label"`
 	ExceptionReason  string `json:"exception_reason"`
@@ -57,7 +58,8 @@ func (q *Querier) ListClassPlanWorkflow(ctx context.Context) ([]ClassPlanWorkflo
 		COALESCE(p.guru_id,0),p.frequency,p.min_quota,p.capacity,COALESCE(p.target_kelas_id,0),p.version,
 		COALESCE(p.coordinator_confirmed_by,0),COALESCE(p.coordinator_confirmed_version,0),
 		COALESCE(p.admin_approved_by,0),(SELECT COUNT(*) FROM class_plan_students s
-		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved')),COALESCE((SELECT MIN(level_kode) FROM class_plan_levels WHERE plan_id=p.id),''),
+		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved')),(SELECT COUNT(*) FROM class_plan_students ps
+			WHERE ps.plan_id=p.id AND ps.status='reserved'),COALESCE((SELECT MIN(level_kode) FROM class_plan_levels WHERE plan_id=p.id),''),
 		COALESCE((SELECT GROUP_CONCAT(hari || ' ' || jam_mulai || '-' || jam_selesai, ', ')
 		FROM class_plan_slots WHERE plan_id=p.id),''),
 		COALESCE((SELECT reason FROM class_plan_exceptions WHERE plan_id=p.id ORDER BY id DESC LIMIT 1),''),
@@ -74,7 +76,7 @@ func (q *Querier) ListClassPlanWorkflow(ctx context.Context) ([]ClassPlanWorkflo
 		var r ClassPlanWorkflowRow
 		if err := rows.Scan(&r.ID, &r.Source, &r.Status, &r.Program, &r.Angkatan, &r.Gender,
 			&r.GuruID, &r.Frequency, &r.MinQuota, &r.Capacity, &r.TargetKelasID, &r.Version,
-			&r.ConfirmedBy, &r.ConfirmedVersion, &r.ApprovedBy, &r.StudentCount, &r.LevelCode, &r.SlotsLabel, &r.ExceptionReason, &r.ExceptionStatus); err != nil {
+			&r.ConfirmedBy, &r.ConfirmedVersion, &r.ApprovedBy, &r.StudentCount, &r.ReservedCount, &r.LevelCode, &r.SlotsLabel, &r.ExceptionReason, &r.ExceptionStatus); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -88,7 +90,8 @@ func (q *Querier) GetClassPlanWorkflow(ctx context.Context, id int64) (ClassPlan
 		COALESCE(p.guru_id,0),p.frequency,p.min_quota,p.capacity,COALESCE(p.target_kelas_id,0),p.version,
 		COALESCE(p.coordinator_confirmed_by,0),COALESCE(p.coordinator_confirmed_version,0),
 		COALESCE(p.admin_approved_by,0),(SELECT COUNT(*) FROM class_plan_students s
-		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved')),COALESCE((SELECT MIN(level_kode) FROM class_plan_levels WHERE plan_id=p.id),''),
+		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved')),(SELECT COUNT(*) FROM class_plan_students ps
+			WHERE ps.plan_id=p.id AND ps.status='reserved'),COALESCE((SELECT MIN(level_kode) FROM class_plan_levels WHERE plan_id=p.id),''),
 		COALESCE((SELECT GROUP_CONCAT(hari || ' ' || jam_mulai || '-' || jam_selesai, ', ')
 		FROM class_plan_slots WHERE plan_id=p.id),''),
 		COALESCE((SELECT reason FROM class_plan_exceptions WHERE plan_id=p.id ORDER BY id DESC LIMIT 1),''),
@@ -96,7 +99,7 @@ func (q *Querier) GetClassPlanWorkflow(ctx context.Context, id int64) (ClassPlan
 		FROM class_plans p WHERE p.id=?`, id).Scan(
 		&r.ID, &r.Source, &r.Status, &r.Program, &r.Angkatan, &r.Gender,
 		&r.GuruID, &r.Frequency, &r.MinQuota, &r.Capacity, &r.TargetKelasID, &r.Version,
-		&r.ConfirmedBy, &r.ConfirmedVersion, &r.ApprovedBy, &r.StudentCount, &r.LevelCode, &r.SlotsLabel, &r.ExceptionReason, &r.ExceptionStatus)
+		&r.ConfirmedBy, &r.ConfirmedVersion, &r.ApprovedBy, &r.StudentCount, &r.ReservedCount, &r.LevelCode, &r.SlotsLabel, &r.ExceptionReason, &r.ExceptionStatus)
 	return r, err
 }
 
@@ -159,7 +162,7 @@ func (q *Querier) ClassPlanWorkflowCandidates(ctx context.Context, id int64) ([]
 		COALESCE(oc.stage,'')
 		FROM class_plan_students ps JOIN santri s ON s.id=ps.santri_id
 		LEFT JOIN onboarding_cases oc ON oc.santri_id=s.id
-		WHERE ps.plan_id=? AND ps.status='candidate' ORDER BY s.id`, id)
+		WHERE ps.plan_id=? AND ps.status IN ('candidate','reserved') ORDER BY s.id`, id)
 	if err != nil {
 		return nil, err
 	}

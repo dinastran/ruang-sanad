@@ -7,7 +7,7 @@
 		id:number; source:string; status:string; program:string; angkatan:string;
 		gender:string; guru_id:number; frequency:number; min_quota:number; capacity:number;
 		target_kelas_id:number; version:number; coordinator_confirmed_by:number;
-		coordinator_confirmed_version:number; admin_approved_by:number; student_count:number; level_code:string; slots_label:string; exception_reason:string; exception_status:string;
+		coordinator_confirmed_version:number; admin_approved_by:number; student_count:number; reserved_count:number; level_code:string; slots_label:string; exception_reason:string; exception_status:string;
 	};
 	let { mode }: {mode:"admin"|"coordinator"|"super_admin"}=$props();
 	let items=$state<WorkflowPlan[]>([]);
@@ -34,9 +34,9 @@
 	onMount(()=>{void load()});
 	async function submit(plan:WorkflowPlan,action:string) {
 		if(busy!==null)return;
-		const labels:Record<string,string>={submit:"Ajukan rencana",coordinator_confirm:"Konfirmasi penugasan guru",admin_approve:"Setujui untuk proses aktivasi berikutnya",exception_approve:"Setujui exception kuota",exception_reject:"Tolak exception kuota"};
+		const labels:Record<string,string>={submit:"Ajukan rencana",coordinator_confirm:"Konfirmasi penugasan guru",admin_approve:"Setujui untuk proses aktivasi berikutnya",exception_approve:"Setujui exception kuota",exception_reject:"Tolak exception kuota",reserve:"Reservasi kandidat yang sudah disetujui",cancel:"Batalkan rencana dan lepas seluruh reservasi"};
 		let reason=labels[action]??action;
-		const needsDecisionNote=action.startsWith("exception_")||(action==="submit"&&plan.student_count<plan.min_quota);
+		const needsDecisionNote=action.startsWith("exception_")||action==="cancel"||(action==="submit"&&plan.student_count<plan.min_quota);
 		if(needsDecisionNote){
 			const entered=prompt(action==="submit"?"Jelaskan mengapa kelas di bawah 8 santri perlu pengecualian (minimal 10 karakter):":"Masukkan alasan keputusan exception (minimal 10 karakter):","");
 			if(entered===null)return;
@@ -78,7 +78,7 @@
 			<div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
 				<div>
 					<p class="text-sm font-semibold">Rencana #{plan.id} · {plan.gender==="P"?"Akhwat":"Ikhwan"} · {plan.angkatan}</p>
-					<p class="mt-1 text-xs text-neutral-500">{plan.frequency}x/pekan · {plan.student_count}/{plan.capacity} santri · Guru #{plan.guru_id}</p>
+					<p class="mt-1 text-xs text-neutral-500">{plan.frequency}x/pekan · {plan.student_count}/{plan.capacity} santri · {plan.reserved_count} direservasi · Guru #{plan.guru_id}</p>
 					<p class="mt-1 text-xs text-neutral-500">Level {plan.level_code} · Jadwal: {plan.slots_label || "Belum disusun"} WIB</p>
 					<p class="mt-1 text-xs text-neutral-500">{labels[plan.status]??plan.status}{plan.admin_approved_by?" · Disetujui Admin Kelas":""} · Versi {plan.version}</p>
 					{#if plan.exception_reason}<p class="mt-1 text-xs text-amber-700 dark:text-amber-300">Alasan exception: {plan.exception_reason} · {plan.exception_status}</p>{/if}
@@ -90,6 +90,10 @@
 						<button type="button" onclick={()=>submit(plan,"coordinator_confirm")} disabled={busy!==null} class="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Konfirmasi guru</button>
 					{:else if mode!=="coordinator" && plan.status==="pending_admin" && !plan.admin_approved_by}
 						<button type="button" onclick={()=>submit(plan,"admin_approve")} disabled={busy!==null} class="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Approve</button>
+					{:else if mode!=="coordinator" && plan.status==="pending_admin" && plan.admin_approved_by && plan.reserved_count===0}
+						<button type="button" onclick={()=>submit(plan,"reserve")} disabled={busy!==null} class="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Reservasi kandidat</button>
+					{:else if mode!=="coordinator" && plan.status==="pending_admin" && plan.admin_approved_by && plan.reserved_count>0}
+						<button type="button" onclick={()=>submit(plan,"cancel")} disabled={busy!==null} class="rounded-lg border border-red-300 px-3 py-2 text-xs font-semibold text-red-700 disabled:opacity-50">Batalkan dan lepas reservasi</button>
 					{:else if plan.status==="pending_exception" && mode==="super_admin"}
 						<div class="flex flex-wrap gap-2">
 							<button type="button" onclick={()=>submit(plan,"exception_approve")} disabled={busy!==null} class="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Setujui exception</button>
