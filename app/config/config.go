@@ -51,6 +51,12 @@ type Config struct {
 	// Only set when the CAPI token belongs to the app with this secret
 	// (e.g. a System User token); an Events Manager token may not.
 	MetaCAPIAppSecret string
+
+	// Meta Ads Insights (read-only): ad spend and delivery for the
+	// Performa Iklan page. Off until the token and an ad account are set.
+	MetaAdsToken     string
+	MetaAdAccountIDs []string
+	MetaAppSecret    string
 }
 
 var AppConfig *Config
@@ -95,6 +101,10 @@ func Load() *Config {
 		MetaCAPITestEventCode: strings.TrimSpace(getEnv("META_CAPI_TEST_EVENT_CODE", "")),
 		MetaAPIVersion:        strings.TrimSpace(getEnv("META_API_VERSION", "")),
 		MetaCAPIAppSecret:     strings.TrimSpace(getEnv("META_CAPI_APP_SECRET", "")),
+
+		MetaAdsToken:     strings.TrimSpace(getEnv("META_ADS_TOKEN", "")),
+		MetaAdAccountIDs: splitList(getEnv("META_AD_ACCOUNT_IDS", "")),
+		MetaAppSecret:    strings.TrimSpace(getEnv("META_APP_SECRET", "")),
 	}
 
 	return AppConfig

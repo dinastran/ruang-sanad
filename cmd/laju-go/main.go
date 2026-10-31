@@ -152,6 +152,10 @@ func main() {
 		AppSecret: cfg.MetaCAPIAppSecret, TestEventCode: cfg.MetaCAPITestEventCode,
 	})
 	startMetaCAPIWorker(metaCAPIService)
+	metaAdsService := services.NewMetaAdsService(querier, services.MetaAdsConfig{
+		Token: cfg.MetaAdsToken, AccountIDs: cfg.MetaAdAccountIDs, APIVersion: cfg.MetaAPIVersion, AppSecret: cfg.MetaAppSecret,
+	})
+	startMetaAdsWorker(metaAdsService)
 
 	// Create storage directories
 	if err := os.MkdirAll("storage/uploads", 0755); err != nil {
@@ -249,6 +253,7 @@ func main() {
 		LeadLaporan:                 handlers.NewLeadLaporanHandler(leadService, sessionStore, inertiaService),
 		LeadSources:                 handlers.NewLeadSourceHandler(leadService, sessionStore, inertiaService),
 		MetaCAPI:                    handlers.NewMetaCAPIHandler(metaCAPIService, sessionStore, inertiaService),
+		MetaAds:                     handlers.NewMetaAdsHandler(metaAdsService, sessionStore, inertiaService),
 		LeadFollowups:               handlers.NewLeadFollowupHandler(leadService, waOutboxService, sessionStore, inertiaService),
 		IntegrasiWhatsApp: handlers.NewIntegrasiWhatsAppHandler(services.NewCRMIntegrationService(querier, services.CRMIntegrationConfig{
 			IngestEnabled: cfg.CSBridgeIngestToken != "",
@@ -535,6 +540,37 @@ func startMetaCAPIWorker(capi *services.MetaCAPIService) {
 			if res.Queued > 0 || res.Sent > 0 || res.Failed > 0 {
 				slog.Info("worker Meta CAPI", "masuk_antrean", res.Queued, "terkirim", res.Sent, "gagal", res.Failed)
 			}
+		}
+	}()
+}
+
+// startMetaAdsWorker syncs Meta Ads Insights once a day after 02.00 WIB
+// (checked hourly). It does nothing until META_ADS_TOKEN and
+// META_AD_ACCOUNT_IDS are set.
+func startMetaAdsWorker(ads *services.MetaAdsService) {
+	if !ads.Enabled() {
+		slog.Info("Sinkron Meta Ads nonaktif: META_ADS_TOKEN / META_AD_ACCOUNT_IDS belum diisi")
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			ctx := context.Background()
+			due, err := ads.DueForDailySync(ctx)
+			if err != nil {
+				slog.Error("cek jadwal sinkron Meta Ads gagal", "error", err)
+				continue
+			}
+			if !due {
+				continue
+			}
+			rows, err := ads.Sync(ctx, "otomatis")
+			if err != nil {
+				slog.Error("sinkron Meta Ads gagal", "error", err)
+				continue
+			}
+			slog.Info("sinkron Meta Ads selesai", "baris", rows)
 		}
 	}()
 }
