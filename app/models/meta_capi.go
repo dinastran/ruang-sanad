@@ -3,12 +3,15 @@ package models
 // MetaCAPIStatus is the Meta Conversions API settings page: configuration
 // (secrets never included), queue counts and the latest events.
 type MetaCAPIStatus struct {
-	Enabled        bool               `json:"enabled"`
-	DatasetID      string             `json:"dataset_id"` // masked
-	APIVersion     string             `json:"api_version"`
-	TestMode       bool               `json:"test_mode"`
-	AppSecretProof bool               `json:"app_secret_proof"`
-	Counts         map[string]int64   `json:"counts"` // pending, sent, failed, skipped
+	Enabled        bool             `json:"enabled"`
+	DatasetID      string           `json:"dataset_id"` // masked
+	APIVersion     string           `json:"api_version"`
+	TestMode       bool             `json:"test_mode"`
+	AppSecretProof bool             `json:"app_secret_proof"`
+	Counts         map[string]int64 `json:"counts"` // pending, sent, failed, skipped
+	// ResendableTest counts events sent in test mode that Meta would still
+	// accept in production (under 7 days old).
+	ResendableTest int64              `json:"resendable_test"`
 	Mapping        []MetaCAPIMapping  `json:"mapping"`
 	Events         []MetaCAPIEventRow `json:"events"`
 }

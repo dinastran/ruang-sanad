@@ -34,6 +34,17 @@ func (h *MetaCAPIHandler) Index(c *fiber.Ctx) error {
 	})
 }
 
+// ResendTest sends the events that went out in test mode again, to production.
+func (h *MetaCAPIHandler) ResendTest(c *fiber.Ctx) error {
+	n, err := h.capi.ResendTestEvents(c.UserContext())
+	if err != nil {
+		h.store.Flash(c, "error", err.Error())
+	} else {
+		h.store.Flash(c, "success", fmt.Sprintf("%d event uji dimasukkan ke antrean produksi; terkirim bertahap dalam beberapa menit", n))
+	}
+	return h.inertiaService.Redirect(c, metaCAPIPath)
+}
+
 // RetryFailed puts failed events (still within Meta's 7-day window) back in the queue.
 func (h *MetaCAPIHandler) RetryFailed(c *fiber.Ctx) error {
 	n, err := h.capi.RetryFailed(c.UserContext())

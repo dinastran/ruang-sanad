@@ -12,7 +12,7 @@
 	}
 	interface Status {
 		enabled: boolean; dataset_id: string; api_version: string; test_mode: boolean; app_secret_proof: boolean;
-		counts: Record<string, number>; mapping: { event: string; tahap: string }[]; events: EventRow[];
+		counts: Record<string, number>; resendable_test: number; mapping: { event: string; tahap: string }[]; events: EventRow[];
 	}
 	interface Props { user?: User; status: Status; flash?: Flash }
 
@@ -32,6 +32,11 @@
 	function retry() {
 		busy = true;
 		router.post("/app/leads/meta-capi/retry", {}, { preserveScroll: true, onFinish: () => (busy = false) });
+	}
+	function resendTest() {
+		if (!confirm(`Kirim ulang ${fmt(s.resendable_test)} event uji ke produksi? Event yang sama dikirim lagi tanpa kode tes, agar tercatat di laporan dan optimasi iklan Meta.`)) return;
+		busy = true;
+		router.post("/app/leads/meta-capi/resend-test", {}, { preserveScroll: true, onFinish: () => (busy = false) });
 	}
 
 	const panel = "rounded-xl border border-neutral-200/80 bg-white dark:border-white/[0.07] dark:bg-neutral-925/60";
@@ -59,6 +64,16 @@
 			<div class="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-4 text-sm text-amber-900 sm:px-5 dark:text-amber-200">
 				<p class="font-semibold">Belum aktif</p>
 				<p class="mt-1">Isi <code class="font-mono text-xs">META_CAPI_DATASET_ID</code> dan <code class="font-mono text-xs">META_CAPI_TOKEN</code> di <code class="font-mono text-xs">.env</code> server lalu restart aplikasi. Langkahnya ada di panduan <code class="font-mono text-xs">docs/panduan/meta-ads-api.md</code> bagian Conversions API.</p>
+			</div>
+		{/if}
+
+		{#if s.enabled && !s.test_mode && s.resendable_test > 0}
+			<div class="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between sm:px-5 dark:text-amber-200">
+				<div class="min-w-0">
+					<p class="font-semibold">{fmt(s.resendable_test)} event uji belum tercatat di produksi</p>
+					<p class="mt-1 leading-relaxed">Event berlabel <span class="rounded bg-amber-500/10 px-1 text-[11px] font-medium">uji</span> terkirim saat mode uji aktif, jadi hanya muncul di Events Manager → Test events. Selama umurnya di bawah 7 hari, event ini masih bisa dikirim ulang ke produksi. Setelah lewat 7 hari, Meta menolaknya.</p>
+				</div>
+				<button type="button" onclick={resendTest} disabled={busy} class="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-amber-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-amber-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"><RefreshCw size={15} /> Kirim ulang ke produksi</button>
 			</div>
 		{/if}
 

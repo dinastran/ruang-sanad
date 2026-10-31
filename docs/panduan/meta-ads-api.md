@@ -457,7 +457,7 @@ Tidak perlu menjalankan migrasi manual. Tabel `meta_capi_events` (migrasi `0100`
 ## Langkah 17: Aktifkan produksi dan pantau
 
 1. **Kosongkan** `META_CAPI_TEST_EVENT_CODE` → restart. Event baru kini masuk ke data produksi.
-   - Event yang terkirim selama mode uji **tidak** dikirim ulang. Itu disengaja, karena data uji tidak boleh tercampur ke produksi.
+   - Event yang terkirim selama mode uji berlabel **uji** dan hanya tercatat di Test events. Setelah restart tanpa kode tes, halaman **Meta CAPI** menampilkan tombol **Kirim ulang ke produksi** untuk event uji yang umurnya masih di bawah 7 hari (`event_id` sama, tanpa kode tes). Event uji yang lebih tua tidak bisa dikirim ulang karena Meta menolak event lebih dari 7 hari.
 2. Pantau **Events Manager → Overview**:
    - jumlah event per hari untuk `Lead` dan `Purchase`;
    - **Event Match Quality (EMQ)**: makin tinggi makin banyak event yang cocok ke akun Meta. Nomor WA yang lengkap sangat membantu.

@@ -51,3 +51,14 @@ SELECT e.id, e.lead_id, e.event_name, e.event_time, e.value, e.status, e.attempt
     CAST(COALESCE(NULLIF(l.nama, ''), NULLIF(l.wa_name, ''), 'Lead ' || l.id) AS TEXT) AS lead_nama
 FROM meta_capi_events e JOIN leads l ON l.id = e.lead_id
 ORDER BY e.id DESC LIMIT ?;
+
+-- name: CountResendableTestMetaCAPIEvents :one
+-- Event yang terkirim/gagal saat mode uji dan masih bisa diterima Meta.
+SELECT COUNT(*) FROM meta_capi_events
+WHERE test_mode = 1 AND status IN ('sent', 'failed') AND event_time >= ?;
+
+-- name: ResendTestMetaCAPIEvents :execrows
+-- Antre ulang event mode uji agar terkirim ke produksi (event_id tetap).
+UPDATE meta_capi_events SET status = 'pending', test_mode = 0, attempts = 0, last_error = '',
+    fbtrace_id = '', sent_at = NULL, next_attempt_at = sqlc.arg(now)
+WHERE test_mode = 1 AND status IN ('sent', 'failed') AND event_time >= sqlc.arg(since);
