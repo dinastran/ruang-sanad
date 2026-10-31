@@ -6,7 +6,7 @@
 		id:number; source:string; status:string; program:string; angkatan:string;
 		gender:string; guru_id:number; frequency:number; min_quota:number; capacity:number;
 		target_kelas_id:number; version:number; coordinator_confirmed_by:number;
-		coordinator_confirmed_version:number; admin_approved_by:number; student_count:number;
+		coordinator_confirmed_version:number; admin_approved_by:number; student_count:number; level_code:string; slots_label:string;
 	};
 	let { mode }: {mode:"admin"|"coordinator"}=$props();
 	let items=$state<WorkflowPlan[]>([]);
@@ -70,6 +70,7 @@
 				<div>
 					<p class="text-sm font-semibold">Rencana #{plan.id} · {plan.gender==="P"?"Akhwat":"Ikhwan"} · {plan.angkatan}</p>
 					<p class="mt-1 text-xs text-neutral-500">{plan.frequency}x/pekan · {plan.student_count}/{plan.capacity} santri · Guru #{plan.guru_id}</p>
+					<p class="mt-1 text-xs text-neutral-500">Level {plan.level_code} · Jadwal: {plan.slots_label || "Belum disusun"} WIB</p>
 					<p class="mt-1 text-xs text-neutral-500">{labels[plan.status]??plan.status}{plan.admin_approved_by?" · Disetujui Admin Kelas":""} · Versi {plan.version}</p>
 				</div>
 				<div>
