@@ -83,6 +83,10 @@
 		jadwal_kode: string;
 		jadwal_label: string;
 		jadwal_options: { kode: string; label: string; is_buka: boolean; gender: string }[];
+		lead_source_id: number;
+		lead_source_nama: string;
+		lead_source_by: string;
+		source_options: { id: number; nama: string; is_aktif: boolean }[];
 		stage: string;
 		status: string;
 		lost_reason: string;
@@ -143,6 +147,8 @@
 	let error = $derived(props.flash?.error);
 
 	let isSuperAdmin = $derived(user?.role === "super_admin");
+	// Same roles as the source catalog (keuangan only reads).
+	let canEditSource = $derived(user?.role === "cs" || user?.role === "super_admin");
 	// Keuangan may convert leads but cannot open Data Santri pages.
 	let canViewSantri = $derived(user?.role === "cs" || isSuperAdmin);
 	let isOpen = $derived(lead.status === "open");
@@ -331,6 +337,8 @@
 		"lead.do_not_contact": "Ditandai jangan hubungi",
 		"lead.reopened": "Dibuka kembali",
 		"lead.assigned": "Penanggung jawab diubah",
+		"source.detected": "Sumber lead dikenali",
+		"source.changed": "Sumber lead diubah",
 		"lead.updated": "Data diperbarui",
 		"label.added": "Label ditambah",
 		"label.removed": "Label dihapus",
@@ -431,6 +439,16 @@
 							<select class="ml-1 rounded border border-neutral-300 dark:border-neutral-700 bg-transparent px-1 py-0.5 text-xs" aria-label="Tugaskan ke" value={String(lead.assigned_user_id || "")} onchange={(e) => send("put", `/app/leads/${lead.id}/assign`, { user_id: Number((e.currentTarget as HTMLSelectElement).value) || 0 })}>
 								<option value="">— tidak ada —</option>
 								{#each props.users as u}<option value={String(u.id)}>{u.name}</option>{/each}
+							</select>
+						{/if}
+					</p>
+					<p class="mt-1 text-xs text-neutral-500">
+						Sumber: <span class="font-medium text-neutral-700 dark:text-neutral-300">{lead.lead_source_nama || "Tanpa sumber"}</span>
+						<span class="text-neutral-400">({lead.lead_source_by === "manual" ? "diisi CS" : lead.lead_source_by === "auto" ? "dari pesan pertama" : "belum dicek"})</span>
+						{#if canEditSource}
+							<select class="ml-1 rounded border border-neutral-300 dark:border-neutral-700 bg-transparent px-1 py-0.5 text-xs" aria-label="Ubah sumber lead" value={String(lead.lead_source_id || 0)} disabled={busy} onchange={(e) => send("put", `/app/leads/${lead.id}/sumber`, { source_id: Number((e.currentTarget as HTMLSelectElement).value) || 0 })}>
+								<option value="0">Tanpa sumber</option>
+								{#each lead.source_options as o}<option value={String(o.id)}>{o.nama}{o.is_aktif ? "" : " (nonaktif)"}</option>{/each}
 							</select>
 						{/if}
 					</p>

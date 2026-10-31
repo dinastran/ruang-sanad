@@ -7,6 +7,7 @@ import (
  "time"
 
  "github.com/maulanashalihin/laju-go/app/models"
+ "github.com/maulanashalihin/laju-go/app/queries"
 )
 
 // dashboardRange requires a valid inclusive WIB interval, with a 7-day default.
@@ -63,7 +64,12 @@ func (s *LeadService) Dashboard(ctx context.Context, from, to string) (*models.L
  if err != nil { return nil, err }
  eligible, replied, err := s.querier.LeadDashboardMaturedFollowups(ctx, start, end, s.nowUTC().Add(-72*time.Hour))
  if err != nil { return nil, err }
+ cohort, err := s.querier.LeadSourceCohort(ctx, queries.LeadSourceCohortParams{CreatedAt: start.UTC(), CreatedAt_2: end.UTC()})
+ if err != nil { return nil, err }
+ sources, err := s.sourceStats(ctx, cohort)
+ if err != nil { return nil, err }
  res := &models.LeadDashboard{
+  Sources:sources,
   From:fromStr, To:toStr, Report:report, ClosingPeriod:int64(len(closed)),
   PreviousLeads:prevLeads, PreviousClosing:int64(len(prevClosed)), ReviewCount:reviews,
   Daily:daily, Priorities:make([]models.LeadDashboardPriority, 0, len(priorities)),

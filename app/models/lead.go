@@ -62,6 +62,8 @@ type LeadListParams struct {
 	Stage       string `query:"stage" json:"stage"`
 	ReachedStage string `query:"reached_stage" json:"reached_stage"`
 	LostReason string `query:"lost_reason" json:"lost_reason"`
+	// Source: a lead_sources id, or "none" for leads without a source.
+	Source string `query:"sumber" json:"sumber"`
 	LabelID     int64  `query:"label" json:"label"`
 	Mine        bool   `query:"mine" json:"mine"`
 	NeedsReview bool   `query:"review" json:"review"`
@@ -147,6 +149,12 @@ type LeadDetail struct {
 	JadwalLabel        string                 `json:"jadwal_label"`
 	// JadwalOptions lists every schedule (for the select on the lead page).
 	JadwalOptions []JadwalOption `json:"jadwal_options"`
+	// Lead source (landing page / iklan); 0 = tanpa sumber. LeadSourceBy is
+	// "auto" (from the first message), "manual" (set by CS), or "".
+	LeadSourceID   int64              `json:"lead_source_id"`
+	LeadSourceNama string             `json:"lead_source_nama"`
+	LeadSourceBy   string             `json:"lead_source_by"`
+	SourceOptions  []LeadSourceOption `json:"source_options"`
 	Stage              string                 `json:"stage"`
 	Status             string                 `json:"status"`
 	LostReason         string                 `json:"lost_reason"`

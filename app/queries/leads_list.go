@@ -15,6 +15,9 @@ type LeadListFilter struct {
 	Stage       string
 	ReachedStage string
 	LostReason string
+	// SourceID > 0 filters one lead source; SourceNone keeps leads without one.
+	SourceID   int64
+	SourceNone bool
 	LabelID     int64
 	AssignedTo  int64
 	NeedsReview bool
@@ -71,6 +74,12 @@ func leadListWhere(f LeadListFilter) ([]string, []any) {
    args = append(args, at)
   }
  }
+ if f.SourceID > 0 {
+		where = append(where, "l.lead_source_id = ?")
+		args = append(args, f.SourceID)
+	} else if f.SourceNone {
+		where = append(where, "l.lead_source_id IS NULL")
+	}
  if f.LostReason != "" {
   where = append(where, "l.status = 'lost' AND l.lost_reason = ?")
   args = append(args, f.LostReason)

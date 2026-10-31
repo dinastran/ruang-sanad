@@ -449,6 +449,8 @@ type Lead struct {
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 	JadwalKode            string
+	LeadSourceID          sql.NullInt64
+	LeadSourceBy          string
 }
 
 type LeadAnalysis struct {
@@ -519,6 +521,23 @@ type LeadMessage struct {
 	MediaType   string
 	SentAt      time.Time
 	CreatedAt   time.Time
+}
+
+type LeadSource struct {
+	ID         int64
+	Nama       string
+	Keterangan string
+	IsAktif    int64
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type LeadSourcePattern struct {
+	ID         int64
+	SourceID   int64
+	Teks       string
+	TeksNormal string
+	CreatedAt  time.Time
 }
 
 type Level struct {

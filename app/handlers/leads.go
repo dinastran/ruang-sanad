@@ -49,7 +49,12 @@ func (h *LeadHandler) Index(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	sources, err := h.leads.SourceOptions(c.UserContext())
+	if err != nil {
+		return err
+	}
 	return h.inertiaService.Render(c, "app/Leads", fiber.Map{
+		"sources": sources,
 		"user":    user,
 		"leads":   list.Items,
 		"next":    list.NextCursor,

@@ -56,6 +56,7 @@ type Handlers struct {
 	Leads                       *handlers.LeadHandler
 	LeadClosing                 *handlers.LeadClosingHandler
 	LeadLaporan                 *handlers.LeadLaporanHandler
+	LeadSources                 *handlers.LeadSourceHandler
 	LeadFollowups               *handlers.LeadFollowupHandler
 	IntegrasiWhatsApp           *handlers.IntegrasiWhatsAppHandler
 	JadwalPenawaran             *handlers.JadwalPenawaranHandler
@@ -460,6 +461,10 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 // deliberately absent: it only receives the "santri baru" notification.
 var LeadRoles = []string{"cs", "keuangan", "super_admin"}
 
+// LeadSourceEditorRoles may manage the lead source catalog and its trigger
+// texts; keuangan only reads it.
+var LeadSourceEditorRoles = []string{"cs", "super_admin"}
+
 // setupLeadRoutes registers the CRM Leads pages under /app. Static paths
 // (laporan) come before /leads/:id.
 func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, userService *services.UserService) {
@@ -472,6 +477,17 @@ func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, u
 	protected.Get("/leads/dashboard", leadRole, h.LeadLaporan.Dashboard)
 	protected.Get("/leads/laporan", leadRole, h.LeadLaporan.Index)
 	protected.Get("/leads/laporan/export", leadRole, h.LeadLaporan.Export)
+	if h.LeadSources != nil {
+		sourceRole := middlewares.RoleRequired(store, userService, LeadSourceEditorRoles...)
+		protected.Get("/leads/sumber", leadRole, h.LeadSources.Index)
+		protected.Post("/leads/sumber", sourceRole, h.LeadSources.Create)
+		protected.Post("/leads/sumber/cocokkan", sourceRole, h.LeadSources.Rematch)
+		protected.Delete("/leads/sumber/pola/:pid", sourceRole, h.LeadSources.DeletePattern)
+		protected.Put("/leads/sumber/:sid", sourceRole, h.LeadSources.Update)
+		protected.Delete("/leads/sumber/:sid", sourceRole, h.LeadSources.Delete)
+		protected.Post("/leads/sumber/:sid/pola", sourceRole, h.LeadSources.AddPattern)
+		protected.Put("/leads/:id/sumber", leadRole, h.LeadSources.SetForLead)
+	}
 	if h.LeadFollowups != nil {
 		approver := middlewares.RoleRequired(store, userService, services.FollowupApproverRoles...)
 		protected.Get("/leads/followups", approver, h.LeadFollowups.Index)

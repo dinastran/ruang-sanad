@@ -4,13 +4,13 @@
 	import type { Flash, User } from "@lib/types";
 	import { Toast } from "@lib/notifications/toast";
 	import type { LeadLabel } from "@lib/leads";
-	import { ChartColumn, Inbox, Kanban, LayoutDashboard, List } from "lucide-svelte";
+	import { ChartColumn, Inbox, Kanban, LayoutDashboard, List, Megaphone } from "lucide-svelte";
 	import { fmt } from "@components/lead-dashboard/types";
 	import PipelineStrip from "@components/leads/PipelineStrip.svelte";
 	import LeadFilters from "@components/leads/LeadFilters.svelte";
 	import LeadTable from "@components/leads/LeadTable.svelte";
 	import LeadKanban from "@components/leads/LeadKanban.svelte";
-	import type { FilterChange, Filters, LeadItem } from "@components/leads/types";
+	import type { FilterChange, Filters, LeadItem, SourceOption } from "@components/leads/types";
 
 	interface Props {
 		user?: User;
@@ -19,6 +19,7 @@
 		total?: number;
 		counts?: Record<string, number>;
 		labels?: LeadLabel[];
+		sources?: SourceOption[];
 		stages?: string[];
 		filters?: Filters;
 		flash?: Flash;
@@ -42,7 +43,7 @@
 
 	let hasFilters = $derived(
 		(filters.status !== "" && filters.status !== "open") ||
-			!!(filters.stage || filters.label || filters.mine || filters.review || filters.q || filters.from || filters.to || filters.date_field || filters.reached_stage || filters.lost_reason),
+			!!(filters.stage || filters.label || filters.mine || filters.review || filters.q || filters.from || filters.to || filters.date_field || filters.reached_stage || filters.lost_reason || filters.sumber),
 	);
 	let view = $state<"list" | "kanban">(readView());
 
@@ -125,6 +126,7 @@
 			<div class="flex flex-wrap items-center gap-1">
 				<a href="/app/leads/dashboard" use:inertia class={ghost}><LayoutDashboard size={15} /> Dashboard</a>
 				<a href="/app/leads/laporan" use:inertia class={ghost}><ChartColumn size={15} /> Laporan</a>
+				<a href="/app/leads/sumber" use:inertia class={ghost}><Megaphone size={15} /> Sumber</a>
 				<div class="ml-1 hidden gap-0.5 rounded-lg bg-neutral-100 p-1 lg:inline-flex dark:bg-neutral-900" role="group" aria-label="Tampilan">
 					<button type="button" onclick={() => setView("list")} aria-pressed={view === "list"} class={seg + (view === "list" ? segOn : segIdle)}><List size={15} /> Daftar</button>
 					<button type="button" onclick={() => setView("kanban")} aria-pressed={view === "kanban"} class={seg + (view === "kanban" ? segOn : segIdle)}><Kanban size={15} /> Kanban</button>
@@ -141,7 +143,7 @@
 
 		<PipelineStrip {stages} {counts} {total} {filters} onfilter={go} />
 
-		<LeadFilters {filters} {stages} {labels} onfilter={go} />
+		<LeadFilters {filters} {stages} {labels} sources={props.sources ?? []} onfilter={go} />
 
 		<p class="text-sm text-neutral-600 dark:text-neutral-400" aria-live="polite">
 			<strong class="font-semibold tabular-nums text-neutral-950 dark:text-white">{fmt(total)} lead</strong>

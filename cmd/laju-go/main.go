@@ -242,6 +242,7 @@ func main() {
 		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService),
 		LeadClosing:                 handlers.NewLeadClosingHandler(leadService, sessionStore, inertiaService),
 		LeadLaporan:                 handlers.NewLeadLaporanHandler(leadService, sessionStore, inertiaService),
+		LeadSources:                 handlers.NewLeadSourceHandler(leadService, sessionStore, inertiaService),
 		LeadFollowups:               handlers.NewLeadFollowupHandler(leadService, waOutboxService, sessionStore, inertiaService),
 		IntegrasiWhatsApp: handlers.NewIntegrasiWhatsAppHandler(services.NewCRMIntegrationService(querier, services.CRMIntegrationConfig{
 			IngestEnabled: cfg.CSBridgeIngestToken != "",

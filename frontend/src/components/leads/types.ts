@@ -29,6 +29,15 @@ export interface Filters {
 	date_field?: string;
 	reached_stage?: string;
 	lost_reason?: string;
+	/** Lead source id, or "none" for leads without a source. */
+	sumber?: string;
+}
+
+/** A lead source (landing page / iklan) for selects and filters. */
+export interface SourceOption {
+	id: number;
+	nama: string;
+	is_aktif: boolean;
 }
 
 export type FilterChange = Partial<Record<keyof Filters, string | number | boolean>>;

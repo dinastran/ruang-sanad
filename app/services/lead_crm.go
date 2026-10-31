@@ -102,6 +102,11 @@ func (s *LeadService) List(ctx context.Context, p models.LeadListParams) (*model
 			break
 		}
 	}
+	if p.Source == "none" {
+		f.SourceNone = true
+	} else if id, err := strconv.ParseInt(p.Source, 10, 64); err == nil && id > 0 {
+		f.SourceID = id
+	}
 	f.LabelID = p.LabelID
 	if p.Mine {
 		f.AssignedTo = p.UserID
@@ -249,6 +254,15 @@ func (s *LeadService) Detail(ctx context.Context, id int64) (*models.LeadDetail,
 		return nil, err
 	} else if ok {
 		d.JadwalLabel = label
+	}
+	d.LeadSourceID, d.LeadSourceBy = l.LeadSourceID.Int64, l.LeadSourceBy
+	if d.SourceOptions, err = s.SourceOptions(ctx); err != nil {
+		return nil, err
+	}
+	for _, o := range d.SourceOptions {
+		if o.ID == d.LeadSourceID {
+			d.LeadSourceNama = o.Nama
+		}
 	}
 	jadwal, err := s.querier.ListJadwalPenawaran(ctx)
 	if err != nil {
