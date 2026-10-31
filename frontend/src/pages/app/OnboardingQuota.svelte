@@ -1,6 +1,7 @@
 <script lang="ts">
  import { router } from "@inertiajs/svelte";
  import { onMount } from "svelte";
+ import { getCSRFToken } from "@lib/utils/csrf";
  import AppLayout from "@layouts/AppLayout.svelte";
  import OnboardingWorkspaceHeader from "@components/OnboardingWorkspaceHeader.svelte";
  import ClassPlanApprovalInbox from "@components/ClassPlanApprovalInbox.svelte";
@@ -57,7 +58,7 @@
   try {
    const response=await fetch("/app/onboarding/planning/plans",{
     method:"POST",credentials:"same-origin",
-    headers:{"Content-Type":"application/json",Accept:"application/json"},
+    headers:{"Content-Type":"application/json",Accept:"application/json","X-XSRF-TOKEN":getCSRFToken()},
     body:JSON.stringify({
      angkatan:option.angkatan,gender:option.gender,level:option.level,
      guru_id:chosen.guru_id,frequency:option.frequency,capacity:10,
