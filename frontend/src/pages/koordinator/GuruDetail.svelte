@@ -2,11 +2,13 @@
 	import { inertia, router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import HapusGuruDialog from "@components/HapusGuruDialog.svelte";
+	import GuruAvailabilityEditor from "@components/GuruAvailabilityEditor.svelte";
 	import type { GuruDirectory, Kompetensi, LinkableUser, Riayah, User } from "@lib/types";
 	import { ArrowLeft, BookOpen, Save, Users, Link2, Unlink, Info, Award, NotebookPen, Trash2 } from "lucide-svelte";
 
-	interface Props { user?: User; guru: GuruDirectory; linkableUsers?: LinkableUser[]; canLink?: boolean; kompetensi?: Kompetensi; riayah?: Riayah[]; success?: string; error?: string; }
-	let { user, guru, linkableUsers = [], canLink = false, kompetensi, riayah = [], success, error }: Props = $props();
+	interface GuruAvailability { id: number; guru_id: number; hari: number; jam_mulai: string; jam_selesai: string; berlaku_mulai: string; berlaku_sampai: string; confirmed_by: number; confirmed_at: string; }
+	interface Props { user?: User; guru: GuruDirectory; linkableUsers?: LinkableUser[]; canLink?: boolean; kompetensi?: Kompetensi; riayah?: Riayah[]; availabilities?: GuruAvailability[]; success?: string; error?: string; }
+	let { user, guru, linkableUsers = [], canLink = false, kompetensi, riayah = [], availabilities = [], success, error }: Props = $props();
 
 	const KOMP_FIELDS: { key: keyof Kompetensi; label: string }[] = [
 		{ key: "hafalan_quran", label: "Hafalan Qur'an" },
@@ -90,6 +92,8 @@
 		</div>
 
 		<form onsubmit={(event) => { event.preventDefault(); save(); }} class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-5 sm:p-6 space-y-5"><div class="grid sm:grid-cols-2 gap-4"><label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Nama<input bind:value={form.nama} required class={`${inputClass} mt-1.5`} /></label><label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Gelar<input bind:value={form.gelar} placeholder="S.Pd., Lc., dll." class={`${inputClass} mt-1.5`} /></label><label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Jenis kelamin<select bind:value={form.jenis_kelamin} class={`${inputClass} mt-1.5`}><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></label><label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Status<select bind:value={form.status} class={`${inputClass} mt-1.5`}><option value="tetap">Guru Tetap</option><option value="part_time">Guru Part Time</option></select></label><label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">No. WhatsApp<input bind:value={form.no_wa} class={`${inputClass} mt-1.5`} /></label><label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Email<input bind:value={form.email} type="email" class={`${inputClass} mt-1.5`} /></label><label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Tanggal bergabung<input bind:value={form.tanggal_gabung} type="date" class={`${inputClass} mt-1.5`} /></label><label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Status akun<select bind:value={form.is_aktif} class={`${inputClass} mt-1.5`}><option value={true}>Aktif</option><option value={false}>Nonaktif</option></select></label></div><label class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">URL foto<input bind:value={form.foto} type="url" placeholder="https://..." class={`${inputClass} mt-1.5`} /></label><div class="pt-4 border-t border-neutral-200/80 dark:border-white/[0.04] flex justify-end"><button type="submit" disabled={saving} class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold disabled:opacity-50"><Save class="w-4 h-4" /> {saving ? "Menyimpan..." : "Simpan perubahan"}</button></div></form>
+
+		<GuruAvailabilityEditor guruId={guru.id} items={availabilities} />
 
 		<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-5 sm:p-6 space-y-4">
 			<div class="flex items-center gap-2"><Award class="w-5 h-5 text-brand-600 dark:text-brand-300" /><h2 class="font-semibold text-neutral-900 dark:text-white">Matriks Kompetensi</h2></div>
