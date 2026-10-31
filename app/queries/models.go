@@ -73,6 +73,77 @@ type ClassMonitoringNote struct {
 	CreatedAt         time.Time
 }
 
+type ClassPlan struct {
+	ID                          int64
+	Source                      string
+	Status                      string
+	Tipe                        string
+	Angkatan                    string
+	Gender                      string
+	GuruID                      sql.NullInt64
+	Frequency                   int64
+	MinQuota                    int64
+	Capacity                    int64
+	TargetKelasID               sql.NullInt64
+	ActivatedKelasID            sql.NullInt64
+	Score                       sql.NullFloat64
+	RulesetVersion              string
+	Version                     int64
+	CoordinatorConfirmedBy      sql.NullInt64
+	CoordinatorConfirmedAt      sql.NullTime
+	CoordinatorConfirmedVersion sql.NullInt64
+	AdminApprovedBy             sql.NullInt64
+	AdminApprovedAt             sql.NullTime
+	CreatedBy                   int64
+	CreatedAt                   time.Time
+	UpdatedAt                   time.Time
+}
+
+type ClassPlanEvent struct {
+	ID          int64
+	PlanID      int64
+	ActorUserID sql.NullInt64
+	EventType   string
+	FromStatus  string
+	ToStatus    string
+	Reason      string
+	CreatedAt   time.Time
+}
+
+type ClassPlanException struct {
+	ID           int64
+	PlanID       int64
+	Status       string
+	Reason       string
+	RequestedBy  int64
+	RequestedAt  time.Time
+	DecidedBy    sql.NullInt64
+	DecidedAt    sql.NullTime
+	DecisionNote string
+}
+
+type ClassPlanLevel struct {
+	PlanID    int64
+	LevelKode string
+}
+
+type ClassPlanSlot struct {
+	ID         int64
+	PlanID     int64
+	Hari       int64
+	JamMulai   string
+	JamSelesai string
+}
+
+type ClassPlanStudent struct {
+	PlanID           int64
+	SantriID         int64
+	LevelKode        string
+	Status           string
+	ScheduleApproved int64
+	AddedAt          time.Time
+}
+
 type CrmSetting struct {
 	ID                          int64
 	PaketKeKelasKode            string
@@ -104,6 +175,20 @@ type Guru struct {
 	Gelar         string
 }
 
+type GuruAvailability struct {
+	ID            int64
+	GuruID        int64
+	Hari          int64
+	JamMulai      string
+	JamSelesai    string
+	BerlakuMulai  time.Time
+	BerlakuSampai sql.NullTime
+	ConfirmedBy   sql.NullInt64
+	ConfirmedAt   sql.NullTime
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
 type GuruKompetensi struct {
 	GuruID           int64
 	HafalanQuran     int64
@@ -115,6 +200,21 @@ type GuruKompetensi struct {
 	BahasaArabPasif  int64
 	BahasaArabAktif  int64
 	UpdatedAt        time.Time
+}
+
+type GuruTeachingLevel struct {
+	GuruID     int64
+	LevelKode  string
+	ApprovedBy int64
+	ApprovedAt time.Time
+}
+
+type GuruWorkloadPolicy struct {
+	GuruID              int64
+	TargetWeeklyMinutes sql.NullInt64
+	MaxWeeklyMinutes    sql.NullInt64
+	UpdatedBy           sql.NullInt64
+	UpdatedAt           time.Time
 }
 
 type ImportLog struct {
@@ -234,6 +334,11 @@ type Kela struct {
 	PertemuanTerakhir  int64
 	MateriIndividual   int64
 	LevelPertemuanAwal int64
+}
+
+type KelasAllowedLevel struct {
+	KelasID   int64
+	LevelKode string
 }
 
 type KelasJadwalRutin struct {
