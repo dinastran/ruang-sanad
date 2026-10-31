@@ -27,23 +27,6 @@ SELECT * FROM meta_ads_sync_runs ORDER BY id DESC LIMIT 1;
 -- name: GetLastSuccessfulMetaAdsSyncRun :one
 SELECT * FROM meta_ads_sync_runs WHERE status = 'success' ORDER BY id DESC LIMIT 1;
 
--- name: MetaAdsDaily :many
-SELECT tanggal, CAST(SUM(spend) AS INTEGER) AS spend, CAST(SUM(impressions) AS INTEGER) AS impressions,
-    CAST(SUM(clicks) AS INTEGER) AS clicks, CAST(SUM(link_clicks) AS INTEGER) AS link_clicks,
-    CAST(SUM(messaging_started) AS INTEGER) AS messaging_started
-FROM meta_ad_insights_daily WHERE tanggal >= ? AND tanggal <= ?
-GROUP BY tanggal ORDER BY tanggal;
-
--- name: MetaAdsByAd :many
--- Satu baris per iklan dalam rentang; nama memakai data terbaru.
-SELECT ad_id, campaign_id,
-    CAST(MAX(campaign_name) AS TEXT) AS campaign_name, CAST(MAX(ad_name) AS TEXT) AS ad_name,
-    CAST(SUM(spend) AS INTEGER) AS spend, CAST(SUM(impressions) AS INTEGER) AS impressions,
-    CAST(SUM(clicks) AS INTEGER) AS clicks, CAST(SUM(link_clicks) AS INTEGER) AS link_clicks,
-    CAST(SUM(messaging_started) AS INTEGER) AS messaging_started
-FROM meta_ad_insights_daily WHERE tanggal >= ? AND tanggal <= ?
-GROUP BY ad_id, campaign_id ORDER BY 5 DESC;
-
 -- name: ListMetaCampaigns :many
 -- Semua kampanye yang pernah tersinkron (untuk pemetaan ke sumber lead).
 SELECT campaign_id, CAST(MAX(campaign_name) AS TEXT) AS campaign_name, CAST(MAX(tanggal) AS TEXT) AS last_date
@@ -62,3 +45,16 @@ DELETE FROM lead_source_meta_campaigns WHERE campaign_id = ?;
 -- name: ListLeadSourceRows :many
 -- Lead yang masuk dalam rentang, untuk menghitung lead/santri per sumber dan per hari.
 SELECT id, lead_source_id, status, created_at FROM leads WHERE created_at >= ? AND created_at < ?;
+
+-- name: MetaAdsRows :many
+-- Baris harian per iklan untuk dashboard (filter dan agregasi di browser).
+SELECT tanggal, ad_id, adset_id, campaign_id, spend, impressions, clicks, link_clicks, messaging_started
+FROM meta_ad_insights_daily WHERE tanggal >= ? AND tanggal <= ?
+ORDER BY tanggal, ad_id;
+
+-- name: MetaAdNames :many
+-- Nama terbaru setiap iklan beserta ad set dan kampanyenya.
+SELECT ad_id, adset_id, campaign_id,
+    CAST(MAX(ad_name) AS TEXT) AS ad_name, CAST(MAX(adset_name) AS TEXT) AS adset_name
+FROM meta_ad_insights_daily WHERE tanggal >= ? AND tanggal <= ?
+GROUP BY ad_id, adset_id, campaign_id;

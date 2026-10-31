@@ -332,17 +332,21 @@ func syncInfo(r queries.MetaAdsSyncRun) *models.MetaAdsSyncInfo {
 	}
 }
 
-// Report builds the Performa Iklan page for a period.
+// Report returns the raw data of the Performa Iklan dashboard for a period
+// and the period of the same length right before it.
 func (s *MetaAdsService) Report(ctx context.Context, from, to string) (*models.MetaAdsReport, error) {
 	start, end, err := s.reportRange(from, to)
 	if err != nil {
 		return nil, err
 	}
-	fromStr, toStr := start.Format(time.DateOnly), end.Format(time.DateOnly)
+	days := int(end.Sub(start).Hours()/24) + 1
+	prevStart, prevEnd := start.AddDate(0, 0, -days), start.AddDate(0, 0, -1)
 	rep := &models.MetaAdsReport{
-		From: fromStr, To: toStr, Enabled: s.Enabled(), Accounts: make([]string, 0, len(s.cfg.AccountIDs)),
-		Daily: []models.MetaAdsDay{}, Campaigns: []models.MetaAdsCampaign{}, Ads: []models.MetaAdsAd{},
-		Sources: []models.MetaAdsSourceStat{}, CampaignOptions: []models.MetaAdsCampaignOption{}, SourceOptions: []models.LeadSourceOption{},
+		From: start.Format(time.DateOnly), To: end.Format(time.DateOnly),
+		PrevFrom: prevStart.Format(time.DateOnly), PrevTo: prevEnd.Format(time.DateOnly),
+		Enabled: s.Enabled(), Accounts: make([]string, 0, len(s.cfg.AccountIDs)),
+		Rows: []models.MetaAdsRow{}, Ads: []models.MetaAdsAdInfo{}, Campaigns: []models.MetaAdsCampaignInfo{},
+		LeadDays: []models.MetaAdsLeadDay{}, Sources: []models.LeadSourceOption{},
 	}
 	for _, a := range s.cfg.AccountIDs {
 		rep.Accounts = append(rep.Accounts, "act_"+maskID(strings.TrimPrefix(a, "act_")))
@@ -358,131 +362,80 @@ func (s *MetaAdsService) Report(ctx context.Context, from, to string) (*models.M
 		return nil, err
 	}
 
-	// Lead sources and campaign mapping.
 	sources, err := s.querier.ListLeadSources(ctx)
 	if err != nil {
 		return nil, err
 	}
-	sourceName := map[int64]string{}
 	for _, src := range sources {
-		sourceName[src.ID] = src.Nama
-		rep.SourceOptions = append(rep.SourceOptions, models.LeadSourceOption{ID: src.ID, Nama: src.Nama, IsAktif: src.IsAktif == 1})
+		rep.Sources = append(rep.Sources, models.LeadSourceOption{ID: src.ID, Nama: src.Nama, IsAktif: src.IsAktif == 1})
 	}
 	mapping, err := s.querier.ListLeadSourceMetaCampaigns(ctx)
 	if err != nil {
 		return nil, err
 	}
 	campaignSource := map[string]int64{}
-	mappedSources := map[int64]bool{}
 	for _, m := range mapping {
 		campaignSource[m.CampaignID] = m.LeadSourceID
-		mappedSources[m.LeadSourceID] = true
 	}
-	rep.HasMapping = len(mappedSources) > 0
-	options, err := s.querier.ListMetaCampaigns(ctx)
+	campaigns, err := s.querier.ListMetaCampaigns(ctx)
 	if err != nil {
 		return nil, err
-	}
-	for _, o := range options {
-		rep.CampaignOptions = append(rep.CampaignOptions, models.MetaAdsCampaignOption{ID: o.CampaignID, Name: o.CampaignName, LastDate: o.LastDate, SourceID: campaignSource[o.CampaignID]})
-	}
-
-	// Meta side: daily totals and per ad / per campaign.
-	days := map[string]int{} // day → index in rep.Daily
-	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-		key := d.Format(time.DateOnly)
-		days[key] = len(rep.Daily)
-		rep.Daily = append(rep.Daily, models.MetaAdsDay{Day: key})
-	}
-	daily, err := s.querier.MetaAdsDaily(ctx, queries.MetaAdsDailyParams{Tanggal: fromStr, Tanggal_2: toStr})
-	if err != nil {
-		return nil, err
-	}
-	for _, d := range daily {
-		rep.Totals.Spend += d.Spend
-		rep.Totals.Impressions += d.Impressions
-		rep.Totals.Clicks += d.Clicks
-		rep.Totals.LinkClicks += d.LinkClicks
-		rep.Totals.Messaging += d.MessagingStarted
-		if i, ok := days[d.Tanggal]; ok {
-			rep.Daily[i].Spend, rep.Daily[i].Messaging = d.Spend, d.MessagingStarted
-		}
-	}
-	ads, err := s.querier.MetaAdsByAd(ctx, queries.MetaAdsByAdParams{Tanggal: fromStr, Tanggal_2: toStr})
-	if err != nil {
-		return nil, err
-	}
-	campaigns := map[string]*models.MetaAdsCampaign{}
-	sourceSpend := map[int64]int64{}
-	sourceCampaigns := map[int64]int{}
-	for _, a := range ads {
-		rep.Ads = append(rep.Ads, models.MetaAdsAd{
-			ID: a.AdID, Name: a.AdName, CampaignID: a.CampaignID, CampaignName: a.CampaignName, Spend: a.Spend,
-			Impressions: a.Impressions, Clicks: a.Clicks, LinkClicks: a.LinkClicks, Messaging: a.MessagingStarted,
-		})
-		c := campaigns[a.CampaignID]
-		if c == nil {
-			src := campaignSource[a.CampaignID]
-			c = &models.MetaAdsCampaign{ID: a.CampaignID, Name: a.CampaignName, SourceID: src, SourceNama: sourceName[src]}
-			campaigns[a.CampaignID] = c
-			if src > 0 {
-				sourceCampaigns[src]++
-			}
-		}
-		c.Spend += a.Spend
-		c.Impressions += a.Impressions
-		c.Clicks += a.Clicks
-		c.LinkClicks += a.LinkClicks
-		c.Messaging += a.MessagingStarted
-		c.Ads++
-		if c.SourceID > 0 {
-			sourceSpend[c.SourceID] += a.Spend
-		}
 	}
 	for _, c := range campaigns {
-		rep.Campaigns = append(rep.Campaigns, *c)
+		rep.Campaigns = append(rep.Campaigns, models.MetaAdsCampaignInfo{ID: c.CampaignID, Name: c.CampaignName, LastDate: c.LastDate, SourceID: campaignSource[c.CampaignID]})
 	}
-	sort.Slice(rep.Campaigns, func(i, j int) bool {
-		if rep.Campaigns[i].Spend != rep.Campaigns[j].Spend {
-			return rep.Campaigns[i].Spend > rep.Campaigns[j].Spend
-		}
-		return rep.Campaigns[i].Name < rep.Campaigns[j].Name
-	})
 
-	// CRM side: leads that came in during the period, by source and day.
-	leads, err := s.querier.ListLeadSourceRows(ctx, queries.ListLeadSourceRowsParams{CreatedAt: start.UTC(), CreatedAt_2: end.AddDate(0, 0, 1).UTC()})
+	f, t := rep.PrevFrom, rep.To
+	rows, err := s.querier.MetaAdsRows(ctx, queries.MetaAdsRowsParams{Tanggal: f, Tanggal_2: t})
 	if err != nil {
 		return nil, err
 	}
-	sourceLeads := map[int64]int64{}
-	sourceWon := map[int64]int64{}
-	for _, l := range leads {
-		rep.Totals.LeadsAll++
-		src := l.LeadSourceID.Int64
-		if !l.LeadSourceID.Valid || !mappedSources[src] {
-			continue
-		}
-		rep.Totals.LeadsAds++
-		sourceLeads[src]++
-		if l.Status == LeadStatusWon {
-			rep.Totals.WonAds++
-			sourceWon[src]++
-		}
-		if i, ok := days[l.CreatedAt.In(wib).Format(time.DateOnly)]; ok {
-			rep.Daily[i].LeadsAds++
-		}
-	}
-	for src := range mappedSources {
-		rep.Sources = append(rep.Sources, models.MetaAdsSourceStat{
-			ID: src, Nama: sourceName[src], Campaigns: sourceCampaigns[src], Spend: sourceSpend[src],
-			Leads: sourceLeads[src], Won: sourceWon[src],
+	for _, r := range rows {
+		rep.Rows = append(rep.Rows, models.MetaAdsRow{
+			Day: r.Tanggal, AdID: r.AdID, AdsetID: r.AdsetID, CampaignID: r.CampaignID, Spend: r.Spend,
+			Impressions: r.Impressions, Clicks: r.Clicks, LinkClicks: r.LinkClicks, Messaging: r.MessagingStarted,
 		})
 	}
-	sort.Slice(rep.Sources, func(i, j int) bool {
-		if rep.Sources[i].Spend != rep.Sources[j].Spend {
-			return rep.Sources[i].Spend > rep.Sources[j].Spend
+	names, err := s.querier.MetaAdNames(ctx, queries.MetaAdNamesParams{Tanggal: f, Tanggal_2: t})
+	if err != nil {
+		return nil, err
+	}
+	for _, n := range names {
+		rep.Ads = append(rep.Ads, models.MetaAdsAdInfo{ID: n.AdID, Name: n.AdName, AdsetID: n.AdsetID, AdsetName: n.AdsetName, CampaignID: n.CampaignID})
+	}
+
+	// CRM leads that came in during both periods, per WIB day and source.
+	leads, err := s.querier.ListLeadSourceRows(ctx, queries.ListLeadSourceRowsParams{CreatedAt: prevStart.UTC(), CreatedAt_2: end.AddDate(0, 0, 1).UTC()})
+	if err != nil {
+		return nil, err
+	}
+	type key struct {
+		day string
+		src int64
+	}
+	counts := map[key]*models.MetaAdsLeadDay{}
+	var order []key
+	for _, l := range leads {
+		k := key{l.CreatedAt.In(wib).Format(time.DateOnly), l.LeadSourceID.Int64}
+		c := counts[k]
+		if c == nil {
+			c = &models.MetaAdsLeadDay{Day: k.day, SourceID: k.src}
+			counts[k] = c
+			order = append(order, k)
 		}
-		return rep.Sources[i].Nama < rep.Sources[j].Nama
+		c.Leads++
+		if l.Status == LeadStatusWon {
+			c.Won++
+		}
+	}
+	sort.Slice(order, func(i, j int) bool {
+		if order[i].day != order[j].day {
+			return order[i].day < order[j].day
+		}
+		return order[i].src < order[j].src
 	})
+	for _, k := range order {
+		rep.LeadDays = append(rep.LeadDays, *counts[k])
+	}
 	return rep, nil
 }

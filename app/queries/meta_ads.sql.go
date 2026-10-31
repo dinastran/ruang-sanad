@@ -234,53 +234,42 @@ func (q *Queries) ListMetaCampaigns(ctx context.Context) ([]ListMetaCampaignsRow
 	return items, nil
 }
 
-const metaAdsByAd = `-- name: MetaAdsByAd :many
-SELECT ad_id, campaign_id,
-    CAST(MAX(campaign_name) AS TEXT) AS campaign_name, CAST(MAX(ad_name) AS TEXT) AS ad_name,
-    CAST(SUM(spend) AS INTEGER) AS spend, CAST(SUM(impressions) AS INTEGER) AS impressions,
-    CAST(SUM(clicks) AS INTEGER) AS clicks, CAST(SUM(link_clicks) AS INTEGER) AS link_clicks,
-    CAST(SUM(messaging_started) AS INTEGER) AS messaging_started
+const metaAdNames = `-- name: MetaAdNames :many
+SELECT ad_id, adset_id, campaign_id,
+    CAST(MAX(ad_name) AS TEXT) AS ad_name, CAST(MAX(adset_name) AS TEXT) AS adset_name
 FROM meta_ad_insights_daily WHERE tanggal >= ? AND tanggal <= ?
-GROUP BY ad_id, campaign_id ORDER BY 5 DESC
+GROUP BY ad_id, adset_id, campaign_id
 `
 
-type MetaAdsByAdParams struct {
+type MetaAdNamesParams struct {
 	Tanggal   string
 	Tanggal_2 string
 }
 
-type MetaAdsByAdRow struct {
-	AdID             string
-	CampaignID       string
-	CampaignName     string
-	AdName           string
-	Spend            int64
-	Impressions      int64
-	Clicks           int64
-	LinkClicks       int64
-	MessagingStarted int64
+type MetaAdNamesRow struct {
+	AdID       string
+	AdsetID    string
+	CampaignID string
+	AdName     string
+	AdsetName  string
 }
 
-// Satu baris per iklan dalam rentang; nama memakai data terbaru.
-func (q *Queries) MetaAdsByAd(ctx context.Context, arg MetaAdsByAdParams) ([]MetaAdsByAdRow, error) {
-	rows, err := q.db.QueryContext(ctx, metaAdsByAd, arg.Tanggal, arg.Tanggal_2)
+// Nama terbaru setiap iklan beserta ad set dan kampanyenya.
+func (q *Queries) MetaAdNames(ctx context.Context, arg MetaAdNamesParams) ([]MetaAdNamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, metaAdNames, arg.Tanggal, arg.Tanggal_2)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []MetaAdsByAdRow
+	var items []MetaAdNamesRow
 	for rows.Next() {
-		var i MetaAdsByAdRow
+		var i MetaAdNamesRow
 		if err := rows.Scan(
 			&i.AdID,
+			&i.AdsetID,
 			&i.CampaignID,
-			&i.CampaignName,
 			&i.AdName,
-			&i.Spend,
-			&i.Impressions,
-			&i.Clicks,
-			&i.LinkClicks,
-			&i.MessagingStarted,
+			&i.AdsetName,
 		); err != nil {
 			return nil, err
 		}
@@ -295,21 +284,22 @@ func (q *Queries) MetaAdsByAd(ctx context.Context, arg MetaAdsByAdParams) ([]Met
 	return items, nil
 }
 
-const metaAdsDaily = `-- name: MetaAdsDaily :many
-SELECT tanggal, CAST(SUM(spend) AS INTEGER) AS spend, CAST(SUM(impressions) AS INTEGER) AS impressions,
-    CAST(SUM(clicks) AS INTEGER) AS clicks, CAST(SUM(link_clicks) AS INTEGER) AS link_clicks,
-    CAST(SUM(messaging_started) AS INTEGER) AS messaging_started
+const metaAdsRows = `-- name: MetaAdsRows :many
+SELECT tanggal, ad_id, adset_id, campaign_id, spend, impressions, clicks, link_clicks, messaging_started
 FROM meta_ad_insights_daily WHERE tanggal >= ? AND tanggal <= ?
-GROUP BY tanggal ORDER BY tanggal
+ORDER BY tanggal, ad_id
 `
 
-type MetaAdsDailyParams struct {
+type MetaAdsRowsParams struct {
 	Tanggal   string
 	Tanggal_2 string
 }
 
-type MetaAdsDailyRow struct {
+type MetaAdsRowsRow struct {
 	Tanggal          string
+	AdID             string
+	AdsetID          string
+	CampaignID       string
 	Spend            int64
 	Impressions      int64
 	Clicks           int64
@@ -317,17 +307,21 @@ type MetaAdsDailyRow struct {
 	MessagingStarted int64
 }
 
-func (q *Queries) MetaAdsDaily(ctx context.Context, arg MetaAdsDailyParams) ([]MetaAdsDailyRow, error) {
-	rows, err := q.db.QueryContext(ctx, metaAdsDaily, arg.Tanggal, arg.Tanggal_2)
+// Baris harian per iklan untuk dashboard (filter dan agregasi di browser).
+func (q *Queries) MetaAdsRows(ctx context.Context, arg MetaAdsRowsParams) ([]MetaAdsRowsRow, error) {
+	rows, err := q.db.QueryContext(ctx, metaAdsRows, arg.Tanggal, arg.Tanggal_2)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []MetaAdsDailyRow
+	var items []MetaAdsRowsRow
 	for rows.Next() {
-		var i MetaAdsDailyRow
+		var i MetaAdsRowsRow
 		if err := rows.Scan(
 			&i.Tanggal,
+			&i.AdID,
+			&i.AdsetID,
+			&i.CampaignID,
 			&i.Spend,
 			&i.Impressions,
 			&i.Clicks,
