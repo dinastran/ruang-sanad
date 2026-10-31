@@ -9,7 +9,7 @@ Add API workflow over existing `class_plans` tables from migration 0093. **This 
 ### API (session-authenticated and role-protected)
 
 - `GET /app/onboarding/planning/plans`: Admin Kelas, Koordinator Guru and Super Admin. Returns open workflow items (max 100).
-- `POST /app/onboarding/planning/plans`: Admin Kelas and Super Admin. Creates a `manual` draft, including slots, level and selected candidates. The client must send `angkatan`, `gender`, `level`, `guru_id`, `frequency`, `capacity`, `slots:[{Day,Start,End}]`, `candidate_ids` and optionally `target_kelas_id`. Regular capacity 8..10, every meeting 90 minutes, 1 or 2 distinct days.
+- `POST /app/onboarding/planning/plans`: Admin Kelas and Super Admin. Creates a `manual` draft, including slots, level and selected candidates. The client must send `angkatan`, `gender`, `level`, `guru_id`, `frequency`, `capacity`, `slots:[{Day,Start,End}]`, `candidate_ids` and `target_kelas_id:0`. P2a only permits drafts for a new class; filling existing classes remains read-only. Regular capacity 8..10, every meeting 90 minutes, 1 or 2 distinct days.
 - `POST /app/onboarding/planning/plans/:id/actions`: Admin Kelas and Super Admin can send `submit` or `admin_approve`; Koordinator Guru and Super Admin can send `coordinator_confirm`. Body: `{action,version,reason}`. All actions are checked server-side against the authenticated user's current persisted role, not just route middleware.
 
 ### Transitions
