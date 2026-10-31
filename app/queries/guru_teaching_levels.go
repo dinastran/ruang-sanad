@@ -1,9 +1,6 @@
 package queries
 
-import (
-	"context"
-	"database/sql"
-)
+import "context"
 
 type GuruTeachingLevelRow struct {
 	GuruID int64  `json:"guru_id"`
@@ -37,5 +34,3 @@ func (q *Querier) ReplaceTeachingLevelsTx(ctx context.Context, guruID,actorID in
 	}
 	return nil
 }
-
-var _ sql.Scanner
