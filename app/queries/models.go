@@ -823,7 +823,7 @@ type SantriScheduleAlternative struct {
 	ConsentNote        string
 	ConsentConfirmedBy sql.NullInt64
 	ConsentConfirmedAt sql.NullTime
-	UpdatedBy          int64
+	UpdatedBy          sql.NullInt64
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
