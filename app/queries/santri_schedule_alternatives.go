@@ -43,7 +43,7 @@ func (q *Querier) ListAlternateOffersForSantri(ctx context.Context, id int64) ([
 	return out,rows.Err()
 }
 
-func (q *Querier) ListSantriScheduleAlternativeRecords(ctx context.Context, id int64) ([]SantriScheduleAlternativeRecord,error) {
+func (q *Querier) ListSantriScheduleAlternatives(ctx context.Context, id int64) ([]SantriScheduleAlternativeRecord,error) {
 	const statement = `SELECT a.id,a.jadwal_kode,a.status,a.consent_channel,a.consent_note,
 		COALESCE(a.consent_confirmed_by,0),COALESCE(CAST(a.consent_confirmed_at AS TEXT),''),
 		CAST(a.updated_at AS TEXT),
