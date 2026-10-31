@@ -74,6 +74,7 @@ func appendPlanningAlternativeMatches(result PlanningMatchResult,snap PlanningMa
 		if !ok||committedPreview[a.SantriID]||moved[a.SantriID]||a.OfferCode==base.OfferCode{
 			continue
 		}
+		if _,_,originalValid:=planningOfferSlots(base);!originalValid{continue}
 		// Source query validates consent, active offer and payment. The pure
 		// preview additionally validates exact duration/frequency/shape.
 		want:=base
