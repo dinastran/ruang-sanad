@@ -86,10 +86,8 @@ func (q *Querier) CanRecordSantriAlternative(ctx context.Context,id int64,kode s
 
 func (q *Querier) SaveSantriAlternativeTx(ctx context.Context,id int64,kode,status,channel,note string,actor int64) (int64,error) {
 	var confirmer sql.NullInt64
-	var confirmedAt sql.NullString
 	if status=="approved" {
 		confirmer=sql.NullInt64{Int64:actor,Valid:true}
-		confirmedAt=sql.NullString{String:"CURRENT_TIMESTAMP",Valid:true}
 	}
 	// Timestamp expressions must stay SQL expressions, not bound strings.
 	const statement = `INSERT INTO santri_schedule_alternatives
@@ -105,7 +103,6 @@ func (q *Querier) SaveSantriAlternativeTx(ctx context.Context,id int64,kode,stat
 		RETURNING id`
 	var newID int64
 	err:=q.Queries.db.QueryRowContext(ctx,statement,id,kode,status,channel,note,confirmer,status,actor).Scan(&newID)
-	_ = confirmedAt
 	return newID,err
 }
 
