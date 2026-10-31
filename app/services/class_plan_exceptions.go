@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/maulanashalihin/laju-go/app/models"
-	"github.com/maulanashalihin/laju-go/app/queries"
 )
 
 func validateQuotaDecision(action,note string) error {
@@ -84,4 +83,3 @@ func (s *ClassPlanWorkflowService) DecideQuotaException(ctx context.Context,id,v
 // The existing approver and coordinator checks remain independent of this
 // exception. A rejected exception is terminal in this slice; create a fresh
 // draft if new candidates or a revised schedule are required.
-var _ = queries.ClassPlanExceptionReview{}
