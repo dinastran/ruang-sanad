@@ -164,7 +164,7 @@ func main() {
 
 	// Initialize handlers
 	uploadHandler := handlers.NewUploadHandler(sessionStore, userService, "storage/uploads")
-	santriHandler := handlers.NewSantriHandler(santriService, masterService, kelasService, productCRMService, sessionStore, inertiaService)
+	santriHandler := handlers.NewSantriHandler(santriService, masterService, kelasService, productCRMService, sessionStore, inertiaService).WithScheduleAlternatives(services.NewSantriScheduleAlternativeService(querier))
 	onboardingHandler := handlers.NewOnboardingHandler(onboardingService, sessionStore, inertiaService).WithPlanningReadiness(services.NewPlanningReadinessService(querier)).WithPlanningMatching(services.NewPlanningMatchingService(querier))
 	santriAnalyticsHandler := handlers.NewSantriAnalyticsHandler(santriAnalyticsService, masterService, sessionStore, inertiaService)
 	kelasHandler := handlers.NewKelasHandler(kelasService, services.NewKelasPerubahanService(querier, kelasEngine), santriStatusService, masterService, sessionStore, inertiaService)
