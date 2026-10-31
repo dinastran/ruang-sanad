@@ -179,7 +179,7 @@
         <p class="mt-2 text-xs text-neutral-500">{suggestion.reason}</p>
        </div>
       {:else}
-       <p class="text-sm text-neutral-500">Belum ada kombinasi kelas yang bisa direkomendasikan dari sumber data terverifikasi. Periksa kesiapan di atas.</p>
+       <p class="text-sm text-neutral-500">Belum ada rekomendasi dari pilihan jadwal utama yang memenuhi aturan. Periksa alternatif yang disetujui dan kesiapan data.</p>
       {/each}
      </div>
      {#if (matching.alternative_matches?.length??0)>0}
