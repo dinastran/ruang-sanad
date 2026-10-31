@@ -80,6 +80,7 @@ func (q *Querier) CanRecordSantriAlternative(ctx context.Context,id int64,kode s
 		AND j.is_buka=1
 		AND (j.gender='' OR j.gender=s.jenis_kelamin)
 		AND (j.level='' OR j.level=s.level)
+		AND NOT EXISTS (SELECT 1 FROM leads l WHERE l.santri_id=s.id AND l.jadwal_kode=j.kode)
 	)`,kode,id).Scan(&valid)
 	return valid,err
 }
