@@ -1,8 +1,10 @@
 <script lang="ts">
  import { router } from "@inertiajs/svelte";
  import { onMount } from "svelte";
+ import { getCSRFToken } from "@lib/utils/csrf";
  import AppLayout from "@layouts/AppLayout.svelte";
  import OnboardingWorkspaceHeader from "@components/OnboardingWorkspaceHeader.svelte";
+ import ClassPlanApprovalInbox from "@components/ClassPlanApprovalInbox.svelte";
  import type { User } from "@lib/types";
  import { ClipboardCopy, History, CalendarClock, ShieldCheck } from "lucide-svelte";
 
@@ -47,6 +49,29 @@
  let matching=$state<MatchingPreview|null>(null);
  let matchingLoading=$state(false);
  let matchingError=$state("");
+ let drafting=$state(false);
+ async function createDraftFromSuggestion(option:MatchOption) {
+  if(drafting || option.kind!=="new_class" || option.state!=="ready_preview" || option.teacher_options.length===0)return;
+  const chosen=option.teacher_options[0];
+  if(!confirm("Buat draft manual dari rekomendasi untuk guru "+(chosen.name||"#"+chosen.guru_id)+" dan "+option.candidate_ids.length+" santri? Ini belum memesan kursi atau mengaktifkan kelas."))return;
+  drafting=true;errorMessage="";success="";
+  try {
+   const response=await fetch("/app/onboarding/planning/plans",{
+    method:"POST",credentials:"same-origin",
+    headers:{"Content-Type":"application/json",Accept:"application/json","X-XSRF-TOKEN":getCSRFToken()},
+    body:JSON.stringify({
+     angkatan:option.angkatan,gender:option.gender,level:option.level,
+     guru_id:chosen.guru_id,frequency:option.frequency,capacity:10,
+     target_kelas_id:0,slots:option.slots,candidate_ids:option.candidate_ids,
+    }),
+   });
+   const result=await response.json().catch(()=>({error:"Gagal membuat draft"})) as {id?:number;error?:string};
+   if(!response.ok)throw new Error(result.error??"Draft tidak tersimpan");
+   success="Draft #"+result.id+" berhasil dibuat. Muat ulang panel persetujuan, lalu ajukan setelah data diperiksa.";
+  }catch(e){errorMessage=e instanceof Error?e.message:"Gagal membuat draft"}
+  finally{drafting=false}
+ }
+
  async function loadMatching() {
   if(matchingLoading)return;
   matchingLoading=true;matchingError="";
@@ -125,6 +150,8 @@
   {#if errorMessage}<p role="alert" class="rounded-lg border border-red-200 p-3 text-sm text-red-700">{errorMessage}</p>{/if}
 
 
+  {#if adminKelas}<ClassPlanApprovalInbox mode="admin"/>{/if}
+
   {#if adminKelas}
    <section class="rounded-xl border border-neutral-200 bg-white p-4 dark:border-white/10 dark:bg-neutral-900" aria-label="Kesiapan data rekomendasi kelas">
     <div class="flex flex-wrap items-center justify-between gap-2">
@@ -177,6 +204,9 @@
         <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-300">Hari {suggestion.slots.map(s=>s.Day).join(", ")} · {suggestion.slots[0]?.Start ?? "-"} sampai {suggestion.slots[0]?.End ?? "-"} WIB</p>
         {#if suggestion.teacher_options.length>0}<p class="mt-1 text-xs text-neutral-600 dark:text-neutral-300">Guru prioritas: {suggestion.teacher_options.map(t=>t.name||"#"+t.guru_id).join(", ")}</p>{/if}
         <p class="mt-2 text-xs text-neutral-500">{suggestion.reason}</p>
+        {#if suggestion.kind==="new_class" && suggestion.state==="ready_preview" && suggestion.teacher_options.length>0}
+         <button type="button" onclick={()=>createDraftFromSuggestion(suggestion)} disabled={drafting} class="mt-3 rounded-lg border border-brand-500 px-3 py-2 text-xs font-semibold text-brand-700 dark:text-brand-300 disabled:opacity-50">{drafting?"Membuat draft...":"Buat draft manual"}</button>
+        {/if}
        </div>
       {:else}
        <p class="text-sm text-neutral-500">Belum ada rekomendasi dari pilihan jadwal utama yang memenuhi aturan. Periksa alternatif yang disetujui dan kesiapan data.</p>
