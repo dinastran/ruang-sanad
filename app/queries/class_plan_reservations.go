@@ -1,9 +1,6 @@
 package queries
 
-import (
-	"context"
-	"database/sql"
-)
+import "context"
 
 // ReserveApprovedClassPlanCandidates runs inside the caller's transaction.
 // The partial unique index on class_plan_students(santri_id) enforces
@@ -62,5 +59,3 @@ func (q *Querier) HasLiveClassPlanReservation(ctx context.Context,santriID int64
 	)`,santriID).Scan(&found)
 	return found,err
 }
-
-var _ sql.Result
