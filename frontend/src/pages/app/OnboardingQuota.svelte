@@ -18,6 +18,10 @@
  interface ReadinessCounts {awaiting_onboarding:number;legacy_preassigned:number;candidate_data_complete:number;crm_payment_verified:number;crm_verification_unknown:number;active_teachers:number;confirmed_availability_guru:number;approved_teaching_level_guru:number;usable_teacher_count:number;active_classes_no_routine_slots:number;regular_classes_above_max:number}
  interface ReadinessIssue {code:string;severity:string;message:string}
  interface ReadinessReport {as_of:string;counts:ReadinessCounts;ready_for_automatic_recommendation:boolean;issues:ReadinessIssue[]}
+ interface MatchSlot {Day:number;Start:string;End:string}
+ interface MatchTeacher {guru_id:number;name:string;gender:string;status:string;weekly_minutes:number}
+ interface MatchOption {kind:string;state:string;angkatan:string;gender:string;level:string;frequency:number;offer_code:string;class_id?:number;candidate_ids:number[];seats_available:number;minimum_to_start:number;slots:MatchSlot[];teacher_options:MatchTeacher[];reason:string}
+ interface MatchingPreview {as_of:string;confirmed_demand:number;eligible_demand:number;skipped_ambiguous:number;truncated:boolean;suggestions:MatchOption[];warnings:string[]}
  interface Action {id:number;event_type:string;note:string;actor_name:string;created_at:string}
  interface Props {user?:User;board:{classes:ClassControl[]};notices:{id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}[]}
  let props:Props=$props();
@@ -39,6 +43,19 @@
  let readiness=$state<ReadinessReport|null>(null);
  let readinessLoading=$state(false);
  let readinessError=$state("");
+ let matching=$state<MatchingPreview|null>(null);
+ let matchingLoading=$state(false);
+ let matchingError=$state("");
+ async function loadMatching() {
+  if(matchingLoading)return;
+  matchingLoading=true;matchingError="";
+  try {
+   const res=await fetch("/app/onboarding/planning/recommendations",{credentials:"same-origin",headers:{Accept:"application/json"}});
+   if(!res.ok)throw new Error("Belum bisa menghitung rekomendasi dari data kelas dan guru saat ini.");
+   matching=await res.json() as MatchingPreview;
+  }catch(e){matchingError=e instanceof Error?e.message:"Gagal mengambil rekomendasi";}
+  finally{matchingLoading=false;}
+ }
  onMount(async()=>{
   if(user?.role!=="admin_kelas"&&user?.role!=="super_admin")return;
   readinessLoading=true;
@@ -131,6 +148,42 @@
       </ul>
      {/if}
      <p class="mt-3 text-xs text-neutral-500">Data berlaku {readiness.as_of} WIB. Pembayaran tanpa lead CRM tidak dianggap tidak bayar; perlu verifikasi dari sumber lain. Rekomendasi belum diaktifkan.</p>
+    {/if}
+   </section>
+  {/if}
+
+  {#if adminKelas}
+   <section class="rounded-xl border border-neutral-200 bg-white p-4 dark:border-white/10 dark:bg-neutral-900" aria-label="Preview rekomendasi jadwal kelas">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+     <div>
+      <h2 class="font-semibold">Rekomendasi Jadwal Kelas</h2>
+      <p class="mt-1 text-xs text-neutral-500">Preview saja. Tidak membuat kelas, tidak menempatkan santri, dan tidak memesan slot guru.</p>
+     </div>
+     <button type="button" onclick={loadMatching} disabled={matchingLoading} class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{matchingLoading?"Menghitung...":matching?"Hitung ulang":"Lihat rekomendasi"}</button>
+    </div>
+    {#if matchingError}<p role="alert" class="mt-3 text-sm text-red-700">{matchingError}</p>{/if}
+    {#if matching}
+     <p class="mt-3 text-sm text-neutral-600 dark:text-neutral-300">{matching.eligible_demand} kandidat layak dibaca dari {matching.confirmed_demand} demand CRM terverifikasi. {matching.skipped_ambiguous} jadwal perlu verifikasi manual.</p>
+     <div class="mt-3 grid gap-3 md:grid-cols-2">
+      {#each matching.suggestions as suggestion,i (i)}
+       <div class="rounded-lg border border-neutral-200 p-3 dark:border-white/10">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+         <h3 class="text-sm font-semibold">{suggestion.kind==="existing_class"?"Isi Kelas Existing #"+suggestion.class_id:"Usulan Kelas Baru"}</h3>
+         <span class="text-xs font-semibold {suggestion.state==='ready_preview'?'text-emerald-700 dark:text-emerald-300':'text-amber-700 dark:text-amber-300'}">{suggestion.state==="ready_preview"?"Layak ditinjau":suggestion.state==="needs_quota"?"Kuota belum cukup":"Belum ada guru cocok"}</span>
+        </div>
+        <p class="mt-2 text-xs text-neutral-600 dark:text-neutral-300">{suggestion.gender==="L"?"Ikhwan":"Akhwat"} · Level {suggestion.level} · {suggestion.frequency}x/pekan · Angkatan {suggestion.angkatan}</p>
+        <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-300">Kode penawaran {suggestion.offer_code} · {suggestion.candidate_ids.length} kandidat · Kuota minimum {suggestion.minimum_to_start}</p>
+        <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-300">Hari {suggestion.slots.map(s=>s.Day).join(", ")} · {suggestion.slots[0]?.Start ?? "-"} sampai {suggestion.slots[0]?.End ?? "-"} WIB</p>
+        {#if suggestion.teacher_options.length>0}<p class="mt-1 text-xs text-neutral-600 dark:text-neutral-300">Guru prioritas: {suggestion.teacher_options.map(t=>t.name||"#"+t.guru_id).join(", ")}</p>{/if}
+        <p class="mt-2 text-xs text-neutral-500">{suggestion.reason}</p>
+       </div>
+      {:else}
+       <p class="text-sm text-neutral-500">Belum ada kombinasi kelas yang bisa direkomendasikan dari sumber data terverifikasi. Periksa kesiapan di atas.</p>
+      {/each}
+     </div>
+     {#each matching.warnings as warning,i (i)}
+      <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">{warning}</p>
+     {/each}
     {/if}
    </section>
   {/if}
