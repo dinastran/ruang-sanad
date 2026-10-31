@@ -43,7 +43,7 @@ confirmed AS (
 	WHERE EXISTS (
 		SELECT 1 FROM leads l WHERE l.santri_id = c.id
 		AND l.verified_at IS NOT NULL AND l.needs_review = 0
-		AND l.status <> 'lost'
+		AND l.status IN ('open', 'won')
 	)
 ),
 availability AS (
