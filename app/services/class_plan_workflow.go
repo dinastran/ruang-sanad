@@ -269,7 +269,10 @@ func (s *ClassPlanWorkflowService) preflight(ctx context.Context, q *queries.Que
 		eligibility = append(eligibility, PlanningCandidate{ID: r.ID, Gender: r.Gender, Level: r.Level,
 			PlacementEligible: eligible, ScheduleApproved: scheduleApproved, CurrentClassID: r.ClassID.Int64})
 	}
-	exceptionApproved := false
+	exceptionApproved, err := q.ClassPlanHasApprovedQuotaException(ctx, plan.ID)
+	if err != nil {
+		return nil, err
+	}
 	issues := ValidatePlanningActivation(PlanningProposal{
 		Program: plan.Program, Gender: plan.Gender, Frequency: int(plan.Frequency), Capacity: int(plan.Capacity),
 		Slots: slots, Teacher: teacher, Candidates: eligibility, ExceptionApproved: exceptionApproved,
@@ -329,8 +332,8 @@ func classPlanWIBDate() (string, error) {
 	return time.Now().In(zone).Format(time.DateOnly), nil
 }
 
-// Submit advances only a valid persisted draft. A sub-quota request stays in
-// pending_exception, which this phase deliberately cannot approve.
+// Submit creates a reviewable exception request when quota is below eight.
+// Approval never activates the class or reserves students.
 func (s *ClassPlanWorkflowService) Action(ctx context.Context, id, version, actorID int64, action, reason string) error {
 	if id <= 0 || version <= 0 || actorID <= 0 {
 		return ErrPlanWorkflowInvalid
@@ -338,6 +341,9 @@ func (s *ClassPlanWorkflowService) Action(ctx context.Context, id, version, acto
 	reason = strings.TrimSpace(reason)
 	if len(reason) > 500 {
 		return ErrPlanWorkflowInvalid
+	}
+	if action == "exception_approve" || action == "exception_reject" {
+		return s.DecideQuotaException(ctx, id, version, actorID, action, reason)
 	}
 	var admin, coordinator bool
 	switch action {
@@ -400,6 +406,9 @@ func (s *ClassPlanWorkflowService) Action(ctx context.Context, id, version, acto
 		// The only provisional state allowed is a valid sub-quota draft. It
 		// cannot go through coordinator/admin approval in this phase.
 		if len(issues) == 1 && issues[0].Code == "MIN_QUOTA_NOT_MET" {
+			if len(reason) < 10 {
+				return fmt.Errorf("%w: alasan exception minimal 10 karakter", ErrPlanWorkflowInvalid)
+			}
 			to = "pending_exception"
 		} else {
 			return fmt.Errorf("%w: %s", ErrPlanWorkflowInvalid, issues[0].Message)
@@ -417,6 +426,12 @@ func (s *ClassPlanWorkflowService) Action(ctx context.Context, id, version, acto
 	}
 	if !ok {
 		return ErrPlanWorkflowConflict
+	}
+	if action == "submit" && to == "pending_exception" {
+		if err := q.ClassPlanRequestQuotaException(ctx, id, actorID, reason); err != nil {
+			return err
+		}
+		event = "planning.exception_requested"
 	}
 	if reason == "" {
 		reason = event
