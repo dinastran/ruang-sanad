@@ -516,8 +516,17 @@ func (s *Store) GetFlash(c *fiber.Ctx, key string) string {
 	value := c.Cookies(cookieName)
 
 	if value != "" {
-		// Clear the flash cookie after reading (one-time use)
-		c.ClearCookie(cookieName)
+		// Clear the flash cookie after reading (one-time use). The path must
+		// match the one Flash set: ClearCookie sends no path, so the browser
+		// kept the "/" cookie and showed the message again on later pages.
+		c.Cookie(&fiber.Cookie{
+			Name:     cookieName,
+			Value:    "",
+			Path:     "/",
+			HTTPOnly: true,
+			SameSite: "Lax",
+			Expires:  time.Unix(0, 0),
+		})
 	}
 
 	return value
