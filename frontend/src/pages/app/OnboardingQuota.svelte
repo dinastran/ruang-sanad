@@ -1,8 +1,10 @@
 <script lang="ts">
  import { router } from "@inertiajs/svelte";
  import { onMount } from "svelte";
+ import { getCSRFToken } from "@lib/utils/csrf";
  import AppLayout from "@layouts/AppLayout.svelte";
  import OnboardingWorkspaceHeader from "@components/OnboardingWorkspaceHeader.svelte";
+ import ClassPlanApprovalInbox from "@components/ClassPlanApprovalInbox.svelte";
  import type { User } from "@lib/types";
  import { ClipboardCopy, History, CalendarClock, ShieldCheck } from "lucide-svelte";
 
@@ -21,7 +23,8 @@
  interface MatchSlot {Day:number;Start:string;End:string}
  interface MatchTeacher {guru_id:number;name:string;gender:string;status:string;weekly_minutes:number}
  interface MatchOption {kind:string;state:string;angkatan:string;gender:string;level:string;frequency:number;offer_code:string;class_id?:number;candidate_ids:number[];seats_available:number;minimum_to_start:number;slots:MatchSlot[];teacher_options:MatchTeacher[];reason:string}
- interface MatchingPreview {as_of:string;confirmed_demand:number;eligible_demand:number;skipped_ambiguous:number;truncated:boolean;suggestions:MatchOption[];warnings:string[]}
+ interface AlternateClassMatch {santri_id:number;class_id:number;offer_code:string;slots:MatchSlot[];reason:string}
+ interface MatchingPreview {as_of:string;confirmed_demand:number;eligible_demand:number;skipped_ambiguous:number;truncated:boolean;suggestions:MatchOption[];alternative_matches?:AlternateClassMatch[];warnings:string[]}
  interface Action {id:number;event_type:string;note:string;actor_name:string;created_at:string}
  interface Props {user?:User;board:{classes:ClassControl[]};notices:{id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}[]}
  let props:Props=$props();
@@ -46,6 +49,29 @@
  let matching=$state<MatchingPreview|null>(null);
  let matchingLoading=$state(false);
  let matchingError=$state("");
+ let drafting=$state(false);
+ async function createDraftFromSuggestion(option:MatchOption) {
+  if(drafting || option.kind!=="new_class" || (option.state!=="ready_preview" && option.state!=="needs_quota") || option.teacher_options.length===0)return;
+  const chosen=option.teacher_options[0];
+  if(!confirm((option.state==="needs_quota"?"Buat draft untuk pengajuan exception kuota":"Buat draft manual")+" dengan guru "+(chosen.name||"#"+chosen.guru_id)+" dan "+option.candidate_ids.length+" santri? Draft belum memesan kursi atau mengaktifkan kelas."))return;
+  drafting=true;errorMessage="";success="";
+  try {
+   const response=await fetch("/app/onboarding/planning/plans",{
+    method:"POST",credentials:"same-origin",
+    headers:{"Content-Type":"application/json",Accept:"application/json","X-XSRF-TOKEN":getCSRFToken()},
+    body:JSON.stringify({
+     angkatan:option.angkatan,gender:option.gender,level:option.level,
+     guru_id:chosen.guru_id,frequency:option.frequency,capacity:10,
+     target_kelas_id:0,slots:option.slots,candidate_ids:option.candidate_ids,
+    }),
+   });
+   const result=await response.json().catch(()=>({error:"Gagal membuat draft"})) as {id?:number;error?:string};
+   if(!response.ok)throw new Error(result.error??"Draft tidak tersimpan");
+   success="Draft #"+result.id+" berhasil dibuat. Muat ulang panel persetujuan, lalu ajukan setelah data diperiksa.";
+  }catch(e){errorMessage=e instanceof Error?e.message:"Gagal membuat draft"}
+  finally{drafting=false}
+ }
+
  async function loadMatching() {
   if(matchingLoading)return;
   matchingLoading=true;matchingError="";
@@ -124,6 +150,8 @@
   {#if errorMessage}<p role="alert" class="rounded-lg border border-red-200 p-3 text-sm text-red-700">{errorMessage}</p>{/if}
 
 
+  {#if adminKelas}<ClassPlanApprovalInbox mode={superAdmin?"super_admin":"admin"}/>{/if}
+
   {#if adminKelas}
    <section class="rounded-xl border border-neutral-200 bg-white p-4 dark:border-white/10 dark:bg-neutral-900" aria-label="Kesiapan data rekomendasi kelas">
     <div class="flex flex-wrap items-center justify-between gap-2">
@@ -176,11 +204,29 @@
         <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-300">Hari {suggestion.slots.map(s=>s.Day).join(", ")} · {suggestion.slots[0]?.Start ?? "-"} sampai {suggestion.slots[0]?.End ?? "-"} WIB</p>
         {#if suggestion.teacher_options.length>0}<p class="mt-1 text-xs text-neutral-600 dark:text-neutral-300">Guru prioritas: {suggestion.teacher_options.map(t=>t.name||"#"+t.guru_id).join(", ")}</p>{/if}
         <p class="mt-2 text-xs text-neutral-500">{suggestion.reason}</p>
+        {#if suggestion.kind==="new_class" && (suggestion.state==="ready_preview" || suggestion.state==="needs_quota") && suggestion.teacher_options.length>0}
+         <button type="button" onclick={()=>createDraftFromSuggestion(suggestion)} disabled={drafting} class="mt-3 rounded-lg border border-brand-500 px-3 py-2 text-xs font-semibold text-brand-700 dark:text-brand-300 disabled:opacity-50">{drafting?"Membuat draft...":suggestion.state==="needs_quota"?"Buat draft exception":"Buat draft manual"}</button>
+        {/if}
        </div>
       {:else}
-       <p class="text-sm text-neutral-500">Belum ada kombinasi kelas yang bisa direkomendasikan dari sumber data terverifikasi. Periksa kesiapan di atas.</p>
+       <p class="text-sm text-neutral-500">Belum ada rekomendasi dari pilihan jadwal utama yang memenuhi aturan. Periksa alternatif yang disetujui dan kesiapan data.</p>
       {/each}
      </div>
+     {#if (matching.alternative_matches?.length??0)>0}
+      <div class="mt-4 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
+       <h3 class="text-sm font-semibold">Alternatif disetujui untuk kelas existing</h3>
+       <p class="mt-1 text-xs text-neutral-500">Santri ini tidak dihitung dua kali sebagai demand. Pilihan alternatif telah tercatat disetujui, tetapi penempatan tetap memerlukan pemeriksaan ulang dan approval.</p>
+       <ul class="mt-3 space-y-2">
+        {#each matching.alternative_matches??[] as alt (alt.santri_id)}
+         <li class="rounded-lg bg-neutral-50 p-3 text-xs dark:bg-white/5">
+          <p class="font-semibold">Santri #{alt.santri_id} · Kelas #{alt.class_id} · {alt.offer_code}</p>
+          <p class="mt-1 text-neutral-500">Jadwal: {alt.slots.map(s=>s.Day+" "+s.Start+"-"+s.End).join(", ")} WIB</p>
+          <p class="mt-1 text-neutral-500">{alt.reason}</p>
+         </li>
+        {/each}
+       </ul>
+      </div>
+     {/if}
      {#each matching.warnings as warning,i (i)}
       <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">{warning}</p>
      {/each}

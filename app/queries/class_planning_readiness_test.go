@@ -20,6 +20,7 @@ func TestReadPlanningReadinessDistinguishesPreassignedAndVerified(t *testing.T) 
 		"CREATE TABLE guru (id INTEGER PRIMARY KEY, is_aktif INTEGER)",
 		"CREATE TABLE guru_availability (guru_id INTEGER, confirmed_at TEXT, berlaku_mulai TEXT, berlaku_sampai TEXT)",
 		"CREATE TABLE guru_teaching_levels (guru_id INTEGER, level_kode TEXT)",
+		"CREATE TABLE level (kode TEXT PRIMARY KEY)",
 		"CREATE TABLE kelas (id INTEGER, guru_id INTEGER, is_aktif INTEGER, tipe TEXT, kapasitas INTEGER)",
 		"CREATE TABLE kelas_jadwal_rutin (kelas_id INTEGER, is_aktif INTEGER, berlaku_mulai TEXT, berlaku_sampai TEXT)",
 	}
@@ -36,6 +37,7 @@ func TestReadPlanningReadinessDistinguishesPreassignedAndVerified(t *testing.T) 
 		"INSERT INTO leads VALUES (2, '2026-10-30 10:00:00', 0, 'closed')",
 		"INSERT INTO guru VALUES (100,1),(200,1),(300,0)",
 		"INSERT INTO guru_availability VALUES (100,'2026-10-30','2026-10-01',NULL),(200,'2026-10-30','2026-10-01',NULL),(300,'2026-10-30','2026-10-01',NULL)",
+		"INSERT INTO level VALUES ('PRA')",
 		"INSERT INTO guru_teaching_levels VALUES (100,'PRA'),(300,'PRA')",
 		"INSERT INTO kelas VALUES (10,100,1,'reguler',15)",
 	}
