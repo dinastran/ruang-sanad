@@ -1,0 +1,213 @@
+package services
+
+import (
+	"database/sql"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/maulanashalihin/laju-go/app/queries"
+	"github.com/stretchr/testify/require"
+)
+
+type fakeMeta struct {
+	mu     sync.Mutex
+	bodies []map[string]any
+	paths  []string
+	fail   bool
+}
+
+func (m *fakeMeta) server(t *testing.T) *httptest.Server {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		require.NoError(t, json.Unmarshal(raw, &body))
+		m.mu.Lock()
+		m.bodies = append(m.bodies, body)
+		m.paths = append(m.paths, r.URL.Path)
+		fail := m.fail
+		m.mu.Unlock()
+		if fail {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"message":"Invalid parameter","code":100,"error_subcode":2804003,"fbtrace_id":"x"}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"events_received":1,"messages":[],"fbtrace_id":"trace-ok"}`))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func newTestCAPI(t *testing.T, f *leadFixture, m *fakeMeta, cfg MetaCAPIConfig) *MetaCAPIService {
+	svc := NewMetaCAPIService(f.querier, cfg)
+	svc.baseURL = m.server(t).URL
+	svc.now = func() time.Time { return f.clock }
+	return svc
+}
+
+func TestLeadMilestonesFromStagesAndTimestamps(t *testing.T) {
+	created := time.Date(2026, 10, 20, 1, 0, 0, 0, time.UTC)
+	l := queries.ListMetaCAPICandidatesRow{
+		ID: 1, CreatedAt: created, Status: LeadStatusWon, PaymentAmount: 350000,
+		ProofReceivedAt: sql.NullTime{Time: created.Add(5 * time.Hour), Valid: true},
+		ConvertedAt:     sql.NullTime{Time: created.Add(9 * time.Hour), Valid: true},
+	}
+	// The lead skipped data_terisi and jumped straight to info_bayar_dikirim:
+	// CompleteRegistration takes the time of the later stage.
+	stages := map[string]time.Time{
+		LeadStageDiscovery:        created.Add(time.Hour),
+		LeadStageInfoBayarDikirim: created.Add(3 * time.Hour),
+		LeadStageBuktiMasuk:       created.Add(6 * time.Hour),
+	}
+	got := leadMilestones(l, stages)
+	require.Equal(t, []metaMilestone{
+		{Event: MetaEventLead, At: created},
+		{Event: MetaEventCompleteRegistration, At: created.Add(3 * time.Hour)},
+		{Event: MetaEventInitiateCheckout, At: created.Add(3 * time.Hour)},
+		{Event: MetaEventAddPaymentInfo, At: created.Add(5 * time.Hour)},
+		{Event: MetaEventPurchase, At: created.Add(9 * time.Hour), Value: 350000},
+	}, got, "proof_received_at is earlier than the bukti_masuk stage event")
+
+	open := queries.ListMetaCAPICandidatesRow{ID: 2, CreatedAt: created, Status: LeadStatusOpen}
+	require.Equal(t, []metaMilestone{{Event: MetaEventLead, At: created}}, leadMilestones(open, nil))
+}
+
+func TestMetaCAPIDisabledDoesNothing(t *testing.T) {
+	f := setupLeadFixture(t)
+	f.ingest(t, leadEvent("c0", "message.in", "2026-10-24T03:00:00Z", map[string]string{"wa_message_id": "C0", "body": "halo"}))
+	m := &fakeMeta{}
+	svc := newTestCAPI(t, f, m, MetaCAPIConfig{DatasetID: "123"})
+	res, err := svc.Tick(t.Context())
+	require.NoError(t, err)
+	require.Zero(t, res)
+	require.Empty(t, m.bodies)
+	_, err = svc.RetryFailed(t.Context())
+	require.ErrorIs(t, err, ErrMetaCAPIDisabled)
+}
+
+func TestMetaCAPISendsFunnelOnceWithHashedData(t *testing.T) {
+	f := setupLeadFixture(t)
+	f.ingest(t, leadEvent("c1", "message.in", "2026-10-24T03:00:00Z", map[string]string{"wa_message_id": "C1", "body": "Saya mau daftar"}))
+	l := f.lead(t)
+	at := func(h int) time.Time { return time.Date(2026, 10, 24, h, 0, 0, 0, time.UTC) }
+	_, err := f.db.Exec(`UPDATE leads SET nama = 'Fulanah Binti Fulan', domisili = 'Jakarta Selatan, DKI', jenis_kelamin = 'P',
+		stage = 'terverifikasi', status = 'won', payment_amount = 350000, payment_info_sent_at = ?, proof_received_at = ?, converted_at = ? WHERE id = ?`,
+		at(4), at(4), at(5), l.ID)
+	require.NoError(t, err)
+	_, err = f.db.Exec(`INSERT INTO lead_events (lead_id, event_id, type, actor, payload, created_at) VALUES
+		(?, 'st1', 'form.parsed', 'bridge', '{"stage_from":"form_dikirim","stage_to":"data_terisi"}', ?),
+		(?, 'st2', 'payment.verified', 'user:1', '{"stage_from":"bukti_masuk","stage_to":"terverifikasi","amount":300000,"expected_amount":350000}', ?)`,
+		l.ID, at(3), l.ID, at(4))
+	require.NoError(t, err)
+
+	m := &fakeMeta{}
+	svc := newTestCAPI(t, f, m, MetaCAPIConfig{DatasetID: "987654321", Token: "tok", AppSecret: "sec", TestEventCode: "TEST123", APIVersion: "v99.0"})
+	f.clock = at(6)
+	res, err := svc.Tick(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, MetaCAPITickResult{Queued: 5, Sent: 5}, res)
+
+	names := []string{}
+	for i, b := range m.bodies {
+		require.Equal(t, "/v99.0/987654321/events", m.paths[i])
+		require.Equal(t, "TEST123", b["test_event_code"])
+		require.NotEmpty(t, b["appsecret_proof"])
+		raw, _ := json.Marshal(b)
+		require.NotContains(t, string(raw), "6281234567890", "raw phone never leaves the server")
+		require.NotContains(t, strings.ToLower(string(raw)), "fulanah")
+		ev := b["data"].([]any)[0].(map[string]any)
+		names = append(names, ev["event_name"].(string))
+		require.Equal(t, "system_generated", ev["action_source"])
+		ud := ev["user_data"].(map[string]any)
+		require.Equal(t, []any{metaHash("6281234567890")}, ud["ph"])
+		require.Equal(t, []any{metaHash("fulanah")}, ud["fn"])
+		require.Equal(t, []any{metaHash("fulan")}, ud["ln"])
+		require.Equal(t, []any{metaHash("jakartaselatan")}, ud["ct"])
+		require.Equal(t, []any{metaHash("f")}, ud["ge"])
+		cd := ev["custom_data"].(map[string]any)
+		require.Equal(t, "IDR", cd["currency"])
+		if ev["event_name"] == MetaEventPurchase {
+			require.EqualValues(t, 300000, cd["value"], "the verified amount, not the expected bill")
+			require.EqualValues(t, at(5).Unix(), ev["event_time"])
+			require.Equal(t, metaEventID(l.ID, MetaEventPurchase), ev["event_id"])
+		}
+	}
+	require.ElementsMatch(t, []string{MetaEventLead, MetaEventCompleteRegistration, MetaEventInitiateCheckout, MetaEventAddPaymentInfo, MetaEventPurchase}, names)
+
+	// The next tick finds nothing new: each funnel event is sent once.
+	res, err = svc.Tick(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, MetaCAPITickResult{}, res)
+
+	st, err := svc.Status(t.Context())
+	require.NoError(t, err)
+	require.True(t, st.Enabled)
+	require.True(t, st.TestMode)
+	require.Equal(t, "••••4321", st.DatasetID)
+	require.EqualValues(t, 5, st.Counts["sent"])
+	require.Len(t, st.Events, 5)
+}
+
+func TestMetaCAPIRetriesThenFails(t *testing.T) {
+	f := setupLeadFixture(t)
+	f.ingest(t, leadEvent("c2", "message.in", "2026-10-24T03:00:00Z", map[string]string{"wa_message_id": "C2", "body": "halo"}))
+	m := &fakeMeta{fail: true}
+	svc := newTestCAPI(t, f, m, MetaCAPIConfig{DatasetID: "1", Token: "tok"})
+
+	for i := 0; i < metaCAPIMaxAttempts; i++ {
+		res, err := svc.Tick(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, 1, res.Failed, "attempt %d", i+1)
+		f.clock = f.clock.Add(2 * time.Hour) // past every backoff
+	}
+	st, err := svc.Status(t.Context())
+	require.NoError(t, err)
+	require.EqualValues(t, 1, st.Counts["failed"])
+	require.Contains(t, st.Events[0].LastError, "kode 100")
+
+	m.fail = false
+	n, err := svc.RetryFailed(t.Context())
+	require.NoError(t, err)
+	require.EqualValues(t, 1, n)
+	res, err := svc.Tick(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, 1, res.Sent)
+}
+
+func TestMetaCAPISkipsOldAndDoNotContact(t *testing.T) {
+	f := setupLeadFixture(t)
+	f.ingest(t, leadEvent("c3", "message.in", "2026-10-24T03:00:00Z", map[string]string{"wa_message_id": "C3", "body": "halo"}))
+	m := &fakeMeta{fail: true}
+	svc := newTestCAPI(t, f, m, MetaCAPIConfig{DatasetID: "1", Token: "tok"})
+	res, err := svc.Tick(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, 1, res.Queued)
+
+	require.Len(t, m.bodies, 1, "first attempt failed")
+
+	// A week later the queued Lead event is too old for Meta: skipped, not sent.
+	f.clock = f.clock.Add(8 * 24 * time.Hour)
+	m.fail = false
+	res, err = svc.Tick(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, MetaCAPITickResult{Failed: 1}, res)
+	require.Len(t, m.bodies, 1, "no new request to Meta")
+	st, err := svc.Status(t.Context())
+	require.NoError(t, err)
+	require.EqualValues(t, 1, st.Counts["skipped"])
+
+	// A lead that asked not to be contacted is never queued.
+	other := leadEvent("c4", "message.in", "2026-11-01T03:00:00Z", map[string]string{"wa_message_id": "C4", "body": "halo"})
+	other.ChatID, other.Phone = "6285555555555@s.whatsapp.net", "6285555555555"
+	f.ingest(t, other)
+	_, err = f.db.Exec(`UPDATE leads SET status = 'do_not_contact' WHERE wa_chat_id = ?`, other.ChatID)
+	require.NoError(t, err)
+	res, err = svc.Tick(t.Context())
+	require.NoError(t, err)
+	require.Zero(t, res.Queued)
+}

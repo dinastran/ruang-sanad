@@ -57,6 +57,7 @@ type Handlers struct {
 	LeadClosing                 *handlers.LeadClosingHandler
 	LeadLaporan                 *handlers.LeadLaporanHandler
 	LeadSources                 *handlers.LeadSourceHandler
+	MetaCAPI                    *handlers.MetaCAPIHandler
 	LeadFollowups               *handlers.LeadFollowupHandler
 	IntegrasiWhatsApp           *handlers.IntegrasiWhatsAppHandler
 	JadwalPenawaran             *handlers.JadwalPenawaranHandler
@@ -495,6 +496,10 @@ func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, u
 		protected.Delete("/leads/sumber/:sid", sourceRole, h.LeadSources.Delete)
 		protected.Post("/leads/sumber/:sid/pola", sourceRole, h.LeadSources.AddPattern)
 		protected.Put("/leads/:id/sumber", leadRole, h.LeadSources.SetForLead)
+	}
+	if h.MetaCAPI != nil {
+		protected.Get("/leads/meta-capi", superAdminRole, h.MetaCAPI.Index)
+		protected.Post("/leads/meta-capi/retry", superAdminRole, h.MetaCAPI.RetryFailed)
 	}
 	if h.LeadFollowups != nil {
 		approver := middlewares.RoleRequired(store, userService, services.FollowupApproverRoles...)

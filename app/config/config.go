@@ -41,6 +41,16 @@ type Config struct {
 	GowaURL               string
 	GowaUser              string
 	GowaPass              string
+
+	// Meta Conversions API (CAPI): sends the CRM funnel to Meta. Off until
+	// the dataset (Pixel) ID and token are set. See docs/panduan/meta-ads-api.md.
+	MetaCAPIDatasetID     string
+	MetaCAPIToken         string
+	MetaCAPITestEventCode string
+	MetaAPIVersion        string
+	// Only set when the CAPI token belongs to the app with this secret
+	// (e.g. a System User token); an Events Manager token may not.
+	MetaCAPIAppSecret string
 }
 
 var AppConfig *Config
@@ -79,6 +89,12 @@ func Load() *Config {
 		GowaURL:               strings.TrimRight(getEnv("GOWA_URL", ""), "/"),
 		GowaUser:              getEnv("GOWA_USER", ""),
 		GowaPass:              getEnv("GOWA_PASS", ""),
+
+		MetaCAPIDatasetID:     strings.TrimSpace(getEnv("META_CAPI_DATASET_ID", "")),
+		MetaCAPIToken:         strings.TrimSpace(getEnv("META_CAPI_TOKEN", "")),
+		MetaCAPITestEventCode: strings.TrimSpace(getEnv("META_CAPI_TEST_EVENT_CODE", "")),
+		MetaAPIVersion:        strings.TrimSpace(getEnv("META_API_VERSION", "")),
+		MetaCAPIAppSecret:     strings.TrimSpace(getEnv("META_CAPI_APP_SECRET", "")),
 	}
 
 	return AppConfig

@@ -4,7 +4,7 @@
 	import type { Flash, User } from "@lib/types";
 	import { Toast } from "@lib/notifications/toast";
 	import type { LeadLabel } from "@lib/leads";
-	import { ChartColumn, Inbox, Kanban, LayoutDashboard, List, Megaphone } from "lucide-svelte";
+	import { Activity, ChartColumn, Inbox, Kanban, LayoutDashboard, List, Megaphone } from "lucide-svelte";
 	import { fmt } from "@components/lead-dashboard/types";
 	import PipelineStrip from "@components/leads/PipelineStrip.svelte";
 	import LeadFilters from "@components/leads/LeadFilters.svelte";
@@ -127,6 +127,7 @@
 				<a href="/app/leads/dashboard" use:inertia class={ghost}><LayoutDashboard size={15} /> Dashboard</a>
 				<a href="/app/leads/laporan" use:inertia class={ghost}><ChartColumn size={15} /> Laporan</a>
 				<a href="/app/leads/sumber" use:inertia class={ghost}><Megaphone size={15} /> Sumber</a>
+				{#if user?.role === "super_admin"}<a href="/app/leads/meta-capi" use:inertia class={ghost}><Activity size={15} /> Meta CAPI</a>{/if}
 				<div class="ml-1 hidden gap-0.5 rounded-lg bg-neutral-100 p-1 lg:inline-flex dark:bg-neutral-900" role="group" aria-label="Tampilan">
 					<button type="button" onclick={() => setView("list")} aria-pressed={view === "list"} class={seg + (view === "list" ? segOn : segIdle)}><List size={15} /> Daftar</button>
 					<button type="button" onclick={() => setView("kanban")} aria-pressed={view === "kanban"} class={seg + (view === "kanban" ? segOn : segIdle)}><Kanban size={15} /> Kanban</button>

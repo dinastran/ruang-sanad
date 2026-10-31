@@ -147,6 +147,11 @@ func main() {
 	// Follow-up and confirmation sends through the CS AI bridge (PRD CRM 10).
 	waOutboxService := services.NewWAOutboxService(querier, services.NewCSBridgeClient(cfg.CSBridgeURL, cfg.CSBridgeOutboundToken))
 	startWAOutboxWorker(waOutboxService)
+	metaCAPIService := services.NewMetaCAPIService(querier, services.MetaCAPIConfig{
+		DatasetID: cfg.MetaCAPIDatasetID, Token: cfg.MetaCAPIToken, APIVersion: cfg.MetaAPIVersion,
+		AppSecret: cfg.MetaCAPIAppSecret, TestEventCode: cfg.MetaCAPITestEventCode,
+	})
+	startMetaCAPIWorker(metaCAPIService)
 
 	// Create storage directories
 	if err := os.MkdirAll("storage/uploads", 0755); err != nil {
@@ -243,6 +248,7 @@ func main() {
 		LeadClosing:                 handlers.NewLeadClosingHandler(leadService, sessionStore, inertiaService),
 		LeadLaporan:                 handlers.NewLeadLaporanHandler(leadService, sessionStore, inertiaService),
 		LeadSources:                 handlers.NewLeadSourceHandler(leadService, sessionStore, inertiaService),
+		MetaCAPI:                    handlers.NewMetaCAPIHandler(metaCAPIService, sessionStore, inertiaService),
 		LeadFollowups:               handlers.NewLeadFollowupHandler(leadService, waOutboxService, sessionStore, inertiaService),
 		IntegrasiWhatsApp: handlers.NewIntegrasiWhatsAppHandler(services.NewCRMIntegrationService(querier, services.CRMIntegrationConfig{
 			IngestEnabled: cfg.CSBridgeIngestToken != "",
@@ -505,6 +511,29 @@ func startWAOutboxWorker(outbox *services.WAOutboxService) {
 			}
 			if res.Queued > 0 || res.Sent > 0 || res.Failed > 0 {
 				slog.Info("worker kirim WA", "masuk_antrean", res.Queued, "terkirim", res.Sent, "gagal", res.Failed)
+			}
+		}
+	}()
+}
+
+// startMetaCAPIWorker sends the CRM funnel to Meta every 2 minutes. It does
+// nothing until META_CAPI_DATASET_ID and META_CAPI_TOKEN are set.
+func startMetaCAPIWorker(capi *services.MetaCAPIService) {
+	if !capi.Enabled() {
+		slog.Info("Meta CAPI nonaktif: META_CAPI_DATASET_ID / META_CAPI_TOKEN belum diisi")
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(2 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			res, err := capi.Tick(context.Background())
+			if err != nil {
+				slog.Error("worker Meta CAPI gagal", "error", err)
+				continue
+			}
+			if res.Queued > 0 || res.Sent > 0 || res.Failed > 0 {
+				slog.Info("worker Meta CAPI", "masuk_antrean", res.Queued, "terkirim", res.Sent, "gagal", res.Failed)
 			}
 		}
 	}()
