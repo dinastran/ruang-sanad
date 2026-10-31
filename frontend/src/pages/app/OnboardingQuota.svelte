@@ -3,6 +3,7 @@
  import { onMount } from "svelte";
  import AppLayout from "@layouts/AppLayout.svelte";
  import OnboardingWorkspaceHeader from "@components/OnboardingWorkspaceHeader.svelte";
+ import ClassPlanApprovalInbox from "@components/ClassPlanApprovalInbox.svelte";
  import type { User } from "@lib/types";
  import { ClipboardCopy, History, CalendarClock, ShieldCheck } from "lucide-svelte";
 
@@ -124,6 +125,8 @@
   {#if success}<p role="status" class="rounded-lg border border-emerald-200 p-3 text-sm text-emerald-700">{success}</p>{/if}
   {#if errorMessage}<p role="alert" class="rounded-lg border border-red-200 p-3 text-sm text-red-700">{errorMessage}</p>{/if}
 
+
+  {#if adminKelas}<ClassPlanApprovalInbox mode="admin"/>{/if}
 
   {#if adminKelas}
    <section class="rounded-xl border border-neutral-200 bg-white p-4 dark:border-white/10 dark:bg-neutral-900" aria-label="Kesiapan data rekomendasi kelas">
