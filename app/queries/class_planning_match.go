@@ -26,6 +26,7 @@ type PlanningExistingClass struct {
 	Capacity  int64
 	Occupancy int64
 	GuruID    int64
+	TeacherGender string
 }
 
 type PlanningClassSlot struct {
@@ -73,6 +74,7 @@ WHERE oc.stage IN ('matching_kelas','waiting_kuota')
 	AND l.verified_at IS NOT NULL AND l.needs_review = 0
 	AND l.status IN ('open','won')
 	AND (jp.gender = '' OR jp.gender = s.jenis_kelamin)
+	AND NOT EXISTS (SELECT 1 FROM class_plan_students ps WHERE ps.santri_id = s.id AND ps.status IN ('reserved','committed'))
 ORDER BY oc.deadline_at ASC, s.id ASC
 LIMIT 501`
 
@@ -96,8 +98,8 @@ func (q *Querier) ListPlanningDemand(ctx context.Context) ([]PlanningDemand, err
 func (q *Querier) ListPlanningExistingClasses(ctx context.Context) ([]PlanningExistingClass, error) {
 	const statement = `SELECT k.id,k.angkatan,k.jenis_kelamin,k.level,k.frekuensi,k.kapasitas,
 	(SELECT COUNT(*) FROM santri s WHERE s.kelas_id = k.id AND s.status IN ('aktif','cuti')),
-	k.guru_id
-	FROM kelas k
+	k.guru_id,g.jenis_kelamin
+	FROM kelas k JOIN guru g ON g.id=k.guru_id AND g.is_aktif=1
 	WHERE k.is_aktif=1 AND LOWER(k.tipe) IN ('reguler','regular')
 	AND k.guru_id IS NOT NULL
 	AND NOT EXISTS (SELECT 1 FROM pertemuan p WHERE p.kelas_id=k.id)
@@ -109,7 +111,7 @@ func (q *Querier) ListPlanningExistingClasses(ctx context.Context) ([]PlanningEx
 	for rows.Next() {
 		var r PlanningExistingClass
 		if err := rows.Scan(&r.ID,&r.Angkatan,&r.Gender,&r.Level,&r.Frequency,
-			&r.Capacity,&r.Occupancy,&r.GuruID); err != nil { return nil, err }
+			&r.Capacity,&r.Occupancy,&r.GuruID,&r.TeacherGender); err != nil { return nil, err }
 		out = append(out,r)
 	}
 	return out, rows.Err()
@@ -170,7 +172,7 @@ func (q *Querier) ListPlanningTeacherBusy(ctx context.Context, asOf string) ([]P
 	// Active routine meetings are 90 minutes. Confirmed plans with no
 	// operational class also reserve the indicated intervals.
 	const statement = `SELECT k.guru_id,r.hari,r.jam_mulai,
-	time(r.jam_mulai,'+90 minutes') AS jam_selesai
+	substr(time(r.jam_mulai,'+90 minutes'),1,5) AS jam_selesai
 	FROM kelas_jadwal_rutin r JOIN kelas k ON k.id=r.kelas_id
 	WHERE k.is_aktif=1 AND k.guru_id IS NOT NULL AND r.is_aktif=1
 	AND r.berlaku_mulai<=? AND (r.berlaku_sampai IS NULL OR r.berlaku_sampai>=?)
