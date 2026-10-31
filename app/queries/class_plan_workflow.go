@@ -18,6 +18,7 @@ type ClassPlanWorkflowRow struct {
 	MinQuota         int64  `json:"min_quota"`
 	Capacity         int64  `json:"capacity"`
 	TargetKelasID    int64  `json:"target_kelas_id"`
+	ActivatedKelasID int64  `json:"activated_kelas_id"`
 	Version          int64  `json:"version"`
 	ConfirmedBy      int64  `json:"coordinator_confirmed_by"`
 	ConfirmedVersion int64  `json:"coordinator_confirmed_version"`
@@ -37,13 +38,15 @@ type ClassPlanWorkflowSlot struct {
 }
 
 type ClassPlanWorkflowCandidate struct {
-	ID       int64
-	Gender   string
-	Level    string
-	Angkatan string
-	Status   string
-	ClassID  sql.NullInt64
-	Stage    string
+	ID        int64
+	Gender    string
+	Level     string
+	Angkatan  string
+	Status    string
+	ClassID   sql.NullInt64
+	Stage     string
+	Frequency string
+	IsLengkap int64
 }
 
 type ClassPlanOfferEvidence struct {
@@ -55,17 +58,17 @@ type ClassPlanOfferEvidence struct {
 
 func (q *Querier) ListClassPlanWorkflow(ctx context.Context) ([]ClassPlanWorkflowRow, error) {
 	rows, err := q.Queries.db.QueryContext(ctx, `SELECT p.id,p.source,p.status,p.tipe,p.angkatan,p.gender,
-		COALESCE(p.guru_id,0),p.frequency,p.min_quota,p.capacity,COALESCE(p.target_kelas_id,0),p.version,
+		COALESCE(p.guru_id,0),p.frequency,p.min_quota,p.capacity,COALESCE(p.target_kelas_id,0),COALESCE(p.activated_kelas_id,0),p.version,
 		COALESCE(p.coordinator_confirmed_by,0),COALESCE(p.coordinator_confirmed_version,0),
 		COALESCE(p.admin_approved_by,0),(SELECT COUNT(*) FROM class_plan_students s
-		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved')),(SELECT COUNT(*) FROM class_plan_students ps
+		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved','committed')),(SELECT COUNT(*) FROM class_plan_students ps
 			WHERE ps.plan_id=p.id AND ps.status='reserved'),COALESCE((SELECT MIN(level_kode) FROM class_plan_levels WHERE plan_id=p.id),''),
 		COALESCE((SELECT GROUP_CONCAT(hari || ' ' || jam_mulai || '-' || jam_selesai, ', ')
 		FROM class_plan_slots WHERE plan_id=p.id),''),
 		COALESCE((SELECT reason FROM class_plan_exceptions WHERE plan_id=p.id ORDER BY id DESC LIMIT 1),''),
 		COALESCE((SELECT status FROM class_plan_exceptions WHERE plan_id=p.id ORDER BY id DESC LIMIT 1),'')
 		FROM class_plans p
-		WHERE p.status IN ('draft','pending_coordinator','pending_admin','pending_exception','blocked')
+		WHERE p.status IN ('draft','pending_coordinator','pending_admin','pending_exception','blocked','activated')
 		ORDER BY p.updated_at DESC,p.id DESC LIMIT 100`)
 	if err != nil {
 		return nil, err
@@ -75,7 +78,7 @@ func (q *Querier) ListClassPlanWorkflow(ctx context.Context) ([]ClassPlanWorkflo
 	for rows.Next() {
 		var r ClassPlanWorkflowRow
 		if err := rows.Scan(&r.ID, &r.Source, &r.Status, &r.Program, &r.Angkatan, &r.Gender,
-			&r.GuruID, &r.Frequency, &r.MinQuota, &r.Capacity, &r.TargetKelasID, &r.Version,
+			&r.GuruID, &r.Frequency, &r.MinQuota, &r.Capacity, &r.TargetKelasID, &r.ActivatedKelasID, &r.Version,
 			&r.ConfirmedBy, &r.ConfirmedVersion, &r.ApprovedBy, &r.StudentCount, &r.ReservedCount, &r.LevelCode, &r.SlotsLabel, &r.ExceptionReason, &r.ExceptionStatus); err != nil {
 			return nil, err
 		}
@@ -87,10 +90,10 @@ func (q *Querier) ListClassPlanWorkflow(ctx context.Context) ([]ClassPlanWorkflo
 func (q *Querier) GetClassPlanWorkflow(ctx context.Context, id int64) (ClassPlanWorkflowRow, error) {
 	var r ClassPlanWorkflowRow
 	err := q.Queries.db.QueryRowContext(ctx, `SELECT p.id,p.source,p.status,p.tipe,p.angkatan,p.gender,
-		COALESCE(p.guru_id,0),p.frequency,p.min_quota,p.capacity,COALESCE(p.target_kelas_id,0),p.version,
+		COALESCE(p.guru_id,0),p.frequency,p.min_quota,p.capacity,COALESCE(p.target_kelas_id,0),COALESCE(p.activated_kelas_id,0),p.version,
 		COALESCE(p.coordinator_confirmed_by,0),COALESCE(p.coordinator_confirmed_version,0),
 		COALESCE(p.admin_approved_by,0),(SELECT COUNT(*) FROM class_plan_students s
-		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved')),(SELECT COUNT(*) FROM class_plan_students ps
+		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved','committed')),(SELECT COUNT(*) FROM class_plan_students ps
 			WHERE ps.plan_id=p.id AND ps.status='reserved'),COALESCE((SELECT MIN(level_kode) FROM class_plan_levels WHERE plan_id=p.id),''),
 		COALESCE((SELECT GROUP_CONCAT(hari || ' ' || jam_mulai || '-' || jam_selesai, ', ')
 		FROM class_plan_slots WHERE plan_id=p.id),''),
@@ -98,7 +101,7 @@ func (q *Querier) GetClassPlanWorkflow(ctx context.Context, id int64) (ClassPlan
 		COALESCE((SELECT status FROM class_plan_exceptions WHERE plan_id=p.id ORDER BY id DESC LIMIT 1),'')
 		FROM class_plans p WHERE p.id=?`, id).Scan(
 		&r.ID, &r.Source, &r.Status, &r.Program, &r.Angkatan, &r.Gender,
-		&r.GuruID, &r.Frequency, &r.MinQuota, &r.Capacity, &r.TargetKelasID, &r.Version,
+		&r.GuruID, &r.Frequency, &r.MinQuota, &r.Capacity, &r.TargetKelasID, &r.ActivatedKelasID, &r.Version,
 		&r.ConfirmedBy, &r.ConfirmedVersion, &r.ApprovedBy, &r.StudentCount, &r.ReservedCount, &r.LevelCode, &r.SlotsLabel, &r.ExceptionReason, &r.ExceptionStatus)
 	return r, err
 }
@@ -159,7 +162,7 @@ func (q *Querier) ClassPlanWorkflowSlots(ctx context.Context, id int64) ([]Class
 
 func (q *Querier) ClassPlanWorkflowCandidates(ctx context.Context, id int64) ([]ClassPlanWorkflowCandidate, error) {
 	rows, err := q.Queries.db.QueryContext(ctx, `SELECT s.id,s.jenis_kelamin,s.level,s.angkatan_kelas,s.status,s.kelas_id,
-		COALESCE(oc.stage,'')
+		COALESCE(oc.stage,''),s.frekuensi,s.is_lengkap
 		FROM class_plan_students ps JOIN santri s ON s.id=ps.santri_id
 		LEFT JOIN onboarding_cases oc ON oc.santri_id=s.id
 		WHERE ps.plan_id=? AND ps.status IN ('candidate','reserved') ORDER BY s.id`, id)
@@ -170,7 +173,7 @@ func (q *Querier) ClassPlanWorkflowCandidates(ctx context.Context, id int64) ([]
 	out := make([]ClassPlanWorkflowCandidate, 0)
 	for rows.Next() {
 		var r ClassPlanWorkflowCandidate
-		if err := rows.Scan(&r.ID, &r.Gender, &r.Level, &r.Angkatan, &r.Status, &r.ClassID, &r.Stage); err != nil {
+		if err := rows.Scan(&r.ID, &r.Gender, &r.Level, &r.Angkatan, &r.Status, &r.ClassID, &r.Stage, &r.Frequency, &r.IsLengkap); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
