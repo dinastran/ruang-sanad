@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { getCSRFToken } from "@lib/utils/csrf";
 	import { ClipboardCheck, RefreshCcw, CheckCircle2 } from "lucide-svelte";
 
 	type WorkflowPlan = {
@@ -39,7 +40,7 @@
 		try {
 			const r=await fetch("/app/onboarding/planning/plans/"+plan.id+"/actions",{
 				method:"POST",credentials:"same-origin",
-				headers:{"Content-Type":"application/json",Accept:"application/json"},
+				headers:{"Content-Type":"application/json",Accept:"application/json","X-XSRF-TOKEN":getCSRFToken()},
 				body:JSON.stringify({action,version:plan.version,reason:labels[action]??action}),
 			});
 			if(!r.ok){
