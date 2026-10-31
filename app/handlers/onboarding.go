@@ -10,10 +10,10 @@ import (
 )
 
 type OnboardingHandler struct {
-	service *services.OnboardingService
+	service           *services.OnboardingService
 	planningReadiness *services.PlanningReadinessService
-	store   *session.Store
-	inertia *services.InertiaService
+	store             *session.Store
+	inertia           *services.InertiaService
 }
 
 func NewOnboardingHandler(s *services.OnboardingService, store *session.Store, inertia *services.InertiaService) *OnboardingHandler {
