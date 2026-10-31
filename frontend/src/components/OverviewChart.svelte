@@ -11,6 +11,8 @@
     title: string;
   } = $props();
   let max = $derived(Math.max(1, ...series.flatMap((s) => s.values)));
+  // Long ranges (e.g. 30 days) show every n-th axis label so they don't overlap.
+  let labelStep = $derived(Math.max(1, Math.ceil(labels.length / 8)));
   const number = (v: number) =>
     new Intl.NumberFormat(
       "id-ID",
@@ -63,11 +65,11 @@
         </circle>
       {/each}
     {/each}
-    {#each labels as label, i}<text
-        x={46 + i * (508 / Math.max(1, labels.length - 1))}
-        y="202"
-        text-anchor="middle">{label}</text
-      >{/each}
+    {#each labels as label, i}{#if i % labelStep === 0}<text
+          x={46 + i * (508 / Math.max(1, labels.length - 1))}
+          y="202"
+          text-anchor="middle">{label}</text
+        >{/if}{/each}
   </svg>
   <details>
     <summary>Lihat angka</summary>

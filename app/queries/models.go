@@ -532,6 +532,12 @@ type LeadSource struct {
 	UpdatedAt  time.Time
 }
 
+type LeadSourceMetaCampaign struct {
+	CampaignID   string
+	LeadSourceID int64
+	CreatedAt    time.Time
+}
+
 type LeadSourcePattern struct {
 	ID         int64
 	SourceID   int64
@@ -560,6 +566,37 @@ type MahasantriProduk struct {
 	DibatalkanOleh sql.NullInt64
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+type MetaAdInsightsDaily struct {
+	ID               int64
+	Tanggal          string
+	AdAccountID      string
+	CampaignID       string
+	CampaignName     string
+	AdsetID          string
+	AdsetName        string
+	AdID             string
+	AdName           string
+	Spend            int64
+	Impressions      int64
+	Reach            int64
+	Clicks           int64
+	LinkClicks       int64
+	MessagingStarted int64
+	SyncedAt         time.Time
+}
+
+type MetaAdsSyncRun struct {
+	ID         int64
+	Trigger    string
+	DateFrom   string
+	DateTo     string
+	Status     string
+	Rows       int64
+	Error      string
+	StartedAt  time.Time
+	FinishedAt sql.NullTime
 }
 
 type MetaCapiEvent struct {

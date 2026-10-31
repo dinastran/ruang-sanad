@@ -58,6 +58,7 @@ type Handlers struct {
 	LeadLaporan                 *handlers.LeadLaporanHandler
 	LeadSources                 *handlers.LeadSourceHandler
 	MetaCAPI                    *handlers.MetaCAPIHandler
+	MetaAds                     *handlers.MetaAdsHandler
 	LeadFollowups               *handlers.LeadFollowupHandler
 	IntegrasiWhatsApp           *handlers.IntegrasiWhatsAppHandler
 	JadwalPenawaran             *handlers.JadwalPenawaranHandler
@@ -474,6 +475,10 @@ var LeadRoles = []string{"cs", "keuangan", "super_admin"}
 // texts; keuangan only reads it.
 var LeadSourceEditorRoles = []string{"cs", "super_admin"}
 
+// MetaAdsRoles may see ad spend on Performa Iklan and map campaigns to lead
+// sources; only super_admin may trigger a sync.
+var MetaAdsRoles = []string{"cs", "super_admin"}
+
 // setupLeadRoutes registers the CRM Leads pages under /app. Static paths
 // (laporan) come before /leads/:id.
 func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, userService *services.UserService) {
@@ -496,6 +501,12 @@ func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, u
 		protected.Delete("/leads/sumber/:sid", sourceRole, h.LeadSources.Delete)
 		protected.Post("/leads/sumber/:sid/pola", sourceRole, h.LeadSources.AddPattern)
 		protected.Put("/leads/:id/sumber", leadRole, h.LeadSources.SetForLead)
+	}
+	if h.MetaAds != nil {
+		adsRole := middlewares.RoleRequired(store, userService, MetaAdsRoles...)
+		protected.Get("/leads/iklan", adsRole, h.MetaAds.Index)
+		protected.Post("/leads/iklan/sinkron", superAdminRole, h.MetaAds.Sync)
+		protected.Put("/leads/iklan/kampanye/:cid", adsRole, h.MetaAds.MapCampaign)
 	}
 	if h.MetaCAPI != nil {
 		protected.Get("/leads/meta-capi", superAdminRole, h.MetaCAPI.Index)
