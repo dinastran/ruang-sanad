@@ -375,35 +375,59 @@ func (s *ClassPlanWorkflowService) Action(ctx context.Context, id, version, acto
 	}
 	// Reserving a plan is separate from approval. The preflight and SQL
 	// reservation run in one transaction; failures roll back every candidate.
-	if action=="reserve" {
-		if plan.Status!="pending_admin" || plan.ApprovedBy==0 ||
-			plan.ConfirmedBy==0 || plan.ConfirmedVersion!=plan.Version ||
-			actorID==plan.ConfirmedBy || plan.TargetKelasID!=0 {
+	if action == "reserve" {
+		if plan.Status != "pending_admin" || plan.ApprovedBy == 0 ||
+			plan.ConfirmedBy == 0 || plan.ConfirmedVersion != plan.Version ||
+			actorID == plan.ConfirmedBy || plan.TargetKelasID != 0 {
 			return ErrPlanWorkflowConflict
 		}
-		already,err:=q.ClassPlanReservationCount(ctx,id)
-		if err!=nil{return err}
-		if already!=0{return ErrPlanWorkflowConflict}
-		issues,err:=s.preflight(ctx,q,plan)
-		if err!=nil{return err}
-		if len(issues)>0{return fmt.Errorf("%w: %s",ErrPlanWorkflowInvalid,issues[0].Message)}
-		n,err:=q.ReserveApprovedClassPlanCandidates(ctx,id,version)
-		if err!=nil{return fmt.Errorf("%w: santri telah direservasi atau berubah: %v",ErrPlanWorkflowConflict,err)}
-		if n!=plan.StudentCount || n==0{return ErrPlanWorkflowConflict}
-		if err:=q.AppendClassPlanWorkflowEvent(ctx,id,actorID,"planning.students_reserved",
-			"pending_admin","pending_admin",fmt.Sprintf("%d kandidat direservasi",n));err!=nil{return err}
+		already, err := q.ClassPlanReservationCount(ctx, id)
+		if err != nil {
+			return err
+		}
+		if already != 0 {
+			return ErrPlanWorkflowConflict
+		}
+		issues, err := s.preflight(ctx, q, plan)
+		if err != nil {
+			return err
+		}
+		if len(issues) > 0 {
+			return fmt.Errorf("%w: %s", ErrPlanWorkflowInvalid, issues[0].Message)
+		}
+		n, err := q.ReserveApprovedClassPlanCandidates(ctx, id, version)
+		if err != nil {
+			return fmt.Errorf("%w: santri telah direservasi atau berubah: %v", ErrPlanWorkflowConflict, err)
+		}
+		if n != plan.StudentCount || n == 0 {
+			return ErrPlanWorkflowConflict
+		}
+		if err := q.AppendClassPlanWorkflowEvent(ctx, id, actorID, "planning.students_reserved",
+			"pending_admin", "pending_admin", fmt.Sprintf("%d kandidat direservasi", n)); err != nil {
+			return err
+		}
 		return tx.Commit()
 	}
-	if action=="cancel" {
-		if plan.Status!="pending_admin" || plan.ApprovedBy==0 ||
-			plan.ConfirmedBy==0 || actorID==plan.ConfirmedBy ||
-			len(reason)<10{return ErrPlanWorkflowConflict}
-		ok,err:=q.CancelApprovedPlan(ctx,id,version)
-		if err!=nil{return err}
-		if !ok{return ErrPlanWorkflowConflict}
-		if err:=q.ReleaseClassPlanReservations(ctx,id);err!=nil{return err}
-		if err:=q.AppendClassPlanWorkflowEvent(ctx,id,actorID,"planning.cancelled",
-			"pending_admin","cancelled",reason);err!=nil{return err}
+	if action == "cancel" {
+		if plan.Status != "pending_admin" || plan.ApprovedBy == 0 ||
+			plan.ConfirmedBy == 0 || actorID == plan.ConfirmedBy ||
+			len(reason) < 10 {
+			return ErrPlanWorkflowConflict
+		}
+		ok, err := q.CancelApprovedPlan(ctx, id, version)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrPlanWorkflowConflict
+		}
+		if err := q.ReleaseClassPlanReservations(ctx, id); err != nil {
+			return err
+		}
+		if err := q.AppendClassPlanWorkflowEvent(ctx, id, actorID, "planning.cancelled",
+			"pending_admin", "cancelled", reason); err != nil {
+			return err
+		}
 		return tx.Commit()
 	}
 	from, to, event := "", "", ""
