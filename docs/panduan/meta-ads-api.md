@@ -316,17 +316,16 @@ GET https://graph.facebook.com/{META_API_VERSION}/{act_id}/insights
 
 Halaman **Performa Iklan**: **Leads → Iklan** (`/app/leads/iklan`). Bisa dibuka super_admin dan cs; tombol Sinkron hanya super_admin.
 
-- Filter periode: hari ini, kemarin, 7/14/30 hari, atau custom.
-- Ringkasan periode:
-  - total biaya, impresi, dan klik tautan;
-  - **lead dari iklan (CRM)**;
-  - **biaya per lead**;
-  - **jadi santri** dan **biaya per santri**;
-  - **percakapan WA menurut Meta** dan biaya per percakapan.
-- Tren harian: biaya iklan, serta lead CRM vs percakapan WA menurut Meta.
-- Tabel **per sumber lead**: kampanye terhubung, biaya, lead, biaya/lead, santri, biaya/santri.
-- Tabel **per kampanye**: biaya, impresi, klik tautan, CTR, percakapan WA, biaya/percakapan, dan pilihan **sumber lead** untuk pemetaan.
-- Rincian **per iklan**.
+- **Filter** (semua angka, grafik, dan tabel ikut berubah; filter tersimpan di URL sehingga tampilan bisa dibagikan):
+  - periode: hari ini, kemarin, 7/14/30 hari, atau custom;
+  - **Bandingkan** dengan periode sebelumnya yang panjangnya sama;
+  - satu atau beberapa **kampanye**;
+  - satu **sumber lead (LP)**.
+- **Jalur rupiah → santri**: biaya → impresi → klik tautan → chat WA (Meta) → lead (CRM) → santri, dengan biaya per langkah, konversi antar-langkah, dan perubahan dibanding periode lalu. Angka fokusnya **biaya per santri**.
+- **Tren harian** dengan pilihan metrik (biaya, chat WA, lead CRM, biaya/chat, CTR), garis periode lalu, dan tooltip per hari.
+- **Per sumber lead**: biaya, lead, biaya/lead, santri, biaya/santri, serta penanda sumber dengan biaya per santri termurah. Klik untuk memfilter.
+- **Porsi biaya per kampanye**: bar bertumpuk 4 kampanye terbesar + lainnya. Klik untuk memfilter.
+- **Rincian performa** dengan tingkat **Kampanye / Ad set / Iklan**, pencarian, pengurutan per kolom, bar porsi biaya, dan label **efisien/mahal** dari biaya per chat dibanding rata-rata. Di tingkat Kampanye ada kolom lead, santri, biaya/santri, dan pilihan **sumber lead**.
 
 ---
 
