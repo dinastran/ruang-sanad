@@ -51,7 +51,7 @@ func TestClassPlanWorkflowVersionAndApprovalCAS(t *testing.T) {
 		t.Fatal(err)
 	}
 	items, err := q.ListClassPlanWorkflow(ctx)
-	if err != nil || len(items) != 1 || items[0].StudentCount != 8 || items[0].Version != 1 || items[0].Status != "draft" {
+	if err != nil || len(items) != 1 || items[0].StudentCount != 8 || items[0].Version != 1 || items[0].Status != "draft" || items[0].LevelCode != "1" || items[0].SlotsLabel == "" {
 		t.Fatalf("unexpected draft: %+v %v", items, err)
 	}
 	if ok, err := q.ClassPlanTransition(ctx, id, 99, "draft", "pending_coordinator", 17); err != nil || ok {
