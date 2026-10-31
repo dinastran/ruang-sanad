@@ -5,11 +5,13 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/models"
+	"github.com/maulanashalihin/laju-go/app/queries"
 	"github.com/maulanashalihin/laju-go/app/services"
 	"github.com/maulanashalihin/laju-go/app/session"
 )
 
 type SantriHandler struct {
+	scheduleAlternatives *services.SantriScheduleAlternativeService
 	santriService  *services.SantriService
 	masterService  *services.MasterService
 	kelasService   *services.KelasService
@@ -27,6 +29,11 @@ func NewSantriHandler(santriService *services.SantriService, masterService *serv
 		store:          store,
 		inertiaService: inertiaService,
 	}
+}
+
+func (h *SantriHandler) WithScheduleAlternatives(s *services.SantriScheduleAlternativeService) *SantriHandler {
+	h.scheduleAlternatives = s
+	return h
 }
 
 func (h *SantriHandler) Index(c *fiber.Ctx) error {
@@ -125,6 +132,14 @@ func (h *SantriHandler) New(c *fiber.Ctx) error {
 	guruList, _ := h.masterService.ListGuru()
 	kodeKelasList, _ := h.masterService.ListKodeKelas()
 
+	var altOffers interface{} = []queries.ScheduleAlternativeOffer{}
+	var altChoices interface{} = []queries.SantriScheduleAlternative{}
+	if (role == models.RoleAdminKelas || role == models.RoleSuperAdmin) && h.scheduleAlternatives != nil {
+		offers,choices,alternativesErr := h.scheduleAlternatives.List(c.UserContext(), id)
+		if alternativesErr != nil {return c.Status(fiber.StatusServiceUnavailable).SendString("Gagal memuat pilihan alternatif jadwal")}
+		altOffers = offers
+		altChoices = choices
+	}
 	return h.inertiaService.Render(c, "app/SantriForm", fiber.Map{
 		"user":       user,
 		"santri":     nil,
@@ -190,6 +205,8 @@ func (h *SantriHandler) Show(c *fiber.Ctx) error {
 		"santri":     santri,
 		"mahasantri_produk": produkMahasantri,
 		"admin_notes": adminNotes,
+		"alternate_offers": altOffers,
+		"alternate_choices": altChoices,
 		"angkatan":   angkatanList,
 		"levels":     levelList,
 		"jadwals":    jadwalList,
