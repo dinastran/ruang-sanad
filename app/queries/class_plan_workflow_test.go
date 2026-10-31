@@ -108,3 +108,31 @@ func TestClassPlanWorkflowUnderQuotaCannotJumpToCoordinator(t *testing.T) {
 		t.Fatalf("exception cannot skip coordinator: %v %v", ok, err)
 	}
 }
+
+func TestClassPlanWorkflowActivatedKeepsCommittedStudentCount(t *testing.T) {
+	ctx := context.Background()
+	q := NewQuerier(workflowQueryDB(t))
+	id, err := q.CreateClassPlanWorkflow(ctx, 17, ClassPlanWorkflowRow{
+		Program: "reguler", Angkatan: "2026-A", Gender: "P", GuruID: 10,
+		Frequency: 1, MinQuota: 8, Capacity: 10,
+	}, []ClassPlanWorkflowSlot{{Day: 2, Start: "19:30", End: "21:00"}}, []int64{1, 2, 3, 4, 5, 6, 7, 8}, "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.Queries.db.ExecContext(ctx,
+		"UPDATE class_plan_students SET status='committed' WHERE plan_id=?", id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.Queries.db.ExecContext(ctx,
+		"UPDATE class_plans SET status='activated', activated_kelas_id=91 WHERE id=?", id); err != nil {
+		t.Fatal(err)
+	}
+	got, err := q.GetClassPlanWorkflow(ctx, id)
+	if err != nil || got.Status != "activated" || got.StudentCount != 8 || got.ReservedCount != 0 || got.ActivatedKelasID != 91 {
+		t.Fatalf("activated plan must retain its actual student count: %+v, %v", got, err)
+	}
+	items, err := q.ListClassPlanWorkflow(ctx)
+	if err != nil || len(items) != 1 || items[0].StudentCount != 8 {
+		t.Fatalf("activation review must show committed students: %+v, %v", items, err)
+	}
+}
