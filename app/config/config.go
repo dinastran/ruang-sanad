@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"log/slog"
 	"os"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 type Config struct {
 	AppPort            string
+	AppBindHost        string
 	AppEnv             string
 	DBPath             string
 	SessionSecret      string
@@ -69,6 +71,7 @@ func Load() *Config {
 
 	AppConfig = &Config{
 		AppPort:            getEnv("APP_PORT", "8080"),
+		AppBindHost:        strings.TrimSpace(getEnv("APP_BIND_HOST", "")),
 		AppEnv:             getEnv("APP_ENV", "development"),
 		DBPath:             getEnv("DB_PATH", "./data/app.db"),
 		SessionSecret:      getEnv("SESSION_SECRET", "change-this-in-production"),
@@ -172,4 +175,13 @@ func getSessionTTL() time.Duration {
 		return 720 * time.Hour // 30 days
 	}
 	return d
+}
+
+// ListenAddress preserves production's existing wildcard binding by default.
+// Staging can opt into loopback without changing production networking.
+func (c *Config) ListenAddress() string {
+	if c.AppBindHost == "" {
+		return ":" + c.AppPort
+	}
+	return net.JoinHostPort(c.AppBindHost, c.AppPort)
 }

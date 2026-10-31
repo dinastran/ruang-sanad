@@ -337,7 +337,7 @@ func main() {
 
 	go func() {
 		slog.Info("server listening", "port", cfg.AppPort)
-		if err := app.Listen(":" + cfg.AppPort); err != nil {
+		if err := app.Listen(cfg.ListenAddress()); err != nil {
 			slog.Error("server failed", "error", err)
 			os.Exit(1)
 		}
