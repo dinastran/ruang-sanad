@@ -369,6 +369,29 @@ func (s *MetaCAPIService) RetryFailed(ctx context.Context) (int64, error) {
 	return s.querier.RetryFailedMetaCAPIEvents(ctx, queries.RetryFailedMetaCAPIEventsParams{Now: now, Since: now.Add(-metaCAPIMaxAge)})
 }
 
+// resendSince is how far back test-mode events can still go to production:
+// Meta's 7 days, minus a margin so an event does not expire while queued.
+func (s *MetaCAPIService) resendSince() time.Time {
+	return s.nowUTC().Add(-metaCAPIMaxAge + 15*time.Minute)
+}
+
+// ErrMetaCAPITestModeOn blocks resending while test mode is still on: the
+// events would only reach Test events again.
+var ErrMetaCAPITestModeOn = errors.New("mode uji masih aktif (META_CAPI_TEST_EVENT_CODE terisi); kosongkan lalu restart aplikasi sebelum mengirim ulang ke produksi")
+
+// ResendTestEvents queues the events that were sent in test mode (so Meta
+// only shows them in Test events) to be sent again to production, as long as
+// Meta still accepts them (7 days). The event_id stays the same.
+func (s *MetaCAPIService) ResendTestEvents(ctx context.Context) (int64, error) {
+	if !s.Enabled() {
+		return 0, ErrMetaCAPIDisabled
+	}
+	if s.cfg.TestEventCode != "" {
+		return 0, ErrMetaCAPITestModeOn
+	}
+	return s.querier.ResendTestMetaCAPIEvents(ctx, queries.ResendTestMetaCAPIEventsParams{Now: s.nowUTC(), Since: s.resendSince()})
+}
+
 // Status is what the settings page shows: configuration (without secrets),
 // queue counts, and the latest events.
 func (s *MetaCAPIService) Status(ctx context.Context) (*models.MetaCAPIStatus, error) {
@@ -389,6 +412,9 @@ func (s *MetaCAPIService) Status(ctx context.Context) (*models.MetaCAPIStatus, e
 	}
 	for _, c := range counts {
 		out.Counts[c.Status] = c.Total
+	}
+	if out.ResendableTest, err = s.querier.CountResendableTestMetaCAPIEvents(ctx, s.resendSince()); err != nil {
+		return nil, err
 	}
 	rows, err := s.querier.ListRecentMetaCAPIEvents(ctx, 50)
 	if err != nil {

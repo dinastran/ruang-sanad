@@ -511,6 +511,7 @@ func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, u
 	if h.MetaCAPI != nil {
 		protected.Get("/leads/meta-capi", superAdminRole, h.MetaCAPI.Index)
 		protected.Post("/leads/meta-capi/retry", superAdminRole, h.MetaCAPI.RetryFailed)
+		protected.Post("/leads/meta-capi/resend-test", superAdminRole, h.MetaCAPI.ResendTest)
 	}
 	if h.LeadFollowups != nil {
 		approver := middlewares.RoleRequired(store, userService, services.FollowupApproverRoles...)

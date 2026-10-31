@@ -43,6 +43,19 @@ func (q *Queries) CountMetaCAPIEventsByStatus(ctx context.Context) ([]CountMetaC
 	return items, nil
 }
 
+const countResendableTestMetaCAPIEvents = `-- name: CountResendableTestMetaCAPIEvents :one
+SELECT COUNT(*) FROM meta_capi_events
+WHERE test_mode = 1 AND status IN ('sent', 'failed') AND event_time >= ?
+`
+
+// Event yang terkirim/gagal saat mode uji dan masih bisa diterima Meta.
+func (q *Queries) CountResendableTestMetaCAPIEvents(ctx context.Context, eventTime time.Time) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countResendableTestMetaCAPIEvents, eventTime)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const insertMetaCAPIEvent = `-- name: InsertMetaCAPIEvent :execrows
 INSERT OR IGNORE INTO meta_capi_events (lead_id, event_name, event_id, event_time, value, test_mode, next_attempt_at, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -339,6 +352,26 @@ type MarkMetaCAPIEventSentParams struct {
 func (q *Queries) MarkMetaCAPIEventSent(ctx context.Context, arg MarkMetaCAPIEventSentParams) error {
 	_, err := q.db.ExecContext(ctx, markMetaCAPIEventSent, arg.FbtraceID, arg.SentAt, arg.ID)
 	return err
+}
+
+const resendTestMetaCAPIEvents = `-- name: ResendTestMetaCAPIEvents :execrows
+UPDATE meta_capi_events SET status = 'pending', test_mode = 0, attempts = 0, last_error = '',
+    fbtrace_id = '', sent_at = NULL, next_attempt_at = ?1
+WHERE test_mode = 1 AND status IN ('sent', 'failed') AND event_time >= ?2
+`
+
+type ResendTestMetaCAPIEventsParams struct {
+	Now   time.Time
+	Since time.Time
+}
+
+// Antre ulang event mode uji agar terkirim ke produksi (event_id tetap).
+func (q *Queries) ResendTestMetaCAPIEvents(ctx context.Context, arg ResendTestMetaCAPIEventsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, resendTestMetaCAPIEvents, arg.Now, arg.Since)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const retryFailedMetaCAPIEvents = `-- name: RetryFailedMetaCAPIEvents :execrows

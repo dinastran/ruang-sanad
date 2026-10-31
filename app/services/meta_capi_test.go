@@ -211,3 +211,63 @@ func TestMetaCAPISkipsOldAndDoNotContact(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, res.Queued)
 }
+
+func TestMetaCAPIResendTestEventsToProduction(t *testing.T) {
+	f := setupLeadFixture(t)
+	f.ingest(t, leadEvent("t1", "message.in", "2026-10-24T03:00:00Z", map[string]string{"wa_message_id": "T1", "body": "halo"}))
+	other := leadEvent("t2", "message.in", "2026-10-15T03:00:00Z", map[string]string{"wa_message_id": "T2", "body": "halo"})
+	other.ChatID, other.Phone = "6287777777777@s.whatsapp.net", "6287777777777"
+
+	// Sent while test mode was on.
+	m := &fakeMeta{}
+	testSvc := newTestCAPI(t, f, m, MetaCAPIConfig{DatasetID: "1", Token: "tok", TestEventCode: "TEST12345"})
+	res, err := testSvc.Tick(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, 1, res.Sent)
+	require.Equal(t, "TEST12345", m.bodies[0]["test_event_code"])
+	_, err = testSvc.ResendTestEvents(t.Context())
+	require.ErrorIs(t, err, ErrMetaCAPITestModeOn, "refused while test mode is on")
+
+	// An old test-mode event (beyond Meta's 7 days) cannot be rescued.
+	f.ingest(t, other)
+	l2, err := f.querier.GetLeadByChatID(t.Context(), other.ChatID)
+	require.NoError(t, err)
+	_, err = f.db.Exec(`INSERT INTO meta_capi_events (lead_id, event_name, event_id, event_time, status, attempts, test_mode, next_attempt_at, sent_at, created_at)
+		VALUES (?, 'Lead', ?, ?, 'sent', 1, 1, ?, ?, ?)`, l2.ID, metaEventID(l2.ID, MetaEventLead), f.clock.Add(-9*24*time.Hour), f.clock, f.clock, f.clock)
+	require.NoError(t, err)
+
+	// After restart without the test code: the page offers the resend.
+	prod := newTestCAPI(t, f, m, MetaCAPIConfig{DatasetID: "1", Token: "tok"})
+	st, err := prod.Status(t.Context())
+	require.NoError(t, err)
+	require.False(t, st.TestMode)
+	require.EqualValues(t, 1, st.ResendableTest)
+
+	// A plain tick sends nothing: the event already exists.
+	res, err = prod.Tick(t.Context())
+	require.NoError(t, err)
+	require.Zero(t, res.Sent)
+
+	n, err := prod.ResendTestEvents(t.Context())
+	require.NoError(t, err)
+	require.EqualValues(t, 1, n)
+	res, err = prod.Tick(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, 1, res.Sent)
+	last := m.bodies[len(m.bodies)-1]
+	require.NotContains(t, last, "test_event_code", "sent to production")
+	ev := last["data"].([]any)[0].(map[string]any)
+	require.Equal(t, metaEventID(f.lead(t).ID, MetaEventLead), ev["event_id"], "same event_id")
+
+	st, err = prod.Status(t.Context())
+	require.NoError(t, err)
+	require.Zero(t, st.ResendableTest)
+	for _, e := range st.Events {
+		if e.LeadID == f.lead(t).ID {
+			require.False(t, e.TestMode, "no longer labelled uji")
+		}
+	}
+	n, err = prod.ResendTestEvents(t.Context())
+	require.NoError(t, err)
+	require.Zero(t, n, "nothing left to resend; the old one stays as is")
+}
