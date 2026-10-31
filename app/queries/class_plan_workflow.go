@@ -25,6 +25,8 @@ type ClassPlanWorkflowRow struct {
 	StudentCount     int64  `json:"student_count"`
 	LevelCode        string `json:"level_code"`
 	SlotsLabel       string `json:"slots_label"`
+	ExceptionReason  string `json:"exception_reason"`
+	ExceptionStatus  string `json:"exception_status"`
 }
 
 type ClassPlanWorkflowSlot struct {
@@ -57,7 +59,9 @@ func (q *Querier) ListClassPlanWorkflow(ctx context.Context) ([]ClassPlanWorkflo
 		COALESCE(p.admin_approved_by,0),(SELECT COUNT(*) FROM class_plan_students s
 		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved')),COALESCE((SELECT MIN(level_kode) FROM class_plan_levels WHERE plan_id=p.id),''),
 		COALESCE((SELECT GROUP_CONCAT(hari || ' ' || jam_mulai || '-' || jam_selesai, ', ')
-		FROM class_plan_slots WHERE plan_id=p.id),'')
+		FROM class_plan_slots WHERE plan_id=p.id),''),
+		COALESCE((SELECT reason FROM class_plan_exceptions WHERE plan_id=p.id ORDER BY id DESC LIMIT 1),''),
+		COALESCE((SELECT status FROM class_plan_exceptions WHERE plan_id=p.id ORDER BY id DESC LIMIT 1),'')
 		FROM class_plans p
 		WHERE p.status IN ('draft','pending_coordinator','pending_admin','pending_exception','blocked')
 		ORDER BY p.updated_at DESC,p.id DESC LIMIT 100`)
@@ -70,7 +74,7 @@ func (q *Querier) ListClassPlanWorkflow(ctx context.Context) ([]ClassPlanWorkflo
 		var r ClassPlanWorkflowRow
 		if err := rows.Scan(&r.ID, &r.Source, &r.Status, &r.Program, &r.Angkatan, &r.Gender,
 			&r.GuruID, &r.Frequency, &r.MinQuota, &r.Capacity, &r.TargetKelasID, &r.Version,
-			&r.ConfirmedBy, &r.ConfirmedVersion, &r.ApprovedBy, &r.StudentCount, &r.LevelCode, &r.SlotsLabel); err != nil {
+			&r.ConfirmedBy, &r.ConfirmedVersion, &r.ApprovedBy, &r.StudentCount, &r.LevelCode, &r.SlotsLabel, &r.ExceptionReason, &r.ExceptionStatus); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -86,11 +90,13 @@ func (q *Querier) GetClassPlanWorkflow(ctx context.Context, id int64) (ClassPlan
 		COALESCE(p.admin_approved_by,0),(SELECT COUNT(*) FROM class_plan_students s
 		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved')),COALESCE((SELECT MIN(level_kode) FROM class_plan_levels WHERE plan_id=p.id),''),
 		COALESCE((SELECT GROUP_CONCAT(hari || ' ' || jam_mulai || '-' || jam_selesai, ', ')
-		FROM class_plan_slots WHERE plan_id=p.id),'')
+		FROM class_plan_slots WHERE plan_id=p.id),''),
+		COALESCE((SELECT reason FROM class_plan_exceptions WHERE plan_id=p.id ORDER BY id DESC LIMIT 1),''),
+		COALESCE((SELECT status FROM class_plan_exceptions WHERE plan_id=p.id ORDER BY id DESC LIMIT 1),'')
 		FROM class_plans p WHERE p.id=?`, id).Scan(
 		&r.ID, &r.Source, &r.Status, &r.Program, &r.Angkatan, &r.Gender,
 		&r.GuruID, &r.Frequency, &r.MinQuota, &r.Capacity, &r.TargetKelasID, &r.Version,
-		&r.ConfirmedBy, &r.ConfirmedVersion, &r.ApprovedBy, &r.StudentCount, &r.LevelCode, &r.SlotsLabel)
+		&r.ConfirmedBy, &r.ConfirmedVersion, &r.ApprovedBy, &r.StudentCount, &r.LevelCode, &r.SlotsLabel, &r.ExceptionReason, &r.ExceptionStatus)
 	return r, err
 }
 
