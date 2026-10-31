@@ -14,7 +14,7 @@ func planningWorkflowError(c *fiber.Ctx, err error) error {
 		return c.SendStatus(fiber.StatusForbidden)
 	case errors.Is(err, services.ErrPlanWorkflowNotFound):
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Perencanaan tidak ditemukan"})
-	case errors.Is(err, services.ErrPlanWorkflowConflict):
+	case errors.Is(err, services.ErrPlanWorkflowConflict), errors.Is(err, services.ErrPlanActivationConflict):
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Rencana atau kandidat berubah. Muat ulang sebelum melanjutkan."})
 	case errors.Is(err, services.ErrPlanWorkflowInvalid):
 		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": err.Error()})

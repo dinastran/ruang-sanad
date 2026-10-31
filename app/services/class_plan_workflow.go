@@ -253,8 +253,9 @@ func (s *ClassPlanWorkflowService) preflight(ctx context.Context, q *queries.Que
 		if err != nil {
 			return nil, err
 		}
-		eligible := free && r.Status == "aktif" && !r.ClassID.Valid && r.Angkatan == plan.Angkatan &&
-			(r.Stage == "matching_kelas" || r.Stage == "waiting_kuota") && r.Level == level
+		eligible := free && r.Status == "aktif" && r.IsLengkap == 1 && !r.ClassID.Valid && r.Angkatan == plan.Angkatan &&
+			(r.Stage == "matching_kelas" || r.Stage == "waiting_kuota") && r.Level == level &&
+			r.Frequency == classPlanFrequencyLabel(plan.Frequency)
 		offers, err := q.ClassPlanCandidateOffers(ctx, r.ID)
 		if err != nil {
 			return nil, err
@@ -341,6 +342,10 @@ func (s *ClassPlanWorkflowService) Action(ctx context.Context, id, version, acto
 	reason = strings.TrimSpace(reason)
 	if len(reason) > 500 {
 		return ErrPlanWorkflowInvalid
+	}
+	if action == "activate" {
+		_, err := s.Activate(ctx, id, version, actorID)
+		return err
 	}
 	if action == "exception_approve" || action == "exception_reject" {
 		return s.DecideQuotaException(ctx, id, version, actorID, action, reason)
