@@ -223,3 +223,36 @@ func (q *Querier) AppendClassPlanWorkflowEvent(ctx context.Context,id,actorID in
 		VALUES (?,?,?,?,?,?)`,id,actorID,eventType,from,to,reason)
 	return err
 }
+
+func (q *Querier) ClassPlanWorkflowCandidateFree(ctx context.Context,planID,santriID int64) (bool,error) {
+	var free bool
+	err:=q.Queries.db.QueryRowContext(ctx,`SELECT NOT EXISTS(
+		SELECT 1 FROM class_plan_students ps
+		JOIN class_plans p ON p.id=ps.plan_id
+		WHERE ps.santri_id=? AND ps.plan_id<>?
+		AND (ps.status IN ('reserved','committed')
+		 OR (ps.status='candidate' AND p.status IN ('pending_coordinator','pending_admin','activated')))
+	)`,santriID,planID).Scan(&free)
+	return free,err
+}
+
+func (q *Querier) ClassPlanWorkflowBusy(ctx context.Context,asOf string,excludePlanID,excludeClassID int64) ([]PlanningTeacherBusy,error) {
+	const statement = `SELECT k.guru_id,r.hari,r.jam_mulai,substr(time(r.jam_mulai,'+90 minutes'),1,5)
+		FROM kelas_jadwal_rutin r JOIN kelas k ON k.id=r.kelas_id
+		WHERE k.is_aktif=1 AND k.guru_id IS NOT NULL AND k.id<>?
+			AND r.is_aktif=1 AND r.berlaku_mulai<=?
+			AND (r.berlaku_sampai IS NULL OR r.berlaku_sampai>=?)
+		UNION ALL
+		SELECT p.guru_id,s.hari,s.jam_mulai,s.jam_selesai
+		FROM class_plans p JOIN class_plan_slots s ON s.plan_id=p.id
+		WHERE p.status='pending_admin' AND p.guru_id IS NOT NULL AND p.id<>?
+		ORDER BY 1,2,3`
+	rows,err:=q.Queries.db.QueryContext(ctx,statement,excludeClassID,asOf,asOf,excludePlanID)
+	if err!=nil{return nil,err}
+	defer rows.Close()
+	out:=make([]PlanningTeacherBusy,0)
+	for rows.Next(){var v PlanningTeacherBusy
+		if err:=rows.Scan(&v.GuruID,&v.Day,&v.Start,&v.End);err!=nil{return nil,err}
+		out=append(out,v)}
+	return out,rows.Err()
+}
