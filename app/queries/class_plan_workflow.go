@@ -25,8 +25,8 @@ type ClassPlanWorkflowRow struct {
 	StudentCount     int64  `json:"student_count"`
 	LevelCode        string `json:"level_code"`
 	SlotsLabel       string `json:"slots_label"`
-	ExceptionReason string `json:"exception_reason"`
-	ExceptionStatus string `json:"exception_status"`
+	ExceptionReason  string `json:"exception_reason"`
+	ExceptionStatus  string `json:"exception_status"`
 }
 
 type ClassPlanWorkflowSlot struct {
