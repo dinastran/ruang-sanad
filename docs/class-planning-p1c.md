@@ -15,7 +15,7 @@ Base: `feature/class-planning-readiness-20261031` (PR #76, which also includes m
 
 ## Alternative schedule preferences
 
-- New additive migration 0094 stores a proposal, an approval evidenced by a recorded contact channel and admin note, or revocation. Every change produces an append-only event.
+- New additive migration 0098 stores a proposal, an approval evidenced by a recorded contact channel and admin note, or revocation. Every change produces an append-only event.
 - Admin Kelas or Super Admin updates alternatives from the existing Santri detail page. CS does not obtain this write route.
 - Selecting an alternative is limited to offered schedules compatible with santri gender and level, within an active onboarding case. Existing CRM primary choice cannot be duplicated as an alternative.
 - This is a **recorded human attestation**, not independent evidence from the student's phone or WhatsApp account. Before any automated reassignment, the service must recheck current approval, active offer and source notes.
