@@ -186,7 +186,7 @@ func main() {
 	riayahSantriHandler := handlers.NewRiayahSantriHandler(guruService, riayahSantriService, sessionStore, inertiaService)
 	riayahTindakLanjutHandler := handlers.NewRiayahTindakLanjutHandler(riayahSantriService, sessionStore, inertiaService)
 	koordinatorGuruHandler := handlers.NewKoordinatorGuruHandler(koordinatorService, koordinatorMonitoringService, pertemuanService, sessionStore, inertiaService)
-	koordinatorGuruDirectoryHandler := handlers.NewKoordinatorGuruDirectoryHandler(guruService, koordinatorService, riayahService, sessionStore, inertiaService)
+	koordinatorGuruDirectoryHandler := handlers.NewKoordinatorGuruDirectoryHandler(guruService, koordinatorService, riayahService, sessionStore, inertiaService).WithAvailability(services.NewGuruAvailabilityService(querier))
 	koordinatorMonitoringHandler := handlers.NewKoordinatorMonitoringHandler(koordinatorMonitoringService, koordinatorService, pertemuanService, sessionStore, inertiaService)
 	koordinatorFeaturesHandler := handlers.NewKoordinatorFeaturesHandler(koordinatorService, guruService, riayahService, sessionStore, inertiaService)
 	kunjunganHandler := handlers.NewKunjunganHandler(services.NewKunjunganService(querier), koordinatorService, guruService, sessionStore, inertiaService)
