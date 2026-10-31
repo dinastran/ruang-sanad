@@ -5,11 +5,11 @@ import "context"
 // PlanningApprovedAlternative is an explicitly approved, currently offered
 // alternative. It does not represent additional demand or a reserved seat.
 type PlanningApprovedAlternative struct {
-	SantriID int64
-	OfferCode string
-	OfferDays string
+	SantriID   int64
+	OfferCode  string
+	OfferDays  string
 	OfferStart string
-	OfferEnd string
+	OfferEnd   string
 }
 
 const planningApprovedAlternativesSQL = `SELECT DISTINCT a.santri_id,a.jadwal_kode,j.hari,j.jam_mulai,j.jam_selesai
@@ -45,15 +45,19 @@ LIMIT 1001`
 
 // ListPlanningApprovedAlternatives never writes or changes payment status.
 // Its result must be intersected with authoritative primary demand before use.
-func (q *Querier) ListPlanningApprovedAlternatives(ctx context.Context) ([]PlanningApprovedAlternative,error) {
-	rows,err:=q.Queries.db.QueryContext(ctx,planningApprovedAlternativesSQL)
-	if err!=nil{return nil,err}
-	defer rows.Close()
-	out:=make([]PlanningApprovedAlternative,0)
-	for rows.Next(){
-		var r PlanningApprovedAlternative
-		if err:=rows.Scan(&r.SantriID,&r.OfferCode,&r.OfferDays,&r.OfferStart,&r.OfferEnd);err!=nil{return nil,err}
-		out=append(out,r)
+func (q *Querier) ListPlanningApprovedAlternatives(ctx context.Context) ([]PlanningApprovedAlternative, error) {
+	rows, err := q.Queries.db.QueryContext(ctx, planningApprovedAlternativesSQL)
+	if err != nil {
+		return nil, err
 	}
-	return out,rows.Err()
+	defer rows.Close()
+	out := make([]PlanningApprovedAlternative, 0)
+	for rows.Next() {
+		var r PlanningApprovedAlternative
+		if err := rows.Scan(&r.SantriID, &r.OfferCode, &r.OfferDays, &r.OfferStart, &r.OfferEnd); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
