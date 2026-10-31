@@ -15,12 +15,18 @@ type KoordinatorGuruDirectoryHandler struct {
 	guruService        *services.GuruService
 	koordinatorService *services.KoordinatorService
 	riayahService      *services.RiayahService
+	availability       *services.GuruAvailabilityService
 	store              *session.Store
 	inertiaService     *services.InertiaService
 }
 
 func NewKoordinatorGuruDirectoryHandler(guruService *services.GuruService, koordinatorService *services.KoordinatorService, riayahService *services.RiayahService, store *session.Store, inertiaService *services.InertiaService) *KoordinatorGuruDirectoryHandler {
 	return &KoordinatorGuruDirectoryHandler{guruService: guruService, koordinatorService: koordinatorService, riayahService: riayahService, store: store, inertiaService: inertiaService}
+}
+
+func (h *KoordinatorGuruDirectoryHandler) WithAvailability(s *services.GuruAvailabilityService) *KoordinatorGuruDirectoryHandler {
+	h.availability = s
+	return h
 }
 
 func (h *KoordinatorGuruDirectoryHandler) List(c *fiber.Ctx) error {
@@ -50,6 +56,15 @@ func (h *KoordinatorGuruDirectoryHandler) Detail(c *fiber.Ctx) error {
 	linkableUsers, _ := h.guruService.ListLinkableUsers()
 	kompetensi, _ := h.koordinatorService.GetKompetensi(id)
 	riayah, _ := h.riayahService.ListRiayahByTarget("guru", id)
+	var availabilities interface{} = []interface{}{}
+	if h.availability != nil {
+		items, availabilityErr := h.availability.List(c.UserContext(), id)
+		if availabilityErr != nil {
+			h.store.Flash(c, "error", "Gagal memuat jadwal available guru")
+			return h.inertiaService.Redirect(c, "/app/koordinator-guru/guru")
+		}
+		availabilities = items
+	}
 	return h.inertiaService.Render(c, "koordinator/GuruDetail", fiber.Map{
 		"user":          user,
 		"guru":          guru,
@@ -57,6 +72,7 @@ func (h *KoordinatorGuruDirectoryHandler) Detail(c *fiber.Ctx) error {
 		"canLink":       user != nil && user.Role == "super_admin",
 		"kompetensi":    kompetensi,
 		"riayah":        riayah,
+		"availabilities": availabilities,
 	})
 }
 
