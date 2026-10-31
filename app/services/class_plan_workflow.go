@@ -61,7 +61,7 @@ func normalizeClassPlanDraft(input *ClassPlanDraftInput) error {
 	if input.Angkatan==""||len(input.Angkatan)>100||input.Level==""||len(input.Level)>50||
 		(input.Gender!="L"&&input.Gender!="P")||input.GuruID<=0||
 		(input.Frequency!=1&&input.Frequency!=2)||input.Capacity<8||input.Capacity>10||
-		input.TargetKelasID<0||len(input.Slots)!=int(input.Frequency)||
+		input.TargetKelasID!=0||len(input.Slots)!=int(input.Frequency)||
 		len(input.CandidateIDs)==0||len(input.CandidateIDs)>int(input.Capacity) {
 		return ErrPlanWorkflowInvalid
 	}
