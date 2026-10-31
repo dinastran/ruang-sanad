@@ -10,6 +10,8 @@ import (
 	"github.com/maulanashalihin/laju-go/app/queries"
 )
 
+func classPlanFrequencyLabel(f int64) string { if f==1 {return "1x/pekan"}; return "2x/pekan" }
+
 var ErrPlanActivationConflict=errors.New("aktivasi kelas tidak lagi memenuhi syarat")
 
 var planningWeekdays=[8]string{"","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Ahad"}
@@ -88,7 +90,7 @@ func (s *ClassPlanWorkflowService) Activate(ctx context.Context,planID,version,a
 	if n!=plan.StudentCount{return 0,ErrPlanWorkflowConflict}
 	for _,student:=range candidates{
 		assigned,err:=q.AssignActivatedPlanningStudent(ctx,plan.ID,student.ID,classID,
-			plan.Gender,plan.Angkatan,level,fmtClassPlanFrequency(plan.Frequency),schedule)
+			plan.Gender,plan.Angkatan,level,classPlanFrequencyLabel(plan.Frequency),schedule)
 		if err!=nil{return 0,err}
 		if !assigned{return 0,ErrPlanActivationConflict}
 	}
