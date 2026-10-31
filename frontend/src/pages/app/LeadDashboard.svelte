@@ -11,6 +11,7 @@
  import StatusComposition from "@components/lead-dashboard/StatusComposition.svelte";
  import FollowupPanel from "@components/lead-dashboard/FollowupPanel.svelte";
  import ReasonBars from "@components/lead-dashboard/ReasonBars.svelte";
+ import SourcePerformance from "@components/lead-dashboard/SourcePerformance.svelte";
  import { panel, shortDate, type Dashboard } from "@components/lead-dashboard/types";
 
  interface Props { user?: User; dashboard: Dashboard }
@@ -69,6 +70,8 @@
      <FollowupPanel {d} {canApproveFollowup} />
     </div>
    </div>
+
+   <SourcePerformance sources={d.sources ?? []} onselect={(sumber) => openLeads({ sumber })} />
 
    <div class="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
     <ReasonBars title="Alasan lost" subtitle="Dicatat manual oleh CS pada lead lost." empty="Belum ada lead lost pada periode ini."

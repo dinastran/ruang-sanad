@@ -30,5 +30,7 @@ type LeadDashboard struct {
  FollowupEligible int64 `json:"followup_eligible"`
  FollowupReplied int64 `json:"followup_replied"`
  Priorities []LeadDashboardPriority `json:"priorities"`
+ // Sources is the period cohort per lead source (landing page / iklan).
+ Sources []LeadSourceStat `json:"sources"`
  Insights []string `json:"insights"`
 }

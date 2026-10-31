@@ -2,10 +2,10 @@
 	import { inertia } from "@inertiajs/svelte";
 	import { STAGE_LABELS, STATUS_LABELS, LOST_REASON_LABELS, type LeadLabel } from "@lib/leads";
 	import { Search, SlidersHorizontal, X } from "lucide-svelte";
-	import type { FilterChange, Filters } from "./types";
+	import type { FilterChange, Filters, SourceOption } from "./types";
 
-	interface Props { filters: Filters; stages: string[]; labels: LeadLabel[]; onfilter: (c: FilterChange) => void }
-	let { filters, stages, labels, onfilter }: Props = $props();
+	interface Props { filters: Filters; stages: string[]; labels: LeadLabel[]; sources: SourceOption[]; onfilter: (c: FilterChange) => void }
+	let { filters, stages, labels, sources, onfilter }: Props = $props();
 
 	// svelte-ignore state_referenced_locally
 	let search = $state(filters.q ?? "");
@@ -31,6 +31,7 @@
 		if (filters.label) out.push({ label: `Label: ${labels.find((l) => l.id === filters.label)?.nama ?? filters.label}`, clear: { label: 0 } });
 		if (filters.mine) out.push({ label: "Lead saya", clear: { mine: false } });
 		if (filters.review) out.push({ label: "Perlu dicek", clear: { review: false } });
+		if (filters.sumber) out.push({ label: `Sumber: ${filters.sumber === "none" ? "Tanpa sumber" : (sources.find((s) => String(s.id) === filters.sumber)?.nama ?? filters.sumber)}`, clear: { sumber: "" } });
 		if (filters.lost_reason) out.push({ label: `Alasan lost: ${LOST_REASON_LABELS[filters.lost_reason] ?? filters.lost_reason.replaceAll("_", " ")}`, clear: { lost_reason: "" } });
 		if (filters.q) out.push({ label: `“${filters.q}”`, clear: { q: "" } });
 		if (filters.from || filters.to) {
@@ -69,7 +70,7 @@
 	</div>
 
 	{#if moreOpen}
-		<div id="lead-filter-more" class="grid grid-cols-2 gap-3 rounded-lg border border-neutral-200/80 bg-white p-3 sm:grid-cols-3 lg:grid-cols-5 dark:border-white/[0.07] dark:bg-neutral-925/60">
+		<div id="lead-filter-more" class="grid grid-cols-2 gap-3 rounded-lg border border-neutral-200/80 bg-white p-3 sm:grid-cols-3 lg:grid-cols-6 dark:border-white/[0.07] dark:bg-neutral-925/60">
 			<label class={lbl}>Status
 				<select class={field + " mt-1"} value={filters.status || "open"} onchange={(e) => onfilter({ status: e.currentTarget.value === "open" ? "" : e.currentTarget.value })}>
 					{#each ["open", "won", "lost", "do_not_contact", "all"] as s}<option value={s}>{s === "all" ? "Semua status" : STATUS_LABELS[s]}</option>{/each}
@@ -85,6 +86,13 @@
 				<select class={field + " mt-1"} value={String(filters.label || "")} onchange={(e) => onfilter({ label: Number(e.currentTarget.value) || 0 })}>
 					<option value="">Semua label</option>
 					{#each labels as l}<option value={String(l.id)}>{l.nama}</option>{/each}
+				</select>
+			</label>
+			<label class={lbl}>Sumber
+				<select class={field + " mt-1"} value={filters.sumber ?? ""} onchange={(e) => onfilter({ sumber: e.currentTarget.value })}>
+					<option value="">Semua sumber</option>
+					{#each sources as s}<option value={String(s.id)}>{s.nama}{s.is_aktif ? "" : " (nonaktif)"}</option>{/each}
+					<option value="none">Tanpa sumber</option>
 				</select>
 			</label>
 			<label class={lbl}>{filters.date_field === "converted" ? "Closing dari" : "Masuk dari"}

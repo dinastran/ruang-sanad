@@ -5,6 +5,7 @@ export interface Report {
 	funnel: FunnelStage[]; lost_reasons: Count[]; objections: Count[];
 	median_hours_to_won: number; followup_sent: number; followup_won: number;
 }
+export interface SourceStat { id: number; nama: string; leads: number; won: number; open: number }
 export interface Day { day: string; leads: number; closing: number }
 export interface Priority { id: number; name: string; stage: string; reason: string; activity_at: string }
 export interface Dashboard {
@@ -12,6 +13,7 @@ export interface Dashboard {
 	previous_leads: number; previous_closing: number; review_count: number; daily: Day[];
 	followup_pending: number; followup_approved: number; followup_failed: number;
 	followup_eligible: number; followup_replied: number; priorities: Priority[]; insights: string[];
+	sources: SourceStat[];
 }
 
 /** Shared card surface for every dashboard panel. */

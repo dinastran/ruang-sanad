@@ -323,6 +323,11 @@ func (s *LeadService) applyMessageIn(ctx context.Context, q *queries.Querier, le
 	}); err != nil {
 		return err
 	}
+	// Ads open WhatsApp with a prefilled text: the first message tells the
+	// landing page or ad the lead came from.
+	if err := detectLeadSource(ctx, q, lead, data.Body, now, payload); err != nil {
+		return err
+	}
 	lead.LastInboundAt = laterTime(lead.LastInboundAt, occurred)
 
 	switch lead.Status {
