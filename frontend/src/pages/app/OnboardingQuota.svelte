@@ -21,7 +21,8 @@
  interface MatchSlot {Day:number;Start:string;End:string}
  interface MatchTeacher {guru_id:number;name:string;gender:string;status:string;weekly_minutes:number}
  interface MatchOption {kind:string;state:string;angkatan:string;gender:string;level:string;frequency:number;offer_code:string;class_id?:number;candidate_ids:number[];seats_available:number;minimum_to_start:number;slots:MatchSlot[];teacher_options:MatchTeacher[];reason:string}
- interface MatchingPreview {as_of:string;confirmed_demand:number;eligible_demand:number;skipped_ambiguous:number;truncated:boolean;suggestions:MatchOption[];warnings:string[]}
+ interface AlternateClassMatch {santri_id:number;class_id:number;offer_code:string;slots:MatchSlot[];reason:string}
+ interface MatchingPreview {as_of:string;confirmed_demand:number;eligible_demand:number;skipped_ambiguous:number;truncated:boolean;suggestions:MatchOption[];alternative_matches?:AlternateClassMatch[];warnings:string[]}
  interface Action {id:number;event_type:string;note:string;actor_name:string;created_at:string}
  interface Props {user?:User;board:{classes:ClassControl[]};notices:{id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}[]}
  let props:Props=$props();
@@ -178,9 +179,24 @@
         <p class="mt-2 text-xs text-neutral-500">{suggestion.reason}</p>
        </div>
       {:else}
-       <p class="text-sm text-neutral-500">Belum ada kombinasi kelas yang bisa direkomendasikan dari sumber data terverifikasi. Periksa kesiapan di atas.</p>
+       <p class="text-sm text-neutral-500">Belum ada rekomendasi dari pilihan jadwal utama yang memenuhi aturan. Periksa alternatif yang disetujui dan kesiapan data.</p>
       {/each}
      </div>
+     {#if (matching.alternative_matches?.length??0)>0}
+      <div class="mt-4 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
+       <h3 class="text-sm font-semibold">Alternatif disetujui untuk kelas existing</h3>
+       <p class="mt-1 text-xs text-neutral-500">Santri ini tidak dihitung dua kali sebagai demand. Pilihan alternatif telah tercatat disetujui, tetapi penempatan tetap memerlukan pemeriksaan ulang dan approval.</p>
+       <ul class="mt-3 space-y-2">
+        {#each matching.alternative_matches??[] as alt (alt.santri_id)}
+         <li class="rounded-lg bg-neutral-50 p-3 text-xs dark:bg-white/5">
+          <p class="font-semibold">Santri #{alt.santri_id} · Kelas #{alt.class_id} · {alt.offer_code}</p>
+          <p class="mt-1 text-neutral-500">Jadwal: {alt.slots.map(s=>s.Day+" "+s.Start+"-"+s.End).join(", ")} WIB</p>
+          <p class="mt-1 text-neutral-500">{alt.reason}</p>
+         </li>
+        {/each}
+       </ul>
+      </div>
+     {/if}
      {#each matching.warnings as warning,i (i)}
       <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">{warning}</p>
      {/each}
