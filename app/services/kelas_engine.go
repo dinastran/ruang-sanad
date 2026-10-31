@@ -132,21 +132,25 @@ func (s *KelasEngineService) ProcessSantriDenganGuru(ctx context.Context, santri
 	// these students to a new class. Explicit manual transfers still use
 	// PindahkanSantri instead.
 	if santri.KelasID.Valid {
-		planned,err:=s.querier.IsActivatedClassForSantri(ctx,santri.ID,santri.KelasID.Int64)
-		if err!=nil{return fmt.Errorf("cek penempatan planning: %w",err)}
+		planned, err := s.querier.IsActivatedClassForSantri(ctx, santri.ID, santri.KelasID.Int64)
+		if err != nil {
+			return fmt.Errorf("cek penempatan planning: %w", err)
+		}
 		if planned {
-			class,err:=s.querier.GetKelasByID(ctx,santri.KelasID.Int64)
-			if err!=nil{return err}
-			if !isLengkap||class.IsAktif!=1||class.JenisKelamin!=santri.JenisKelamin||
-				class.Angkatan!=santri.AngkatanKelas||class.Level!=santri.Level||
-				class.Frekuensi!=frekuensi||class.Jadwal!=santri.Jadwal||
-				!strings.EqualFold(class.Tipe,tipe)||
-				(guruID>0&&(!class.GuruID.Valid||class.GuruID.Int64!=guruID)){
+			class, err := s.querier.GetKelasByID(ctx, santri.KelasID.Int64)
+			if err != nil {
+				return err
+			}
+			if !isLengkap || class.IsAktif != 1 || class.JenisKelamin != santri.JenisKelamin ||
+				class.Angkatan != santri.AngkatanKelas || class.Level != santri.Level ||
+				class.Frekuensi != frekuensi || class.Jadwal != santri.Jadwal ||
+				!strings.EqualFold(class.Tipe, tipe) ||
+				(guruID > 0 && (!class.GuruID.Valid || class.GuruID.Int64 != guruID)) {
 				return errors.New("perubahan penempatan kelas planning harus melalui tindakan pindah kelas yang eksplisit")
 			}
-			return s.querier.UpdateSantriEngine(ctx,queries.UpdateSantriEngineParams{
-				Tipe:tipe,Frekuensi:frekuensi,IsLengkap:1,
-				KelasID:santri.KelasID,UpdatedAt:time.Now(),ID:santri.ID,
+			return s.querier.UpdateSantriEngine(ctx, queries.UpdateSantriEngineParams{
+				Tipe: tipe, Frekuensi: frekuensi, IsLengkap: 1,
+				KelasID: santri.KelasID, UpdatedAt: time.Now(), ID: santri.ID,
 			})
 		}
 	}
