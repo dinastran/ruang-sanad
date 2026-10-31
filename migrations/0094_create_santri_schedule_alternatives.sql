@@ -11,13 +11,13 @@ CREATE TABLE santri_schedule_alternatives (
     consent_note TEXT NOT NULL DEFAULT '',
     consent_confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     consent_confirmed_at DATETIME,
-    updated_by INTEGER NOT NULL REFERENCES users(id),
+    updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(santri_id,jadwal_kode),
     CHECK (status <> 'approved' OR (
         consent_channel <> '' AND length(trim(consent_note)) > 0
-        AND consent_confirmed_by IS NOT NULL AND consent_confirmed_at IS NOT NULL
+        AND consent_confirmed_at IS NOT NULL
     ))
 );
 CREATE INDEX idx_santri_schedule_alternatives_status
