@@ -19,6 +19,7 @@ type PlanningMatchResult struct {
 	SkippedAmbiguous int                     `json:"skipped_ambiguous"`
 	Truncated        bool                    `json:"truncated"`
 	Suggestions      []PlanningMatchOption   `json:"suggestions"`
+	AlternativeMatches []PlanningAlternativeMatch `json:"alternative_matches"`
 	Warnings         []string                `json:"warnings"`
 }
 
@@ -49,6 +50,7 @@ type PlanningMatchOption struct {
 
 type PlanningMatchSnapshot struct {
 	Demand        []queries.PlanningDemand
+	ApprovedAlternatives []queries.PlanningApprovedAlternative
 	Classes       []queries.PlanningExistingClass
 	ClassSlots    []queries.PlanningClassSlot
 	Windows       []queries.PlanningTeacherWindow
@@ -71,6 +73,7 @@ func (s *PlanningMatchingService) Recommend(ctx context.Context) (PlanningMatchR
 	if err!=nil{return PlanningMatchResult{},err}
 	asOf:=time.Now().In(zone).Format(time.DateOnly)
 	demand,err:=s.querier.ListPlanningDemand(ctx);if err!=nil{return PlanningMatchResult{},err}
+	alternatives,err:=s.querier.ListPlanningApprovedAlternatives(ctx);if err!=nil{return PlanningMatchResult{},err}
 	classes,err:=s.querier.ListPlanningExistingClasses(ctx);if err!=nil{return PlanningMatchResult{},err}
 	classSlots,err:=s.querier.ListPlanningCurrentClassSlots(ctx,asOf);if err!=nil{return PlanningMatchResult{},err}
 	windows,err:=s.querier.ListPlanningTeacherWindows(ctx,asOf);if err!=nil{return PlanningMatchResult{},err}
@@ -81,7 +84,7 @@ func (s *PlanningMatchingService) Recommend(ctx context.Context) (PlanningMatchR
 	maxWorkload:=make(map[int64]int64)
 	for id,max:=range limits{if max.Valid{maxWorkload[id]=max.Int64}}
 	return PlanMatchingPreview(asOf,PlanningMatchSnapshot{
-		Demand:demand,Classes:classes,ClassSlots:classSlots,
+		Demand:demand,ApprovedAlternatives:alternatives,Classes:classes,ClassSlots:classSlots,
 		Windows:windows,Levels:levels,Busy:busy,
 		UnsafeTeacher:unsafe,MaxWorkload:maxWorkload,
 	}),nil
@@ -246,6 +249,8 @@ func PlanMatchingPreview(asOf string,snap PlanningMatchSnapshot) PlanningMatchRe
 		if classes[i].Occupancy!=classes[j].Occupancy{return classes[i].Occupancy>classes[j].Occupancy}
 		return classes[i].ID<classes[j].ID
 	})
+	// Enforce one physical capacity across all primary offer groups sharing a class.
+	primarySeatsReserved:=make(map[int64]int)
 	const maxOptions=40
 	for _,g:=range ordered{
 		remaining:=append([]int64(nil),g.ids...)
@@ -258,7 +263,7 @@ func PlanMatchingPreview(asOf string,snap PlanningMatchSnapshot) PlanningMatchRe
 				!planningSameSlots(g.slots,classSlots[k.ID]){continue}
 			space:=int(k.Capacity)
 			if space>10{space=10}
-			space-=int(k.Occupancy)
+			space-=int(k.Occupancy)+primarySeatsReserved[k.ID]
 			if space<=0{continue}
 			n:=space
 			if n>len(remaining){n=len(remaining)}
@@ -270,6 +275,7 @@ func PlanMatchingPreview(asOf string,snap PlanningMatchSnapshot) PlanningMatchRe
 				SeatsAvailable:space,MinimumToStart:8,Slots:g.slots,
 				Reason:"Kelas existing cocok secara gender, level, angkatan, frekuensi, jadwal rutin dan belum memiliki pertemuan.",
 			})
+			primarySeatsReserved[k.ID]+=n
 			remaining=remaining[n:]
 		}
 		for len(remaining)>0&&len(result.Suggestions)<maxOptions{
@@ -313,5 +319,5 @@ func PlanMatchingPreview(asOf string,snap PlanningMatchSnapshot) PlanningMatchRe
 	result.Warnings=append(result.Warnings,
 		"Preview hanya mencakup pembayaran CRM terverifikasi. Data pembayaran manual, alternatif jadwal, kelas multi-level, perubahan setelah snapshot dan histori retensi belum masuk.",
 		"Jam kelas existing diasumsikan 90 menit; keputusan penempatan tetap memerlukan konfirmasi guru, approval Admin Kelas dan validasi ulang.")
-	return result
+	return appendPlanningAlternativeMatches(result,snap)
 }
