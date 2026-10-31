@@ -2,8 +2,8 @@ package config
 
 import (
 	"fmt"
-	"net"
 	"log/slog"
+	"net"
 	"os"
 	"strings"
 	"time"
