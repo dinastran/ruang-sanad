@@ -30,3 +30,13 @@ func TestValidateScheduleAlternativeConsent(t *testing.T) {
 		})
 	}
 }
+
+func TestScheduleAlternativeTransitionNeedsRevocation(t *testing.T) {
+	if err:=validateAlternativeTransition("approved","proposed"); !errors.Is(err,ErrAlternativeInvalid){
+		t.Fatalf("must not silently downgrade approved consent: %v",err)
+	}
+	if err:=validateAlternativeTransition("approved","revoked");err!=nil{t.Fatal(err)}
+	if err:=validateAlternativeTransition("","revoked");!errors.Is(err,ErrAlternativeInvalid){
+		t.Fatalf("unknown alternative cannot be revoked: %v",err)
+	}
+}
