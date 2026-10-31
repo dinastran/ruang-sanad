@@ -31,6 +31,7 @@ func (q *Querier) ListAlternateOffersForSantri(ctx context.Context, id int64) ([
 		FROM jadwal_penawaran j JOIN santri s ON s.id=?
 		WHERE j.is_buka=1 AND (j.gender='' OR j.gender=s.jenis_kelamin)
 		AND (j.level='' OR j.level=s.level)
+		AND NOT EXISTS (SELECT 1 FROM leads l WHERE l.santri_id=s.id AND l.jadwal_kode=j.kode)
 		ORDER BY j.urutan,j.kode`
 	rows,err:=q.Queries.db.QueryContext(ctx,statement,id)
 	if err!=nil{return nil,err}
