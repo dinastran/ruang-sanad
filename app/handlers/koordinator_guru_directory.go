@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/models"
+	"github.com/maulanashalihin/laju-go/app/queries"
 	"github.com/maulanashalihin/laju-go/app/services"
 	"github.com/maulanashalihin/laju-go/app/session"
 )
@@ -56,7 +57,7 @@ func (h *KoordinatorGuruDirectoryHandler) Detail(c *fiber.Ctx) error {
 	linkableUsers, _ := h.guruService.ListLinkableUsers()
 	kompetensi, _ := h.koordinatorService.GetKompetensi(id)
 	riayah, _ := h.riayahService.ListRiayahByTarget("guru", id)
-	var availabilities interface{} = []interface{}{}
+	availabilities := make([]queries.GuruAvailabilityRow, 0)
 	if h.availability != nil {
 		items, availabilityErr := h.availability.List(c.UserContext(), id)
 		if availabilityErr != nil {
