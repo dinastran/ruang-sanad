@@ -81,12 +81,12 @@ func (h *KoordinatorGuruDirectoryHandler) Detail(c *fiber.Ctx) error {
 		}
 	}
 	return h.inertiaService.Render(c, "koordinator/GuruDetail", fiber.Map{
-		"user":          user,
-		"guru":          guru,
-		"linkableUsers": linkableUsers,
-		"canLink":       user != nil && user.Role == "super_admin",
-		"kompetensi":    kompetensi,
-		"riayah":        riayah,
+		"user":           user,
+		"guru":           guru,
+		"linkableUsers":  linkableUsers,
+		"canLink":        user != nil && user.Role == "super_admin",
+		"kompetensi":     kompetensi,
+		"riayah":         riayah,
 		"availabilities": availabilities,
 		"teachingLevels": teachingLevels,
 	})
