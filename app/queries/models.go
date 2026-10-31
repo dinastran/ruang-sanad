@@ -562,6 +562,23 @@ type MahasantriProduk struct {
 	UpdatedAt      time.Time
 }
 
+type MetaCapiEvent struct {
+	ID            int64
+	LeadID        int64
+	EventName     string
+	EventID       string
+	EventTime     time.Time
+	Value         int64
+	Status        string
+	Attempts      int64
+	LastError     string
+	FbtraceID     string
+	TestMode      int64
+	NextAttemptAt time.Time
+	SentAt        sql.NullTime
+	CreatedAt     time.Time
+}
+
 type Notification struct {
 	ID            int64
 	UserID        int64
