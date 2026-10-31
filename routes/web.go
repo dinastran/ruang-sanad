@@ -213,6 +213,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	// Admin Kelas routes (admin_kelas + super_admin)
 	protected.Get("/perlu-dilengkapi", akRole, h.Santri.PerluDilengkapi)
 	protected.Put("/santri/:id/kelas-data", akRole, h.Santri.UpdateAdminKelas)
+	protected.Put("/santri/:id/schedule-alternative", akRole, h.Santri.UpdateScheduleAlternative)
 	protected.Post("/santri/:id/admin-notes", akRole, h.Santri.CreateAdminNote)
 	protected.Put("/santri/:id/admin-notes/:noteID", akRole, h.Santri.UpdateAdminNote)
 	protected.Post("/santri/:id/voice-note", akRole, middlewares.UploadRateLimit.Limit(), h.Santri.UploadVoiceNote)
