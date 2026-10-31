@@ -24,7 +24,7 @@ func reservationDB(t *testing.T) *Querier {
 			t.Fatal(err)
 		}
 	}
-	raw, err := os.ReadFile("../../migrations/0095_guard_class_plan_reservations.sql")
+	raw, err := os.ReadFile("../../migrations/0099_guard_class_plan_reservations.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func reservationDB(t *testing.T) *Querier {
 		t.Fatal("missing Goose Down section")
 	}
 	if _, err := db.Exec(up); err != nil {
-		t.Fatalf("apply actual 0095 migration: %v", err)
+		t.Fatalf("apply actual 0099 migration: %v", err)
 	}
 	return NewQuerier(db)
 }
