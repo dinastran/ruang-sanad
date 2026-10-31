@@ -63,7 +63,7 @@ func validateAlternativeTransition(oldStatus,newStatus string) error {
 	return nil
 }
 
-func (s *SantriScheduleAlternativeService) List(ctx context.Context,santriID int64) ([]queries.ScheduleAlternativeOffer,[]queries.SantriScheduleAlternative,error) {
+func (s *SantriScheduleAlternativeService) List(ctx context.Context,santriID int64) ([]queries.ScheduleAlternativeOffer,[]queries.SantriScheduleAlternativeRecord,error) {
 	if santriID<=0{return nil,nil,ErrAlternativeInvalid}
 	offers,err:=s.q.ListAlternateOffersForSantri(ctx,santriID)
 	if err!=nil{return nil,nil,err}
