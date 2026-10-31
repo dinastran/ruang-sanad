@@ -17,6 +17,7 @@ type KoordinatorGuruDirectoryHandler struct {
 	koordinatorService *services.KoordinatorService
 	riayahService      *services.RiayahService
 	availability       *services.GuruAvailabilityService
+	teachingLevels     *services.GuruTeachingLevelsService
 	store              *session.Store
 	inertiaService     *services.InertiaService
 }
@@ -27,6 +28,11 @@ func NewKoordinatorGuruDirectoryHandler(guruService *services.GuruService, koord
 
 func (h *KoordinatorGuruDirectoryHandler) WithAvailability(s *services.GuruAvailabilityService) *KoordinatorGuruDirectoryHandler {
 	h.availability = s
+	return h
+}
+
+func (h *KoordinatorGuruDirectoryHandler) WithTeachingLevels(s *services.GuruTeachingLevelsService) *KoordinatorGuruDirectoryHandler {
+	h.teachingLevels = s
 	return h
 }
 
@@ -66,6 +72,14 @@ func (h *KoordinatorGuruDirectoryHandler) Detail(c *fiber.Ctx) error {
 		}
 		availabilities = items
 	}
+	var teachingLevels services.GuruTeachingLevelData
+	if h.teachingLevels != nil {
+		teachingLevels, err = h.teachingLevels.Get(c.UserContext(), id)
+		if err != nil {
+			h.store.Flash(c, "error", "Gagal memuat izin mengajar level")
+			return h.inertiaService.Redirect(c, "/app/koordinator-guru/guru")
+		}
+	}
 	return h.inertiaService.Render(c, "koordinator/GuruDetail", fiber.Map{
 		"user":          user,
 		"guru":          guru,
@@ -74,6 +88,7 @@ func (h *KoordinatorGuruDirectoryHandler) Detail(c *fiber.Ctx) error {
 		"kompetensi":    kompetensi,
 		"riayah":        riayah,
 		"availabilities": availabilities,
+		"teachingLevels": teachingLevels,
 	})
 }
 
