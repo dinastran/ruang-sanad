@@ -167,29 +167,30 @@ func TestMetaAdsReportJoinsCampaignsWithLeadSources(t *testing.T) {
 
 	rep, err := svc.Report(t.Context(), "2026-10-18", "2026-10-24")
 	require.NoError(t, err)
-	require.True(t, rep.HasMapping)
-	require.Len(t, rep.Daily, 7)
-	require.Equal(t, models.MetaAdsTotals{Spend: 350000, Impressions: 1800, Clicks: 45, LinkClicks: 42, Messaging: 8, LeadsAll: 3, LeadsAds: 2, WonAds: 1}, rep.Totals)
-	require.EqualValues(t, 2, rep.Daily[6].LeadsAds)
-	require.EqualValues(t, 150000, rep.Daily[6].Spend)
-
-	require.Len(t, rep.Campaigns, 2)
-	require.Equal(t, "c1", rep.Campaigns[0].ID)
-	require.EqualValues(t, 300000, rep.Campaigns[0].Spend)
-	require.Equal(t, 2, rep.Campaigns[0].Ads)
-	require.Equal(t, "LP Kelas Reguler Tahsin", rep.Campaigns[0].SourceNama)
-	require.Zero(t, rep.Campaigns[1].SourceID)
-
-	require.Equal(t, []models.MetaAdsSourceStat{{ID: reguler, Nama: "LP Kelas Reguler Tahsin", Campaigns: 1, Spend: 300000, Leads: 2, Won: 1}}, rep.Sources)
-	require.Len(t, rep.CampaignOptions, 2)
+	require.Equal(t, "2026-10-11", rep.PrevFrom, "previous period has the same length")
+	require.Equal(t, "2026-10-17", rep.PrevTo)
+	require.Len(t, rep.Rows, 3)
+	require.Equal(t, models.MetaAdsRow{Day: "2026-10-23", AdID: "a1", AdsetID: "s1", CampaignID: "c1", Spend: 200000, Impressions: 1000, Clicks: 30, LinkClicks: 29, Messaging: 5}, rep.Rows[0])
 	require.Len(t, rep.Ads, 3)
+	require.Len(t, rep.Campaigns, 2)
+	mapped := map[string]int64{}
+	for _, c := range rep.Campaigns {
+		mapped[c.ID] = c.SourceID
+	}
+	require.Equal(t, map[string]int64{"c1": reguler, "c2": 0}, mapped)
+	require.Equal(t, []models.MetaAdsLeadDay{
+		{Day: "2026-10-24", SourceID: 0, Leads: 1},
+		{Day: "2026-10-24", SourceID: reguler, Leads: 2, Won: 1},
+	}, rep.LeadDays)
+	require.NotEmpty(t, rep.Sources)
 
-	// Removing the mapping removes the CRM side.
+	// Removing the mapping is reflected in the campaign list.
 	require.NoError(t, svc.SetCampaignSource(t.Context(), "c1", 0))
 	rep, err = svc.Report(t.Context(), "2026-10-18", "2026-10-24")
 	require.NoError(t, err)
-	require.False(t, rep.HasMapping)
-	require.Zero(t, rep.Totals.LeadsAds)
+	for _, c := range rep.Campaigns {
+		require.Zero(t, c.SourceID)
+	}
 
 	_, err = svc.Report(t.Context(), "2026-10-24", "2026-10-01")
 	require.Error(t, err)
