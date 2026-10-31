@@ -255,7 +255,7 @@ func (s *ClassPlanWorkflowService) preflight(ctx context.Context, q *queries.Que
 		}
 		eligible := free && r.Status == "aktif" && r.IsLengkap == 1 && !r.ClassID.Valid && r.Angkatan == plan.Angkatan &&
 			(r.Stage == "matching_kelas" || r.Stage == "waiting_kuota") && r.Level == level &&
-			r.Frequency == fmtClassPlanFrequency(plan.Frequency)
+			r.Frequency == classPlanFrequencyLabel(plan.Frequency)
 		offers, err := q.ClassPlanCandidateOffers(ctx, r.ID)
 		if err != nil {
 			return nil, err
