@@ -3,7 +3,7 @@
 Panduan ini menjelaskan langkah demi langkah agar Dashboard Ruang Sanad bisa **membaca** data iklan Meta (biaya, impresi, klik, percakapan WhatsApp, dll.) secara otomatis, lalu menggabungkannya dengan data lead dan santri di CRM.
 
 > **Cakupan:**
-> - **Bagian A (Langkah 1–11):** Dashboard **membaca** data performa iklan (read-only).
+> - **Bagian A (Langkah 1–11):** Dashboard **membaca** data performa iklan (read-only) dan menampilkannya di **Leads → Iklan** (`/app/leads/iklan`).
 > - **Bagian B (Langkah 12–17):** Dashboard **mengirim** event funnel lead ke Meta lewat **Conversions API (CAPI)** — Lead sampai **Purchase** saat jadi santri — agar iklan bisa diukur dan dioptimalkan sampai hasil akhir.
 >
 > Dashboard **tidak** membuat, mengubah, atau menghentikan iklan.
@@ -249,8 +249,12 @@ Tambahkan ke `.env` server produksi:
 META_ADS_TOKEN=EAAB...              # token System User dari Langkah 6
 META_AD_ACCOUNT_IDS=act_123456789012345   # pisahkan koma jika lebih dari satu akun
 META_API_VERSION=v23.0              # dari Langkah 7b
-META_APP_SECRET=...                 # dari Langkah 2, untuk appsecret_proof
+META_APP_SECRET=...                 # dari Langkah 2, untuk appsecret_proof (opsional)
 ```
+
+- `META_AD_ACCOUNT_IDS` boleh ditulis dengan atau tanpa awalan `act_`.
+- `META_APP_SECRET` hanya dipakai untuk token Meta Ads ini. CAPI punya variabel sendiri (`META_CAPI_APP_SECRET`, Bagian B).
+- Saat start, log berisi `Sinkron Meta Ads nonaktif: ...` bila token atau akun belum diisi.
 
 Lalu restart aplikasi Dashboard (sesuai `docs/deployment`).
 
@@ -262,7 +266,7 @@ Siapa yang memasukkan: **pemilik/admin server**, langsung di server. Developer a
 
 ## Langkah 10: Cara Dashboard menarik data (untuk developer)
 
-Bagian ini adalah spesifikasi implementasi yang disarankan, mengikuti arsitektur repo (Handler → Service → Query → DB).
+Bagian ini **sudah diimplementasikan** (`app/services/meta_ads.go`, halaman `frontend/src/pages/app/MetaAds.svelte`) mengikuti arsitektur repo (Handler → Service → Query → DB). Rinciannya:
 
 ### 10.1 Request Insights
 
@@ -289,9 +293,10 @@ GET https://graph.facebook.com/{META_API_VERSION}/{act_id}/insights
 
 ### 10.2 Jadwal sinkron
 
-- **Harian** (mis. 02.00 WIB): tarik ulang **28 hari terakhir** dan *upsert* (ganti) baris yang sama. Angka Meta (terutama konversi/atribusi) masih bisa berubah beberapa hari setelah tanggal kejadian.
-- Tombol **"Sinkron sekarang"** di halaman Performa Iklan (super_admin) untuk tarik manual.
-- Catat waktu sinkron terakhir + pesan error terakhir agar terlihat di Dashboard.
+- **Harian, setelah 02.00 WIB** (worker memeriksa tiap jam; sinkron bila belum ada sinkron berhasil dalam 20 jam terakhir): tarik ulang **28 hari terakhir**. Data 28 hari itu dihapus lalu diisi ulang dalam satu transaksi, sehingga iklan yang sudah tidak muncul di Meta ikut hilang. Angka Meta (terutama konversi/atribusi) masih bisa berubah beberapa hari setelah tanggal kejadian.
+- Semua akun diambil dulu. Bila satu akun gagal, **data lama tidak dihapus** dan sinkron dicatat **gagal** beserta pesan error.
+- Tombol **"Sinkron sekarang"** di halaman Performa Iklan (super_admin) untuk tarik manual. Dua sinkron tidak bisa berjalan bersamaan.
+- Waktu sinkron terakhir, jumlah baris, dan pesan error terakhir terlihat di bagian atas halaman.
 
 ### 10.3 Tabel yang disarankan (satu tabel per migrasi)
 
@@ -307,13 +312,21 @@ GET https://graph.facebook.com/{META_API_VERSION}/{act_id}/insights
 - Jika API membalas error kode **17**, **80004**, atau pesan "User request limit reached": hentikan, tunggu, coba lagi nanti (backoff); jangan diulang terus-menerus.
 - Header respons `x-business-use-case-usage` menunjukkan persentase kuota yang terpakai.
 
-### 10.5 Yang ditampilkan di Dashboard (usulan)
+### 10.5 Yang ditampilkan di Dashboard
 
-Halaman **Performa Iklan** (`/app/leads/iklan`, peran super_admin & cs):
+Halaman **Performa Iklan**: **Leads → Iklan** (`/app/leads/iklan`). Bisa dibuka super_admin dan cs; tombol Sinkron hanya super_admin.
 
-- Ringkasan periode: total biaya, lead CRM, **biaya per lead (CPL)**, santri dari iklan, **biaya per santri**, percakapan WA menurut Meta vs lead tercatat.
-- Tabel per kampanye/iklan: biaya, impresi, klik, percakapan WA, lead CRM (dari pemetaan sumber), closing, CPL, biaya per santri.
-- Tren harian biaya vs lead.
+- Filter periode: hari ini, kemarin, 7/14/30 hari, atau custom.
+- Ringkasan periode:
+  - total biaya, impresi, dan klik tautan;
+  - **lead dari iklan (CRM)**;
+  - **biaya per lead**;
+  - **jadi santri** dan **biaya per santri**;
+  - **percakapan WA menurut Meta** dan biaya per percakapan.
+- Tren harian: biaya iklan, serta lead CRM vs percakapan WA menurut Meta.
+- Tabel **per sumber lead**: kampanye terhubung, biaya, lead, biaya/lead, santri, biaya/santri.
+- Tabel **per kampanye**: biaya, impresi, klik tautan, CTR, percakapan WA, biaya/percakapan, dan pilihan **sumber lead** untuk pemetaan.
+- Rincian **per iklan**.
 
 ---
 
@@ -321,7 +334,7 @@ Halaman **Performa Iklan** (`/app/leads/iklan`, peran super_admin & cs):
 
 Data Meta memberi **biaya per kampanye/iklan**; data CRM memberi **lead & santri per sumber** (fitur *Sumber lead* di `/app/leads/sumber`). Keduanya digabung lewat **pemetaan**:
 
-1. **Tahap awal (paling sederhana):** di halaman Sumber lead, setiap sumber dipetakan ke satu atau beberapa **kampanye** Meta. Contoh:
+1. **Tahap awal (paling sederhana):** di halaman **Leads → Iklan**, tabel **Kampanye**, pilih **Sumber lead** untuk setiap kampanye. Satu kampanye hanya ke satu sumber; satu sumber boleh punya banyak kampanye. Kampanye tanpa biaya di periode terpilih ada di bagian "Kampanye lain". Contoh:
    - Sumber "LP Kelas Reguler Tahsin" ↔ kampanye "Tahsin Reguler – Okt 2026"
    - CPL sumber = total biaya kampanye terpetakan ÷ lead dari sumber itu.
 2. **Lebih akurat (per iklan):** beri setiap iklan/LP **teks pembuka WhatsApp yang unik** atau **kode `ref`**, lalu daftarkan teks itu sebagai teks pemicu sumber lead. Pakai parameter dinamis Meta di URL iklan ke LP agar UTM terisi otomatis:
@@ -484,6 +497,9 @@ Tidak perlu menjalankan migrasi manual. Tabel `meta_capi_events` (migrasi `0100`
 | `appsecret_proof` error | "Require App Secret" aktif tapi Dashboard belum mengirim proof, atau App Secret salah | Pastikan `META_APP_SECRET` benar |
 | Aplikasi tidak muncul saat **Generate token** | Aplikasi belum milik portfolio / belum diberikan ke System User | Langkah 1 dan Langkah 5 |
 | Angka biaya di Dashboard beda tipis dengan Ads Manager | Data hari-hari terakhir masih diperbarui Meta, atau beda zona waktu | Tunggu sinkron berikutnya (tarik ulang 28 hari); cek zona waktu akun (Langkah 7c) |
+| Halaman Iklan: "Belum terhubung ke Meta Ads" | `META_ADS_TOKEN` atau `META_AD_ACCOUNT_IDS` kosong | Isi keduanya (Langkah 9), restart |
+| Halaman Iklan: sinkron **gagal**, `kode 190` / `kode 200` / `kode 100` | Token tidak valid, kurang `ads_read`, atau ID akun salah | Lihat baris error yang sama di atas; perbaiki lalu klik Sinkron sekarang |
+| Halaman Iklan: biaya ada tetapi "Lead dari iklan" = — | Belum ada kampanye yang dihubungkan ke sumber lead | Pilih sumber lead di tabel Kampanye (Langkah 11) |
 | **CAPI:** `Meta CAPI nonaktif` di log | `META_CAPI_DATASET_ID` atau `META_CAPI_TOKEN` kosong | Isi keduanya (Langkah 15), restart |
 | **CAPI:** status Gagal, `kode 190` | Token CAPI tidak valid/dicabut | Buat token baru (Langkah 14b) |
 | **CAPI:** status Gagal, `kode 100` dengan pesan tentang dataset/pixel | Dataset ID salah, atau token bukan untuk dataset itu | Cek Langkah 14a; token Opsi 1 harus dibuat dari dataset yang sama |
@@ -524,11 +540,12 @@ Untuk Pixel & CAPI (Bagian B):
 - [ ] `META_CAPI_TEST_EVENT_CODE` dikosongkan untuk produksi, aplikasi di-restart (Langkah 17)
 - [ ] Kebijakan privasi menyebut pemrosesan data untuk pengukuran iklan (Langkah 12)
 
-Untuk developer (setelah fitur sinkron Insights dibuat):
+Setelah token Meta Ads terpasang:
 
-- [ ] Sinkron harian berjalan dan menulis `meta_ads_sync_runs` dengan status sukses
+- [ ] Klik **Sinkron sekarang** di Leads → Iklan: status **berhasil** dengan jumlah baris > 0
 - [ ] Angka biaya 7 hari terakhir cocok dengan Ads Manager (selisih kecil wajar)
-- [ ] Pemetaan sumber lead ↔ kampanye terisi (Langkah 11)
+- [ ] Setiap kampanye sudah dipilihkan **sumber lead** (Langkah 11)
+- [ ] Keesokan harinya, sinkron **otomatis** tercatat berhasil
 
 ---
 
