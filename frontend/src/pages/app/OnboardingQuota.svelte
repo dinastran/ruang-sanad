@@ -1,5 +1,6 @@
 <script lang="ts">
  import { router } from "@inertiajs/svelte";
+ import { onMount } from "svelte";
  import AppLayout from "@layouts/AppLayout.svelte";
  import OnboardingWorkspaceHeader from "@components/OnboardingWorkspaceHeader.svelte";
  import type { User } from "@lib/types";
@@ -14,6 +15,9 @@
   exception_approved_by:number; guru_confirmed:boolean; jadwal_confirmed:boolean;
   can_start:boolean; is_active:boolean; vacancy_text:string;
  }
+ interface ReadinessCounts {awaiting_onboarding:number;legacy_preassigned:number;candidate_data_complete:number;crm_payment_verified:number;crm_verification_unknown:number;active_teachers:number;confirmed_availability_guru:number;approved_teaching_level_guru:number;usable_teacher_count:number;active_classes_no_routine_slots:number;regular_classes_above_max:number}
+ interface ReadinessIssue {code:string;severity:string;message:string}
+ interface ReadinessReport {as_of:string;counts:ReadinessCounts;ready_for_automatic_recommendation:boolean;issues:ReadinessIssue[]}
  interface Action {id:number;event_type:string;note:string;actor_name:string;created_at:string}
  interface Props {user?:User;board:{classes:ClassControl[]};notices:{id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}[]}
  let props:Props=$props();
@@ -32,6 +36,19 @@
  let historyId=$state<number|null>(null);
  let history=$state<Action[]>([]);
  let historyLoading=$state(false);
+ let readiness=$state<ReadinessReport|null>(null);
+ let readinessLoading=$state(false);
+ let readinessError=$state("");
+ onMount(async()=>{
+  if(user?.role!=="admin_kelas"&&user?.role!=="super_admin")return;
+  readinessLoading=true;
+  try{
+   const response=await fetch("/app/onboarding/planning/readiness",{credentials:"same-origin",headers:{Accept:"application/json"}});
+   if(!response.ok)throw new Error("Data kesiapan belum tersedia. Pastikan migration planning sudah diterapkan.");
+   readiness=await response.json() as ReadinessReport;
+  }catch(e){readinessError=e instanceof Error?e.message:"Tidak dapat memuat kesiapan";}
+  finally{readinessLoading=false;}
+ });
 
  const btn="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-2.5 py-1.5 text-xs font-medium hover:bg-neutral-100 disabled:opacity-40 dark:border-white/15 dark:hover:bg-white/10";
  const label:Record<string,string>={
@@ -89,6 +106,34 @@
   {#if success}<p role="status" class="rounded-lg border border-emerald-200 p-3 text-sm text-emerald-700">{success}</p>{/if}
   {#if errorMessage}<p role="alert" class="rounded-lg border border-red-200 p-3 text-sm text-red-700">{errorMessage}</p>{/if}
 
+
+  {#if adminKelas}
+   <section class="rounded-xl border border-neutral-200 bg-white p-4 dark:border-white/10 dark:bg-neutral-900" aria-label="Kesiapan data rekomendasi kelas">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+     <h2 class="font-semibold">Kesiapan Data Rekomendasi Kelas</h2>
+     <span class="text-xs text-neutral-500">Read-only, belum membuat kelas atau menugaskan guru</span>
+    </div>
+    {#if readinessLoading}<p class="mt-3 text-sm text-neutral-500">Memeriksa sumber data...</p>
+    {:else if readinessError}<p role="alert" class="mt-3 text-sm text-amber-700 dark:text-amber-300">{readinessError}</p>
+    {:else if readiness}
+     <div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="rounded-lg bg-neutral-50 p-3 dark:bg-white/5"><p class="text-2xl font-semibold tabular-nums">{readiness.counts.awaiting_onboarding}</p><p class="text-xs text-neutral-500">Menunggu tahap onboarding</p></div>
+      <div class="rounded-lg bg-neutral-50 p-3 dark:bg-white/5"><p class="text-2xl font-semibold tabular-nums">{readiness.counts.crm_payment_verified}</p><p class="text-xs text-neutral-500">Kandidat terverifikasi CRM</p></div>
+      <div class="rounded-lg bg-neutral-50 p-3 dark:bg-white/5"><p class="text-2xl font-semibold tabular-nums">{readiness.counts.usable_teacher_count}</p><p class="text-xs text-neutral-500">Guru: available + level disetujui</p></div>
+      <div class="rounded-lg bg-neutral-50 p-3 dark:bg-white/5"><p class="text-2xl font-semibold tabular-nums">{readiness.counts.active_classes_no_routine_slots}</p><p class="text-xs text-neutral-500">Kelas aktif tanpa jadwal rutin tercatat</p></div>
+     </div>
+     <p class="mt-3 text-xs font-medium {readiness.ready_for_automatic_recommendation?'text-emerald-700 dark:text-emerald-300':'text-amber-700 dark:text-amber-300'}">{readiness.ready_for_automatic_recommendation?"Syarat agregat awal terpenuhi. Matching individu tetap perlu validasi.":"Belum aman untuk rekomendasi otomatis. Periksa blocker di bawah."}</p>
+     {#if readiness.issues.length>0}
+      <ul class="mt-2 space-y-1.5">
+       {#each readiness.issues as issue (issue.code)}
+        <li class="text-xs {issue.severity==='blocker'?'text-red-700 dark:text-red-300':'text-amber-700 dark:text-amber-300'}">{issue.severity==='blocker'?'Blocker':'Perhatian'}: {issue.message}</li>
+       {/each}
+      </ul>
+     {/if}
+     <p class="mt-3 text-xs text-neutral-500">Data berlaku {readiness.as_of} WIB. Pembayaran tanpa lead CRM tidak dianggap tidak bayar; perlu verifikasi dari sumber lain. Rekomendasi belum diaktifkan.</p>
+    {/if}
+   </section>
+  {/if}
 
   {#if classes.length===0}
    <section class="rounded-xl border border-dashed border-neutral-300 p-10 text-center dark:border-white/15">
