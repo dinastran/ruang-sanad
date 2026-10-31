@@ -11,12 +11,18 @@ import (
 
 type OnboardingHandler struct {
 	service *services.OnboardingService
+	planningReadiness *services.PlanningReadinessService
 	store   *session.Store
 	inertia *services.InertiaService
 }
 
 func NewOnboardingHandler(s *services.OnboardingService, store *session.Store, inertia *services.InertiaService) *OnboardingHandler {
 	return &OnboardingHandler{service: s, store: store, inertia: inertia}
+}
+
+func (h *OnboardingHandler) WithPlanningReadiness(s *services.PlanningReadinessService) *OnboardingHandler {
+	h.planningReadiness = s
+	return h
 }
 
 // List retains PR 1's read-only JSON endpoint for existing consumers.
