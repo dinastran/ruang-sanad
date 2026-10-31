@@ -33,6 +33,7 @@ func TestReadPlanningReadinessDistinguishesPreassignedAndVerified(t *testing.T) 
 		"INSERT INTO santri VALUES (4, 10, 'P', 'PRA', 'Selasa 19:30', '2x', 1, 'aktif')",
 		"INSERT INTO onboarding_cases VALUES (1,'waiting_kuota'), (2,'matching_kelas'), (3,'onboarding_baru'), (4,'masuk_kelas')",
 		"INSERT INTO leads VALUES (1, '2026-10-30 10:00:00', 0, 'open')",
+		"INSERT INTO leads VALUES (2, '2026-10-30 10:00:00', 0, 'closed')",
 		"INSERT INTO guru VALUES (100,1),(200,1),(300,0)",
 		"INSERT INTO guru_availability VALUES (100,'2026-10-30','2026-10-01',NULL),(200,'2026-10-30','2026-10-01',NULL),(300,'2026-10-30','2026-10-01',NULL)",
 		"INSERT INTO guru_teaching_levels VALUES (100,'PRA'),(300,'PRA')",
