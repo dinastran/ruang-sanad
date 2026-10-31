@@ -24,6 +24,7 @@ type PlanningMatchResult struct {
 
 type PlanningTeacherChoice struct {
 	GuruID        int64  `json:"guru_id"`
+	Name          string `json:"name"`
 	Gender        string `json:"gender"`
 	Status        string `json:"status"`
 	WeeklyMinutes int    `json:"weekly_minutes"`
@@ -156,7 +157,7 @@ func planningChoices(group planningDemandGroup,snap PlanningMatchSnapshot,occupi
 		windows[window.GuruID]=append(windows[window.GuruID],PlanningSlot{
 			Day:int(window.Day),Start:window.Start,End:window.End,
 		})
-		details[window.GuruID]=PlanningTeacherChoice{GuruID:window.GuruID,Gender:window.Gender,Status:window.Status}
+		details[window.GuruID]=PlanningTeacherChoice{GuruID:window.GuruID,Name:window.GuruName,Gender:window.Gender,Status:window.Status}
 	}
 	var choices []PlanningTeacherChoice
 	for id,slots:=range windows{
