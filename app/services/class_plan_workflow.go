@@ -344,7 +344,7 @@ func (s *ClassPlanWorkflowService) Action(ctx context.Context, id, version, acto
 		return ErrPlanWorkflowInvalid
 	}
 	if action == "activate" {
-		_,err:=s.Activate(ctx,id,version,actorID)
+		_, err := s.Activate(ctx, id, version, actorID)
 		return err
 	}
 	if action == "exception_approve" || action == "exception_reject" {
