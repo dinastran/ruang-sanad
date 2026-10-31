@@ -45,6 +45,8 @@ type ClassPlanWorkflowCandidate struct {
 	Status   string
 	ClassID  sql.NullInt64
 	Stage    string
+	Frequency string
+	IsLengkap int64
 }
 
 type ClassPlanOfferEvidence struct {
@@ -160,7 +162,7 @@ func (q *Querier) ClassPlanWorkflowSlots(ctx context.Context, id int64) ([]Class
 
 func (q *Querier) ClassPlanWorkflowCandidates(ctx context.Context, id int64) ([]ClassPlanWorkflowCandidate, error) {
 	rows, err := q.Queries.db.QueryContext(ctx, `SELECT s.id,s.jenis_kelamin,s.level,s.angkatan_kelas,s.status,s.kelas_id,
-		COALESCE(oc.stage,'')
+		COALESCE(oc.stage,''),s.frekuensi,s.is_lengkap
 		FROM class_plan_students ps JOIN santri s ON s.id=ps.santri_id
 		LEFT JOIN onboarding_cases oc ON oc.santri_id=s.id
 		WHERE ps.plan_id=? AND ps.status IN ('candidate','reserved') ORDER BY s.id`, id)
@@ -171,7 +173,7 @@ func (q *Querier) ClassPlanWorkflowCandidates(ctx context.Context, id int64) ([]
 	out := make([]ClassPlanWorkflowCandidate, 0)
 	for rows.Next() {
 		var r ClassPlanWorkflowCandidate
-		if err := rows.Scan(&r.ID, &r.Gender, &r.Level, &r.Angkatan, &r.Status, &r.ClassID, &r.Stage); err != nil {
+		if err := rows.Scan(&r.ID, &r.Gender, &r.Level, &r.Angkatan, &r.Status, &r.ClassID, &r.Stage, &r.Frequency, &r.IsLengkap); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
