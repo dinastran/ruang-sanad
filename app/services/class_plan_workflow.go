@@ -149,7 +149,7 @@ func (s *ClassPlanWorkflowService) preflight(ctx context.Context,q *queries.Quer
 		max:=int(limit.Int64);teacher.MaxWeeklyMinutes=&max
 	}
 	teacher.CurrentWeeklyMinutes=len(teacher.Occupied)*planningLessonMinutes
-	if unsafe[plan.GuruID]&&plan.TargetKelasID==0{
+	if unsafe[plan.GuruID]{
 		teacher.Active=false
 	}
 	eligibility:=make([]PlanningCandidate,0,len(candidates))
@@ -231,7 +231,7 @@ func (s *ClassPlanWorkflowService) Action(ctx context.Context,id,version,actorID
 		from="pending_coordinator";to="pending_admin";event="planning.coordinator_confirmed"
 	case "admin_approve":
 		if plan.Status!="pending_admin"||plan.ApprovedBy!=0||
-			plan.ConfirmedBy==0||plan.ConfirmedVersion!=plan.Version{
+			plan.ConfirmedBy==0||plan.ConfirmedVersion!=plan.Version||actorID==plan.ConfirmedBy{
 			return ErrPlanWorkflowConflict
 		}
 		from="pending_admin";to="pending_admin";event="planning.admin_approved"
