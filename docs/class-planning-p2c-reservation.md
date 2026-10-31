@@ -7,7 +7,7 @@ Base: `feature/class-planning-p1c-20261031` (contains merged P2b #82). The featu
 - **New admin action** `reserve` on an approved `pending_admin` new-class plan. Only the authenticated Admin Kelas or Super Admin (not the coordinator confirmer) can reserve. Admin approval and coordinator confirmation of the exact immutable version are prerequisites.
 - Re-evaluate all hard rules, candidate eligibility, CRM payment, consent, teacher availability/conflict, workload, and approved under-quota exception inside the reservation transaction.
 - Update every candidate to `reserved` and its snapshot `schedule_approved=1`. The row count must equal the plan candidate count; otherwise the whole SQL transaction is rolled back. The existing partial unique index guarantees a student has at most one live reservation.
-- SQLite migration 0095 adds guards **only for explicitly reserved students in pending-admin plans**. Their legacy `santri.kelas_id` changes and deletions are refused. Ordinary operations for all other students continue unchanged.
+- SQLite migration 0099 adds guards **only for explicitly reserved students in pending-admin plans**. Their legacy `santri.kelas_id` changes and deletions are refused. Ordinary operations for all other students continue unchanged.
 - **New admin action** `cancel`: an approved pending-admin plan can be cancelled with a recorded reason of at least 10 characters, atomically marking any candidate/reserved rows `released` and writing the audit event. The guard then permits legacy placement again.
 - Existing approvals, audit, version and permission middleware are reused. Existing routes are unchanged.
 
