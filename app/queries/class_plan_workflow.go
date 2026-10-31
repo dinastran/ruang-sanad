@@ -61,7 +61,7 @@ func (q *Querier) ListClassPlanWorkflow(ctx context.Context) ([]ClassPlanWorkflo
 		COALESCE(p.guru_id,0),p.frequency,p.min_quota,p.capacity,COALESCE(p.target_kelas_id,0),COALESCE(p.activated_kelas_id,0),p.version,
 		COALESCE(p.coordinator_confirmed_by,0),COALESCE(p.coordinator_confirmed_version,0),
 		COALESCE(p.admin_approved_by,0),(SELECT COUNT(*) FROM class_plan_students s
-		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved')),(SELECT COUNT(*) FROM class_plan_students ps
+		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved','committed')),(SELECT COUNT(*) FROM class_plan_students ps
 			WHERE ps.plan_id=p.id AND ps.status='reserved'),COALESCE((SELECT MIN(level_kode) FROM class_plan_levels WHERE plan_id=p.id),''),
 		COALESCE((SELECT GROUP_CONCAT(hari || ' ' || jam_mulai || '-' || jam_selesai, ', ')
 		FROM class_plan_slots WHERE plan_id=p.id),''),
@@ -93,7 +93,7 @@ func (q *Querier) GetClassPlanWorkflow(ctx context.Context, id int64) (ClassPlan
 		COALESCE(p.guru_id,0),p.frequency,p.min_quota,p.capacity,COALESCE(p.target_kelas_id,0),COALESCE(p.activated_kelas_id,0),p.version,
 		COALESCE(p.coordinator_confirmed_by,0),COALESCE(p.coordinator_confirmed_version,0),
 		COALESCE(p.admin_approved_by,0),(SELECT COUNT(*) FROM class_plan_students s
-		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved')),(SELECT COUNT(*) FROM class_plan_students ps
+		    WHERE s.plan_id=p.id AND s.status IN ('candidate','reserved','committed')),(SELECT COUNT(*) FROM class_plan_students ps
 			WHERE ps.plan_id=p.id AND ps.status='reserved'),COALESCE((SELECT MIN(level_kode) FROM class_plan_levels WHERE plan_id=p.id),''),
 		COALESCE((SELECT GROUP_CONCAT(hari || ' ' || jam_mulai || '-' || jam_selesai, ', ')
 		FROM class_plan_slots WHERE plan_id=p.id),''),
