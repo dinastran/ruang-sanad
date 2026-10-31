@@ -38,13 +38,13 @@ type ClassPlanWorkflowSlot struct {
 }
 
 type ClassPlanWorkflowCandidate struct {
-	ID       int64
-	Gender   string
-	Level    string
-	Angkatan string
-	Status   string
-	ClassID  sql.NullInt64
-	Stage    string
+	ID        int64
+	Gender    string
+	Level     string
+	Angkatan  string
+	Status    string
+	ClassID   sql.NullInt64
+	Stage     string
 	Frequency string
 	IsLengkap int64
 }
