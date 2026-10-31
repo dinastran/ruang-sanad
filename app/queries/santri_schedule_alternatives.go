@@ -14,7 +14,7 @@ type ScheduleAlternativeOffer struct {
 	Level string `json:"level"`
 }
 
-type SantriScheduleAlternative struct {
+type SantriScheduleAlternativeRecord struct {
 	ID int64 `json:"id"`
 	JadwalKode string `json:"jadwal_kode"`
 	Status string `json:"status"`
@@ -43,7 +43,7 @@ func (q *Querier) ListAlternateOffersForSantri(ctx context.Context, id int64) ([
 	return out,rows.Err()
 }
 
-func (q *Querier) ListSantriScheduleAlternatives(ctx context.Context, id int64) ([]SantriScheduleAlternative,error) {
+func (q *Querier) ListSantriScheduleAlternativeRecords(ctx context.Context, id int64) ([]SantriScheduleAlternativeRecord,error) {
 	const statement = `SELECT a.id,a.jadwal_kode,a.status,a.consent_channel,a.consent_note,
 		COALESCE(a.consent_confirmed_by,0),COALESCE(CAST(a.consent_confirmed_at AS TEXT),''),
 		CAST(a.updated_at AS TEXT),
@@ -54,8 +54,8 @@ func (q *Querier) ListSantriScheduleAlternatives(ctx context.Context, id int64) 
 	rows,err:=q.Queries.db.QueryContext(ctx,statement,id)
 	if err!=nil{return nil,err}
 	defer rows.Close()
-	out:=make([]SantriScheduleAlternative,0)
-	for rows.Next(){var r SantriScheduleAlternative
+	out:=make([]SantriScheduleAlternativeRecord,0)
+	for rows.Next(){var r SantriScheduleAlternativeRecord
 		if err:=rows.Scan(&r.ID,&r.JadwalKode,&r.Status,&r.ConsentChannel,&r.ConsentNote,
 			&r.ConsentConfirmedBy,&r.ConsentConfirmedAt,&r.UpdatedAt,&r.Label);err!=nil{return nil,err}
 		out=append(out,r)}
