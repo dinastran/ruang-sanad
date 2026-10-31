@@ -5,28 +5,35 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/models"
+	"github.com/maulanashalihin/laju-go/app/queries"
 	"github.com/maulanashalihin/laju-go/app/services"
 	"github.com/maulanashalihin/laju-go/app/session"
 )
 
 type SantriHandler struct {
-	santriService  *services.SantriService
-	masterService  *services.MasterService
-	kelasService   *services.KelasService
-	productCRMService *services.ProductCRMService
-	store          *session.Store
-	inertiaService *services.InertiaService
+	scheduleAlternatives *services.SantriScheduleAlternativeService
+	santriService        *services.SantriService
+	masterService        *services.MasterService
+	kelasService         *services.KelasService
+	productCRMService    *services.ProductCRMService
+	store                *session.Store
+	inertiaService       *services.InertiaService
 }
 
 func NewSantriHandler(santriService *services.SantriService, masterService *services.MasterService, kelasService *services.KelasService, productCRMService *services.ProductCRMService, store *session.Store, inertiaService *services.InertiaService) *SantriHandler {
 	return &SantriHandler{
-		santriService:  santriService,
-		masterService:  masterService,
-		kelasService:   kelasService,
+		santriService:     santriService,
+		masterService:     masterService,
+		kelasService:      kelasService,
 		productCRMService: productCRMService,
-		store:          store,
-		inertiaService: inertiaService,
+		store:             store,
+		inertiaService:    inertiaService,
 	}
+}
+
+func (h *SantriHandler) WithScheduleAlternatives(s *services.SantriScheduleAlternativeService) *SantriHandler {
+	h.scheduleAlternatives = s
+	return h
 }
 
 func (h *SantriHandler) Index(c *fiber.Ctx) error {
@@ -185,16 +192,28 @@ func (h *SantriHandler) Show(c *fiber.Ctx) error {
 		}
 	}
 
+	var altOffers interface{} = []queries.ScheduleAlternativeOffer{}
+	var altChoices interface{} = []queries.SantriScheduleAlternativeRecord{}
+	if (role == models.RoleAdminKelas || role == models.RoleSuperAdmin) && h.scheduleAlternatives != nil {
+		offers, choices, alternativesErr := h.scheduleAlternatives.List(c.UserContext(), id)
+		if alternativesErr != nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString("Gagal memuat pilihan alternatif jadwal")
+		}
+		altOffers = offers
+		altChoices = choices
+	}
 	return h.inertiaService.Render(c, "app/SantriForm", fiber.Map{
-		"user":       user,
-		"santri":     santri,
+		"user":              user,
+		"santri":            santri,
 		"mahasantri_produk": produkMahasantri,
-		"admin_notes": adminNotes,
-		"angkatan":   angkatanList,
-		"levels":     levelList,
-		"jadwals":    jadwalList,
-		"gurus":      guruList,
-		"kode_kelas": kodeKelasList,
+		"admin_notes":       adminNotes,
+		"alternate_offers":  altOffers,
+		"alternate_choices": altChoices,
+		"angkatan":          angkatanList,
+		"levels":            levelList,
+		"jadwals":           jadwalList,
+		"gurus":             guruList,
+		"kode_kelas":        kodeKelasList,
 	})
 }
 

@@ -157,7 +157,7 @@ func (q *Querier) ListPlanningTeacherWindows(ctx context.Context, asOf string) (
 }
 
 func (q *Querier) ListPlanningTeacherLevels(ctx context.Context) ([]PlanningTeacherLevel,error) {
-	rows,err:=q.Queries.db.QueryContext(ctx,"SELECT guru_id,level_kode FROM guru_teaching_levels ORDER BY guru_id,level_kode")
+	rows,err:=q.Queries.db.QueryContext(ctx,"SELECT tl.guru_id,tl.level_kode FROM guru_teaching_levels tl JOIN level l ON l.kode=tl.level_kode ORDER BY tl.guru_id,tl.level_kode")
 	if err!=nil{return nil,err}
 	defer rows.Close()
 	out:=make([]PlanningTeacherLevel,0)

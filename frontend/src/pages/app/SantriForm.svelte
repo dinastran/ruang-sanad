@@ -3,6 +3,7 @@
 	import { tick } from "svelte";
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
+	import SantriScheduleAlternativesEditor from "@components/SantriScheduleAlternativesEditor.svelte";
 	import { Toast } from "@lib/notifications/toast";
 	import { getCSRFToken } from "@lib/utils/csrf";
 	import StatusBadge from "@components/StatusBadge.svelte";
@@ -77,6 +78,8 @@
 		updated_at: string;
 	}
 
+	interface AlternateOffer {kode:string;hari:string;jam_mulai:string;jam_selesai:string;gender:string;level:string}
+	interface AlternateChoice {id:number;jadwal_kode:string;status:string;consent_channel:string;consent_note:string;consent_confirmed_by:number;consent_confirmed_at:string;updated_at:string;label:string}
 	interface Props {
 		user?: User;
 		santri?: SantriItem | null;
@@ -87,12 +90,14 @@
 		kode_kelas?: KodeKelasItem[];
 		mahasantri_produk?: MahasantriProductItem[];
 		admin_notes?: SantriAdminNoteItem[];
+		alternate_offers?: AlternateOffer[];
+		alternate_choices?: AlternateChoice[];
 		success?: string;
 		error?: string;
 		flash?: Flash;
 	}
 
-	let { user, santri = null, angkatan = [], levels = [], jadwals = [], gurus = [], kode_kelas = [], mahasantri_produk = [], admin_notes = [], success, error, flash }: Props = $props();
+	let { user, santri = null, angkatan = [], levels = [], jadwals = [], gurus = [], kode_kelas = [], mahasantri_produk = [], admin_notes = [], alternate_offers = [], alternate_choices = [], success, error, flash }: Props = $props();
 	let successMessage = $derived(flash?.success ?? success);
 	let errorMessage = $derived(flash?.error ?? error);
 
@@ -836,6 +841,10 @@
 					</fieldset>
 				</form>
 			</div>
+		{/if}
+
+		{#if isEdit && isAdminKelas && santri}
+			<SantriScheduleAlternativesEditor santriId={santri.id} offers={alternate_offers} choices={alternate_choices}/>
 		{/if}
 
 		{#if isEdit && isAdminKelas}

@@ -2,6 +2,7 @@
 	import { inertia, router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import PertemuanBelumDitutupList from "@components/PertemuanBelumDitutup.svelte";
+	import ClassPlanApprovalInbox from "@components/ClassPlanApprovalInbox.svelte";
 	import { formatJadwalSemula } from "@lib/utils/jadwal";
 	import type { Flash, KoordinatorDashboard, MonitoringKelasItem, PertemuanBelumDitutup, RingkasanAlfaBeruntun, User } from "@lib/types";
 	import { AlertTriangle, ArrowRight, UserX, BellRing, CalendarDays, CheckCircle2, ClipboardCheck, ListTodo, Users, BookOpen, UserRoundCheck, Award, RotateCcw } from "lucide-svelte";
@@ -117,6 +118,8 @@
 		{#if flash?.success}<div role="status" class="rounded-xl border border-success/20 bg-success/10 p-4 text-sm font-medium text-emerald-700 dark:text-emerald-400">{flash.success}</div>{/if}
 		{#if flash?.error}<div role="alert" class="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm font-medium text-red-700 dark:text-red-400">{flash.error}</div>{/if}
 		{#if error}<div role="alert" class="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm font-medium text-red-700 dark:text-red-400">{error}</div>{/if}
+
+		<ClassPlanApprovalInbox mode="coordinator"/>
 
 		<!-- Ringkasan aksi hari ini -->
 		{#if !d}

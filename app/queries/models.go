@@ -814,6 +814,32 @@ type SantriBillingProgress struct {
 	UpdatedAt       time.Time
 }
 
+type SantriScheduleAlternative struct {
+	ID                 int64
+	SantriID           int64
+	JadwalKode         string
+	Status             string
+	ConsentChannel     string
+	ConsentNote        string
+	ConsentConfirmedBy sql.NullInt64
+	ConsentConfirmedAt sql.NullTime
+	UpdatedBy          sql.NullInt64
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+type SantriScheduleAlternativeEvent struct {
+	ID             int64
+	AlternativeID  int64
+	SantriID       int64
+	ActorUserID    sql.NullInt64
+	OldStatus      string
+	NewStatus      string
+	ConsentChannel string
+	Reason         string
+	CreatedAt      time.Time
+}
+
 type SantriStatusLog struct {
 	ID          int64
 	SantriID    int64

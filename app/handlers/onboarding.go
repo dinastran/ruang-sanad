@@ -13,6 +13,7 @@ type OnboardingHandler struct {
 	service           *services.OnboardingService
 	planningReadiness *services.PlanningReadinessService
 	planningMatching  *services.PlanningMatchingService
+	planningWorkflow  *services.ClassPlanWorkflowService
 	store             *session.Store
 	inertia           *services.InertiaService
 }
@@ -28,6 +29,11 @@ func (h *OnboardingHandler) WithPlanningReadiness(s *services.PlanningReadinessS
 
 func (h *OnboardingHandler) WithPlanningMatching(s *services.PlanningMatchingService) *OnboardingHandler {
 	h.planningMatching = s
+	return h
+}
+
+func (h *OnboardingHandler) WithPlanningWorkflow(s *services.ClassPlanWorkflowService) *OnboardingHandler {
+	h.planningWorkflow = s
 	return h
 }
 

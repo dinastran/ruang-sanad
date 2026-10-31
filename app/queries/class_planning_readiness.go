@@ -57,6 +57,7 @@ availability AS (
 competent AS (
 	SELECT DISTINCT g.id
 	FROM guru g JOIN guru_teaching_levels tl ON tl.guru_id = g.id
+	JOIN level l ON l.kode = tl.level_kode
 	WHERE g.is_aktif = 1
 )
 SELECT
