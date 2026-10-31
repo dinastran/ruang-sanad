@@ -132,14 +132,6 @@ func (h *SantriHandler) New(c *fiber.Ctx) error {
 	guruList, _ := h.masterService.ListGuru()
 	kodeKelasList, _ := h.masterService.ListKodeKelas()
 
-	var altOffers interface{} = []queries.ScheduleAlternativeOffer{}
-	var altChoices interface{} = []queries.SantriScheduleAlternativeRecord{}
-	if (role == models.RoleAdminKelas || role == models.RoleSuperAdmin) && h.scheduleAlternatives != nil {
-		offers,choices,alternativesErr := h.scheduleAlternatives.List(c.UserContext(), id)
-		if alternativesErr != nil {return c.Status(fiber.StatusServiceUnavailable).SendString("Gagal memuat pilihan alternatif jadwal")}
-		altOffers = offers
-		altChoices = choices
-	}
 	return h.inertiaService.Render(c, "app/SantriForm", fiber.Map{
 		"user":       user,
 		"santri":     nil,
@@ -200,6 +192,14 @@ func (h *SantriHandler) Show(c *fiber.Ctx) error {
 		}
 	}
 
+	var altOffers interface{} = []queries.ScheduleAlternativeOffer{}
+	var altChoices interface{} = []queries.SantriScheduleAlternativeRecord{}
+	if (role == models.RoleAdminKelas || role == models.RoleSuperAdmin) && h.scheduleAlternatives != nil {
+		offers,choices,alternativesErr := h.scheduleAlternatives.List(c.UserContext(), id)
+		if alternativesErr != nil {return c.Status(fiber.StatusServiceUnavailable).SendString("Gagal memuat pilihan alternatif jadwal")}
+		altOffers = offers
+		altChoices = choices
+	}
 	return h.inertiaService.Render(c, "app/SantriForm", fiber.Map{
 		"user":       user,
 		"santri":     santri,
