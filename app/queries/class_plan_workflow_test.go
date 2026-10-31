@@ -31,6 +31,7 @@ func workflowQueryDB(t *testing.T) *sql.DB {
 		"CREATE TABLE class_plan_levels(plan_id INTEGER,level_kode TEXT)",
 		"CREATE TABLE class_plan_students(plan_id INTEGER,santri_id INTEGER,level_kode TEXT,status TEXT,schedule_approved INTEGER)",
 		"CREATE TABLE class_plan_events(plan_id INTEGER,actor_user_id INTEGER,event_type TEXT,from_status TEXT,to_status TEXT,reason TEXT)",
+		`CREATE TABLE class_plan_exceptions(id INTEGER PRIMARY KEY AUTOINCREMENT,plan_id INTEGER,status TEXT,reason TEXT,requested_by INTEGER,decided_by INTEGER,decided_at DATETIME,decision_note TEXT DEFAULT '')`,
 	}
 	for _, stmt := range stmts {
 		if _, err := db.Exec(stmt); err != nil {
