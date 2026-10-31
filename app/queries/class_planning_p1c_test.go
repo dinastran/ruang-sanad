@@ -16,6 +16,8 @@ func p1cDB(t *testing.T) *sql.DB {
 	t.Cleanup(func(){_ =db.Close()})
 	statements:=[]string{
 		"CREATE TABLE guru_teaching_levels(guru_id INTEGER,level_kode TEXT,approved_by INTEGER,approved_at DATETIME,PRIMARY KEY(guru_id,level_kode))",
+		"CREATE TABLE level(kode TEXT PRIMARY KEY)",
+		"INSERT INTO level VALUES('1')",
 		"CREATE TABLE santri(id INTEGER PRIMARY KEY,jenis_kelamin TEXT,level TEXT,status TEXT)",
 		"CREATE TABLE onboarding_cases(santri_id INTEGER,stage TEXT)",
 		"CREATE TABLE leads(santri_id INTEGER,jadwal_kode TEXT)",
@@ -42,6 +44,11 @@ func TestP1CTeacherLevelsQueries(t *testing.T) {
 	ctx:=context.Background()
 	q:=NewQuerier(p1cDB(t))
 	if err:=q.ReplaceTeachingLevelsTx(ctx,10,5,[]string{"1","2"});err!=nil{t.Fatal(err)}
+	approved,err:=q.ListPlanningTeacherLevels(ctx)
+	if err!=nil||len(approved)!=1||approved[0].Level!="1"{
+		t.Fatalf("orphaned master level should not qualify for recommendation: %+v %v",approved,err)
+	}
+
 	rows,err:=q.ListGuruTeachingLevels(ctx,10)
 	if err!=nil||len(rows)!=2||rows[0].ApprovedBy!=5{t.Fatalf("level insert/read: %+v %v",rows,err)}
 	if err:=q.ReplaceTeachingLevelsTx(ctx,10,5,[]string{});err!=nil{t.Fatal(err)}
