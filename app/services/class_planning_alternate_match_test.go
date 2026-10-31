@@ -107,11 +107,15 @@ func TestPlanningMatchingExistingCapacitySharedAcrossOfferCodes(t *testing.T) {
 }
 
 func TestPlanningAlternativeDoesNotRecoverInvalidPrimaryDemand(t *testing.T) {
-	s:=previewAlternativeFixture()
-	s.Demand[0].OfferEnd="20:00"
-	r:=PlanMatchingPreview("2026-10-31",s)
-	for _,a:=range r.AlternativeMatches{
-		if a.SantriID==1{t.Fatal("ambiguous original primary demand must remain excluded")}
+	s := previewAlternativeFixture()
+	s.Demand[0].OfferEnd = "20:00"
+	r := PlanMatchingPreview("2026-10-31", s)
+	for _, a := range r.AlternativeMatches {
+		if a.SantriID == 1 {
+			t.Fatal("ambiguous original primary demand must remain excluded")
+		}
 	}
-	if r.SkippedAmbiguous!=1{t.Fatalf("expected excluded primary row, got %+v",r)}
+	if r.SkippedAmbiguous != 1 {
+		t.Fatalf("expected excluded primary row, got %+v", r)
+	}
 }
