@@ -386,6 +386,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/koordinator-guru/guru/:id/availability/:slotId", koordinatorRole, h.KoordinatorGuruDirectory.AvailabilityUpdate)
 	protected.Delete("/koordinator-guru/guru/:id/availability/:slotId", koordinatorRole, h.KoordinatorGuruDirectory.AvailabilityDelete)
 	protected.Put("/koordinator-guru/guru/:id/kompetensi", koordinatorRole, h.KoordinatorFeatures.KompetensiSave)
+	protected.Put("/koordinator-guru/guru/:id/teaching-levels", koordinatorRole, h.KoordinatorGuruDirectory.TeachingLevelsReplace)
 	protected.Post("/koordinator-guru/guru/:id/riayah", koordinatorRole, h.KoordinatorFeatures.RiayahGuruCreate)
 	protected.Put("/koordinator-guru/guru/:id/link", superAdminRole, h.KoordinatorGuruDirectory.LinkUser)
 	protected.Delete("/koordinator-guru/guru/:id/link", superAdminRole, h.KoordinatorGuruDirectory.Unlink)
