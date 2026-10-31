@@ -199,6 +199,10 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Get("/onboarding/monitoring", akRole, h.Onboarding.Monitoring)
 	protected.Get("/onboarding/planning/readiness", akRole, h.Onboarding.PlanningReadiness)
 	protected.Get("/onboarding/planning/recommendations", akRole, h.Onboarding.PlanningRecommendations)
+	planReviewRole := middlewares.RoleRequired(store, userService, "admin_kelas", "koordinator_guru", "super_admin")
+	protected.Get("/onboarding/planning/plans", planReviewRole, h.Onboarding.PlanWorkflowList)
+	protected.Post("/onboarding/planning/plans", akRole, h.Onboarding.PlanWorkflowCreate)
+	protected.Post("/onboarding/planning/plans/:id/actions", planReviewRole, h.Onboarding.PlanWorkflowAction)
 	protected.Put("/onboarding/notifications/:id/read", santriViewRole, h.Onboarding.MarkMonitoringNoticeRead)
 	// PR 3: class quota visibility for CS; updates restricted by role and service.
 	protected.Get("/onboarding/classes", santriViewRole, h.Onboarding.ClassControls)
