@@ -28,7 +28,7 @@ func TestClassPlanWorkflowDraftInputValidation(t *testing.T) {
 		{"duplicate santri",func(p *ClassPlanDraftInput){p.CandidateIDs[0]=2}},
 		{"invalid teacher",func(p *ClassPlanDraftInput){p.GuruID=-1}},
 		{"invalid cohort",func(p *ClassPlanDraftInput){p.Angkatan=""}},
-		{"bad target class",func(p *ClassPlanDraftInput){p.TargetKelasID=-3}},
+		{"existing class out of scope",func(p *ClassPlanDraftInput){p.TargetKelasID=17}},
 	}
 	if err:=normalizeClassPlanDraft(ptrDraft(validManualDraft()));err!=nil{t.Fatalf("valid draft rejected: %v",err)}
 	for _,tc:=range cases {
