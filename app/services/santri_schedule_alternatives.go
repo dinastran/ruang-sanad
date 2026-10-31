@@ -53,6 +53,16 @@ func validateAlternative(req *SantriScheduleAlternativeInput) error {
 	return nil
 }
 
+func validateAlternativeTransition(oldStatus,newStatus string) error {
+	if oldStatus=="approved"&&newStatus=="proposed" {
+		return fmt.Errorf("%w: persetujuan yang sudah ada wajib dicabut dengan alasan, bukan dikembalikan menjadi usulan",ErrAlternativeInvalid)
+	}
+	if oldStatus==""&&newStatus=="revoked" {
+		return fmt.Errorf("%w: tidak ada alternatif yang dapat dicabut",ErrAlternativeInvalid)
+	}
+	return nil
+}
+
 func (s *SantriScheduleAlternativeService) List(ctx context.Context,santriID int64) ([]queries.ScheduleAlternativeOffer,[]queries.SantriScheduleAlternative,error) {
 	if santriID<=0{return nil,nil,ErrAlternativeInvalid}
 	offers,err:=s.q.ListAlternateOffersForSantri(ctx,santriID)
@@ -73,6 +83,7 @@ func (s *SantriScheduleAlternativeService) Save(ctx context.Context,id,actor int
 	oldID,oldStatus,oldChannel,oldNote,err:=q.GetSantriAlternativeState(ctx,id,input.JadwalKode)
 	if err!=nil&&!errors.Is(err,sql.ErrNoRows){return err}
 	if errors.Is(err,sql.ErrNoRows){oldID=0;oldStatus="";oldChannel="";oldNote=""}
+	if err:=validateAlternativeTransition(oldStatus,input.Status);err!=nil{return err}
 	if input.Status=="revoked"{
 		if oldID==0{return ErrAlternativeUnavailable}
 	}else{
