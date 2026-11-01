@@ -19,7 +19,7 @@ type MetaCAPIAnalyticsRow struct {
 
 func (q *Queries) ListMetaCAPIAnalytics(ctx context.Context, start, end time.Time) ([]MetaCAPIAnalyticsRow, error) {
  rows, err := q.db.QueryContext(ctx, `
-SELECT DATE(event_time, '+7 hours') AS day, event_name, status, test_mode,
+SELECT DATE(SUBSTR(event_time, 1, 19), '+7 hours') AS day, event_name, status, test_mode,
  COUNT(*) AS total,
  COALESCE(SUM(CASE WHEN event_name = 'Purchase'
    AND status = 'sent' AND test_mode = 0 AND value > 0
