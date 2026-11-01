@@ -488,7 +488,7 @@ func (s *MetaCAPIService) Analytics(ctx context.Context, from, to string) (*mode
   if lastDay,ok = wibDayStart(to); !ok { return nil, errors.New("tanggal akhir tidak valid") }
  }
  end := lastDay.AddDate(0,0,1)
- if firstDay.After(lastDay) || end.After(firstDay.AddDate(0,0,91)) {
+ if firstDay.After(lastDay) || end.After(firstDay.AddDate(0,0,90)) {
   return nil,errors.New("rentang CAPI harus 1 sampai 90 hari")
  }
  rows,err := s.querier.ListMetaCAPIAnalytics(ctx,firstDay,end)
