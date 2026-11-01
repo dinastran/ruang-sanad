@@ -2,6 +2,7 @@ package queries
 
 import (
  "context"
+ "database/sql"
  "time"
 )
 
@@ -56,7 +57,7 @@ type MetaCAPIAuditRow struct {
  Attempts int64
  LastError string
  TestMode bool
- SentAt string
+ SentAt sql.NullTime
  FBTraceID string
 }
 
@@ -65,7 +66,7 @@ func (q *Queries) ListMetaCAPIAudit(ctx context.Context, limit int) ([]MetaCAPIA
 SELECT e.id,e.lead_id,
  COALESCE(NULLIF(l.nama,''),NULLIF(l.wa_name,''),'Lead ' || l.id),
  e.event_name,e.event_id,e.event_time,e.value,e.status,
- e.attempts,e.last_error,e.test_mode,COALESCE(CAST(e.sent_at AS TEXT),''),
+ e.attempts,e.last_error,e.test_mode,e.sent_at,
  COALESCE(e.fbtrace_id,'')
 FROM meta_capi_events e JOIN leads l ON l.id = e.lead_id
 ORDER BY e.id DESC LIMIT ?`,limit)
