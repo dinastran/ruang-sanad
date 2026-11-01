@@ -22,6 +22,8 @@ const PAGE_TITLES: Record<string, string> = {
 	"app/SantriList": "Data Santri",
 	"app/Leads": "Leads",
 	"app/LeadDetail": "Detail Lead",
+	"app/LeadDashboard": "Dashboard CRM",
+	"app/LeadPriorities": "Prioritas Lead Aktif",
 	"app/LeadLaporan": "Laporan Leads",
 	"app/LeadFollowups": "Follow-up Leads",
 	"app/IntegrasiWhatsApp": "Integrasi WhatsApp",
