@@ -49,7 +49,9 @@ type Config struct {
 	MetaCAPIDatasetID     string
 	MetaCAPIToken         string
 	MetaCAPITestEventCode string
-	MetaAPIVersion        string
+	// Default landing page URL for event_source_url (sources may override).
+	MetaCAPIEventSourceURL string
+	MetaAPIVersion         string
 	// Only set when the CAPI token belongs to the app with this secret
 	// (e.g. a System User token); an Events Manager token may not.
 	MetaCAPIAppSecret string
@@ -99,11 +101,12 @@ func Load() *Config {
 		GowaUser:              getEnv("GOWA_USER", ""),
 		GowaPass:              getEnv("GOWA_PASS", ""),
 
-		MetaCAPIDatasetID:     strings.TrimSpace(getEnv("META_CAPI_DATASET_ID", "")),
-		MetaCAPIToken:         strings.TrimSpace(getEnv("META_CAPI_TOKEN", "")),
-		MetaCAPITestEventCode: strings.TrimSpace(getEnv("META_CAPI_TEST_EVENT_CODE", "")),
-		MetaAPIVersion:        strings.TrimSpace(getEnv("META_API_VERSION", "")),
-		MetaCAPIAppSecret:     strings.TrimSpace(getEnv("META_CAPI_APP_SECRET", "")),
+		MetaCAPIDatasetID:      strings.TrimSpace(getEnv("META_CAPI_DATASET_ID", "")),
+		MetaCAPIToken:          strings.TrimSpace(getEnv("META_CAPI_TOKEN", "")),
+		MetaCAPITestEventCode:  strings.TrimSpace(getEnv("META_CAPI_TEST_EVENT_CODE", "")),
+		MetaCAPIEventSourceURL: strings.TrimSpace(getEnv("META_CAPI_EVENT_SOURCE_URL", "")),
+		MetaAPIVersion:         strings.TrimSpace(getEnv("META_API_VERSION", "")),
+		MetaCAPIAppSecret:      strings.TrimSpace(getEnv("META_CAPI_APP_SECRET", "")),
 
 		MetaAdsToken:     strings.TrimSpace(getEnv("META_ADS_TOKEN", "")),
 		MetaAdAccountIDs: splitList(getEnv("META_AD_ACCOUNT_IDS", "")),

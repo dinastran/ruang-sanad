@@ -47,6 +47,10 @@ type MetaCAPIConfig struct {
 	APIVersion    string
 	AppSecret     string
 	TestEventCode string
+	// EventSourceURL is the landing page sent as event_source_url when the
+	// lead's source has no URL of its own. Meta blocks events without one
+	// for businesses in restricted categories.
+	EventSourceURL string
 }
 
 const (
@@ -261,16 +265,21 @@ func metaUserData(l queries.Lead) map[string]any {
 	return ud
 }
 
-func (s *MetaCAPIService) eventPayload(ev queries.MetaCapiEvent, l queries.Lead) map[string]any {
+// eventPayload builds one server event. Every event carries value + IDR
+// (Meta flags events without a valid currency): Purchase uses the verified
+// amount, earlier steps the lead's bill when known, otherwise 0.
+func (s *MetaCAPIService) eventPayload(ev queries.MetaCapiEvent, l queries.Lead, sourceURL string) map[string]any {
+	value := l.PaymentAmount
+	if ev.EventName == MetaEventPurchase {
+		value = ev.Value
+	}
 	custom := map[string]any{
 		"currency":          "IDR",
+		"value":             max(value, 0),
 		"lead_event_source": "Ruang Sanad Dashboard",
 		"event_source":      "crm",
 	}
-	if ev.EventName == MetaEventPurchase {
-		custom["value"] = ev.Value
-	}
-	return map[string]any{
+	out := map[string]any{
 		"event_name":    ev.EventName,
 		"event_time":    ev.EventTime.Unix(),
 		"event_id":      ev.EventID,
@@ -278,6 +287,10 @@ func (s *MetaCAPIService) eventPayload(ev queries.MetaCapiEvent, l queries.Lead)
 		"user_data":     metaUserData(l),
 		"custom_data":   custom,
 	}
+	if sourceURL != "" {
+		out["event_source_url"] = sourceURL
+	}
+	return out
 }
 
 type metaAPIError struct {
@@ -309,7 +322,15 @@ func (s *MetaCAPIService) sendOne(ctx context.Context, ev queries.MetaCapiEvent)
 			Status: "skipped", Attempts: 0, LastError: "lead minta tidak dihubungi", ID: ev.ID,
 		})
 	}
-	traceID, sendErr := s.post(ctx, s.eventPayload(ev, lead))
+	sourceURL := s.cfg.EventSourceURL
+	if lead.LeadSourceID.Valid {
+		if src, err := s.querier.GetLeadSource(ctx, lead.LeadSourceID.Int64); err == nil && src.Url != "" {
+			sourceURL = src.Url
+		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return false, err
+		}
+	}
+	traceID, sendErr := s.post(ctx, s.eventPayload(ev, lead, sourceURL))
 	if sendErr == nil {
 		return true, s.querier.MarkMetaCAPIEventSent(ctx, queries.MarkMetaCAPIEventSentParams{
 			FbtraceID: traceID, SentAt: sql.NullTime{Time: now, Valid: true}, ID: ev.ID,
@@ -415,6 +436,17 @@ func (s *MetaCAPIService) Status(ctx context.Context) (*models.MetaCAPIStatus, e
 	}
 	if out.ResendableTest, err = s.querier.CountResendableTestMetaCAPIEvents(ctx, s.resendSince()); err != nil {
 		return nil, err
+	}
+	out.EventSourceURL = s.cfg.EventSourceURL
+	out.SourcesWithoutURL = []string{}
+	sources, err := s.querier.ListLeadSources(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, src := range sources {
+		if src.IsAktif == 1 && src.Url == "" {
+			out.SourcesWithoutURL = append(out.SourcesWithoutURL, src.Nama)
+		}
 	}
 	rows, err := s.querier.ListRecentMetaCAPIEvents(ctx, 50)
 	if err != nil {

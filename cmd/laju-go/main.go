@@ -150,6 +150,7 @@ func main() {
 	metaCAPIService := services.NewMetaCAPIService(querier, services.MetaCAPIConfig{
 		DatasetID: cfg.MetaCAPIDatasetID, Token: cfg.MetaCAPIToken, APIVersion: cfg.MetaAPIVersion,
 		AppSecret: cfg.MetaCAPIAppSecret, TestEventCode: cfg.MetaCAPITestEventCode,
+		EventSourceURL: cfg.MetaCAPIEventSourceURL,
 	})
 	startMetaCAPIWorker(metaCAPIService)
 	metaAdsService := services.NewMetaAdsService(querier, services.MetaAdsConfig{

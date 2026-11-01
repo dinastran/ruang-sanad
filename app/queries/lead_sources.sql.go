@@ -67,14 +67,15 @@ func (q *Queries) CountLeadsOfSource(ctx context.Context, leadSourceID sql.NullI
 }
 
 const createLeadSource = `-- name: CreateLeadSource :one
-INSERT INTO lead_sources (nama, keterangan, is_aktif, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, nama, keterangan, is_aktif, created_at, updated_at
+INSERT INTO lead_sources (nama, keterangan, url, is_aktif, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING id, nama, keterangan, is_aktif, created_at, updated_at, url
 `
 
 type CreateLeadSourceParams struct {
 	Nama       string
 	Keterangan string
+	Url        string
 	IsAktif    int64
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
@@ -84,6 +85,7 @@ func (q *Queries) CreateLeadSource(ctx context.Context, arg CreateLeadSourcePara
 	row := q.db.QueryRowContext(ctx, createLeadSource,
 		arg.Nama,
 		arg.Keterangan,
+		arg.Url,
 		arg.IsAktif,
 		arg.CreatedAt,
 		arg.UpdatedAt,
@@ -96,6 +98,7 @@ func (q *Queries) CreateLeadSource(ctx context.Context, arg CreateLeadSourcePara
 		&i.IsAktif,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Url,
 	)
 	return i, err
 }
@@ -156,7 +159,7 @@ func (q *Queries) DeleteLeadSourcePattern(ctx context.Context, id int64) (int64,
 }
 
 const getLeadSource = `-- name: GetLeadSource :one
-SELECT id, nama, keterangan, is_aktif, created_at, updated_at FROM lead_sources WHERE id = ?
+SELECT id, nama, keterangan, is_aktif, created_at, updated_at, url FROM lead_sources WHERE id = ?
 `
 
 func (q *Queries) GetLeadSource(ctx context.Context, id int64) (LeadSource, error) {
@@ -169,6 +172,7 @@ func (q *Queries) GetLeadSource(ctx context.Context, id int64) (LeadSource, erro
 		&i.IsAktif,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Url,
 	)
 	return i, err
 }
@@ -309,7 +313,7 @@ func (q *Queries) ListLeadSourcePatterns(ctx context.Context) ([]LeadSourcePatte
 }
 
 const listLeadSources = `-- name: ListLeadSources :many
-SELECT id, nama, keterangan, is_aktif, created_at, updated_at FROM lead_sources ORDER BY is_aktif DESC, nama
+SELECT id, nama, keterangan, is_aktif, created_at, updated_at, url FROM lead_sources ORDER BY is_aktif DESC, nama
 `
 
 func (q *Queries) ListLeadSources(ctx context.Context) ([]LeadSource, error) {
@@ -328,6 +332,7 @@ func (q *Queries) ListLeadSources(ctx context.Context) ([]LeadSource, error) {
 			&i.IsAktif,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Url,
 		); err != nil {
 			return nil, err
 		}
@@ -400,12 +405,13 @@ func (q *Queries) SetLeadSource(ctx context.Context, arg SetLeadSourceParams) er
 }
 
 const updateLeadSource = `-- name: UpdateLeadSource :exec
-UPDATE lead_sources SET nama = ?, keterangan = ?, is_aktif = ?, updated_at = ? WHERE id = ?
+UPDATE lead_sources SET nama = ?, keterangan = ?, url = ?, is_aktif = ?, updated_at = ? WHERE id = ?
 `
 
 type UpdateLeadSourceParams struct {
 	Nama       string
 	Keterangan string
+	Url        string
 	IsAktif    int64
 	UpdatedAt  time.Time
 	ID         int64
@@ -415,6 +421,7 @@ func (q *Queries) UpdateLeadSource(ctx context.Context, arg UpdateLeadSourcePara
 	_, err := q.db.ExecContext(ctx, updateLeadSource,
 		arg.Nama,
 		arg.Keterangan,
+		arg.Url,
 		arg.IsAktif,
 		arg.UpdatedAt,
 		arg.ID,

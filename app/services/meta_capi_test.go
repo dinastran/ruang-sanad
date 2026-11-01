@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/maulanashalihin/laju-go/app/models"
 	"github.com/maulanashalihin/laju-go/app/queries"
 	"github.com/stretchr/testify/require"
 )
@@ -270,4 +271,52 @@ func TestMetaCAPIResendTestEventsToProduction(t *testing.T) {
 	n, err = prod.ResendTestEvents(t.Context())
 	require.NoError(t, err)
 	require.Zero(t, n, "nothing left to resend; the old one stays as is")
+}
+
+func TestMetaCAPIEventSourceURLAndValue(t *testing.T) {
+	f := setupLeadFixture(t)
+	reguler := sourceIDByName(t, f, "LP Kelas Reguler Tahsin")
+	require.ErrorContains(t, f.service.UpdateSource(t.Context(), reguler, models.LeadSourceRequest{Nama: "LP Kelas Reguler Tahsin", URL: "ruangsanad.com/tahsin", IsAktif: true}), "URL LP harus lengkap")
+	require.NoError(t, f.service.UpdateSource(t.Context(), reguler, models.LeadSourceRequest{Nama: "LP Kelas Reguler Tahsin", URL: " https://ruangsanad.com/tahsin ", IsAktif: true}))
+
+	// Lead A comes from the reguler LP; lead B has no source.
+	f.ingest(t, leadEvent("u1", "message.in", "2026-10-24T03:00:00Z", map[string]string{"wa_message_id": "U1", "body": "Assalamu'alaikum, saya ingin tanya tentang Kelas Reguler Tahsin Ruang Sanad."}))
+	b := leadEvent("u2", "message.in", "2026-10-24T03:01:00Z", map[string]string{"wa_message_id": "U2", "body": "halo"})
+	b.ChatID, b.Phone = "6286666666666@s.whatsapp.net", "6286666666666"
+	f.ingest(t, b)
+	_, err := f.db.Exec(`UPDATE leads SET payment_amount = 250000 WHERE wa_chat_id = ?`, b.ChatID)
+	require.NoError(t, err)
+
+	m := &fakeMeta{}
+	svc := newTestCAPI(t, f, m, MetaCAPIConfig{DatasetID: "1", Token: "tok", EventSourceURL: "https://ruangsanad.com"})
+	res, err := svc.Tick(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, 2, res.Sent)
+	got := map[string]map[string]any{}
+	for _, body := range m.bodies {
+		ev := body["data"].([]any)[0].(map[string]any)
+		got[ev["event_id"].(string)] = ev
+	}
+	a, err := f.querier.GetLeadByChatID(t.Context(), testChatID)
+	require.NoError(t, err)
+	lb, err := f.querier.GetLeadByChatID(t.Context(), b.ChatID)
+	require.NoError(t, err)
+	evA, evB := got[metaEventID(a.ID, MetaEventLead)], got[metaEventID(lb.ID, MetaEventLead)]
+	require.Equal(t, "https://ruangsanad.com/tahsin", evA["event_source_url"], "the lead source's own landing page")
+	require.Equal(t, "https://ruangsanad.com", evB["event_source_url"], "default for leads without a source URL")
+	cdA, cdB := evA["custom_data"].(map[string]any), evB["custom_data"].(map[string]any)
+	require.Equal(t, "IDR", cdA["currency"])
+	require.EqualValues(t, 0, cdA["value"], "no bill yet: value 0 with a valid currency")
+	require.EqualValues(t, 250000, cdB["value"], "the lead's bill when known")
+
+	st, err := svc.Status(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, "https://ruangsanad.com", st.EventSourceURL)
+	require.Contains(t, st.SourcesWithoutURL, "Iklan Meta (teks default)")
+	require.NotContains(t, st.SourcesWithoutURL, "LP Kelas Reguler Tahsin")
+
+	// Without any URL the field is left out rather than sent empty.
+	noURL := newTestCAPI(t, f, &fakeMeta{}, MetaCAPIConfig{DatasetID: "1", Token: "tok"})
+	ev := noURL.eventPayload(queries.MetaCapiEvent{EventName: MetaEventLead, EventID: "x"}, lb, "")
+	require.NotContains(t, ev, "event_source_url")
 }
