@@ -54,7 +54,7 @@
     <h1 class="mt-1 text-[28px] font-semibold tracking-tight text-neutral-950 dark:text-white">Prioritas lead aktif</h1>
     <p class="mt-1 max-w-2xl text-sm text-neutral-500 dark:text-neutral-400">Lead yang memerlukan tindakan sekarang, di seluruh periode. Prioritas berdasarkan tahap dan kondisi percakapan, bukan prediksi closing.</p>
    </div>
-   <a href="/app/leads" use:inertia class="inline-flex h-10 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 text-sm font-medium text-neutral-700 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/10 dark:bg-neutral-900 dark:text-neutral-200"><ClipboardList size={16}/> Semua leads <ArrowUpRight size={14}/></a>
+   <a href="/app/leads?view=list" use:inertia class="inline-flex h-10 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 text-sm font-medium text-neutral-700 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/10 dark:bg-neutral-900 dark:text-neutral-200"><ClipboardList size={16}/> Semua leads <ArrowUpRight size={14}/></a>
   </header>
 
   <section class={panel+" overflow-hidden"} aria-label="Filter prioritas lead">
