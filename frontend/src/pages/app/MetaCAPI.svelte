@@ -3,10 +3,10 @@
  import AppLayout from "@layouts/AppLayout.svelte";
  import type { Flash, User } from "@lib/types";
  import { formatDateTime, STAGE_LABELS, todayWIB } from "@lib/leads";
- import { fmt, panel, pct } from "@components/lead-dashboard/types";
+ import { fmt, panel } from "@components/lead-dashboard/types";
  import Trend from "@components/meta-capi/Trend.svelte";
  import { currency, eventLabels, statLabels, type CAPIStatus, type CapiAnalytics } from "@components/meta-capi/data";
- import { Activity, ArrowLeft, ArrowUpRight, AlertTriangle, CheckCircle2, ChevronRight, CircleHelp, RefreshCw, Search, Settings2 } from "lucide-svelte";
+ import { ArrowLeft, ArrowUpRight, AlertTriangle, CircleHelp, RefreshCw, Search, Settings2 } from "lucide-svelte";
 
  interface Props { user?:User; status:CAPIStatus; analytics:CapiAnalytics; flash?:Flash }
  let props:Props=$props();
