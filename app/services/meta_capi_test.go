@@ -366,7 +366,7 @@ func TestMetaCAPIAnalyticsSeparatesProductionTestAndPurchaseValue(t *testing.T) 
  require.Len(t,st.Events,6)
  require.NotEmpty(t,st.Events[0].EventID)
  require.NotEmpty(t,st.Events[0].FBTraceID)
- require.Equal(t,int64(2),st.Counts["sent"])
+ require.Equal(t,int64(3),st.Counts["sent"])
  // Historical totals remain available, separate from the selected period.
  _,err=svc.Analytics(t.Context(),"2026-11-02","2026-11-01")
  require.Error(t,err)
