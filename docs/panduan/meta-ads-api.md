@@ -395,9 +395,10 @@ Pixel di LP Ruang Sanad sudah terpasang (HTML sendiri). Agar tidak bentrok denga
 1. Pastikan LP mengirim **`PageView`** (otomatis dari kode dasar Pixel).
 2. Saat tombol WhatsApp diklik, kirim **`Contact`**, bukan `Lead`:
    ```html
-   <a href="https://wa.me/62xxxxxxxxxx?text=..." onclick="fbq('track', 'Contact');">Chat via WhatsApp</a>
+   <a href="https://wa.me/62xxxxxxxxxx?text=..." onclick="fbq('track', 'Contact', {value: 0, currency: 'IDR'});">Chat via WhatsApp</a>
    ```
-3. **Jangan** kirim `Lead`, `Purchase`, dan event funnel lain dari LP. Event itu sudah dikirim Dashboard lewat CAPI. Kalau LP juga mengirimnya, Meta menghitung dua kali karena `event_id`-nya berbeda.
+   Sertakan `value` dan `currency: 'IDR'`. Tanpa itu, Diagnosis Events Manager menampilkan "Kirim informasi harga dan mata uang yang valid untuk peristiwa Contact situs web".
+3. **Hapus** setiap `fbq('track', 'Lead')` di LP, dan **jangan** kirim `Purchase` atau event funnel lain dari LP. Event itu sudah dikirim Dashboard lewat CAPI. Kalau LP juga mengirimnya, Meta menghitung dua kali karena `event_id`-nya berbeda.
 4. Pastikan Pixel di LP dan CAPI Dashboard memakai **dataset (Pixel) yang sama**. ID-nya terlihat di kode LP: `fbq('init', 'XXXXXXXXXXXXXXX')`.
 
 ## Langkah 14: Ambil Dataset ID dan token CAPI
@@ -436,7 +437,16 @@ META_CAPI_TOKEN=EAAB...                   # Langkah 14b
 META_CAPI_TEST_EVENT_CODE=TEST12345       # isi saat uji (Langkah 16), kosongkan untuk produksi
 META_API_VERSION=v23.0                    # versi Graph API terbaru (Langkah 7b)
 META_CAPI_APP_SECRET=                     # opsional, hanya untuk token Opsi 2
+META_CAPI_EVENT_SOURCE_URL=https://ruangsanad.com   # URL LP default (lihat di bawah)
 ```
+
+**URL landing page (`event_source_url`).** Meta **memblokir** event Conversions API tanpa `event_source_url` bila bisnis atau iklan tertaut ke situs dalam kategori terbatas. Diagnosis yang muncul: "Beberapa peristiwa yang dikirim melalui Conversions API diblokir". Dashboard mengirim URL ini di setiap event:
+
+- **Per sumber lead:** isi **URL LP** setiap sumber di **Leads → Sumber** (mis. LP Kelas Reguler Tahsin → `https://…/tahsin-reguler`). Lead dari sumber itu memakai URL tersebut.
+- **Default:** `META_CAPI_EVENT_SOURCE_URL`, dipakai untuk lead tanpa sumber atau sumber yang belum punya URL (mis. "Iklan Meta (teks default)").
+- Halaman **Meta CAPI** menampilkan URL default dan memperingatkan bila ada sumber aktif tanpa URL sementara URL default kosong.
+
+Setiap event juga membawa `value` + `currency: IDR`: nominal yang diverifikasi untuk Purchase, nominal tagihan lead untuk tahap sebelumnya bila sudah ada, selain itu 0.
 
 Restart aplikasi. Saat start, log server berisi salah satu dari:
 - `Meta CAPI nonaktif: ...`: dataset ID atau token belum terisi.
@@ -507,6 +517,8 @@ Tidak perlu menjalankan migrasi manual. Tabel `meta_capi_events` (migrasi `0100`
 | **CAPI:** event tidak muncul di Test events | Test code salah/kedaluwarsa, atau aplikasi belum di-restart | Salin ulang test code, restart, buat lead uji baru |
 | **CAPI:** Purchase terkirim dengan nilai Rp0 | Nominal verifikasi dan nominal tagihan lead sama-sama kosong | Isi nominal saat verifikasi pembayaran; event yang sudah terkirim tidak berubah |
 | **CAPI:** `Lead` terhitung dua kali di Events Manager | LP juga mengirim `fbq('track','Lead')` | Ganti event di LP menjadi `Contact` (Langkah 13) |
+| Diagnosis: "Beberapa peristiwa yang dikirim melalui Conversions API diblokir" (tanpa `event_source_url`) | Sumber lead belum punya URL LP dan `META_CAPI_EVENT_SOURCE_URL` kosong | Isi URL LP di Leads → Sumber dan/atau `META_CAPI_EVENT_SOURCE_URL`, restart. Meta perlu sekitar 3 hari untuk memperbarui diagnosis |
+| Diagnosis: "Kirim informasi mata uang/harga yang valid untuk peristiwa Lead/Contact situs web" | Event Pixel di LP tanpa `value`/`currency`, atau LP masih mengirim `Lead` | Pakai kode Langkah 13: `Contact` dengan `{value: 0, currency: 'IDR'}`, hapus `Lead` dari LP |
 | Percakapan WA menurut Meta ≠ lead CRM | Definisi berbeda (Meta menghitung percakapan baru setelah ≥7 hari tidak aktif; CRM menghitung nomor baru) | Normal; gunakan CRM untuk lead/closing dan Meta untuk biaya |
 
 ---

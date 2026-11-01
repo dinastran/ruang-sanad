@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -121,7 +122,7 @@ func (s *LeadService) Sources(ctx context.Context) ([]models.LeadSourceResponse,
 			p = []models.LeadSourcePatternResponse{}
 		}
 		out = append(out, models.LeadSourceResponse{
-			ID: r.ID, Nama: r.Nama, Keterangan: r.Keterangan, IsAktif: r.IsAktif == 1, Patterns: p, TotalLeads: total[r.ID],
+			ID: r.ID, Nama: r.Nama, Keterangan: r.Keterangan, URL: r.Url, IsAktif: r.IsAktif == 1, Patterns: p, TotalLeads: total[r.ID],
 		})
 	}
 	return out, nil
@@ -146,6 +147,13 @@ func normalizeLeadSourceRequest(req *models.LeadSourceRequest) error {
 		return errors.New("nama sumber 2–80 karakter")
 	}
 	req.Keterangan = truncateRunes(strings.TrimSpace(req.Keterangan), 300)
+	req.URL = strings.TrimSpace(req.URL)
+	if req.URL != "" {
+		u, err := url.Parse(req.URL)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || len(req.URL) > 500 {
+			return errors.New("URL LP harus lengkap, mis. https://ruangsanad.com/tahsin")
+		}
+	}
 	return nil
 }
 
@@ -162,7 +170,7 @@ func (s *LeadService) CreateSource(ctx context.Context, req models.LeadSourceReq
 	}
 	now := s.nowUTC()
 	row, err := s.querier.CreateLeadSource(ctx, queries.CreateLeadSourceParams{
-		Nama: req.Nama, Keterangan: req.Keterangan, IsAktif: boolInt(req.IsAktif), CreatedAt: now, UpdatedAt: now,
+		Nama: req.Nama, Keterangan: req.Keterangan, Url: req.URL, IsAktif: boolInt(req.IsAktif), CreatedAt: now, UpdatedAt: now,
 	})
 	return row.ID, duplicateNameErr(err, req.Nama)
 }
@@ -175,7 +183,7 @@ func (s *LeadService) UpdateSource(ctx context.Context, id int64, req models.Lea
 		return err
 	}
 	return duplicateNameErr(s.querier.UpdateLeadSource(ctx, queries.UpdateLeadSourceParams{
-		Nama: req.Nama, Keterangan: req.Keterangan, IsAktif: boolInt(req.IsAktif), UpdatedAt: s.nowUTC(), ID: id,
+		Nama: req.Nama, Keterangan: req.Keterangan, Url: req.URL, IsAktif: boolInt(req.IsAktif), UpdatedAt: s.nowUTC(), ID: id,
 	}), req.Nama)
 }
 

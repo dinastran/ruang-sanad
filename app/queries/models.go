@@ -530,6 +530,7 @@ type LeadSource struct {
 	IsAktif    int64
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+	Url        string
 }
 
 type LeadSourceMetaCampaign struct {

@@ -5,12 +5,12 @@ SELECT * FROM lead_sources ORDER BY is_aktif DESC, nama;
 SELECT * FROM lead_sources WHERE id = ?;
 
 -- name: CreateLeadSource :one
-INSERT INTO lead_sources (nama, keterangan, is_aktif, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO lead_sources (nama, keterangan, url, is_aktif, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateLeadSource :exec
-UPDATE lead_sources SET nama = ?, keterangan = ?, is_aktif = ?, updated_at = ? WHERE id = ?;
+UPDATE lead_sources SET nama = ?, keterangan = ?, url = ?, is_aktif = ?, updated_at = ? WHERE id = ?;
 
 -- name: DeleteLeadSource :execrows
 DELETE FROM lead_sources WHERE id = ?;

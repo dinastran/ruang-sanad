@@ -6,7 +6,7 @@
 	import { ArrowLeft, Info, Plus, RefreshCw, X } from "lucide-svelte";
 
 	interface Pattern { id: number; teks: string }
-	interface Source { id: number; nama: string; keterangan: string; is_aktif: boolean; patterns: Pattern[]; total_leads: number }
+	interface Source { id: number; nama: string; keterangan: string; url: string; is_aktif: boolean; patterns: Pattern[]; total_leads: number }
 	interface Props { user?: User; sources: Source[]; flash?: Flash }
 
 	let props: Props = $props();
@@ -14,9 +14,9 @@
 	let sources = $derived(props.sources ?? []);
 
 	let busy = $state(false);
-	let newSource = $state({ nama: "", keterangan: "" });
+	let newSource = $state({ nama: "", keterangan: "", url: "" });
 	let editingId = $state<number | null>(null);
-	let editForm = $state({ nama: "", keterangan: "", is_aktif: true });
+	let editForm = $state({ nama: "", keterangan: "", url: "", is_aktif: true });
 	// One draft trigger text per source card.
 	let drafts = $state<Record<number, string>>({});
 
@@ -24,10 +24,10 @@
 	function addSource(e: Event) {
 		e.preventDefault();
 		busy = true;
-		router.post("/app/leads/sumber", { ...newSource, is_aktif: true }, opts(() => (newSource = { nama: "", keterangan: "" })));
+		router.post("/app/leads/sumber", { ...newSource, is_aktif: true }, opts(() => (newSource = { nama: "", keterangan: "", url: "" })));
 	}
 	function startEdit(s: Source) {
-		editForm = { nama: s.nama, keterangan: s.keterangan, is_aktif: s.is_aktif };
+		editForm = { nama: s.nama, keterangan: s.keterangan, url: s.url, is_aktif: s.is_aktif };
 		editingId = s.id;
 	}
 	function saveEdit(e: Event, s: Source) {
@@ -37,7 +37,7 @@
 	}
 	function toggleAktif(s: Source) {
 		busy = true;
-		router.put(`/app/leads/sumber/${s.id}`, { nama: s.nama, keterangan: s.keterangan, is_aktif: !s.is_aktif }, opts());
+		router.put(`/app/leads/sumber/${s.id}`, { nama: s.nama, keterangan: s.keterangan, url: s.url, is_aktif: !s.is_aktif }, opts());
 	}
 	function hapus(s: Source) {
 		if (!confirm(`Hapus sumber "${s.nama}" beserta teks pemicunya?`)) return;
@@ -96,8 +96,9 @@
 		</details>
 
 		{#if canEdit}
-			<form class={panel + " grid gap-3 p-4 sm:grid-cols-[1fr_1.4fr_auto] sm:items-end sm:p-5"} onsubmit={addSource}>
+			<form class={panel + " grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1.2fr_1.2fr_auto] lg:items-end sm:p-5"} onsubmit={addSource}>
 				<label class={lbl}>Nama sumber baru<input class={field + " mt-1"} bind:value={newSource.nama} maxlength="80" placeholder="mis. LP Tahsin Anak" required /></label>
+				<label class={lbl}>URL LP (untuk Meta CAPI)<input type="url" class={field + " mt-1"} bind:value={newSource.url} maxlength="500" placeholder="https://ruangsanad.com/tahsin-anak" /></label>
 				<label class={lbl}>Keterangan (opsional)<input class={field + " mt-1"} bind:value={newSource.keterangan} maxlength="300" placeholder="mis. iklan Meta kampanye Oktober" /></label>
 				<button type="submit" class={btnPrimary} disabled={busy || newSource.nama.trim().length < 2}><Plus size={15} /> Tambah</button>
 			</form>
@@ -114,6 +115,7 @@
 						<form class="grid gap-3 sm:grid-cols-[1fr_1.4fr]" onsubmit={(e) => saveEdit(e, s)}>
 							<label class={lbl}>Nama<input class={field + " mt-1"} bind:value={editForm.nama} maxlength="80" required /></label>
 							<label class={lbl}>Keterangan<input class={field + " mt-1"} bind:value={editForm.keterangan} maxlength="300" /></label>
+							<label class={lbl + " sm:col-span-2"}>URL LP (dikirim ke Meta CAPI sebagai event_source_url)<input type="url" class={field + " mt-1"} bind:value={editForm.url} maxlength="500" placeholder="https://ruangsanad.com/tahsin" /></label>
 							<div class="flex justify-end gap-2 sm:col-span-2">
 								<button type="button" class={btnGhost} onclick={() => (editingId = null)}>Batal</button>
 								<button type="submit" class={btnPrimary} disabled={busy}>Simpan</button>
@@ -127,6 +129,11 @@
 									{#if !s.is_aktif}<span class="rounded-full bg-neutral-200 px-2 py-0.5 text-[11px] font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">Nonaktif</span>{/if}
 								</div>
 								{#if s.keterangan}<p class="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">{s.keterangan}</p>{/if}
+								{#if s.url}
+									<a href={s.url} target="_blank" rel="noopener noreferrer" class="mt-0.5 block max-w-md truncate text-xs text-brand-700 hover:underline dark:text-brand-400">{s.url}</a>
+								{:else if s.is_aktif}
+									<p class="mt-0.5 text-xs text-amber-700 dark:text-amber-400">URL LP belum diisi. Event Meta CAPI dari sumber ini memakai URL default (META_CAPI_EVENT_SOURCE_URL) bila ada; tanpa URL, Meta bisa memblokir event.</p>
+								{/if}
 							</div>
 							<a href={`/app/leads?status=all&sumber=${s.id}`} use:inertia class="shrink-0 rounded text-right focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
 								<span class="block text-xl font-semibold tabular-nums text-neutral-950 dark:text-white">{fmt(s.total_leads)}</span>

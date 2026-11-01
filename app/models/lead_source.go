@@ -4,7 +4,9 @@ package models
 type LeadSourceRequest struct {
 	Nama       string `json:"nama"`
 	Keterangan string `json:"keterangan"`
-	IsAktif    bool   `json:"is_aktif"`
+	// URL is the landing page; sent to Meta CAPI as event_source_url.
+	URL     string `json:"url"`
+	IsAktif bool   `json:"is_aktif"`
 }
 
 // LeadSourcePatternRequest adds a trigger text to a source.
@@ -22,6 +24,7 @@ type LeadSourceResponse struct {
 	ID         int64                       `json:"id"`
 	Nama       string                      `json:"nama"`
 	Keterangan string                      `json:"keterangan"`
+	URL        string                      `json:"url"`
 	IsAktif    bool                        `json:"is_aktif"`
 	Patterns   []LeadSourcePatternResponse `json:"patterns"`
 	TotalLeads int64                       `json:"total_leads"`

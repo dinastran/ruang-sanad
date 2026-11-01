@@ -12,7 +12,7 @@
 	}
 	interface Status {
 		enabled: boolean; dataset_id: string; api_version: string; test_mode: boolean; app_secret_proof: boolean;
-		counts: Record<string, number>; resendable_test: number; mapping: { event: string; tahap: string }[]; events: EventRow[];
+		counts: Record<string, number>; resendable_test: number; event_source_url: string; sources_without_url: string[]; mapping: { event: string; tahap: string }[]; events: EventRow[];
 	}
 	interface Props { user?: User; status: Status; flash?: Flash }
 
@@ -67,6 +67,13 @@
 			</div>
 		{/if}
 
+		{#if s.enabled && !s.event_source_url && s.sources_without_url.length > 0}
+			<div role="alert" class="rounded-xl border border-red-500/30 bg-red-500/[0.05] px-4 py-4 text-sm text-red-800 sm:px-5 dark:text-red-300">
+				<p class="font-semibold">Event tanpa URL LP bisa diblokir Meta</p>
+				<p class="mt-1 leading-relaxed">Sumber berikut belum punya URL LP dan <code class="font-mono text-xs">META_CAPI_EVENT_SOURCE_URL</code> belum diisi, sehingga event-nya dikirim tanpa <code class="font-mono text-xs">event_source_url</code>: <strong>{s.sources_without_url.join(", ")}</strong>. Isi URL di <a href="/app/leads/sumber" use:inertia class="font-medium underline">Sumber lead</a>, atau isi URL default di <code class="font-mono text-xs">.env</code> lalu restart.</p>
+			</div>
+		{/if}
+
 		{#if s.enabled && !s.test_mode && s.resendable_test > 0}
 			<div class="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between sm:px-5 dark:text-amber-200">
 				<div class="min-w-0">
@@ -95,6 +102,8 @@
 					<div class="flex justify-between gap-3"><dt class="text-neutral-500 dark:text-neutral-400">Versi API</dt><dd class="font-mono text-neutral-900 dark:text-white">{s.api_version}</dd></div>
 					<div class="flex justify-between gap-3"><dt class="text-neutral-500 dark:text-neutral-400">Mode uji (Test Events)</dt><dd class={"font-medium " + (s.test_mode ? "text-amber-700 dark:text-amber-400" : "text-neutral-900 dark:text-white")}>{s.test_mode ? "Aktif — event hanya tampil di Test Events" : "Nonaktif (produksi)"}</dd></div>
 					<div class="flex justify-between gap-3"><dt class="text-neutral-500 dark:text-neutral-400">appsecret_proof</dt><dd class="text-neutral-900 dark:text-white">{s.app_secret_proof ? "Dipakai" : "Tidak dipakai"}</dd></div>
+					<div class="flex justify-between gap-3"><dt class="shrink-0 text-neutral-500 dark:text-neutral-400">URL LP default</dt><dd class={"min-w-0 truncate text-right " + (s.event_source_url ? "text-neutral-900 dark:text-white" : "text-amber-700 dark:text-amber-400")} title={s.event_source_url}>{s.event_source_url || "Belum diisi"}</dd></div>
+					{#if s.event_source_url && s.sources_without_url.length}<p class="text-xs text-neutral-500 dark:text-neutral-400">{s.sources_without_url.length} sumber aktif belum punya URL LP sendiri dan memakai URL default.</p>{/if}
 				</dl>
 			</section>
 			<section class={panel + " p-5 sm:p-6"} aria-labelledby="capi-map">

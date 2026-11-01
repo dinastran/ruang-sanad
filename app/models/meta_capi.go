@@ -11,9 +11,14 @@ type MetaCAPIStatus struct {
 	Counts         map[string]int64 `json:"counts"` // pending, sent, failed, skipped
 	// ResendableTest counts events sent in test mode that Meta would still
 	// accept in production (under 7 days old).
-	ResendableTest int64              `json:"resendable_test"`
-	Mapping        []MetaCAPIMapping  `json:"mapping"`
-	Events         []MetaCAPIEventRow `json:"events"`
+	ResendableTest int64 `json:"resendable_test"`
+	// EventSourceURL is the default landing page (META_CAPI_EVENT_SOURCE_URL).
+	EventSourceURL string `json:"event_source_url"`
+	// SourcesWithoutURL lists active lead sources with no landing page URL:
+	// their events fall back to EventSourceURL, or go without one.
+	SourcesWithoutURL []string           `json:"sources_without_url"`
+	Mapping           []MetaCAPIMapping  `json:"mapping"`
+	Events            []MetaCAPIEventRow `json:"events"`
 }
 
 // MetaCAPIMapping explains which CRM step sends which Meta event.
