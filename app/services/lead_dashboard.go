@@ -4,6 +4,7 @@ import (
  "context"
  "errors"
  "fmt"
+ "strings"
  "time"
 
  "github.com/maulanashalihin/laju-go/app/models"
@@ -84,12 +85,7 @@ func (s *LeadService) Dashboard(ctx context.Context, from, to string) (*models.L
   }
  }
  for _, p := range priorities {
-  reason := "Pesan masuk belum dibalas"
-  switch {
-  case p.Stage == LeadStageBuktiMasuk: reason = "Bukti masuk, perlu verifikasi"
-  case p.Stage == LeadStageTerverifikasi: reason = "Terverifikasi, perlu dikonversi"
-  case p.NeedsReview: reason = "Data perlu ditinjau"
-  }
+  reason := dashboardPriorityReason(p)
   activity := p.CreatedAt
   if p.LastInbound.Valid { activity = p.LastInbound.Time }
   res.Priorities = append(res.Priorities, models.LeadDashboardPriority{
@@ -110,4 +106,42 @@ func (s *LeadService) Dashboard(ctx context.Context, from, to string) (*models.L
  if len(report.LostReasons) > 0 { res.Insights = append(res.Insights, fmt.Sprintf("Alasan lost paling banyak pada cohort ini: %s (%d lead).", report.LostReasons[0].Key, report.LostReasons[0].Count)) }
  if reviews > 0 { res.Insights = append(res.Insights, fmt.Sprintf("%d lead yang masuk periode ini masih memerlukan peninjauan.", reviews)) }
  return res, nil
+}
+
+func dashboardPriorityReason(p queries.LeadDashboardPriorityRow) string {
+ switch {
+ case p.Stage == LeadStageBuktiMasuk: return "Bukti masuk, perlu verifikasi"
+ case p.Stage == LeadStageTerverifikasi: return "Terverifikasi, perlu dikonversi"
+ case p.NeedsReview: return "Data perlu ditinjau"
+ default: return "Pesan masuk belum dibalas"
+ }
+}
+
+// PriorityPage is an operational queue across all dates, not a cohort report.
+func (s *LeadService) PriorityPage(ctx context.Context, search, reason string, page int) (*models.LeadPriorityPage, error) {
+ const size = 30
+ search = strings.ToLower(strings.TrimSpace(search))
+ chars := []rune(search)
+ if len(chars) > 80 { search = string(chars[:80]) }
+ switch reason {
+ case "verify", "convert", "review", "reply":
+ default: reason = ""
+ }
+ if page < 1 { page = 1 }
+ if page > 100000 { page = 100000 }
+ rows, total, err := s.querier.LeadDashboardPriorityPage(ctx, search, reason, size, (page-1)*size)
+ if err != nil { return nil, err }
+ out := &models.LeadPriorityPage{
+  Items:make([]models.LeadDashboardPriority,0,len(rows)), Total:total,
+  Page:page, PerPage:size, Query:search, Reason:reason,
+ }
+ for _, p := range rows {
+  activity := p.CreatedAt
+  if p.LastInbound.Valid { activity = p.LastInbound.Time }
+  out.Items = append(out.Items, models.LeadDashboardPriority{
+   ID:p.ID, Name:p.Nama, Stage:p.Stage, Reason:dashboardPriorityReason(p),
+   ActivityAt:activity.In(wib).Format(time.RFC3339),
+  })
+ }
+ return out,nil
 }

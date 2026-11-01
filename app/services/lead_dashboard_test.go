@@ -100,3 +100,43 @@ func TestLeadListTotalAndColumnCountsCoverAllPages(t *testing.T) {
  require.NoError(t, err)
  require.Equal(t, int64(leadListPageSize+5), open.Total)
 }
+
+func TestPriorityPageFiltersAndOrdering(t *testing.T) {
+ f := setupLeadFixture(t)
+ created := time.Date(2026, 10, 25, 2, 0, 0, 0, time.UTC)
+ for _, row := range []struct{
+  chat,name,stage,status string
+  review int
+  inbound bool
+ }{
+  {"verify","Zahra","bukti_masuk","open",0,false},
+  {"convert","Salman","terverifikasi","open",0,false},
+  {"review","Aminah","baru","open",1,false},
+  {"reply","Hasan","discovery","open",0,true},
+  {"passive","Lukman","baru","open",0,false},
+  {"won","Hanan","terverifikasi","won",0,false},
+ } {
+  var inbound any
+  if row.inbound { inbound = created }
+  _,err := f.db.Exec(`INSERT INTO leads
+   (wa_chat_id,nama,stage,status,needs_review,last_inbound_at,created_at,updated_at)
+   VALUES (?,?,?,?,?,?,?,?)`,
+   row.chat,row.name,row.stage,row.status,row.review,inbound,created,created)
+  require.NoError(t,err)
+ }
+ all,err := f.service.PriorityPage(t.Context(),"","",1)
+ require.NoError(t,err)
+ require.Equal(t,int64(4),all.Total)
+ require.Len(t,all.Items,4)
+ require.Equal(t,[]string{"Zahra","Salman","Aminah","Hasan"},[]string{
+  all.Items[0].Name,all.Items[1].Name,all.Items[2].Name,all.Items[3].Name,
+ })
+ replies,err := f.service.PriorityPage(t.Context(),"has","reply",1)
+ require.NoError(t,err)
+ require.Equal(t,int64(1),replies.Total)
+ require.Equal(t,"Hasan",replies.Items[0].Name)
+ absent,err := f.service.PriorityPage(t.Context(),"lukman","",1)
+ require.NoError(t,err)
+ require.Zero(t,absent.Total)
+ require.Empty(t,absent.Items)
+}

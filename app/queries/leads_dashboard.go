@@ -3,6 +3,7 @@ package queries
 import (
  "context"
  "database/sql"
+ "fmt"
  "time"
 )
 
@@ -95,4 +96,46 @@ func (q *Queries) LeadDashboardMaturedFollowups(ctx context.Context, from, to, c
  FROM lead_followups f WHERE f.status = 'sent' AND f.sent_at >= ? AND f.sent_at < ? AND f.sent_at <= ?`,
  from.UTC(), to.UTC(), cutoff.UTC()).Scan(&eligible, &replied)
  return
+}
+
+// LeadDashboardPriorityPage returns the entire actionable queue in bounded pages.
+// Reasons are mutually exclusive and follow the same precedence as the dashboard.
+func (q *Queries) LeadDashboardPriorityPage(ctx context.Context, search, reason string, limit, offset int) ([]LeadDashboardPriorityRow, int64, error) {
+ const category = `CASE WHEN stage = 'bukti_masuk' THEN 'verify'
+ WHEN stage = 'terverifikasi' THEN 'convert'
+ WHEN needs_review = 1 THEN 'review' ELSE 'reply' END`
+ where := ` FROM leads WHERE status = 'open' AND (
+ stage IN ('bukti_masuk','terverifikasi') OR needs_review = 1 OR
+ (last_inbound_at IS NOT NULL AND (last_outbound_at IS NULL OR last_inbound_at > last_outbound_at))
+ )`
+ args := []any{}
+ if reason != "" {
+  where += " AND (" + category + ") = ?"
+  args = append(args, reason)
+ }
+ if search != "" {
+  where += " AND (LOWER(COALESCE(nama,'')) LIKE ? OR LOWER(COALESCE(wa_name,'')) LIKE ? OR CAST(id AS TEXT) LIKE ?)"
+  term := "%" + search + "%"
+  args = append(args, term, term, term)
+ }
+ var total int64
+ if err := q.db.QueryRowContext(ctx, "SELECT COUNT(*)"+where, args...).Scan(&total); err != nil {
+  return nil, 0, err
+ }
+ sqlQuery := `SELECT id, COALESCE(NULLIF(nama, ''), NULLIF(wa_name, ''), 'Lead L-' || id),
+ stage, needs_review, last_inbound_at, last_outbound_at, created_at` +
+  where + " ORDER BY " + category +
+  ", COALESCE(last_inbound_at, created_at) ASC, id ASC LIMIT ? OFFSET ?"
+ rows, err := q.db.QueryContext(ctx, sqlQuery, append(args, limit, offset)...)
+ if err != nil { return nil, 0, fmt.Errorf("list lead priorities: %w", err) }
+ defer rows.Close()
+ out := make([]LeadDashboardPriorityRow, 0, limit)
+ for rows.Next() {
+  var r LeadDashboardPriorityRow
+  if err := rows.Scan(&r.ID, &r.Nama, &r.Stage, &r.NeedsReview, &r.LastInbound, &r.LastOutbound, &r.CreatedAt); err != nil {
+   return nil, 0, err
+  }
+  out = append(out, r)
+ }
+ return out, total, rows.Err()
 }

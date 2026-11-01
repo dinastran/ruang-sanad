@@ -125,6 +125,7 @@
 			</div>
 			<div class="flex flex-wrap items-center gap-1">
 				<a href="/app/leads/dashboard" use:inertia class={ghost}><LayoutDashboard size={15} /> Dashboard</a>
+				<a href="/app/leads/prioritas" use:inertia class={ghost}><Inbox size={15} /> Prioritas</a>
 				<a href="/app/leads/laporan" use:inertia class={ghost}><ChartColumn size={15} /> Laporan</a>
 				<a href="/app/leads/sumber" use:inertia class={ghost}><Megaphone size={15} /> Sumber</a>
 				{#if user?.role === "super_admin" || user?.role === "cs"}<a href="/app/leads/iklan" use:inertia class={ghost}><BadgeDollarSign size={15} /> Iklan</a>{/if}
