@@ -394,7 +394,7 @@
 <AppLayout {user}>
 	<div class="border-b border-neutral-200/80 dark:border-white/[0.04]">
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 pt-6 pb-5">
-			<a href="/app/leads" use:inertia class="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-600 dark:hover:text-brand-400">
+			<a href="/app/leads?view=list" use:inertia class="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-600 dark:hover:text-brand-400">
 				<ArrowLeft class="w-4 h-4" /> Leads
 			</a>
 			<div class="mt-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
