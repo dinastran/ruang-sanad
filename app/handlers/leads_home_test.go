@@ -2,6 +2,7 @@ package handlers
 
 import (
  "net/http/httptest"
+ "io"
  "testing"
 
  "github.com/gofiber/fiber/v2"
@@ -34,10 +35,9 @@ func TestLeadOverviewRoutingCompatibility(t *testing.T) {
    require.NoError(t,err)
    defer resp.Body.Close()
    require.Equal(t,200,resp.StatusCode)
-   body := make([]byte,16)
-   n,err:=resp.Body.Read(body)
+   body,err:=io.ReadAll(resp.Body)
    require.NoError(t,err)
-   require.Equal(t,tc.want,string(body[:n]))
+   require.Equal(t,tc.want,string(body))
   })
  }
 }
