@@ -103,6 +103,7 @@
 		{ href: "/app/kelas/tindak-lanjut-alpa", label: "Tindak Lanjut Alpa", group: "tindak-lanjut-alpa", category: "Akademik", show: isAdminKelas, icon: PhoneCall, badge: jumlahAlpa },
 		{ href: "/app/jadwal-penawaran", label: "Jadwal Penawaran", group: "jadwal-penawaran", category: "Akademik", show: isCS || isAdminKelas, icon: CalendarClock },
 		{ href: "/app/leads/dashboard", label: "Dashboard CRM", group: "leads-dashboard", category: "CRM", show: canLeads, icon: LayoutDashboard },
+		{ href: "/app/leads/prioritas", label: "Prioritas Lead", group: "leads-prioritas", category: "CRM", show: canLeads, icon: ClipboardList },
 		{ href: "/app/leads", label: "Leads", group: "leads", category: "CRM", show: canLeads, icon: MessageCircle },
 		{ href: "/app/leads/followups", label: "Follow-up", group: "leads-followups", category: "CRM", show: canApproveFollowup, icon: Send },
 		{ href: "/app/leads/laporan", label: "Laporan Leads", group: "leads-laporan", category: "CRM", show: canLeads, icon: ChartColumn },
@@ -151,6 +152,7 @@
 		if (path === "/app" || path === "/app/") return "dashboard";
 		if (path.startsWith("/app/analitik-santri")) return "analitik-santri";
 		if (path.startsWith("/app/leads/dashboard")) return "leads-dashboard";
+		if (path.startsWith("/app/leads/prioritas")) return "leads-prioritas";
 		if (path.startsWith("/app/leads/laporan")) return "leads-laporan";
 		if (path.startsWith("/app/leads/followups")) return "leads-followups";
 		if (path.startsWith("/app/leads")) return "leads";
