@@ -3,11 +3,12 @@
  import AppLayout from "@layouts/AppLayout.svelte";
  import type { User } from "@lib/types";
  import { formatDateTime } from "@lib/leads";
- import { ArrowRight, ArrowUpRight, Activity, AlertTriangle, CheckCircle2, ClipboardList, Megaphone, MessageCircle, ShieldAlert } from "lucide-svelte";
+ import { ArrowRight, ArrowUpRight, Activity, AlertTriangle, CheckCircle2, Megaphone, MessageCircle, ShieldAlert } from "lucide-svelte";
  import AcquisitionHero from "@components/lead-dashboard/AcquisitionHero.svelte";
  import ActionQueue from "@components/lead-dashboard/ActionQueue.svelte";
  import RegistrationPath from "@components/lead-dashboard/RegistrationPath.svelte";
  import FollowupPanel from "@components/lead-dashboard/FollowupPanel.svelte";
+ import SourcePerformance from "@components/lead-dashboard/SourcePerformance.svelte";
  import { fmt, panel, pct, shortDate, type Dashboard } from "@components/lead-dashboard/types";
  import { scopeOf, totals, rpShort, type Report as MetaAdsReport } from "@components/meta-ads/data";
  import type { CapiAnalytics } from "@components/meta-capi/data";
@@ -38,7 +39,6 @@
  let campaign=$state("");
  let adScope=$derived(props.ads?scopeOf(props.ads,{campaigns:campaign?[campaign]:[],source:0}):null);
  let adTotals=$derived(props.ads&&adScope?totals(props.ads,adScope,d.from,d.to):null);
- let mappedCampaigns=$derived(props.ads?.campaigns.filter(x=>x.source_id>0)??[]);
  let selectedMapped=$derived(props.ads?.campaigns.filter(x=>(!campaign||x.id===campaign)&&x.source_id>0).length??0);
  let mappedSpend=$derived(props.ads?.rows.reduce((sum,row)=>{
   if(row.d<d.from||row.d>d.to)return sum;
@@ -248,8 +248,10 @@
     <FollowupPanel {d} canApproveFollowup={canApprove}/>
    </div>
 
+   <SourcePerformance sources={d.sources??[]} onselect={(source)=>openLeads({sumber:source})}/>
+
    <footer class="pb-3 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
-    Ringkasan CRM menggunakan WIB. Data iklan mengikuti tanggal akun Meta, sementara event CAPI dihitung dari waktu milestone CRM. Ketiganya tidak boleh dijumlahkan sebagai satu funnel atribusi individu. Untuk analisis terperinci, gunakan <a href="/app/leads/dashboard" use:inertia class="font-semibold text-brand-700 hover:underline dark:text-brand-400">Dashboard CRM</a>, <a href="/app/leads/iklan" use:inertia class="font-semibold text-brand-700 hover:underline dark:text-brand-400">Iklan</a>, dan halaman CAPI sesuai hak akses.
+    Ringkasan CRM menggunakan WIB. Data iklan mengikuti tanggal akun Meta, sementara event CAPI dihitung dari waktu milestone CRM. Ketiganya tidak boleh dijumlahkan sebagai satu funnel atribusi individu. Untuk analisis terperinci, gunakan <a href="/app/leads/dashboard" use:inertia class="font-semibold text-brand-700 hover:underline dark:text-brand-400">Dashboard CRM</a>, {#if canAds}<a href="/app/leads/iklan" use:inertia class="font-semibold text-brand-700 hover:underline dark:text-brand-400">Iklan</a>{/if}{#if canCapi} dan <a href="/app/leads/meta-capi" use:inertia class="font-semibold text-brand-700 hover:underline dark:text-brand-400">Meta CAPI</a>{/if}.
    </footer>
   </div>
  </main>
