@@ -448,16 +448,17 @@ func (s *MetaCAPIService) Status(ctx context.Context) (*models.MetaCAPIStatus, e
 			out.SourcesWithoutURL = append(out.SourcesWithoutURL, src.Nama)
 		}
 	}
-	rows, err := s.querier.ListRecentMetaCAPIEvents(ctx, 50)
+	rows, err := s.querier.ListMetaCAPIAudit(ctx, 50)
 	if err != nil {
 		return nil, err
 	}
 	for _, r := range rows {
 		out.Events = append(out.Events, models.MetaCAPIEventRow{
-			ID: r.ID, LeadID: r.LeadID, LeadNama: r.LeadNama, Event: r.EventName,
+			ID: r.ID, LeadID: r.LeadID, LeadNama: r.LeadName, Event: r.EventName,
+			EventID: r.EventID, FBTraceID: r.FBTraceID,
 			EventTime: r.EventTime.UTC().Format(time.RFC3339), Value: r.Value, Status: r.Status,
-			Attempts: r.Attempts, LastError: r.LastError, TestMode: r.TestMode == 1,
-			SentAt: formatLeadNullTime(r.SentAt),
+			Attempts: r.Attempts, LastError: r.LastError, TestMode: r.TestMode,
+			SentAt: r.SentAt,
 		})
 	}
 	return out, nil
@@ -473,3 +474,72 @@ func maskID(id string) string {
 
 // ErrMetaCAPIDisabled is returned by actions that need a configured dataset.
 var ErrMetaCAPIDisabled = errors.New("Meta CAPI belum dikonfigurasi (META_CAPI_DATASET_ID dan META_CAPI_TOKEN)")
+
+// Analytics aggregates persisted events in a WIB reporting window.
+// Daily/event totals are period-scoped; Status().Counts remains the lifetime queue.
+func (s *MetaCAPIService) Analytics(ctx context.Context, from, to string) (*models.MetaCAPIAnalytics,error) {
+ today := s.now().In(wib)
+ lastDay := time.Date(today.Year(),today.Month(),today.Day(),0,0,0,0,wib)
+ firstDay := lastDay.AddDate(0,0,-13)
+ if from != "" || to != "" {
+  if from == "" || to == "" { return nil, errors.New("tanggal awal dan akhir wajib diisi") }
+  var ok bool
+  if firstDay,ok = wibDayStart(from); !ok { return nil, errors.New("tanggal awal tidak valid") }
+  if lastDay,ok = wibDayStart(to); !ok { return nil, errors.New("tanggal akhir tidak valid") }
+ }
+ end := lastDay.AddDate(0,0,1)
+ if firstDay.After(lastDay) || end.After(firstDay.AddDate(0,0,91)) {
+  return nil,errors.New("rentang CAPI harus 1 sampai 90 hari")
+ }
+ rows,err := s.querier.ListMetaCAPIAnalytics(ctx,firstDay,end)
+ if err != nil { return nil,err }
+ out := &models.MetaCAPIAnalytics{
+  From:firstDay.Format(time.DateOnly),To:lastDay.Format(time.DateOnly),
+  Days:[]models.MetaCAPIDay{}, Events:[]models.MetaCAPIEventSummary{},
+ }
+ daily := map[string]*models.MetaCAPIDay{}
+ for d:=firstDay;d.Before(end);d=d.AddDate(0,0,1) {
+  day := d.Format(time.DateOnly)
+  daily[day] = &models.MetaCAPIDay{Day:day}
+ }
+ order := []string{MetaEventLead,MetaEventCompleteRegistration,MetaEventInitiateCheckout,MetaEventAddPaymentInfo,MetaEventPurchase}
+ byEvent := map[string]*models.MetaCAPIEventSummary{}
+ for _,name := range order { byEvent[name] = &models.MetaCAPIEventSummary{Event:name} }
+ for _,r := range rows {
+  day := daily[r.Day]
+  if day == nil { continue }
+  by := byEvent[r.Event]
+  if by == nil {
+   by = &models.MetaCAPIEventSummary{Event:r.Event}
+   byEvent[r.Event] = by
+   order = append(order,r.Event)
+  }
+  out.Total += r.Count
+  by.Total += r.Count
+  switch r.Status {
+  case "sent":
+   if r.TestMode {
+    out.TestSent += r.Count
+    day.TestSent += r.Count
+    by.TestSent += r.Count
+   } else {
+    out.Sent += r.Count
+    day.Sent += r.Count
+    by.Sent += r.Count
+    out.PurchaseValue += r.PurchaseValue
+    by.PurchaseValue += r.PurchaseValue
+   }
+  case "pending":
+   out.Pending += r.Count; day.Pending += r.Count; by.Pending += r.Count
+  case "failed":
+   out.Failed += r.Count; day.Failed += r.Count; by.Failed += r.Count
+  case "skipped":
+   out.Skipped += r.Count; day.Skipped += r.Count; by.Skipped += r.Count
+  }
+ }
+ for d:=firstDay;d.Before(end);d=d.AddDate(0,0,1) {
+  out.Days=append(out.Days,*daily[d.Format(time.DateOnly)])
+ }
+ for _,name:=range order {out.Events=append(out.Events,*byEvent[name])}
+ return out,nil
+}
