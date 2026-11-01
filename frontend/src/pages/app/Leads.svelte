@@ -120,11 +120,11 @@
 		<header class="flex flex-col gap-3 pb-1 sm:flex-row sm:items-end sm:justify-between">
 			<div class="min-w-0">
 				<p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-700 dark:text-brand-400">CRM Leads</p>
-				<h1 class="mt-1 text-[28px] font-semibold leading-tight tracking-[-0.02em] text-neutral-950 dark:text-white">Leads</h1>
+				<h1 class="mt-1 text-[28px] font-semibold leading-tight tracking-[-0.02em] text-neutral-950 dark:text-white">Daftar lead</h1>
 				<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Calon santri dari chat CS, dari pertanyaan pertama sampai jadi santri.</p>
 			</div>
 			<div class="flex flex-wrap items-center gap-1">
-				<a href="/app/leads/dashboard" use:inertia class={ghost}><LayoutDashboard size={15} /> Dashboard</a>
+				<a href="/app/leads" use:inertia class={ghost}><LayoutDashboard size={15} /> Ringkasan</a>
 				<a href="/app/leads/prioritas" use:inertia class={ghost}><Inbox size={15} /> Prioritas</a>
 				<a href="/app/leads/laporan" use:inertia class={ghost}><ChartColumn size={15} /> Laporan</a>
 				<a href="/app/leads/sumber" use:inertia class={ghost}><Megaphone size={15} /> Sumber</a>
@@ -159,7 +159,7 @@
 				<Inbox size={28} class="mx-auto text-neutral-400" />
 				<p class="mt-3 text-sm font-medium text-neutral-700 dark:text-neutral-300">Belum ada lead untuk filter ini</p>
 				<p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Lead baru muncul otomatis saat ada chat masuk ke nomor CS.</p>
-				{#if hasFilters}<a href="/app/leads" use:inertia class="mt-4 inline-block text-sm font-medium text-brand-700 hover:underline dark:text-brand-400">Reset filter</a>{/if}
+				{#if hasFilters}<a href="/app/leads?view=list" use:inertia class="mt-4 inline-block text-sm font-medium text-brand-700 hover:underline dark:text-brand-400">Reset filter</a>{/if}
 			</div>
 		{:else if view === "kanban"}
 			<!-- Kanban is desktop-only; on small screens the list is shown instead. -->
