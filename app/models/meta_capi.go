@@ -32,6 +32,8 @@ type MetaCAPIEventRow struct {
 	LeadID    int64  `json:"lead_id"`
 	LeadNama  string `json:"lead_nama"`
 	Event     string `json:"event"`
+	EventID   string `json:"event_id"`
+	FBTraceID string `json:"fbtrace_id"`
 	EventTime string `json:"event_time"`
 	Value     int64  `json:"value"`
 	Status    string `json:"status"`
@@ -39,4 +41,40 @@ type MetaCAPIEventRow struct {
 	LastError string `json:"last_error"`
 	TestMode  bool   `json:"test_mode"`
 	SentAt    string `json:"sent_at"`
+}
+
+// MetaCAPIAnalytics measures outgoing CRM events by event_time (WIB).
+// It does not represent Meta-attributed conversions, revenue, or match quality.
+type MetaCAPIAnalytics struct {
+ From string `json:"from"`
+ To string `json:"to"`
+ Total int64 `json:"total"`
+ Sent int64 `json:"sent"` // sent to production
+ TestSent int64 `json:"test_sent"`
+ Pending int64 `json:"pending"`
+ Failed int64 `json:"failed"`
+ Skipped int64 `json:"skipped"`
+ PurchaseValue int64 `json:"purchase_value"` // sent production Purchase events only
+ Days []MetaCAPIDay `json:"days"`
+ Events []MetaCAPIEventSummary `json:"events"`
+}
+
+type MetaCAPIDay struct {
+ Day string `json:"day"`
+ Sent int64 `json:"sent"`
+ TestSent int64 `json:"test_sent"`
+ Pending int64 `json:"pending"`
+ Failed int64 `json:"failed"`
+ Skipped int64 `json:"skipped"`
+}
+
+type MetaCAPIEventSummary struct {
+ Event string `json:"event"`
+ Total int64 `json:"total"`
+ Sent int64 `json:"sent"`
+ TestSent int64 `json:"test_sent"`
+ Pending int64 `json:"pending"`
+ Failed int64 `json:"failed"`
+ Skipped int64 `json:"skipped"`
+ PurchaseValue int64 `json:"purchase_value"`
 }

@@ -320,3 +320,56 @@ func TestMetaCAPIEventSourceURLAndValue(t *testing.T) {
 	ev := noURL.eventPayload(queries.MetaCapiEvent{EventName: MetaEventLead, EventID: "x"}, lb, "")
 	require.NotContains(t, ev, "event_source_url")
 }
+
+func TestMetaCAPIAnalyticsSeparatesProductionTestAndPurchaseValue(t *testing.T) {
+ f := setupLeadFixture(t)
+ f.clock = time.Date(2026,11,1,12,0,0,0,time.UTC)
+ f.ingest(t, leadEvent("audit-1","message.in","2026-10-31T18:20:00Z",map[string]string{"wa_message_id":"A1","body":"Halo"}))
+ lead := f.lead(t)
+ created := f.clock
+ seed := func(name,id,stamp,status string,testMode int,value int64) {
+  t.Helper()
+  moment,err := time.Parse(time.RFC3339,stamp)
+  require.NoError(t,err)
+  _,err=f.db.Exec(`INSERT INTO meta_capi_events
+   (lead_id,event_name,event_id,event_time,value,status,test_mode,next_attempt_at,created_at,fbtrace_id)
+   VALUES(?,?,?,?,?,?,?,?,?,?)`,
+   lead.ID,name,id,moment,value,status,testMode,created,created,"trace-"+id)
+  require.NoError(t,err)
+ }
+ // 18:20 UTC on Oct 31 belongs to November 1 in WIB.
+ seed("Purchase","purchase-prod","2026-10-31T18:20:00Z","sent",0,450000)
+ seed("Lead","lead-test","2026-11-01T01:00:00Z","sent",1,0)
+ seed("Lead","lead-failed","2026-11-01T02:00:00Z","failed",0,0)
+ seed("Lead","lead-pending","2026-11-01T03:00:00Z","pending",0,0)
+ seed("CompleteRegistration","registration-skipped","2026-11-01T04:00:00Z","skipped",0,0)
+ seed("Purchase","purchase-old","2026-10-29T12:00:00Z","sent",0,900000)
+
+ svc := NewMetaCAPIService(f.querier,MetaCAPIConfig{DatasetID:"123",Token:"token"})
+ svc.now=func()time.Time{return f.clock}
+ report,err:=svc.Analytics(t.Context(),"2026-11-01","2026-11-01")
+ require.NoError(t,err)
+ require.Equal(t,int64(5),report.Total)
+ require.Equal(t,int64(1),report.Sent)
+ require.Equal(t,int64(1),report.TestSent)
+ require.Equal(t,int64(1),report.Failed)
+ require.Equal(t,int64(1),report.Pending)
+ require.Equal(t,int64(1),report.Skipped)
+ require.Equal(t,int64(450000),report.PurchaseValue)
+ require.Len(t,report.Days,1)
+ require.Equal(t,"2026-11-01",report.Days[0].Day)
+ require.Equal(t,int64(1),report.Days[0].Sent)
+ require.Equal(t,int64(1),report.Days[0].TestSent)
+
+ st,err:=svc.Status(t.Context())
+ require.NoError(t,err)
+ require.Len(t,st.Events,6)
+ require.NotEmpty(t,st.Events[0].EventID)
+ require.NotEmpty(t,st.Events[0].FBTraceID)
+ require.Equal(t,int64(3),st.Counts["sent"])
+ // Historical totals remain available, separate from the selected period.
+ _,err=svc.Analytics(t.Context(),"2026-11-02","2026-11-01")
+ require.Error(t,err)
+ _,err=svc.Analytics(t.Context(),"2026-07-01","2026-11-01")
+ require.Error(t,err)
+}
