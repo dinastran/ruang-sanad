@@ -34,3 +34,12 @@ type LeadDashboard struct {
  Sources []LeadSourceStat `json:"sources"`
  Insights []string `json:"insights"`
 }
+
+type LeadPriorityPage struct {
+ Items []LeadDashboardPriority `json:"items"`
+ Total int64 `json:"total"`
+ Page int `json:"page"`
+ PerPage int `json:"per_page"`
+ Query string `json:"query"`
+ Reason string `json:"reason"`
+}
