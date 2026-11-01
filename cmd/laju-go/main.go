@@ -251,7 +251,7 @@ func main() {
 		JadwalPenawaran:             handlers.NewJadwalPenawaranHandler(jadwalService, sessionStore, inertiaService),
 		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService),
 		LeadClosing:                 handlers.NewLeadClosingHandler(leadService, sessionStore, inertiaService),
-		LeadLaporan:                 handlers.NewLeadLaporanHandler(leadService, sessionStore, inertiaService),
+		LeadLaporan:                 handlers.NewLeadLaporanHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService),
 		LeadSources:                 handlers.NewLeadSourceHandler(leadService, sessionStore, inertiaService),
 		MetaCAPI:                    handlers.NewMetaCAPIHandler(metaCAPIService, sessionStore, inertiaService),
 		MetaAds:                     handlers.NewMetaAdsHandler(metaAdsService, sessionStore, inertiaService),
