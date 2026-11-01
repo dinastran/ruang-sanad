@@ -28,9 +28,14 @@ func (h *MetaCAPIHandler) Index(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	analytics, err := h.capi.Analytics(c.UserContext(), c.Query("from"), c.Query("to"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
+	}
 	return h.inertiaService.Render(c, "app/MetaCAPI", fiber.Map{
 		"user":   sessionUser(sess),
 		"status": status,
+		"analytics": analytics,
 	})
 }
 
