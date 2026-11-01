@@ -458,7 +458,7 @@ func (s *MetaCAPIService) Status(ctx context.Context) (*models.MetaCAPIStatus, e
 			EventID: r.EventID, FBTraceID: r.FBTraceID,
 			EventTime: r.EventTime.UTC().Format(time.RFC3339), Value: r.Value, Status: r.Status,
 			Attempts: r.Attempts, LastError: r.LastError, TestMode: r.TestMode,
-			SentAt: r.SentAt,
+			SentAt: formatLeadNullTime(r.SentAt),
 		})
 	}
 	return out, nil
