@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/models"
@@ -15,12 +16,73 @@ import (
 // actions (/app/leads). Verification and conversion live in lead_closing.go.
 type LeadHandler struct {
 	leads          *services.LeadService
+	ads            *services.MetaAdsService
+	capi           *services.MetaCAPIService
 	store          *session.Store
 	inertiaService *services.InertiaService
 }
 
 func NewLeadHandler(leads *services.LeadService, store *session.Store, inertiaService *services.InertiaService) *LeadHandler {
 	return &LeadHandler{leads: leads, store: store, inertiaService: inertiaService}
+}
+
+// WithIntegrations enables optional read-only Meta status for the CRM home.
+// No provider API calls or CAPI events are triggered by loading this page.
+func (h *LeadHandler) WithIntegrations(ads *services.MetaAdsService, capi *services.MetaCAPIService) *LeadHandler {
+	h.ads, h.capi = ads, capi
+	return h
+}
+
+// /app/leads stays backward-compatible: links with list filters keep rendering
+// the existing list; the empty URL opens the command center.
+func leadOverviewRequested(c *fiber.Ctx) bool {
+	if c.Query("view") == "list" { return false }
+	for key := range c.Queries() {
+		if key != "summary_days" && key != "view" { return false }
+	}
+	return true
+}
+
+func (h *LeadHandler) overview(c *fiber.Ctx) error {
+	sess, _ := h.store.Get(c)
+	days := 14
+	switch c.Query("summary_days") {
+	case "7": days = 7
+	case "30": days = 30
+	}
+	loc := time.FixedZone("WIB", 7*60*60)
+	now := time.Now().In(loc)
+	last := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	from, to := last.AddDate(0, 0, 1-days).Format(time.DateOnly), last.Format(time.DateOnly)
+	crm, err := h.leads.Dashboard(c.UserContext(), from, to)
+	if err != nil { return err }
+	props := fiber.Map{"user": sessionUser(sess), "dashboard": crm, "summary_days": days}
+	role := roleOf(c)
+	if h.ads != nil && (role == "cs" || role == "super_admin") {
+		if report, err := h.ads.Report(c.UserContext(), from, to); err == nil {
+			props["ads"] = report
+		} else {
+			props["ads_error"] = "Laporan iklan belum dapat dimuat."
+		}
+	}
+	if h.capi != nil && role == "super_admin" {
+		if status, err := h.capi.Status(c.UserContext()); err == nil {
+			props["capi_status"] = fiber.Map{
+				"enabled": status.Enabled, "test_mode": status.TestMode,
+				"counts": status.Counts,
+				"sources_without_url": len(status.SourcesWithoutURL),
+				"has_default_url": status.EventSourceURL != "",
+			}
+			if analytics, err := h.capi.Analytics(c.UserContext(), from, to); err == nil {
+				props["capi_analytics"] = analytics
+			} else {
+				props["capi_error"] = "Ringkasan event CAPI belum dapat dimuat."
+			}
+		} else {
+			props["capi_error"] = "Status integrasi CAPI belum dapat dimuat."
+		}
+	}
+	return h.inertiaService.Render(c, "app/LeadHome", props)
 }
 
 func leadIDParam(c *fiber.Ctx) (int64, bool) {
@@ -36,6 +98,7 @@ func roleOf(c *fiber.Ctx) string {
 func leadPath(id int64) string { return fmt.Sprintf("/app/leads/%d", id) }
 
 func (h *LeadHandler) Index(c *fiber.Ctx) error {
+	if leadOverviewRequested(c) { return h.overview(c) }
 	sess, _ := h.store.Get(c)
 	user := sessionUser(sess)
 	var params models.LeadListParams

@@ -112,7 +112,7 @@
 					{c.label}<X size={12} class="text-neutral-400" />
 				</button>
 			{/each}
-			<a href="/app/leads" use:inertia class="ml-1 rounded px-1 text-xs font-medium text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-brand-400">Reset semua</a>
+			<a href="/app/leads?view=list" use:inertia class="ml-1 rounded px-1 text-xs font-medium text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-brand-400">Reset semua</a>
 		</div>
 	{/if}
 	{#if filters.reached_stage}

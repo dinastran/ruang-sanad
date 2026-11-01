@@ -249,7 +249,7 @@ func main() {
 		AIAkses:                     handlers.NewAIAksesHandler(aiTokenService, aiAgentService, userService, sessionStore, inertiaService, cfg.AppURL),
 		CsAiIngest:                  handlers.NewCsAiIngestHandler(leadService, cfg.CSBridgeIngestToken, cfg.CSBridgeAllowedCIDRs).WithJadwal(jadwalService),
 		JadwalPenawaran:             handlers.NewJadwalPenawaranHandler(jadwalService, sessionStore, inertiaService),
-		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService),
+		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService),
 		LeadClosing:                 handlers.NewLeadClosingHandler(leadService, sessionStore, inertiaService),
 		LeadLaporan:                 handlers.NewLeadLaporanHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService),
 		LeadSources:                 handlers.NewLeadSourceHandler(leadService, sessionStore, inertiaService),
