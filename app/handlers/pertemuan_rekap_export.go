@@ -37,7 +37,7 @@ func parseRekapDateRange(mode, month, day, from, to string, meetings []models.Pe
   if !date(from)||!date(to)||from>to {return rekapDateRange{},fmt.Errorf("rentang tanggal tidak valid")}
   a,_:=time.Parse(time.DateOnly,from)
   b,_:=time.Parse(time.DateOnly,to)
-  if b.Sub(a).Hours()/24 > 366 {return rekapDateRange{},fmt.Errorf("rentang maksimal 367 hari")}
+  if b.Sub(a).Hours()/24 > 365 {return rekapDateRange{},fmt.Errorf("rentang maksimal 366 hari")}
   return rekapDateRange{From:from,To:to,Label:from+"_"+to},nil
  default:
   return rekapDateRange{},fmt.Errorf("mode filter tidak valid")
