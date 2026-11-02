@@ -6,7 +6,7 @@
 	import { getCSRFToken } from "@lib/utils/csrf";
 	import type { User, GuruKelas, SantriGuru, PertemuanGuru } from "@lib/types";
 	import { nomorPertemuan } from "@lib/pertemuan";
-	import { ArrowLeft, BookOpen, Users, Calendar, Download, FileText } from "lucide-svelte";
+	import { ArrowLeft, BookOpen, Users, Calendar, Download, FileText, ChevronLeft, ChevronRight, Search, Clock3, BarChart3, CalendarRange, AlertTriangle, CheckCircle2 } from "lucide-svelte";
 
 	interface Props {
 		user?: User;
@@ -127,126 +127,299 @@
 		setUpdatingAbsensi(entry.id, false);
 		}
 	}
+
+ // Every metric on this page derives from the selected calendar period,
+ // not from SantriGuru.persen_hadir (which is lifetime).
+ type Mode = "month" | "day" | "range";
+ type StatusKey = "hadir" | "telat" | "izin" | "sakit" | "alpa";
+ const statusKeys: StatusKey[] = ["hadir","telat","izin","sakit","alpa"];
+ const statusNames: Record<StatusKey,string> = {hadir:"Hadir",telat:"Terlambat",izin:"Izin",sakit:"Sakit",alpa:"Alpa"};
+ const dateToday = () => new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Jakarta"});
+ let monthOptions = $derived([...new Set(pertemuan_list.map(p=>p.tanggal.slice(0,7)).filter(Boolean))].sort().reverse());
+ const latestDay = pertemuan_list.reduce((v,p)=>p.tanggal>v?p.tanggal:v,"");
+ let mode = $state<Mode>("month");
+ let month = $state(latestDay.slice(0,7) || dateToday().slice(0,7));
+ let day = $state(latestDay || dateToday());
+ let fromDate = $state((latestDay.slice(0,7)||dateToday().slice(0,7))+"-01");
+ let toDate = $state(latestDay || dateToday());
+ let search = $state("");
+ let showOnlyRisk = $state(false);
+
+ let invalidRange = $derived(mode==="range" && (!fromDate||!toDate||fromDate>toDate || (Date.parse(toDate)-Date.parse(fromDate))/86400000>365));
+ let filteredMeetings = $derived.by(()=>{
+  if(invalidRange) return [];
+  const meetings=pertemuan_list.filter(p=>mode==="month"?p.tanggal.slice(0,7)===month:mode==="day"?p.tanggal===day:p.tanggal>=fromDate&&p.tanggal<=toDate);
+  return [...meetings].sort((a,b)=>a.tanggal.localeCompare(b.tanggal)||a.pertemuan_ke-b.pertemuan_ke);
+ });
+ function formatMonth(value:string){if(!value)return "Belum ada periode";return new Date(value+"-01T12:00:00+07:00").toLocaleDateString("id-ID",{month:"long",year:"numeric",timeZone:"Asia/Jakarta"});}
+ function shortDay(value:string){return new Date(value+"T12:00:00+07:00").toLocaleDateString("id-ID",{day:"numeric",month:"short",timeZone:"Asia/Jakarta"});}
+ let periodTitle=$derived(mode==="month"?formatMonth(month):mode==="day"?shortDay(day):fromDate&&toDate?shortDay(fromDate)+" sampai "+shortDay(toDate):"Pilih periode");
+ const rateOf=(a:number,n:number)=>n>0?Math.round(a/n*100):null;
+ let rows=$derived(santri.map(s=>{
+  const counts:Record<StatusKey,number>={hadir:0,telat:0,izin:0,sakit:0,alpa:0};
+  let recorded=0;
+  for(const p of filteredMeetings){
+   const entry=absensi[`${s.id}:${p.id}`];
+   if(entry && statusKeys.includes(entry.status as StatusKey)){
+    counts[entry.status as StatusKey]++;recorded++;
+   }
+  }
+  return {...s,counts,recorded,missing:Math.max(0,filteredMeetings.length-recorded),rate:rateOf(counts.hadir,recorded)};
+ }));
+ let totalRecorded=$derived(rows.reduce((v,s)=>v+s.recorded,0));
+ let totalPossible=$derived(rows.length*filteredMeetings.length);
+ let totals=$derived(statusKeys.reduce((out,key)=>({...out,[key]:rows.reduce((v,s)=>v+s.counts[key],0)}),{} as Record<StatusKey,number>));
+ let attendanceRate=$derived(rateOf(totals.hadir,totalRecorded));
+ let completion=$derived(rateOf(totalRecorded,totalPossible));
+ let riskCount=$derived(rows.filter(s=>s.recorded>=2 && s.rate!==null && s.rate<75).length);
+ let visibleRows=$derived(rows.filter(s=>(!showOnlyRisk||(s.recorded>=2 && s.rate!==null&&s.rate<75)) && (s.nama+" "+s.id_mahasantri).toLowerCase().includes(search.trim().toLowerCase())));
+ let meetingStats=$derived(filteredMeetings.map(p=>{
+  const counts:Record<StatusKey,number>={hadir:0,telat:0,izin:0,sakit:0,alpa:0};
+  let recorded=0;
+  for(const s of santri){const a=absensi[`${s.id}:${p.id}`];if(a&&statusKeys.includes(a.status as StatusKey)){counts[a.status as StatusKey]++;recorded++;}}
+  return {p,counts,recorded,missing:Math.max(0,santri.length-recorded),pct:rateOf(counts.hadir,recorded)};
+ }));
+ let exportUrl=$derived.by(()=>{
+  const params=new URLSearchParams({mode});
+  if(mode==="month")params.set("month",month);
+  if(mode==="day")params.set("date",day);
+  if(mode==="range"){params.set("from",fromDate);params.set("to",toDate);}
+  return `/app/guru/kelas/${kelas?.id}/rekap/export?`+params.toString();
+ });
+ const surface="rounded-xl border border-neutral-200/80 bg-white dark:border-white/[0.07] dark:bg-neutral-925/60";
+ const focus="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
+ const input="h-10 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/10 dark:bg-neutral-900 dark:text-white";
+ const rateTone=(r:number|null)=>r===null?"text-neutral-400":r>=85?"text-emerald-700 dark:text-emerald-400":r>=75?"text-amber-700 dark:text-amber-400":"text-rose-700 dark:text-rose-400";
+ function switchMonth(delta:number){
+  const d=new Date(month+"-01T12:00:00+07:00");
+  d.setUTCMonth(d.getUTCMonth()+delta);
+  month=d.toLocaleDateString("en-CA",{timeZone:"Asia/Jakarta"}).slice(0,7);
+ }
+
 </script>
 
 <AppLayout {user} group="guru-kelas">
-	<div class="pt-8 pb-10 border-b border-neutral-200/80 dark:border-white/[0.04]">
-		<div class="max-w-6xl mx-auto px-4 sm:px-6">
-			<div class="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400 mb-2">
-				<a href="/app" use:inertia class="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Dashboard</a>
-				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-				</svg>
-				<a href="/app/guru/kelas" use:inertia class="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Kelas Saya</a>
-				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-				</svg>
-				<span class="text-neutral-700 dark:text-neutral-300">Rekap Absensi</span>
-			</div>
+ <main class="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:py-8">
+  <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+   <div class="min-w-0">
+    <a href={"/app/guru/kelas/"+kelas?.id} use:inertia class="inline-flex min-h-9 items-center gap-1.5 text-sm font-medium text-neutral-500 hover:text-brand-700 dark:text-neutral-400 dark:hover:text-brand-400"><ArrowLeft size={15}/> Kembali ke kelas</a>
+    <p class="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-700 dark:text-brand-400">Monitoring pembelajaran / Rekap absensi</p>
+    <h1 class="mt-1 text-[28px] font-semibold tracking-[-0.025em] text-neutral-950 dark:text-white">{kelas?.nama_kelas||"Rekap kelas"}</h1>
+    <p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{kelas?.level||"Kelas"} · {santri.length} santri aktif · {pertemuan_list.length} pertemuan tercatat sepanjang riwayat</p>
+   </div>
+   <div class="flex flex-wrap items-center gap-2">
+    <a href={"/app/guru/kelas/"+kelas?.id+"/riwayat-pertemuan"} use:inertia class={"inline-flex min-h-10 items-center gap-2 rounded-lg border border-neutral-200 px-3 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/[0.05] "+focus}><Calendar size={15}/> Riwayat pertemuan</a>
+    {#if !invalidRange}
+     <a href={exportUrl} download class={"inline-flex min-h-10 items-center gap-2 rounded-lg bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-800 dark:bg-brand-600 dark:hover:bg-brand-500 "+focus}><Download size={16}/> Export CSV</a>
+    {:else}
+     <button type="button" disabled class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-neutral-200 px-4 text-sm font-semibold text-neutral-500 dark:bg-neutral-800"><Download size={16}/> Export CSV</button>
+    {/if}
+   </div>
+  </header>
 
-			<a href={"/app/guru/kelas/" + kelas?.id} use:inertia class="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors mb-4">
-				<ArrowLeft class="w-4 h-4" />
-				Kembali
-			</a>
+  <section class={surface+" p-4 sm:p-5"} aria-labelledby="period-title">
+   <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+     <h2 id="period-title" class="text-base font-semibold text-neutral-900 dark:text-white">Periode rekap</h2>
+     <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Semua angka dan hasil export mengikuti periode yang dipilih.</p>
+    </div>
+    <div role="group" aria-label="Mode filter absensi" class="flex flex-wrap gap-1 rounded-lg bg-neutral-100 p-1 dark:bg-neutral-900">
+     {#each [{key:"month",text:"Per bulan"},{key:"day",text:"Tanggal"},{key:"range",text:"Rentang khusus"}] as tab}
+      <button type="button" aria-pressed={mode===tab.key} onclick={()=>mode=tab.key as Mode}
+       class={"min-h-9 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors "+focus+" "+(mode===tab.key?"bg-white text-neutral-950 shadow-sm dark:bg-neutral-800 dark:text-white":"text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white")}>{tab.text}</button>
+     {/each}
+    </div>
+   </div>
+   <div class="mt-4 flex flex-wrap items-end gap-3">
+    {#if mode==="month"}
+     <div class="flex min-w-[240px] items-end gap-2">
+      <button type="button" aria-label="Bulan sebelumnya" onclick={()=>switchMonth(-1)} class={"flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 "+focus}><ChevronLeft size={17}/></button>
+      <label class="min-w-0 flex-1 text-xs font-medium text-neutral-600 dark:text-neutral-300">Bulan
+       <input type="month" bind:value={month} class={input+" mt-1"} aria-label="Pilih bulan rekap"/>
+      </label>
+      <button type="button" aria-label="Bulan berikutnya" onclick={()=>switchMonth(1)} class={"flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 "+focus}><ChevronRight size={17}/></button>
+     </div>
+     {#if monthOptions.length>0}
+      <label class="min-w-[175px] text-xs font-medium text-neutral-600 dark:text-neutral-300">Bulan dengan data
+       <select bind:value={month} class={input+" mt-1"}><option value={month}>{formatMonth(month)}</option>{#each monthOptions.filter(v=>v!==month) as m}<option value={m}>{formatMonth(m)}</option>{/each}</select>
+      </label>
+     {/if}
+    {:else if mode==="day"}
+     <label class="w-full max-w-[240px] text-xs font-medium text-neutral-600 dark:text-neutral-300">Tanggal pembelajaran
+      <input type="date" bind:value={day} class={input+" mt-1"}/>
+     </label>
+    {:else}
+     <label class="min-w-[160px] text-xs font-medium text-neutral-600 dark:text-neutral-300">Dari
+      <input type="date" bind:value={fromDate} class={input+" mt-1"}/>
+     </label>
+     <label class="min-w-[160px] text-xs font-medium text-neutral-600 dark:text-neutral-300">Sampai
+      <input type="date" bind:value={toDate} class={input+" mt-1"}/>
+     </label>
+    {/if}
+    <p class="pb-2 text-sm font-medium text-neutral-700 dark:text-neutral-200">{periodTitle}</p>
+   </div>
+   {#if invalidRange}
+    <p role="alert" class="mt-3 flex items-center gap-2 text-sm text-rose-700 dark:text-rose-400"><AlertTriangle size={15}/> Tanggal awal harus sebelum tanggal akhir, dengan rentang maksimal 366 hari.</p>
+   {/if}
+  </section>
 
-			<div class="flex items-center justify-between gap-4 flex-wrap">
-				<div class="flex items-center gap-4 min-w-0">
-					<div class="w-14 h-14 rounded-2xl bg-brand-400/15 flex items-center justify-center shrink-0">
-						<BookOpen class="w-7 h-7 text-brand-600 dark:text-brand-400" />
-					</div>
-					<div class="min-w-0">
-						<h1 class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white tracking-tight break-words">{kelas?.nama_kelas || "Kelas"}</h1>
-						<p class="text-neutral-600 dark:text-neutral-400">
-							{kelas?.level || ""} &middot; {santri.length} santri &middot; {totalPertemuan} pertemuan
-						</p>
-					</div>
-				</div>
+  <section aria-label="Indikator periode" class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   <div class={surface+" col-span-2 p-5 lg:col-span-1"}>
+    <p class="flex items-center gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400"><BarChart3 size={15}/> Kehadiran tercatat</p>
+    <p class={"mt-2 text-[36px] font-semibold leading-tight tabular-nums tracking-tight "+rateTone(attendanceRate)}>{attendanceRate===null?"—":attendanceRate+"%"}</p>
+    <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Hadir dari {totalRecorded} absensi berstatus · tidak termasuk telat</p>
+   </div>
+   <div class={surface+" p-5"}>
+    <p class="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"><CalendarRange size={15}/> Pertemuan</p>
+    <p class="mt-2 text-[30px] font-semibold leading-tight tabular-nums text-neutral-950 dark:text-white">{filteredMeetings.length}</p>
+    <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Pada {periodTitle}</p>
+   </div>
+   <div class={surface+" p-5"}>
+    <p class="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"><CheckCircle2 size={15}/> Kelengkapan</p>
+    <p class="mt-2 text-[30px] font-semibold leading-tight tabular-nums text-neutral-950 dark:text-white">{completion===null?"—":completion+"%"}</p>
+    <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{totalRecorded} dari {totalPossible} slot absensi</p>
+   </div>
+   <div class={surface+" p-5"}>
+    <p class="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"><AlertTriangle size={15}/> Perlu perhatian</p>
+    <p class="mt-2 text-[30px] font-semibold leading-tight tabular-nums text-neutral-950 dark:text-white">{riskCount}</p>
+    <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Santri hadir kurang dari 75%, minimal 2 catatan</p>
+   </div>
+  </section>
 
-				<button
-					onclick={() => {}}
-					class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 font-semibold transition-colors text-sm"
-					disabled
-				>
-					<Download class="w-4 h-4" />
-					Export
-				</button>
-			</div>
-		</div>
-	</div>
+  <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+   <section class={surface+" p-5 sm:p-6"} aria-labelledby="composition-title">
+    <h2 id="composition-title" class="text-base font-semibold text-neutral-900 dark:text-white">Komposisi status absensi</h2>
+    <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Dari catatan yang sudah terisi dalam periode. Tidak termasuk slot kosong.</p>
+    <div class="mt-5 flex h-3 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/[0.08]" role="img" aria-label={"Status: "+statusKeys.map(k=>statusNames[k]+" "+totals[k]).join(", ")}>
+     <span class="h-full bg-emerald-500" style:width={(totalRecorded?totals.hadir/totalRecorded*100:0)+"%"}></span>
+     <span class="h-full bg-amber-500" style:width={(totalRecorded?totals.telat/totalRecorded*100:0)+"%"}></span>
+     <span class="h-full bg-sky-500" style:width={(totalRecorded?totals.izin/totalRecorded*100:0)+"%"}></span>
+     <span class="h-full bg-indigo-400" style:width={(totalRecorded?totals.sakit/totalRecorded*100:0)+"%"}></span>
+     <span class="h-full bg-rose-500" style:width={(totalRecorded?totals.alpa/totalRecorded*100:0)+"%"}></span>
+    </div>
+    <dl class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+     {#each [{key:"hadir",color:"bg-emerald-500"},{key:"telat",color:"bg-amber-500"},{key:"izin",color:"bg-sky-500"},{key:"sakit",color:"bg-indigo-400"},{key:"alpa",color:"bg-rose-500"}] as item}
+      <div class="flex items-start gap-2">
+       <span class={"mt-1.5 h-2.5 w-2.5 rounded-sm "+item.color}></span>
+       <div><dt class="text-xs text-neutral-500 dark:text-neutral-400">{statusNames[item.key as StatusKey]}</dt><dd class="text-lg font-semibold tabular-nums text-neutral-900 dark:text-white">{totals[item.key as StatusKey]}</dd></div>
+      </div>
+     {/each}
+     <div class="flex items-start gap-2"><span class="mt-1.5 h-2.5 w-2.5 rounded-sm bg-neutral-300 dark:bg-neutral-600"></span><div><dt class="text-xs text-neutral-500">Belum tercatat</dt><dd class="text-lg font-semibold tabular-nums text-neutral-900 dark:text-white">{totalPossible-totalRecorded}</dd></div></div>
+    </dl>
+   </section>
 
-	<div class="relative max-w-6xl mx-auto px-4 sm:px-6 py-8">
-		{#if santri.length > 0 && pertemuan_list.length > 0}
-			<div class="overflow-x-auto rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50" in:fly={{ y: 20, duration: 500 }}>
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="bg-neutral-50 dark:bg-neutral-900/50 border-b border-neutral-200/80 dark:border-white/[0.04]">
-							<th class="sticky left-0 z-10 bg-neutral-50 dark:bg-neutral-900/50 text-left px-4 py-3 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider min-w-[160px]">Santri</th>
-							<th class="text-center px-2 py-3 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider min-w-[36px]" title="Kehadiran %">%</th>
-							{#each pertemuan_list as p, i}
-								<th class="text-center px-2 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 min-w-[36px]" title={"Pertemuan " + nomorPertemuan(p) + (p.level_nama ? " level " + p.level_nama : "") + " - " + p.tanggal}>
-									<div class="flex flex-col items-center gap-0.5">
-										{#if p.level_nama && (i === 0 || pertemuan_list[i - 1].level_nama !== p.level_nama)}
-											<span class="rounded bg-brand-400/10 px-1 text-[9px] font-semibold text-brand-700 dark:text-brand-400">{p.level_nama}</span>
-										{/if}
-										<span class="font-semibold">#{nomorPertemuan(p)}</span>
-										<span class="text-[9px] font-mono">{p.tanggal?.substring(5, 10) || ""}</span>
-									</div>
-								</th>
-							{/each}
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-neutral-200/80 dark:divide-white/[0.04]">
-						{#each santri as s}
-							<tr class="hover:bg-neutral-50/50 dark:hover:bg-white/[0.015] transition-colors">
-								<td class="sticky left-0 z-10 bg-white dark:bg-neutral-925/50 px-4 py-3">
-									<div class="flex items-center gap-2 min-w-0">
-										<div class="w-7 h-7 rounded-full bg-brand-600 dark:bg-brand-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
-											{s.nama.charAt(0).toUpperCase()}
-										</div>
-										<span class="text-sm font-medium text-neutral-900 dark:text-white truncate">{s.nama}</span>
-									</div>
-								</td>
-								<td class="text-center px-2 py-3 text-sm font-mono font-bold {attendanceColor(s.persen_hadir)}">
-									{s.persen_hadir}%
-								</td>
-								{#each pertemuan_list as p}
-									{@const entry = absensi[`${s.id}:${p.id}`]}
-									<td class="text-center px-2 py-3">
-										{#if entry}
-											{#if canEdit}
-												<select value={entry.status} disabled={updatingAbsensi[entry.id]} onchange={(event) => changeStatus(`${s.id}:${p.id}`, event.currentTarget.value, event.currentTarget, s.nama, nomorPertemuan(p))} aria-label={`Absensi ${s.nama} pertemuan ${nomorPertemuan(p)}`} class="w-8 h-7 rounded-md border-0 text-xs font-bold text-center {statusColor(entry.status)} disabled:cursor-wait disabled:opacity-60">
-													<option value="hadir">H</option><option value="izin">I</option><option value="sakit">S</option><option value="alpa">A</option><option value="telat">T</option>
-												</select>
-											{:else}
-												<span class="inline-flex items-center justify-center w-7 h-7 rounded-md text-xs font-bold {statusColor(entry.status)}">{statusLabel(entry.status)}</span>
-											{/if}
-											<button onclick={() => openCatatan(`${s.id}:${p.id}`, s.nama, nomorPertemuan(p))} disabled={updatingAbsensi[entry.id]} class="ml-1 inline-flex h-5 w-5 items-center justify-center rounded hover:bg-brand-400/10 hover:text-brand-600 disabled:cursor-wait disabled:opacity-60 dark:hover:text-brand-400 {entry.catatan.trim().length > 0 ? 'text-brand-600 dark:text-brand-400' : 'text-neutral-400'}" title={entry.catatan.trim() ? "Lihat catatan absensi" : "Tambah catatan absensi"} aria-label={`Catatan absensi ${s.nama} pertemuan ${nomorPertemuan(p)}`}>
-												<FileText class="h-3.5 w-3.5" />
-											</button>
-										{:else}
-											<span class="text-neutral-400">-</span>
-										{/if}
-									</td>
-								{/each}
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{:else}
-			<div class="rounded-2xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-12 text-center" in:fly={{ y: 20, duration: 500 }}>
-				<div class="w-16 h-16 rounded-2xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mx-auto mb-4">
-					<Calendar class="w-8 h-8 text-neutral-500" />
-				</div>
-				<h3 class="text-lg font-semibold text-neutral-900 dark:text-white mb-2">
-					{pertemuan_list.length === 0 ? "Belum ada pertemuan" : "Belum ada santri"}
-				</h3>
-				<p class="text-neutral-500 dark:text-neutral-400 max-w-md mx-auto text-sm">
-					{pertemuan_list.length === 0 ? "Data absensi akan muncul setelah pertemuan pertama dimulai" : "Tidak ada santri untuk ditampilkan"}
-				</p>
-			</div>
-		{/if}
-	</div>
+   <section class={surface+" p-5 sm:p-6"} aria-labelledby="pertemuan-title">
+    <div class="flex flex-wrap items-start justify-between gap-2">
+     <div><h2 id="pertemuan-title" class="text-base font-semibold text-neutral-900 dark:text-white">Jejak pertemuan</h2>
+      <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Kelengkapan dan jumlah hadir per tanggal.</p>
+     </div>
+     <span class="text-xs tabular-nums text-neutral-500">{filteredMeetings.length} pertemuan</span>
+    </div>
+    {#if meetingStats.length===0}
+     <p class="py-10 text-center text-sm text-neutral-500 dark:text-neutral-400">Belum ada pertemuan pada periode ini.</p>
+    {:else}
+     <div class="mt-4 max-h-[280px] space-y-3 overflow-y-auto pr-1">
+      {#each meetingStats as m (m.p.id)}
+       <div class="grid grid-cols-[minmax(7rem,1fr)_minmax(0,1.2fr)_auto] items-center gap-3">
+        <div class="min-w-0"><p class="truncate text-xs font-semibold text-neutral-800 dark:text-neutral-200">Pertemuan #{nomorPertemuan(m.p)}</p><p class="text-[11px] text-neutral-500">{shortDay(m.p.tanggal)}</p></div>
+        <div class="h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-white/[0.07]" role="meter" aria-label={"Kelengkapan pertemuan "+nomorPertemuan(m.p)} aria-valuemin={0} aria-valuemax={santri.length} aria-valuenow={m.recorded}>
+         <span class="block h-full rounded-full bg-brand-600 dark:bg-brand-400" style:width={(santri.length?m.recorded/santri.length*100:0)+"%"}></span>
+        </div>
+        <span class="text-right text-xs tabular-nums text-neutral-600 dark:text-neutral-300">{m.recorded}/{santri.length}</span>
+       </div>
+      {/each}
+     </div>
+    {/if}
+   </section>
+  </div>
+
+  <section class={surface+" overflow-hidden"} aria-labelledby="ledger-title">
+   <div class="flex flex-wrap items-start justify-between gap-4 px-5 py-5 sm:px-6">
+    <div>
+     <p class="text-[11px] font-semibold uppercase tracking-[0.11em] text-brand-700 dark:text-brand-400">Buku absensi bulanan</p>
+     <h2 id="ledger-title" class="mt-1 text-lg font-semibold text-neutral-950 dark:text-white">Rekap per santri</h2>
+     <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Persentase dihitung dari status yang sudah dicatat pada periode terpilih. Klik status untuk mengubah, atau ikon catatan untuk melihat materi.</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+     <label class="relative block min-w-[180px]">
+      <span class="sr-only">Cari nama santri</span>
+      <Search size={15} class="pointer-events-none absolute left-3 top-3 text-neutral-400"/>
+      <input type="search" bind:value={search} placeholder="Cari santri atau ID" class={input+" pl-9"} />
+     </label>
+     <label class="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-neutral-200 px-3 text-xs font-medium text-neutral-700 dark:border-white/10 dark:text-neutral-300"><input type="checkbox" bind:checked={showOnlyRisk} class="accent-brand-600"/> Perlu perhatian</label>
+    </div>
+   </div>
+   {#if !filteredMeetings.length||!santri.length}
+    <div class="flex flex-col items-center gap-3 border-t border-neutral-100 px-6 py-12 text-center dark:border-white/[0.06]">
+     <Calendar size={24} class="text-neutral-400"/>
+     <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">{!santri.length?"Belum ada santri aktif":"Tidak ada pertemuan pada periode ini"}</h3>
+     <p class="max-w-md text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">Pilih bulan lain atau gunakan rentang khusus. Data yang ditampilkan mengikuti santri yang masih aktif di kelas saat ini.</p>
+    </div>
+   {:else if !visibleRows.length}
+    <p class="border-t border-neutral-100 px-6 py-10 text-center text-sm text-neutral-500 dark:border-white/[0.06]">Tidak ada santri yang cocok dengan filter.</p>
+   {:else}
+    <p class="border-t border-neutral-100 px-5 py-2 text-xs text-neutral-500 sm:px-6 dark:border-white/[0.06]">Geser tabel secara horizontal untuk melihat setiap tanggal. {visibleRows.length} dari {santri.length} santri ditampilkan.</p>
+    <div class="max-w-full overflow-x-auto">
+     <table class="w-full min-w-max border-collapse text-sm">
+      <thead class="bg-neutral-50 text-xs text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400">
+       <tr class="border-y border-neutral-100 dark:border-white/[0.06]">
+        <th scope="col" class="sticky left-0 z-20 min-w-[185px] bg-neutral-50 px-4 py-3 text-left font-semibold dark:bg-neutral-900 sm:px-6">Santri</th>
+        <th scope="col" class="min-w-[70px] px-3 py-3 text-right font-semibold">Hadir %</th>
+        <th scope="col" class="min-w-[85px] px-3 py-3 text-right font-semibold" title="Hadir/Telat/Izin/Sakit/Alpa">H/T/I/S/A</th>
+        {#each filteredMeetings as p (p.id)}
+         <th scope="col" class="min-w-[80px] border-l border-neutral-100 px-2 py-2.5 text-center font-semibold dark:border-white/[0.06]" title={"Pertemuan "+nomorPertemuan(p)+" ("+p.tanggal+")"+(p.level_nama?" · "+p.level_nama:"")}>
+          <span class="block text-xs text-neutral-700 dark:text-neutral-300">#{nomorPertemuan(p)}</span><span class="mt-0.5 block text-[11px] font-normal text-neutral-500">{shortDay(p.tanggal)}</span>
+         </th>
+        {/each}
+       </tr>
+      </thead>
+      <tbody class="divide-y divide-neutral-100 dark:divide-white/[0.06]">
+       {#each visibleRows as s (s.id)}
+        <tr class="group hover:bg-neutral-50/60 dark:hover:bg-white/[0.02]">
+         <th scope="row" class="sticky left-0 z-10 max-w-[220px] bg-white px-4 py-3 text-left group-hover:bg-neutral-50 dark:bg-neutral-925 dark:group-hover:bg-neutral-900 sm:px-6">
+          <span class="block truncate font-semibold text-neutral-900 dark:text-white">{s.nama}</span><span class="block truncate text-[11px] font-normal text-neutral-500">{s.id_mahasantri}</span>
+         </th>
+         <td class={"px-3 py-3 text-right font-semibold tabular-nums "+rateTone(s.rate)}>{s.rate===null?"—":s.rate+"%"}</td>
+         <td class="px-3 py-3 text-right font-mono text-[11px] tabular-nums text-neutral-600 dark:text-neutral-300">{statusKeys.map(k=>s.counts[k]).join("/")}</td>
+         {#each filteredMeetings as p (p.id)}
+          {@const key=`${s.id}:${p.id}`}
+          {@const entry=absensi[key]}
+          <td class="border-l border-neutral-100 px-2 py-3 text-center dark:border-white/[0.05]">
+           {#if entry}
+            <div class="flex items-center justify-center gap-1">
+             {#if canEdit}
+              <select value={entry.status} disabled={updatingAbsensi[entry.id]} onchange={(event)=>changeStatus(key,event.currentTarget.value,event.currentTarget,s.nama,nomorPertemuan(p))}
+               aria-label={"Absensi "+s.nama+" pertemuan "+nomorPertemuan(p)} class={"h-8 w-9 cursor-pointer rounded-md text-center text-xs font-bold disabled:opacity-50 "+statusColor(entry.status)+" "+focus}>
+               <option value="hadir">H</option><option value="telat">T</option><option value="izin">I</option><option value="sakit">S</option><option value="alpa">A</option>
+              </select>
+             {:else}
+              <span class={"inline-flex h-8 w-8 items-center justify-center rounded-md text-xs font-bold "+statusColor(entry.status)}>{statusLabel(entry.status)}</span>
+             {/if}
+             <button type="button" onclick={()=>openCatatan(key,s.nama,nomorPertemuan(p))} disabled={updatingAbsensi[entry.id]} title={entry.catatan?"Lihat catatan":"Lihat atau tambah catatan"} aria-label={"Catatan "+s.nama+" pertemuan "+nomorPertemuan(p)}
+              class={"inline-flex h-8 w-7 items-center justify-center rounded-md hover:bg-neutral-100 disabled:opacity-50 dark:hover:bg-white/[0.07] "+(entry.catatan||entry.batas_materi?"text-brand-700 dark:text-brand-400":"text-neutral-400")+" "+focus}><FileText size={14}/></button>
+            </div>
+           {:else}
+            <span title="Belum ada catatan absensi" class="text-neutral-400">—</span>
+           {/if}
+          </td>
+         {/each}
+        </tr>
+       {/each}
+      </tbody>
+     </table>
+    </div>
+   {/if}
+   <div class="flex flex-wrap gap-x-4 gap-y-2 border-t border-neutral-100 px-5 py-4 text-xs text-neutral-600 dark:border-white/[0.06] dark:text-neutral-400 sm:px-6">
+    <span><span class="mr-1 font-semibold text-emerald-700 dark:text-emerald-400">H</span>Hadir</span>
+    <span><span class="mr-1 font-semibold text-amber-700 dark:text-amber-400">T</span>Telat</span>
+    <span><span class="mr-1 font-semibold text-sky-700 dark:text-sky-400">I</span>Izin</span>
+    <span><span class="mr-1 font-semibold text-indigo-700 dark:text-indigo-400">S</span>Sakit</span>
+    <span><span class="mr-1 font-semibold text-rose-700 dark:text-rose-400">A</span>Alpa</span>
+    <span>— Belum dicatat</span>
+   </div>
+  </section>
+  <p class="pb-3 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">Catatan: data hanya menampilkan santri aktif yang masih berada pada kelas ini, mengikuti cakupan rekap sebelumnya. Persentase hadir hanya menghitung status “hadir” dari absensi yang tercatat; “telat” dipantau terpisah. Export CSV berisi satu baris per santri per pertemuan dan mencakup catatan serta batas materi.</p>
+ </main>
 
 	{#if catatanModal}
 		<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -288,4 +461,5 @@
 			</div>
 		</div>
 	{/if}
+
 </AppLayout>
