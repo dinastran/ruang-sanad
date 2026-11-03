@@ -16,8 +16,15 @@ type LeadAIFilter struct {
 	Stages        []string
 	UpdatedSince  time.Time
 	NeedsAnalysis bool
-	BeforeID      int64 // keyset cursor: rows with id < BeforeID
-	Limit         int64
+	// SourceID filters by lead source when HasSource (0 = tanpa sumber).
+	HasSource bool
+	SourceID  int64
+	LabelID   int64 // 0 = no label filter
+	// AssignedUserID filters by PIC when HasAssigned (0 = belum ditugaskan).
+	HasAssigned    bool
+	AssignedUserID int64
+	BeforeID       int64 // keyset cursor: rows with id < BeforeID
+	Limit          int64
 }
 
 type LeadAIRow struct {
@@ -31,6 +38,10 @@ type LeadAIRow struct {
 	LastOutboundAt        sql.NullTime
 	LastAnalyzedMessageID int64
 	NewMessages           int64
+	LeadSourceID          int64
+	AssignedUserID        int64
+	NeedsReview           bool
+	CreatedAt             time.Time
 }
 
 // ListLeadsForAI returns leads newest first (by id) with the number of
@@ -55,6 +66,18 @@ func (q *Queries) ListLeadsForAI(ctx context.Context, f LeadAIFilter) ([]LeadAIR
 	if f.NeedsAnalysis {
 		where = append(where, "EXISTS (SELECT 1 FROM lead_messages m WHERE m.lead_id = l.id AND m.id > l.last_analyzed_message_id)")
 	}
+	if f.HasSource {
+		where = append(where, "COALESCE(l.lead_source_id, 0) = ?")
+		args = append(args, f.SourceID)
+	}
+	if f.LabelID > 0 {
+		where = append(where, "EXISTS (SELECT 1 FROM lead_label_links ll WHERE ll.lead_id = l.id AND ll.label_id = ?)")
+		args = append(args, f.LabelID)
+	}
+	if f.HasAssigned {
+		where = append(where, "COALESCE(l.assigned_user_id, 0) = ?")
+		args = append(args, f.AssignedUserID)
+	}
 	if f.BeforeID > 0 {
 		where = append(where, "l.id < ?")
 		args = append(args, f.BeforeID)
@@ -62,7 +85,8 @@ func (q *Queries) ListLeadsForAI(ctx context.Context, f LeadAIFilter) ([]LeadAIR
 	args = append(args, f.Limit)
 	rows, err := q.db.QueryContext(ctx, `SELECT l.id, l.nama, l.wa_name, l.stage, l.status, l.paket_kode,
 	 l.last_inbound_at, l.last_outbound_at, l.last_analyzed_message_id,
-	 (SELECT COUNT(*) FROM lead_messages m WHERE m.lead_id = l.id AND m.id > l.last_analyzed_message_id)
+	 (SELECT COUNT(*) FROM lead_messages m WHERE m.lead_id = l.id AND m.id > l.last_analyzed_message_id),
+	 COALESCE(l.lead_source_id, 0), COALESCE(l.assigned_user_id, 0), l.needs_review, l.created_at
 	 FROM leads l WHERE `+strings.Join(where, " AND ")+` ORDER BY l.id DESC LIMIT ?`, args...)
 	if err != nil {
 		return nil, err
@@ -72,7 +96,8 @@ func (q *Queries) ListLeadsForAI(ctx context.Context, f LeadAIFilter) ([]LeadAIR
 	for rows.Next() {
 		var r LeadAIRow
 		if err := rows.Scan(&r.ID, &r.Nama, &r.WaName, &r.Stage, &r.Status, &r.PaketKode,
-			&r.LastInboundAt, &r.LastOutboundAt, &r.LastAnalyzedMessageID, &r.NewMessages); err != nil {
+			&r.LastInboundAt, &r.LastOutboundAt, &r.LastAnalyzedMessageID, &r.NewMessages,
+			&r.LeadSourceID, &r.AssignedUserID, &r.NeedsReview, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

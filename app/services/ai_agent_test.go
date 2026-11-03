@@ -34,7 +34,7 @@ func setupAIAgent(t *testing.T) (*AIAgentService, *AITokenService, *sql.DB) {
 	overview := NewOverviewService(q, finance, riayah)
 	overview.now = now
 	santri := NewSantriService(q, NewKelasEngineService(q))
-	agent := NewAIAgentService(q, overview, finance, riayah, NewTSIService(q), santri, NewLeadService(q, santri))
+	agent := NewAIAgentService(q, overview, finance, riayah, NewTSIService(q), santri, NewLeadService(q, santri), NewMetaAdsService(q, MetaAdsConfig{}), NewMetaCAPIService(q, MetaCAPIConfig{}))
 	agent.now = now
 	tokens := NewAITokenService(q)
 	tokens.now = func() time.Time { return time.Date(2026, 3, 15, 2, 0, 0, 0, time.UTC) }
@@ -101,11 +101,20 @@ func TestAIAgentToolsRunReadOnlyWithoutContactData(t *testing.T) {
 		"daftar_tagihan":             `{}`,
 		"daftar_lead":                `{}`,
 		"laporan_funnel":             `{}`,
+		"daftar_kandidat_followup":   `{}`,
+		"analisis_crm":               `{}`,
+		"prioritas_lead":             `{}`,
+		"antrean_followup":           `{}`,
+		"daftar_sumber_lead":         `{}`,
+		"referensi_crm":              `{}`,
+		"performa_iklan":             `{"level":"iklan"}`,
+		"atribusi_iklan":             `{}`,
+		"status_meta_capi":           `{}`,
 	}
 	for _, dim := range []string{"level", "tipe", "frekuensi", "angkatan", "produk"} {
 		calls["tren_program/"+dim] = `{"dimensi":"` + dim + `","bulan":3}`
 	}
-	require.Len(t, s.Tools("super_admin"), 18)
+	require.Len(t, s.Tools("super_admin"), 27)
 
 	var before, after int64
 	require.NoError(t, db.QueryRow(`SELECT total_changes()`).Scan(&before))
@@ -162,9 +171,13 @@ func TestAIAgentRoleGating(t *testing.T) {
 		}
 		return out
 	}
-	crmRead := []string{"daftar_lead", "detail_lead", "laporan_funnel"}
+	crmRead := []string{"daftar_lead", "daftar_kandidat_followup", "detail_lead", "laporan_funnel", "analisis_crm", "prioritas_lead", "daftar_sumber_lead", "referensi_crm"}
 	require.ElementsMatch(t, append([]string{"ringkasan_kondisi", "rekap_tunggakan", "daftar_tagihan"}, crmRead...), names("keuangan"))
-	require.ElementsMatch(t, append([]string{"cari_santri", "detail_santri", "daftar_santri"}, crmRead...), names("cs"))
+	require.ElementsMatch(t, append([]string{"cari_santri", "detail_santri", "daftar_santri", "antrean_followup", "performa_iklan", "atribusi_iklan"}, crmRead...), names("cs"))
+	require.Contains(t, names("super_admin"), "status_meta_capi")
+	require.NotContains(t, names("cs"), "status_meta_capi")
+	require.NotContains(t, names("keuangan"), "performa_iklan")
+	require.NotContains(t, names("keuangan"), "antrean_followup")
 	require.NotContains(t, names("admin_kelas"), "daftar_lead")
 	require.NotContains(t, names("koordinator_guru"), "detail_lead")
 	require.NotContains(t, names("admin_kelas"), "daftar_guru")

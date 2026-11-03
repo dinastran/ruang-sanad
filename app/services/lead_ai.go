@@ -16,9 +16,10 @@ import (
 	"github.com/maulanashalihin/laju-go/app/queries"
 )
 
-// CRM writes made by the AI agent through MCP (PRD 9.2). The AI only adds
-// analysis, proposals and labels; stage, status, verification, conversion
-// and sending stay human actions (PRD 9.4).
+// CRM writes made by the AI agent through MCP (PRD 9.2). The AI adds
+// analysis, proposals and labels, and may make the "safe" CS edits (stage
+// except terverifikasi, PIC, lead source). Status won/lost, verification,
+// conversion, approving and sending stay human actions (PRD 9.4).
 
 // LeadInputError is a validation error whose message is safe to return to
 // the caller (staff or AI) as-is.
@@ -364,4 +365,118 @@ func (s *LeadService) AddLabelByAI(ctx context.Context, leadID, tokenID, ownerUs
 		return writeLeadEvent(ctx, q, leadID, newLeadEventID("ai"), "label.added", aiActor(tokenID), map[string]any{"label": label.Nama}, now)
 	})
 	return added, err
+}
+
+// AI write actions (token with can_write). They mirror the CS buttons on the
+// lead page but record the event as "ai:<token>" and return LeadInputError so
+// the reason reaches the AI.
+
+const aiAlasanMax = 300
+
+func aiAlasan(alasan string) (string, error) {
+	alasan = strings.TrimSpace(alasan)
+	if utf8.RuneCountInString(alasan) < 10 {
+		return "", leadInputErr("alasan wajib diisi (minimal 10 karakter): bukti dari chat atau data yang mendasari perubahan")
+	}
+	if utf8.RuneCountInString(alasan) > aiAlasanMax {
+		return "", leadInputErr("alasan maksimal %d karakter", aiAlasanMax)
+	}
+	return RedactContactText(alasan), nil
+}
+
+// ChangeStageByAI moves an open lead to another stage. The AI can never
+// reach terverifikasi nor move a lead out of it (that would void a payment
+// verification done by staff).
+func (s *LeadService) ChangeStageByAI(ctx context.Context, leadID, tokenID int64, stage, alasan string) (from string, changed bool, err error) {
+	if !isValidLeadStage(stage) {
+		return "", false, leadInputErr("tahap %q tidak dikenal; pilih dari: %s", stage, strings.Join(LeadStages, ", "))
+	}
+	if stage == LeadStageTerverifikasi {
+		return "", false, leadInputErr("tahap terverifikasi hanya bisa dicapai lewat verifikasi pembayaran oleh staf")
+	}
+	if alasan, err = aiAlasan(alasan); err != nil {
+		return "", false, err
+	}
+	err = s.mutateLeadAs(ctx, leadID, aiActor(tokenID), "ai", func(q *queries.Querier, l *queries.Lead, now time.Time) (string, map[string]any, error) {
+		if l.Status != LeadStatusOpen {
+			return "", nil, leadInputErr("tahap hanya bisa diubah untuk lead berstatus open (lead ini %s)", l.Status)
+		}
+		from = l.Stage
+		if l.Stage == LeadStageTerverifikasi {
+			return "", nil, leadInputErr("lead sudah terverifikasi; hanya staf yang boleh memindahkannya")
+		}
+		if l.Stage == stage {
+			return "", nil, nil
+		}
+		l.Stage, changed = stage, true
+		return "stage.changed", map[string]any{"stage_from": from, "stage_to": stage, "alasan": alasan}, nil
+	})
+	return from, changed, err
+}
+
+// AssignByAI sets the lead's PIC. Like the CS button, a token owned by a
+// non-super_admin can only assign the lead to its owner; userID 0 unassigns
+// (super_admin only).
+func (s *LeadService) AssignByAI(ctx context.Context, leadID, tokenID, ownerID int64, ownerRole string, userID int64) (changed bool, err error) {
+	if userID < 0 {
+		return false, leadInputErr("user_id tidak valid")
+	}
+	if ownerRole != "super_admin" && userID != ownerID {
+		return false, leadInputErr("token milik %s hanya bisa menugaskan lead ke pemilik token sendiri (user_id %d)", ownerRole, ownerID)
+	}
+	err = s.mutateLeadAs(ctx, leadID, aiActor(tokenID), "ai", func(q *queries.Querier, l *queries.Lead, now time.Time) (string, map[string]any, error) {
+		if userID != 0 {
+			u, err := q.GetUserByID(ctx, userID)
+			if err != nil {
+				return "", nil, leadInputErr("user %d tidak ditemukan; lihat pic di referensi_crm", userID)
+			}
+			if r := string(u.Role); r != "cs" && r != "keuangan" && r != "super_admin" {
+				return "", nil, leadInputErr("lead hanya bisa ditugaskan ke CS, Keuangan, atau super admin")
+			}
+		}
+		if l.AssignedUserID.Int64 == userID {
+			return "", nil, nil
+		}
+		from := l.AssignedUserID.Int64
+		l.AssignedUserID = sql.NullInt64{Int64: userID, Valid: userID != 0}
+		changed = true
+		return "lead.assigned", map[string]any{"from_user_id": from, "to_user_id": userID}, nil
+	})
+	return changed, err
+}
+
+// SetLeadSourceByAI sets the lead source manually (0 = tanpa sumber).
+func (s *LeadService) SetLeadSourceByAI(ctx context.Context, leadID, tokenID, sourceID int64, alasan string) (changed bool, err error) {
+	if sourceID < 0 {
+		return false, leadInputErr("sumber_id tidak valid")
+	}
+	if sourceID > 0 {
+		if _, err := s.querier.GetLeadSource(ctx, sourceID); errors.Is(err, sql.ErrNoRows) {
+			return false, leadInputErr("sumber %d tidak ditemukan; lihat daftar_sumber_lead", sourceID)
+		} else if err != nil {
+			return false, err
+		}
+	}
+	if alasan, err = aiAlasan(alasan); err != nil {
+		return false, err
+	}
+	err = s.withTx(ctx, func(q *queries.Querier) error {
+		l, err := loadLead(ctx, q, leadID)
+		if err != nil {
+			return err
+		}
+		if l.LeadSourceID.Int64 == sourceID && l.LeadSourceBy == LeadSourceByManual {
+			return nil
+		}
+		now := s.nowUTC()
+		if err := q.SetLeadSource(ctx, queries.SetLeadSourceParams{
+			LeadSourceID: sql.NullInt64{Int64: sourceID, Valid: sourceID > 0}, LeadSourceBy: LeadSourceByManual, UpdatedAt: now, ID: leadID,
+		}); err != nil {
+			return err
+		}
+		changed = true
+		return writeLeadEvent(ctx, q, leadID, newLeadEventID("ai"), "source.changed", aiActor(tokenID),
+			map[string]any{"lead_source_from": l.LeadSourceID.Int64, "lead_source_to": sourceID, "alasan": alasan}, now)
+	})
+	return changed, err
 }
