@@ -28,7 +28,7 @@ func setupCRMAgent(t *testing.T) *crmAgentFixture {
 	res, err = f.db.Exec(`INSERT INTO ai_tokens (user_id, nama, token_hash, prefix, expires_at, can_write) VALUES (?, 'Hermes', 'hash', 'rsai_x', '2027-01-01 00:00:00', 1)`, adminID)
 	require.NoError(t, err)
 	tokenID, _ := res.LastInsertId()
-	agent := NewAIAgentService(f.querier, nil, nil, nil, nil, nil, f.service)
+	agent := NewAIAgentService(f.querier, nil, nil, nil, nil, nil, f.service, nil, nil)
 	agent.now = func() time.Time { return f.clock }
 	return &crmAgentFixture{leadFixture: f, agent: agent, adminID: adminID, tokenID: tokenID}
 }

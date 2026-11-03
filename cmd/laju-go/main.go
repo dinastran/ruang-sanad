@@ -188,7 +188,7 @@ func main() {
 
 	// AI agent access (MCP): read-only tools over the same services.
 	aiTokenService := services.NewAITokenService(querier)
-	aiAgentService := services.NewAIAgentService(querier, overviewService, keuanganDashboardService, riayahSantriService, tsiService, santriService, leadService)
+	aiAgentService := services.NewAIAgentService(querier, overviewService, keuanganDashboardService, riayahSantriService, tsiService, santriService, leadService, metaAdsService, metaCAPIService)
 	guruHandler := handlers.NewGuruHandler(guruService, pertemuanService, riayahService, sessionStore, inertiaService, notificationService).WithRiayahSantri(riayahSantriService).WithBeranda(services.NewGuruBerandaService(querier, tsiService))
 	pertemuanHandler := handlers.NewPertemuanHandler(guruService, pertemuanService, jadwalPertemuanService, sessionStore, inertiaService)
 	jadwalPertemuanHandler := handlers.NewJadwalPertemuanHandler(guruService, jadwalPertemuanService, pertemuanService, sessionStore, inertiaService)

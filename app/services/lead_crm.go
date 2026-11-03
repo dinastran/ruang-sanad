@@ -399,6 +399,12 @@ func (s *LeadService) OlderMessages(ctx context.Context, leadID, beforeID int64)
 // mutateLead loads a lead in a transaction, applies fn, saves it and writes
 // the timeline event fn returns (type "" = no event).
 func (s *LeadService) mutateLead(ctx context.Context, id, actorID int64, fn func(q *queries.Querier, l *queries.Lead, now time.Time) (string, map[string]any, error)) error {
+	return s.mutateLeadAs(ctx, id, userActor(actorID), "usr", fn)
+}
+
+// mutateLeadAs is mutateLead with an explicit event actor ("user:1", "ai:7")
+// and event id prefix.
+func (s *LeadService) mutateLeadAs(ctx context.Context, id int64, actor, eventPrefix string, fn func(q *queries.Querier, l *queries.Lead, now time.Time) (string, map[string]any, error)) error {
 	return s.withTx(ctx, func(q *queries.Querier) error {
 		l, err := loadLead(ctx, q, id)
 		if err != nil {
@@ -415,7 +421,7 @@ func (s *LeadService) mutateLead(ctx context.Context, id, actorID int64, fn func
 		if typ == "" {
 			return nil
 		}
-		return writeLeadEvent(ctx, q, l.ID, newLeadEventID("usr"), typ, userActor(actorID), payload, now)
+		return writeLeadEvent(ctx, q, l.ID, newLeadEventID(eventPrefix), typ, actor, payload, now)
 	})
 }
 

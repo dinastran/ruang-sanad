@@ -33,7 +33,7 @@ func setupMCP(t *testing.T) (*fiber.App, *services.AITokenService, *sql.DB) {
 	riayah := services.NewRiayahSantriService(q)
 	overview := services.NewOverviewService(q, finance, riayah)
 	santri := services.NewSantriService(q, services.NewKelasEngineService(q))
-	agent := services.NewAIAgentService(q, overview, finance, riayah, services.NewTSIService(q), santri, services.NewLeadService(q, santri))
+	agent := services.NewAIAgentService(q, overview, finance, riayah, services.NewTSIService(q), santri, services.NewLeadService(q, santri), nil, nil)
 	tokens := services.NewAITokenService(q)
 	h := NewMCPHandler(tokens, agent, "https://dashboard.example.test", []string{"http://localhost:5173"}, "test")
 	app := fiber.New()
@@ -97,10 +97,10 @@ func TestMCPEndpointProtocolAndAuth(t *testing.T) {
 
 	// tools/list is role-scoped.
 	_, out, _ = mcpPost(t, app, boss.Plaintext, `{"jsonrpc":"2.0","id":3,"method":"tools/list"}`)
-	require.Len(t, out["result"].(map[string]any)["tools"], 18)
+	require.Len(t, out["result"].(map[string]any)["tools"], 27)
 	_, out, _ = mcpPost(t, app, cs.Plaintext, `{"jsonrpc":"2.0","id":3,"method":"tools/list"}`)
 	csTools := out["result"].(map[string]any)["tools"].([]any)
-	require.Len(t, csTools, 6)
+	require.Len(t, csTools, 14)
 	require.Equal(t, true, csTools[0].(map[string]any)["annotations"].(map[string]any)["readOnlyHint"])
 
 	// A write token sees the CRM write tools, annotated as not read-only.
@@ -112,8 +112,11 @@ func TestMCPEndpointProtocolAndAuth(t *testing.T) {
 		tool := raw.(map[string]any)
 		writeTools[tool["name"].(string)] = tool["annotations"].(map[string]any)["readOnlyHint"] == false
 	}
-	require.Len(t, writeTools, 21)
+	require.Len(t, writeTools, 34)
 	require.True(t, writeTools["simpan_analisis_lead"])
+	require.True(t, writeTools["ubah_tahap_lead"])
+	require.True(t, writeTools["petakan_kampanye_iklan"])
+	require.False(t, writeTools["atribusi_iklan"])
 	require.True(t, writeTools["usulkan_followup"])
 	require.False(t, writeTools["detail_lead"])
 	_, out, _ = mcpPost(t, app, writer.Plaintext, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`)
