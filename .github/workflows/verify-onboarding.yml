@@ -42,6 +42,8 @@ jobs:
         run: GOFLAGS=-mod=mod go test ./app/handlers -run '^TestRekap(PeriodFilters|CSVIncludesPeriodNotesAndNeutralizesFormulas)$' -count=1
       - name: Targeted Meta CAPI tests
         run: GOFLAGS=-mod=mod go test ./app/services -run '^(TestMetaCAPIAuditSearchesFullHistoryBeforePaging|TestMetaCAPIAnalyticsSeparatesProductionTestAndPurchaseValue|TestMetaCAPISendsFunnelOnceWithHashedData)$' -count=1
+      - name: Transactional CAPI Purchase regression tests
+        run: GOFLAGS=-mod=mod go test ./app/services -run '^TestLeadConvert(QueuesPurchaseInTransaction|PurchaseOutboxFailureRollsBackEverything|DoesNotQueueCAPIWhenDisabled)$' -count=1
       - name: Targeted onboarding and CRM tests
         run: |
           GOFLAGS=-mod=mod go test ./app/services -run '^(TestPriorityPageFiltersAndOrdering|TestOnboarding|TestSantriCreationOpensOnboarding|TestInvalidSantriCreation|TestImportedHistoricalSantri|TestLeadConvert|TestSantriCreate|TestGuruAvailability|TestValidatePlanningActivation|TestPlanningOverlapsBoundary|TestPlanningReadiness|TestPlanningMatching|TestTeachingLevels|TestValidateScheduleAlternativeConsent|TestScheduleAlternativeTransition|TestPlanningAlternateMatching|TestClassPlanWorkflow|TestClassPlanOfferMatchesExactSessions|TestClassPlanException|TestPlanningActivation)' -count=1

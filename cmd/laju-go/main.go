@@ -152,6 +152,7 @@ func main() {
 		AppSecret: cfg.MetaCAPIAppSecret, TestEventCode: cfg.MetaCAPITestEventCode,
 		EventSourceURL: cfg.MetaCAPIEventSourceURL,
 	})
+	leadService.WithMetaCAPI(metaCAPIService)
 	startMetaCAPIWorker(metaCAPIService)
 	metaAdsService := services.NewMetaAdsService(querier, services.MetaAdsConfig{
 		Token: cfg.MetaAdsToken, AccountIDs: cfg.MetaAdAccountIDs, APIVersion: cfg.MetaAPIVersion, AppSecret: cfg.MetaAppSecret,
