@@ -464,6 +464,46 @@ func (s *MetaCAPIService) Status(ctx context.Context) (*models.MetaCAPIStatus, e
 	return out, nil
 }
 
+// Audit reads matching events across the full selected history before paging.
+// Event logs contain delivery metadata only; no raw or hashed user_data.
+func (s *MetaCAPIService) Audit(ctx context.Context, from, to, event, status, search string, page int) ([]models.MetaCAPIEventRow, int64, error) {
+ start, ok := wibDayStart(from)
+ if !ok { return nil, 0, errors.New("tanggal awal audit tidak valid") }
+ last, ok := wibDayStart(to)
+ if !ok || last.Before(start) || last.AddDate(0,0,1).After(start.AddDate(0,0,91)) {
+  return nil, 0, errors.New("rentang audit harus 1 sampai 90 hari")
+ }
+ if event != "" {
+  valid := false
+  for _, allowed := range []string{MetaEventLead,MetaEventCompleteRegistration,MetaEventInitiateCheckout,MetaEventAddPaymentInfo,MetaEventPurchase} {
+   if event == allowed { valid = true; break }
+  }
+  if !valid { return nil,0,errors.New("jenis event tidak valid") }
+ }
+ if status != "" && status != "sent" && status != "pending" && status != "failed" && status != "skipped" {
+  return nil, 0, errors.New("status audit tidak valid")
+ }
+ search = strings.TrimSpace(search)
+ if len([]rune(search)) > 120 { return nil,0,errors.New("pencarian maksimal 120 karakter") }
+ if page < 1 { page = 1 }
+ if page > 100000 { return nil,0,errors.New("halaman audit terlalu jauh") }
+ rows, total, err := s.querier.FilterMetaCAPIAudit(ctx, queries.MetaCAPIAuditFilter{
+  Start:start, End:last.AddDate(0,0,1), Event:event, Status:status, Search:search, Limit:50, Offset:(page-1)*50,
+ })
+ if err != nil { return nil,0,err }
+ out:=make([]models.MetaCAPIEventRow,0,len(rows))
+ for _,r := range rows {
+  out=append(out,models.MetaCAPIEventRow{
+   ID:r.ID, LeadID:r.LeadID, LeadNama:r.LeadName, Event:r.EventName,
+   EventID:r.EventID, FBTraceID:r.FBTraceID,
+   EventTime:r.EventTime.UTC().Format(time.RFC3339), Value:r.Value,
+   Status:r.Status, Attempts:r.Attempts, LastError:r.LastError,
+   TestMode:r.TestMode, SentAt:formatLeadNullTime(r.SentAt),
+  })
+ }
+ return out,total,nil
+}
+
 // maskID shows only the last 4 digits of an ID.
 func maskID(id string) string {
 	if len(id) <= 4 {
