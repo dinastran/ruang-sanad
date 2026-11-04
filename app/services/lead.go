@@ -63,11 +63,19 @@ func isValidLeadStage(stage string) bool { return leadStageIndex(stage) >= 0 }
 type LeadService struct {
 	querier *queries.Querier
 	santri  *SantriService
+	metaCAPI *MetaCAPIService
 	now     func() time.Time
 }
 
 func NewLeadService(querier *queries.Querier, santri *SantriService) *LeadService {
 	return &LeadService{querier: querier, santri: santri, now: time.Now}
+}
+
+// WithMetaCAPI enables transactional Purchase outbox writes for configured CAPI.
+// Call during application startup, before requests are served.
+func (s *LeadService) WithMetaCAPI(capi *MetaCAPIService) *LeadService {
+	s.metaCAPI = capi
+	return s
 }
 
 // nowUTC returns the service clock in UTC, truncated to seconds so stored
