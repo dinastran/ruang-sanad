@@ -8,6 +8,7 @@
  import ActionQueue from "@components/lead-dashboard/ActionQueue.svelte";
  import RegistrationPath from "@components/lead-dashboard/RegistrationPath.svelte";
  import FollowupPanel from "@components/lead-dashboard/FollowupPanel.svelte";
+ import PeriodPicker from "@components/lead-dashboard/PeriodPicker.svelte";
  import SourcePerformance from "@components/lead-dashboard/SourcePerformance.svelte";
  import { fmt, panel, pct, shortDate, type Dashboard } from "@components/lead-dashboard/types";
  import { scopeOf, totals, rpShort, type Report as MetaAdsReport } from "@components/meta-ads/data";
@@ -65,8 +66,8 @@
  const tab="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
  const activeTab="bg-neutral-900 text-white dark:bg-white dark:text-neutral-950";
  const idleTab="text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/[0.06]";
- function period(days:number){
-  router.get("/app/leads",{summary_days:days},{preserveScroll:true,onStart:()=>loading=true,onFinish:()=>loading=false});
+ function applyRange(from:string,to:string){
+  router.get("/app/leads",{view:"overview",from,to},{preserveScroll:true,onStart:()=>loading=true,onFinish:()=>loading=false});
  }
  function openLeads(extra:Record<string,string>={}){
   const params=new URLSearchParams({view:"list",status:"all",from:d.from,to:d.to,...extra});
@@ -97,14 +98,9 @@
      <a href="/app/leads?view=list" use:inertia class={tab+" "+idleTab}>Daftar lead <ArrowUpRight size={14}/></a>
      <a href="/app/leads/dashboard" use:inertia class={tab+" "+idleTab}>Analisis lengkap</a>
     </nav>
-    <div class="flex flex-wrap items-center gap-2">
-     <span class="mr-1 text-xs tabular-nums text-neutral-500 dark:text-neutral-400">{shortDate(d.from)} sampai {shortDate(d.to)} · WIB</span>
-     <div role="group" aria-label="Periode ringkasan CRM" class="inline-flex gap-0.5 rounded-lg bg-neutral-100 p-1 dark:bg-neutral-900">
-      {#each [7,14,30] as days}
-       <button type="button" aria-pressed={props.summary_days===days} disabled={loading} onclick={()=>period(days)}
-        class={"rounded-md px-3 py-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50 "+(props.summary_days===days?"bg-white text-neutral-950 shadow-sm dark:bg-neutral-800 dark:text-white":"text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white")}>{days} hari</button>
-      {/each}
-     </div>
+    <div class="flex flex-col items-start gap-2 lg:items-end">
+     <span class="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">{shortDate(d.from)} sampai {shortDate(d.to)} · WIB</span>
+     <PeriodPicker from={d.from} to={d.to} {loading} onapply={applyRange} />
     </div>
    </div>
   </header>
