@@ -8,7 +8,8 @@
  import { currency, eventLabels, statLabels, type CAPIStatus, type CapiAnalytics } from "@components/meta-capi/data";
  import { ArrowLeft, ArrowUpRight, AlertTriangle, CircleHelp, RefreshCw, Search, Settings2 } from "lucide-svelte";
 
- interface Props { user?:User; status:CAPIStatus; analytics:CapiAnalytics; flash?:Flash }
+ interface AuditFilters { event:string; status:string; q:string; page:number }
+ interface Props { user?:User; status:CAPIStatus; analytics:CapiAnalytics; audit_total:number; audit_filters:AuditFilters; flash?:Flash }
  let props:Props=$props();
  let s=$derived(props.status);
  let a=$derived(props.analytics);
@@ -17,14 +18,10 @@
  let from=$state(props.analytics.from);
  let to=$state(props.analytics.to);
  let periodError=$state("");
- let eventFilter=$state("");
- let statusFilter=$state("");
- let search=$state("");
- let filtered=$derived(s.events.filter(e=>
-  (!eventFilter||e.event===eventFilter) &&
-  (!statusFilter||e.status===statusFilter) &&
-  (!search.trim()||[e.lead_nama,e.event,e.event_id,String(e.lead_id)].join(" ").toLowerCase().includes(search.trim().toLowerCase()))
- ));
+ let eventFilter=$state(props.audit_filters.event);
+ let statusFilter=$state(props.audit_filters.status);
+ let search=$state(props.audit_filters.q);
+ let filtered=$derived(s.events);
  let totalQueue=$derived(Object.values(s.counts).reduce((sum,n)=>sum+n,0));
  let maxEvent=$derived(Math.max(1,...a.events.map(x=>x.total)));
  const statTone:Record<string,string>={
@@ -40,9 +37,22 @@
   const length=(Date.parse(t+"T00:00:00Z")-Date.parse(f+"T00:00:00Z"))/86400000+1;
   if(!Number.isFinite(length)||length>90){periodError="Maksimal 90 hari.";return;}
   periodError="";
-  router.get("/app/leads/meta-capi",{from:f,to:t},{
+  router.get("/app/leads/meta-capi",{from:f,to:t,event:eventFilter,status:statusFilter,q:search.trim()},{
    preserveScroll:true,onStart:()=>loading=true,onFinish:()=>loading=false,
   });
+ }
+ function audit(page=1, applied=false){
+  const filters=applied?props.audit_filters:{event:eventFilter,status:statusFilter,q:search.trim()};
+  router.get("/app/leads/meta-capi",{from:a.from,to:a.to,event:filters.event,status:filters.status,q:filters.q,page},{
+   preserveScroll:true,onStart:()=>loading=true,onFinish:()=>loading=false,
+  });
+ }
+ function yesterday(){
+  const d=new Date(todayWIB()+"T12:00:00+07:00");
+  d.setUTCDate(d.getUTCDate()-1);
+  const date=d.toLocaleDateString("en-CA",{timeZone:"Asia/Jakarta"});
+  from=date;to=date;
+  applyPeriod(date,date);
  }
  function recent(n:number){
   const d=new Date(todayWIB()+"T12:00:00+07:00");
@@ -65,7 +75,7 @@
   });
  }
  function reload(){
-  router.reload({only:["status","analytics"],onStart:()=>loading=true,onFinish:()=>loading=false});
+  router.reload({only:["status","analytics","audit_total","audit_filters"],onStart:()=>loading=true,onFinish:()=>loading=false});
  }
  const stageName=(v:string)=>STAGE_LABELS[v]?"Tahap "+STAGE_LABELS[v]:v;
 </script>
@@ -136,7 +146,9 @@
      <p class="text-xs font-semibold text-neutral-800 dark:text-neutral-200">Periode event</p>
      <p class="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">Berdasarkan waktu terjadinya event, bukan waktu pengirimannya.</p>
      <div class="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Preset periode">
-      {#each [7,14,30,90] as days}
+      <button type="button" onclick={()=>recent(1)} disabled={loading} class="rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/[0.05]">Hari Ini</button>
+       <button type="button" onclick={yesterday} disabled={loading} class="rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/[0.05]">Kemarin</button>
+       {#each [7,14,30,90] as days}
        <button type="button" onclick={()=>recent(days)} disabled={loading} class="rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/[0.05]">{days} hari</button>
       {/each}
      </div>
@@ -233,11 +245,11 @@
      <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
        <h2 id="eventlog-title" class="text-base font-semibold text-neutral-950 dark:text-white">Log event terbaru</h2>
-       <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">50 event paling baru dari keseluruhan data. Filter berikut berlaku pada 50 baris ini, bukan pada seluruh histori.</p>
+       <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Cari di seluruh histori periode yang dipilih. Maksimal 50 event per halaman, difilter dari server.</p>
       </div>
-      <span class="rounded-md bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">{filtered.length} ditampilkan</span>
+      <span class="rounded-md bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">{filtered.length} dari {fmt(props.audit_total)} event</span>
      </div>
-     <div class="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_minmax(0,10rem)]">
+     <form class="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_minmax(0,10rem)_auto]" onsubmit={e=>{e.preventDefault();audit();}}>
       <label class="relative block">
        <span class="sr-only">Cari lead atau event ID</span>
        <Search size={15} class="pointer-events-none absolute left-3 top-3 text-neutral-400"/>
@@ -249,13 +261,14 @@
       <label><span class="sr-only">Status event</span>
        <select bind:value={statusFilter} class={inputStyle}><option value="">Semua status</option>{#each ["sent","pending","failed","skipped"] as state}<option value={state}>{statLabels[state]}</option>{/each}</select>
       </label>
-     </div>
+      <button type="submit" disabled={loading} class="h-10 rounded-lg bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-50">Cari</button>
+     </form>
     </div>
     {#if s.events.length===0}
      <div class="flex flex-col items-center gap-2 px-5 py-12 text-center">
       <CircleHelp size={24} class="text-neutral-400"/>
-      <p class="text-sm font-semibold text-neutral-800 dark:text-neutral-200">Belum ada event di antrean CAPI</p>
-      <p class="max-w-lg text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">Event hanya dibuat jika CAPI aktif, lead memiliki nomor yang valid, dan event berada dalam jendela waktu yang didukung. Periksa konfigurasi serta proses worker sebelum menganggap data hilang.</p>
+      <p class="text-sm font-semibold text-neutral-800 dark:text-neutral-200">Tidak ada event pada periode atau filter ini</p>
+      <p class="max-w-lg text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">Filter menelusuri histori yang sudah masuk antrean CAPI. Jika santri closing tidak ditemukan, periksa status won, converted_at, dan worker.</p>
      </div>
     {:else if filtered.length===0}
      <p class="px-5 py-10 text-center text-sm text-neutral-500">Tidak ada event yang cocok dengan pencarian ini.</p>
@@ -300,6 +313,15 @@
         {/each}
        </tbody>
       </table>
+     </div>
+    {/if}
+    {#if props.audit_total>50}
+     <div class="flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 px-5 py-4 text-xs text-neutral-600 dark:border-white/10 dark:text-neutral-400">
+      <span>Halaman {props.audit_filters.page} dari {Math.ceil(props.audit_total/50)} · {fmt(props.audit_total)} event cocok</span>
+      <div class="flex gap-2">
+       <button type="button" class={actionStyle} disabled={loading||props.audit_filters.page<=1} onclick={()=>audit(props.audit_filters.page-1,true)}>Sebelumnya</button>
+       <button type="button" class={actionStyle} disabled={loading||props.audit_filters.page*50>=props.audit_total} onclick={()=>audit(props.audit_filters.page+1,true)}>Berikutnya</button>
+      </div>
      </div>
     {/if}
    </section>
