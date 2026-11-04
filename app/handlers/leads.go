@@ -37,8 +37,13 @@ func (h *LeadHandler) WithIntegrations(ads *services.MetaAdsService, capi *servi
 // the existing list; the empty URL opens the command center.
 func leadOverviewRequested(c *fiber.Ctx) bool {
 	if c.Query("view") == "list" { return false }
+	// Date-only links already point to the lead list. Custom home periods
+	// explicitly use view=overview so those existing links keep working.
+	allowDates := c.Query("view") == "overview"
 	for key := range c.Queries() {
-		if key != "summary_days" && key != "view" { return false }
+		if key == "summary_days" || key == "view" { continue }
+		if allowDates && (key == "from" || key == "to") { continue }
+		return false
 	}
 	return true
 }
@@ -54,6 +59,9 @@ func (h *LeadHandler) overview(c *fiber.Ctx) error {
 	now := time.Now().In(loc)
 	last := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	from, to := last.AddDate(0, 0, 1-days).Format(time.DateOnly), last.Format(time.DateOnly)
+	if c.Query("view") == "overview" && (c.Query("from") != "" || c.Query("to") != "") {
+		from, to = c.Query("from"), c.Query("to")
+	}
 	crm, err := h.leads.Dashboard(c.UserContext(), from, to)
 	if err != nil { return err }
 	props := fiber.Map{"user": sessionUser(sess), "dashboard": crm, "summary_days": days}
