@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/services"
@@ -32,10 +34,19 @@ func (h *MetaCAPIHandler) Index(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
 	}
+	search := strings.TrimSpace(c.Query("q"))
+	event, state := c.Query("event"), c.Query("status")
+	page, _ := strconv.Atoi(c.Query("page", "1"))
+	if page < 1 { page = 1 }
+	events, total, err := h.capi.Audit(c.UserContext(), analytics.From, analytics.To, event, state, search, page)
+	if err != nil { return c.Status(fiber.StatusBadRequest).SendString(err.Error()) }
+	status.Events = events
 	return h.inertiaService.Render(c, "app/MetaCAPI", fiber.Map{
-		"user":   sessionUser(sess),
+		"user": sessionUser(sess),
 		"status": status,
 		"analytics": analytics,
+		"audit_total": total,
+		"audit_filters": fiber.Map{"event":event,"status":state,"q":search,"page":page},
 	})
 }
 
