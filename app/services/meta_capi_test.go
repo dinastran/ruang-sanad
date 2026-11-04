@@ -3,6 +3,7 @@ package services
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -371,5 +372,48 @@ func TestMetaCAPIAnalyticsSeparatesProductionTestAndPurchaseValue(t *testing.T) 
  _,err=svc.Analytics(t.Context(),"2026-11-02","2026-11-01")
  require.Error(t,err)
  _,err=svc.Analytics(t.Context(),"2026-07-01","2026-11-01")
+ require.Error(t,err)
+}
+
+
+func TestMetaCAPIAuditSearchesFullHistoryBeforePaging(t *testing.T) {
+ f:=setupLeadFixture(t)
+ f.clock=time.Date(2026,11,4,9,0,0,0,time.UTC)
+ f.ingest(t,leadEvent("audit-window","message.in","2026-11-03T03:00:00Z",map[string]string{"wa_message_id":"aw1","body":"Assalamualaikum"}))
+ lead:=f.lead(t)
+ seed:=func(name,id,stamp,status string){
+  t.Helper()
+  moment,err:=time.Parse(time.RFC3339,stamp)
+  require.NoError(t,err)
+  _,err=f.db.Exec(`INSERT INTO meta_capi_events
+   (lead_id,event_name,event_id,event_time,status,next_attempt_at,created_at)
+   VALUES(?,?,?,?,?,?,?)`,lead.ID,name,id,moment,status,f.clock,f.clock)
+  require.NoError(t,err)
+ }
+ // This Purchase is older than the latest 50 events and at 23:59 WIB.
+ seed("Purchase","closing-3nov","2026-11-03T16:59:00Z","sent")
+ // These 60 newer events belong to Nov 4 in WIB.
+ for i:=0;i<60;i++ {
+  seed("Lead",fmt.Sprintf("newer-%d",i),"2026-11-03T17:01:00Z","sent")
+ }
+ svc:=NewMetaCAPIService(f.querier,MetaCAPIConfig{})
+ rows,total,err:=svc.Audit(t.Context(),"2026-11-03","2026-11-03","Purchase","sent","closing-3nov",1)
+ require.NoError(t,err)
+ require.EqualValues(t,1,total)
+ require.Len(t,rows,1)
+ require.Equal(t,"closing-3nov",rows[0].EventID)
+
+ first,n,err:=svc.Audit(t.Context(),"2026-11-04","2026-11-04","Lead","","",1)
+ require.NoError(t,err)
+ require.EqualValues(t,60,n)
+ require.Len(t,first,50)
+ second,n,err:=svc.Audit(t.Context(),"2026-11-04","2026-11-04","Lead","","",2)
+ require.NoError(t,err)
+ require.EqualValues(t,60,n)
+ require.Len(t,second,10)
+ require.NotEqual(t,first[0].EventID,second[0].EventID)
+ _,_,err=svc.Audit(t.Context(),"2026-11-03","2026-11-03","Purchase","not-a-status","",1)
+ require.Error(t,err)
+ _,_,err=svc.Audit(t.Context(),"2026-11-04","2026-11-03","","","",1)
  require.Error(t,err)
 }
