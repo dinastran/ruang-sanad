@@ -470,7 +470,7 @@ func (s *MetaCAPIService) Audit(ctx context.Context, from, to, event, status, se
  start, ok := wibDayStart(from)
  if !ok { return nil, 0, errors.New("tanggal awal audit tidak valid") }
  last, ok := wibDayStart(to)
- if !ok || last.Before(start) || last.AddDate(0,0,1).After(start.AddDate(0,0,91)) {
+ if !ok || last.Before(start) || last.AddDate(0,0,1).After(start.AddDate(0,0,90)) {
   return nil, 0, errors.New("rentang audit harus 1 sampai 90 hari")
  }
  if event != "" {
