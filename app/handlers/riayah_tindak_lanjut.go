@@ -24,7 +24,8 @@ func NewRiayahTindakLanjutHandler(riayahSantriService *services.RiayahSantriServ
 
 func (h *RiayahTindakLanjutHandler) Index(c *fiber.Ctx) error {
 	sess, _ := h.store.Get(c)
-	perlu, sudah, err := h.riayahSantriService.ListTindakLanjutAlpa(services.HariIniRiayah())
+	today := services.HariIniRiayah()
+	perlu, sudah, err := h.riayahSantriService.ListTindakLanjutAlpa(today)
 	if err != nil {
 		slog.Error("tindak lanjut alpa list failed", "error", err)
 		h.store.Flash(c, "error", "Gagal memuat tindak lanjut alpa")
@@ -32,6 +33,7 @@ func (h *RiayahTindakLanjutHandler) Index(c *fiber.Ctx) error {
 	}
 	return h.inertiaService.Render(c, "app/TindakLanjutAlpa", fiber.Map{
 		"user":         sessionUser(sess),
+		"tanggal_hari_ini": today.Format("2006-01-02"),
 		"perlu":        perlu,
 		"sudah":        sudah,
 		"wa_templates": h.riayahSantriService.ListTemplateWATindakLanjut(),
