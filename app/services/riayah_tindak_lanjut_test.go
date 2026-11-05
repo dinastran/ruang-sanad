@@ -152,10 +152,11 @@ func TestTindakLanjutAlpaPenutupanBeradabDanBukaUlang(t *testing.T) {
 	items, _, err := f.service.ListPerhatian(models.RiayahViewer{}, f.today)
 	require.NoError(t, err)
 	require.Empty(t, findItem(items, santri).KontakTerakhir)
-	f.absen(t, f.kelasA, santri, 5, "hadir", "")
-	f.absen(t, f.kelasA, santri, 4, "alpa", "")
-	f.absen(t, f.kelasA, santri, 3, "alpa", "")
-	perlu, _, err = f.service.ListTindakLanjutAlpa(f.today)
+	// Pertemuan berikutnya harus benar-benar terjadi sesudah tanggal penutupan.
+	f.absen(t, f.kelasA, santri, -1, "hadir", "")
+	f.absen(t, f.kelasA, santri, -2, "alpa", "")
+	f.absen(t, f.kelasA, santri, -3, "alpa", "")
+	perlu, _, err = f.service.ListTindakLanjutAlpa(f.today.AddDate(0, 0, 3))
 	require.NoError(t, err)
 	require.Len(t, perlu, 1)
 }
