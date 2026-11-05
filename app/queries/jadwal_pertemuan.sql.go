@@ -318,6 +318,7 @@ JOIN kelas k ON k.id = jp.kelas_id
 LEFT JOIN guru gu ON gu.id = k.guru_id
 LEFT JOIN guru gb ON gb.id = jp.guru_pengganti_id
 WHERE jp.status IN ('dijadwalkan', 'dimulai')
+  AND k.is_aktif = 1
   AND (
       ?1 IS NULL
       OR k.guru_id = ?1

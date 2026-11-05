@@ -125,6 +125,9 @@ func (s *GuruBerandaService) GetBeranda(guruID *int64, today time.Time) (*models
 	dalamRentang := func(t string) bool { return t >= mulaiStr && t < besok }
 	jadwalSlots := map[slotKey]*models.GuruSlotKelas{}
 	for _, j := range jadwalRows {
+		if j.JumlahSantri == 0 {
+			continue // jadwal tersimpan tidak mengaktifkan kelas tanpa santri aktif
+		}
 		tanggal := j.Tanggal.Format("2006-01-02")
 		semula := ""
 		if len(j.JadwalSemula) >= 10 {
