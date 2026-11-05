@@ -1,9 +1,10 @@
 <script lang="ts">
-	import { inertia } from "@inertiajs/svelte";
+	import { inertia, router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import SapaWADialog from "@components/riayah/SapaWADialog.svelte";
 	import CatatKontakDialog from "@components/riayah/CatatKontakDialog.svelte";
-	import { hariLalu, mediaKontak } from "@lib/riayah";
+	import RiayahDialog from "@components/riayah/RiayahDialog.svelte";
+	import { adaFlashError, hariLalu, mediaKontak } from "@lib/riayah";
 	import type { Flash, RiayahSantriItem, RiayahWATemplate, User } from "@lib/types";
 	import { PhoneCall, Search, MessageCircle, NotebookPen, ChevronRight, CheckCircle2 } from "lucide-svelte";
 
@@ -22,6 +23,26 @@
 	let search = $state("");
 	let waSantri = $state<RiayahSantriItem | null>(null);
 	let kontakSantri = $state<RiayahSantriItem | null>(null);
+	let tutupSantri = $state<RiayahSantriItem | null>(null);
+	let alasanTutup = $state("");
+	let sedangMenutup = $state(false);
+
+	function tutupKasus(event: SubmitEvent) {
+		event.preventDefault();
+		if (!tutupSantri || sedangMenutup || alasanTutup.trim().length < 10) return;
+		sedangMenutup = true;
+		router.post(`/app/kelas/tindak-lanjut-alpa/${tutupSantri.id}/selesai`, { alasan: alasanTutup.trim() }, {
+			preserveScroll: true,
+			preserveState: true,
+			onSuccess: (page) => {
+				if (!adaFlashError(page)) {
+					tutupSantri = null;
+					alasanTutup = "";
+				}
+			},
+			onFinish: () => (sedangMenutup = false),
+		});
+	}
 
 	const KEMBALI = "/app/kelas/tindak-lanjut-alpa" as const;
 
@@ -54,7 +75,7 @@
 	<div class="pt-8 pb-8 border-b border-neutral-200/80 dark:border-white/[0.04]">
 		<div class="max-w-4xl mx-auto px-4 sm:px-6">
 			<h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">Tindak Lanjut Alpa</h1>
-			<p class="mt-2 text-neutral-600 dark:text-neutral-400">Santri yang alpa 2 pertemuan atau lebih berturut-turut. Hubungi santri lalu catat kontaknya; penanda hilang sampai santri alpa lagi.</p>
+			<p class="mt-2 text-neutral-600 dark:text-neutral-400">Kasus muncul setelah dua alfa berturut-turut dan tetap perlu ditindaklanjuti meski santri kemudian hadir. Catat hasil kontak atau tutup dengan alasan yang jelas.</p>
 		</div>
 	</div>
 
@@ -64,7 +85,7 @@
 
 		<div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
 			<div class="flex gap-1 border-b border-neutral-200/80 dark:border-white/[0.06]" role="tablist">
-				{#each [{ key: "perlu" as Tab, label: "Perlu dihubungi", n: perlu.length }, { key: "sudah" as Tab, label: "Sudah dihubungi", n: sudah.length }] as t (t.key)}
+				{#each [{ key: "perlu" as Tab, label: "Perlu tindak lanjut", n: perlu.length }, { key: "sudah" as Tab, label: "Selesai", n: sudah.length }] as t (t.key)}
 					<button type="button" role="tab" aria-selected={tab === t.key} onclick={() => (tab = t.key)} class="-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors {tab === t.key ? 'border-brand-500 text-brand-700 dark:text-brand-300' : 'border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'}">
 						{t.label}
 						<span class="rounded-full px-1.5 text-xs tabular-nums {t.key === 'perlu' && t.n > 0 ? 'bg-red-500/10 text-red-700 dark:text-red-400' : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'}">{t.n}</span>
@@ -77,7 +98,7 @@
 			</label>
 		</div>
 
-		{#if tab === "sudah"}<p class="text-xs text-neutral-500">Santri yang dihubungi dalam 14 hari terakhir dan belum alpa lagi sesudahnya.</p>{/if}
+		{#if tab === "sudah"}<p class="text-xs text-neutral-500">Kasus yang diselesaikan dengan kontak atau alasan dalam 14 hari terakhir.</p>{/if}
 
 		<div class="space-y-3">
 			{#each daftar as s (s.id)}
@@ -88,7 +109,7 @@
 							<div class="flex flex-wrap items-center gap-2">
 								<h2 class="font-semibold text-neutral-900 dark:text-white">{s.nama}</h2>
 								{#if tl}
-									<span class="rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-semibold text-red-700 dark:text-red-400">Alpa {tl.alpa_beruntun}× berturut-turut</span>
+									<span class="rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-semibold text-red-700 dark:text-red-400">Pernah alfa {tl.alpa_beruntun}× berturut-turut</span>
 								{/if}
 							</div>
 							<p class="mt-1 text-xs text-neutral-500">{[s.id_mahasantri, s.nama_kelas, s.jadwal, s.guru_nama && `Guru: ${s.guru_nama}`].filter(Boolean).join(" · ")}</p>
@@ -96,7 +117,8 @@
 								{#if tl}Alpa terakhir {hariLalu(tl.alpa_terakhir)}{/if} · Hadir 30 hari {persen(s.persen_hadir_30)}
 							</p>
 							{#if tab === "sudah" && tl}
-								<p class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400"><CheckCircle2 class="h-3.5 w-3.5" /> Dihubungi {hariLalu(tl.kontak_tanggal)} via {labelMedia(tl.kontak_media)}{tl.kontak_oleh ? ` oleh ${tl.kontak_oleh}` : ""}</p>
+								<p class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400"><CheckCircle2 class="h-3.5 w-3.5" /> {tl.kontak_jenis === "tutup_alpa" ? "Ditutup" : "Dihubungi"} {hariLalu(tl.kontak_tanggal)}{tl.kontak_jenis === "tutup_alpa" ? "" : ` via ${labelMedia(tl.kontak_media)}`}{tl.kontak_oleh ? ` oleh ${tl.kontak_oleh}` : ""}</p>
+								{#if tl.kontak_catatan}<p class="mt-1 text-xs text-neutral-500">Catatan: {tl.kontak_catatan}</p>{/if}
 							{/if}
 						</div>
 						{#if tl}
@@ -113,7 +135,10 @@
 						{:else}
 							<span class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-dashed border-neutral-300 px-3 text-xs text-neutral-400 dark:border-neutral-700" title="Nomor WA santri belum diisi"><MessageCircle class="h-4 w-4" /> Tanpa no. WA</span>
 						{/if}
-						<button type="button" onclick={() => (kontakSantri = s)} class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-neutral-200 px-3 text-xs font-semibold text-neutral-700 hover:border-brand-400/40 hover:text-brand-700 dark:border-neutral-700 dark:text-neutral-300 dark:hover:text-brand-300"><NotebookPen class="h-4 w-4" /> Catat kontak</button>
+						<button type="button" onclick={() => (kontakSantri = s)} class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-neutral-200 px-3 text-xs font-semibold text-neutral-700 hover:border-brand-400/40 hover:text-brand-700 dark:border-neutral-700 dark:text-neutral-300 dark:hover:text-brand-300"><NotebookPen class="h-4 w-4" /> Catat hasil kontak</button>
+						{#if tab === "perlu"}
+							<button type="button" onclick={() => { tutupSantri = s; alasanTutup = ""; }} class="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-neutral-200 px-3 text-xs font-semibold text-neutral-700 hover:border-brand-400/40 hover:text-brand-700 dark:border-neutral-700 dark:text-neutral-300 dark:hover:text-brand-300"><CheckCircle2 class="h-4 w-4" /> Tutup dengan alasan</button>
+						{/if}
 						<a href={`/app/guru/santri/${s.id}`} use:inertia class="inline-flex min-h-9 items-center gap-1 rounded-lg px-3 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800">Profil santri <ChevronRight class="h-4 w-4" /></a>
 					</div>
 				</article>
@@ -125,6 +150,22 @@
 			{/each}
 		</div>
 	</div>
+
+	{#if tutupSantri}
+		<RiayahDialog title="Tutup kasus tindak lanjut alpa" subtitle={tutupSantri.nama} busy={sedangMenutup} onclose={() => (tutupSantri = null)}>
+			<form onsubmit={tutupKasus} class="space-y-4">
+				<p class="text-sm text-neutral-600 dark:text-neutral-400">Jika tidak perlu menghubungi mahasantri, berikan alasan penyelesaian yang bisa dipertanggungjawabkan.</p>
+				<label class="block">
+					<span class="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Alasan penyelesaian (minimal 10 karakter)</span>
+					<textarea bind:value={alasanTutup} minlength="10" required rows="3" placeholder="Contoh: Sudah kembali hadir dan kondisi sudah ditangani admin" class="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm dark:border-neutral-800 dark:bg-neutral-925"></textarea>
+				</label>
+				<div class="flex justify-end gap-2">
+					<button type="button" onclick={() => (tutupSantri = null)} disabled={sedangMenutup} class="min-h-10 rounded-xl px-4 text-sm font-medium text-neutral-600">Batal</button>
+					<button type="submit" disabled={sedangMenutup || alasanTutup.trim().length < 10} class="min-h-10 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white disabled:opacity-50">Selesaikan kasus</button>
+				</div>
+			</form>
+		</RiayahDialog>
+	{/if}
 
 	{#if kontakSantri}
 		<CatatKontakDialog santri={kontakSantri} kembali={KEMBALI} onclose={() => (kontakSantri = null)} />

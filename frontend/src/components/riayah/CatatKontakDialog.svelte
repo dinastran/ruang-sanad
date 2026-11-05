@@ -23,7 +23,7 @@
 		if (busy) return;
 		busy = true;
 		const query = kembali ? `?kembali=${encodeURIComponent(kembali)}` : "";
-		router.post(`/app/guru/santri/${santri.id}/kontak${query}`, { media, tanggal, catatan, jenis: "sapa" }, {
+		router.post(`/app/guru/santri/${santri.id}/kontak${query}`, { media, tanggal, catatan, jenis: kembali === "/app/kelas/tindak-lanjut-alpa" ? "tindak_lanjut_alpa" : "sapa" }, {
 			preserveScroll: true,
 			preserveState: true,
 			// Server menjawab error dengan redirect + flash; dialog tetap terbuka
@@ -36,7 +36,7 @@
 	}
 </script>
 
-<RiayahDialog title="Catat sapaan" subtitle={santri.nama} {busy} {onclose}>
+<RiayahDialog title={kembali === "/app/kelas/tindak-lanjut-alpa" ? "Catat hasil tindak lanjut" : "Catat sapaan"} subtitle={santri.nama} {busy} {onclose}>
 	<form onsubmit={simpan} class="space-y-4">
 		<fieldset>
 			<legend class="mb-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">Cara menghubungi</legend>
@@ -54,8 +54,8 @@
 			<input type="date" bind:value={tanggal} max={maxTanggal} required class="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400/40 dark:border-neutral-800 dark:bg-neutral-925" />
 		</label>
 		<label class="block">
-			<span class="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Ringkasan (opsional)</span>
-			<textarea bind:value={catatan} rows="3" placeholder="Mis. menanyakan kabar, santri sedang sakit, minta izin 2 pekan" class="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400/40 dark:border-neutral-800 dark:bg-neutral-925"></textarea>
+			<span class="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">{kembali === "/app/kelas/tindak-lanjut-alpa" ? "Hasil kontak (wajib, minimal 10 karakter)" : "Ringkasan (opsional)"}</span>
+			<textarea bind:value={catatan} required={kembali === "/app/kelas/tindak-lanjut-alpa"} minlength={kembali === "/app/kelas/tindak-lanjut-alpa" ? 10 : undefined} rows="3" placeholder="Mis. menanyakan kabar, santri sedang sakit, minta izin 2 pekan" class="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400/40 dark:border-neutral-800 dark:bg-neutral-925"></textarea>
 		</label>
 		<div class="flex justify-end gap-2">
 			<button type="button" onclick={onclose} disabled={busy} class="min-h-10 rounded-xl px-4 text-sm font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-50 dark:text-neutral-300 dark:hover:bg-neutral-800">Batal</button>
