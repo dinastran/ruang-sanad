@@ -48,12 +48,12 @@
   const tombolRingan = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-neutral-200 px-3 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/10 dark:text-neutral-200 dark:hover:bg-white/[0.04]";
   const tombolUtama = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-3 text-sm font-semibold text-white transition-colors hover:bg-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-brand-600 dark:hover:bg-brand-500";
 
-  const jejak: Record<string, { warna: string; label: string; singkat: string }> = {
-    hadir: { warna: "bg-emerald-600", label: "Hadir", singkat: "H" },
-    telat: { warna: "bg-emerald-300", label: "Terlambat", singkat: "T" },
-    izin: { warna: "bg-sky-500", label: "Izin", singkat: "I" },
-    sakit: { warna: "bg-amber-400", label: "Sakit", singkat: "S" },
-    alpa: { warna: "bg-rose-500", label: "Alpa", singkat: "A" },
+  const jejak: Record<string, { warna: string; label: string; singkat: string; teks: string }> = {
+    hadir: { warna: "bg-emerald-600", label: "Hadir", singkat: "H", teks: "text-white" },
+    telat: { warna: "bg-emerald-300", label: "Terlambat", singkat: "T", teks: "text-emerald-950" },
+    izin: { warna: "bg-sky-500", label: "Izin", singkat: "I", teks: "text-white" },
+    sakit: { warna: "bg-amber-400", label: "Sakit", singkat: "S", teks: "text-amber-950" },
+    alpa: { warna: "bg-rose-500", label: "Alpa", singkat: "A", teks: "text-white" },
   };
 
   function hariSejak(tanggal: string): number {
@@ -273,7 +273,7 @@
           </div>
         </div>
 
-        <div class={dasarPanel + " flex min-h-36 flex-col justify-between p-4 sm:p-5"}>
+        <div class={dasarPanel + " col-span-2 flex min-h-36 flex-col justify-between p-4 sm:p-5 lg:col-span-1"}>
           <div class="flex items-start justify-between gap-2">
             <p class="text-xs font-medium leading-snug text-neutral-600 dark:text-neutral-400">Selesai 14 hari terakhir</p>
             <CheckCheck size={18} class="shrink-0 text-emerald-700 dark:text-emerald-400"/>
@@ -296,7 +296,7 @@
               <h2 id="antrean-heading" class="mt-1 text-lg font-semibold tracking-tight text-neutral-950 dark:text-white">Antrean mahasantri</h2>
               <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Pilih kasus, hubungi mahasantri, lalu dokumentasikan hasilnya.</p>
             </div>
-            <span class="rounded-md bg-neutral-100 px-2.5 py-1.5 text-xs font-medium tabular-nums text-neutral-700 dark:bg-white/[0.07] dark:text-neutral-300">{tersaring.length} ditampilkan oleh filter</span>
+            <span class="rounded-md bg-neutral-100 px-2.5 py-1.5 text-xs font-medium tabular-nums text-neutral-700 dark:bg-white/[0.07] dark:text-neutral-300">{tersaring.length} kasus sesuai filter</span>
           </div>
 
           <div class="mt-5 flex flex-wrap gap-1 border-b border-neutral-200 dark:border-white/[0.07]" role="group" aria-label="Status tindak lanjut">
@@ -378,7 +378,7 @@
                         <h3 class="text-[15px] font-semibold text-neutral-950 dark:text-white">{s.nama}</h3>
                         {#if tab === "perlu"}
                           <span class={"rounded-md px-2 py-0.5 text-[11px] font-semibold " + (tl.alpa_beruntun >= 3 ? "bg-rose-500/10 text-rose-700 dark:text-rose-400" : "bg-amber-500/10 text-amber-800 dark:text-amber-400")}>
-                            {tl.alpa_beruntun} kali alpa beruntun
+                            Pernah {tl.alpa_beruntun} kali alpa beruntun
                           </span>
                         {:else}
                           <span class="rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:text-emerald-400">Selesai</span>
@@ -401,7 +401,7 @@
                       <div class="mt-2 flex flex-wrap items-center gap-1.5">
                         {#each [...tl.absen_terakhir].reverse() as status, idx (idx)}
                           {@const item = jejak[status]}
-                          <span title={item?.label ?? status} aria-label={item?.label ?? status} class={"inline-flex h-7 w-7 items-center justify-center rounded-md text-[11px] font-semibold " + (item?.warna ?? "bg-neutral-300") + (item?.warna ? " text-white" : " text-neutral-700")}>{item?.singkat ?? "?"}</span>
+                          <span title={item?.label ?? status} aria-label={item?.label ?? status} class={"inline-flex h-7 w-7 items-center justify-center rounded-md text-[11px] font-semibold " + (item?.warna ?? "bg-neutral-300") + " " + (item?.teks ?? "text-neutral-700")}>{item?.singkat ?? "?"}</span>
                         {:else}
                           <span class="text-xs text-neutral-400">Belum ada riwayat</span>
                         {/each}
