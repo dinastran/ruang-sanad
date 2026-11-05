@@ -210,6 +210,7 @@ FROM riayah_kontak rk
 JOIN santri s ON s.id = rk.santri_id
 LEFT JOIN kelas k ON k.id = s.kelas_id
 WHERE s.status = 'aktif'
+  AND rk.jenis <> 'tutup_alpa'
   AND (?1 IS NULL OR k.guru_id = ?1)
 GROUP BY rk.santri_id
 `
@@ -243,7 +244,7 @@ func (q *Queries) ListKontakTerakhirRiayah(ctx context.Context, guruID interface
 }
 
 const listKontakTindakLanjutTerakhir = `-- name: ListKontakTindakLanjutTerakhir :many
-SELECT rk.santri_id, rk.tanggal, rk.media, COALESCE(u.name, '') AS penulis_nama
+SELECT rk.santri_id, rk.tanggal, rk.media, COALESCE(u.name, '') AS penulis_nama, rk.jenis, rk.catatan
 FROM riayah_kontak rk
 JOIN santri s ON s.id = rk.santri_id
 LEFT JOIN kelas k ON k.id = s.kelas_id
@@ -264,6 +265,8 @@ type ListKontakTindakLanjutTerakhirRow struct {
 	Tanggal     string
 	Media       string
 	PenulisNama string
+	Jenis       string
+	Catatan     string
 }
 
 // Kontak non-rapor terakhir per santri (siapa pun pencatatnya), untuk menutup
@@ -282,6 +285,8 @@ func (q *Queries) ListKontakTindakLanjutTerakhir(ctx context.Context, guruID int
 			&i.Tanggal,
 			&i.Media,
 			&i.PenulisNama,
+			&i.Jenis,
+			&i.Catatan,
 		); err != nil {
 			return nil, err
 		}

@@ -29,8 +29,8 @@ func (c *jumlahAlpaCache) reset() {
 	c.mu.Unlock()
 }
 
-// ListTindakLanjutAlpa mengembalikan antrian Admin Kelas: santri alpa
-// berturut-turut yang belum dihubungi, dan yang sudah dihubungi belakangan ini.
+// ListTindakLanjutAlpa mengembalikan kasus yang belum ditindaklanjuti
+// serta kasus yang sudah diselesaikan, walaupun santri kemudian hadir.
 func (s *RiayahSantriService) ListTindakLanjutAlpa(today time.Time) (perlu, sudah []models.RiayahSantriItem, err error) {
 	items, _, err := s.ListPerhatian(models.RiayahViewer{}, today)
 	if err != nil {

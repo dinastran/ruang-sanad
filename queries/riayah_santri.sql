@@ -79,6 +79,7 @@ FROM riayah_kontak rk
 JOIN santri s ON s.id = rk.santri_id
 LEFT JOIN kelas k ON k.id = s.kelas_id
 WHERE s.status = 'aktif'
+  AND rk.jenis <> 'tutup_alpa'
   AND (sqlc.narg('guru_id') IS NULL OR k.guru_id = sqlc.narg('guru_id'))
 GROUP BY rk.santri_id;
 
@@ -117,7 +118,7 @@ WHERE rk.jenis = 'rapor'
 -- name: ListKontakTindakLanjutTerakhir :many
 -- Kontak non-rapor terakhir per santri (siapa pun pencatatnya), untuk menutup
 -- penanda alpa berturut-turut yang ditangani Admin Kelas.
-SELECT rk.santri_id, rk.tanggal, rk.media, COALESCE(u.name, '') AS penulis_nama
+SELECT rk.santri_id, rk.tanggal, rk.media, COALESCE(u.name, '') AS penulis_nama, rk.jenis, rk.catatan
 FROM riayah_kontak rk
 JOIN santri s ON s.id = rk.santri_id
 LEFT JOIN kelas k ON k.id = s.kelas_id

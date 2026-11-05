@@ -788,6 +788,8 @@ export interface RiayahTindakLanjutAlpa {
 	kontak_tanggal: string;
 	kontak_media: string;
 	kontak_oleh: string;
+	kontak_jenis: string;
+	kontak_catatan: string;
 }
 
 export interface RiayahSantriItem {

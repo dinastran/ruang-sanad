@@ -76,6 +76,14 @@ func (s *RiayahSantriService) ListPerhatian(viewer models.RiayahViewer, today ti
 	if err != nil {
 		return nil, models.RiayahRingkasan{}, err
 	}
+	alpaRuns, err := s.querier.ListRiayahAlpaRuns(ctx, scope)
+	if err != nil {
+		return nil, models.RiayahRingkasan{}, err
+	}
+	alpaRunBySantri := make(map[int64]queries.RiayahAlpaRun, len(alpaRuns))
+	for _, run := range alpaRuns {
+		alpaRunBySantri[run.SantriID] = run
+	}
 	sejak := today.AddDate(0, 0, -riayahJendelaHari).Format("2006-01-02")
 	rekapRows, err := s.querier.RekapKehadiranRiayahSejak(ctx, queries.RekapKehadiranRiayahSejakParams{Sejak: sejak, GuruID: scope})
 	if err != nil {
@@ -155,14 +163,32 @@ func (s *RiayahSantriService) ListPerhatian(viewer models.RiayahViewer, today ti
 			ringkasan.RaporTerkirim++
 		}
 		item.Penanda = hitungPenandaRiayah(absen, r.total, r.hadir)
-		if kontak, ok := tindakLanjutBySantri[row.ID]; ok {
-			item.TindakLanjutAlpa = hitungTindakLanjutAlpa(absen, &kontak)
-		} else {
-			item.TindakLanjutAlpa = hitungTindakLanjutAlpa(absen, nil)
+		if run, ok := alpaRunBySantri[row.ID]; ok {
+			if kontak, adaKontak := tindakLanjutBySantri[row.ID]; adaKontak {
+				item.TindakLanjutAlpa = hitungTindakLanjutAlpa(absen, &run, &kontak)
+			} else {
+				item.TindakLanjutAlpa = hitungTindakLanjutAlpa(absen, &run, nil)
+			}
 		}
-		if item.TindakLanjutAlpa != nil && item.TindakLanjutAlpa.Status == models.TindakLanjutSelesai {
-			// Sudah dihubungi setelah alpa terakhir: penanda Admin Kelas selesai.
-			item.Penanda = tanpaPenandaAdminKelas(item.Penanda)
+		if tl := item.TindakLanjutAlpa; tl != nil {
+			if tl.Status == models.TindakLanjutSelesai {
+				item.Penanda = tanpaPenandaAdminKelas(item.Penanda)
+			} else {
+				adaPenandaAdmin := false
+				for _, p := range item.Penanda {
+					if p.Penanggung == models.PenanggungAdminKelas {
+						adaPenandaAdmin = true
+						break
+					}
+				}
+				if !adaPenandaAdmin {
+					item.Penanda = append(item.Penanda, models.RiayahPenanda{
+						Kode: models.PenandaKehadiran, Level: models.LevelMerah,
+						Alasan: fmt.Sprintf("Belum ditindaklanjuti: pernah alpa %d pertemuan berturut-turut", tl.AlpaBeruntun),
+						Penanggung: models.PenanggungAdminKelas,
+					})
+				}
+			}
 		}
 		mulai := ""
 		if row.MulaiBelajar.Valid {
@@ -185,6 +211,7 @@ func (s *RiayahSantriService) ListPerhatian(viewer models.RiayahViewer, today ti
 		if perlu {
 			ringkasan.PerluPerhatian++
 		}
+		kehadiranTerhitung := false
 		for _, p := range item.Penanda {
 			if p.Penanggung == models.PenanggungAdminKelas {
 				ringkasan.AlpaPerluDihubungi++
@@ -194,7 +221,10 @@ func (s *RiayahSantriService) ListPerhatian(viewer models.RiayahViewer, today ti
 			}
 			switch p.Kode {
 			case models.PenandaKehadiran:
-				ringkasan.Kehadiran++
+				if !kehadiranTerhitung {
+					ringkasan.Kehadiran++
+					kehadiranTerhitung = true
+				}
 			case models.PenandaKontak:
 				ringkasan.Kontak++
 			case models.PenandaProgres:
@@ -403,34 +433,23 @@ func hitungPenandaRiayah(absen []queries.ListAbsensiTerakhirRiayahRow, total30, 
 	return penanda
 }
 
-// hitungTindakLanjutAlpa menerima absensi terbaru lebih dulu dan kontak
-// non-rapor terakhir. Nil bila santri tidak sedang alpa berturut-turut.
-// Kontak pada/sesudah alpa terakhir menutup penanda; alpa baru sesudah kontak
-// membukanya lagi selama rangkaiannya masih memenuhi ambang.
-func hitungTindakLanjutAlpa(absen []queries.ListAbsensiTerakhirRiayahRow, kontak *queries.ListKontakTindakLanjutTerakhirRow) *models.RiayahTindakLanjutAlpa {
-	alpa := 0
-	for _, a := range absen {
-		if a.Status != "alpa" {
-			break
-		}
-		alpa++
-	}
-	if alpa < riayahAlpaBerturut {
-		return nil
-	}
+// Kasus yang pernah mencapai dua alpa berturut-turut tetap terbuka meski
+// santri berikutnya hadir; kontak atau penutupan beralasan menyelesaikannya.
+func hitungTindakLanjutAlpa(absen []queries.ListAbsensiTerakhirRiayahRow, run *queries.RiayahAlpaRun, kontak *queries.ListKontakTindakLanjutTerakhirRow) *models.RiayahTindakLanjutAlpa {
+	if run == nil { return nil }
 	tl := &models.RiayahTindakLanjutAlpa{
-		Status:       models.TindakLanjutPerlu,
-		AlpaBeruntun: alpa,
-		AlpaTerakhir: absen[0].Tanggal.Format("2006-01-02"),
+		Status: models.TindakLanjutPerlu,
+		AlpaBeruntun: int(run.AlpaBeruntun),
+		AlpaTerakhir: run.AlpaTerakhir,
 	}
-	for i := 0; i < len(absen) && i < 5; i++ {
-		tl.AbsenTerakhir = append(tl.AbsenTerakhir, absen[i].Status)
-	}
+	for i := 0; i < len(absen) && i < 5; i++ { tl.AbsenTerakhir = append(tl.AbsenTerakhir, absen[i].Status) }
 	if kontak != nil && kontak.Tanggal >= tl.AlpaTerakhir {
 		tl.Status = models.TindakLanjutSelesai
 		tl.KontakTanggal = kontak.Tanggal
 		tl.KontakMedia = kontak.Media
 		tl.KontakOleh = kontak.PenulisNama
+		tl.KontakJenis = kontak.Jenis
+		tl.KontakCatatan = kontak.Catatan
 	}
 	return tl
 }
@@ -640,8 +659,13 @@ func (s *RiayahSantriService) GetProfil(viewer models.RiayahViewer, santriID int
 	}
 	for _, k := range kontak {
 		judul := "Menyapa via " + riayahMediaKontak[k.Media]
-		if k.Jenis == "rapor" {
+		switch k.Jenis {
+		case "rapor":
 			judul = "Rapor " + k.Periode + " dikirim via " + riayahMediaKontak[k.Media]
+		case "tutup_alpa":
+			judul = "Tindak lanjut alpa ditutup dengan alasan"
+		case "tindak_lanjut_alpa":
+			judul = "Tindak lanjut alpa via " + riayahMediaKontak[k.Media]
 		}
 		profil.Timeline = append(profil.Timeline, models.RiayahTimelineItem{
 			Jenis:     "kontak",
@@ -737,8 +761,11 @@ func (s *RiayahSantriService) CatatKontak(viewer models.RiayahViewer, santriID i
 	if input.Jenis == "" {
 		input.Jenis = "sapa"
 	}
-	if input.Jenis != "sapa" && input.Jenis != "rapor" {
+	if input.Jenis != "sapa" && input.Jenis != "rapor" && input.Jenis != "tindak_lanjut_alpa" {
 		return fmt.Errorf("jenis kontak tidak valid")
+	}
+	if input.Jenis == "tindak_lanjut_alpa" && utf8.RuneCountInString(strings.TrimSpace(input.Catatan)) < 10 {
+		return fmt.Errorf("hasil tindak lanjut alpa wajib dijelaskan (minimal 10 karakter)")
 	}
 	if input.Jenis == "rapor" {
 		if _, err := time.Parse("2006-01", input.Periode); err != nil {
@@ -793,6 +820,33 @@ func (s *RiayahSantriService) CatatKontak(viewer models.RiayahViewer, santriID i
 	if err == nil {
 		s.jumlahAlpa.reset()
 	}
+	return err
+}
+
+// SelesaikanTindakLanjutAlpa menutup kasus tanpa mengklaim sudah mengontak
+// santri. Alasan disimpan di log audit, bukan sebagai sapaan biasa.
+func (s *RiayahSantriService) SelesaikanTindakLanjutAlpa(actorID, santriID int64, alasan string, today time.Time) error {
+	alasan = strings.TrimSpace(alasan)
+	if actorID <= 0 || santriID <= 0 { return ErrRiayahAksesDitolak }
+	if utf8.RuneCountInString(alasan) < 10 {
+		return fmt.Errorf("alasan penyelesaian wajib diisi (minimal 10 karakter)")
+	}
+	perlu, _, err := s.ListTindakLanjutAlpa(today)
+	if err != nil { return err }
+	ada := false
+	for _, item := range perlu {
+		if item.ID == santriID { ada = true; break }
+	}
+	if !ada { return fmt.Errorf("kasus tindak lanjut alpa tidak ditemukan atau sudah selesai") }
+	_, err = s.querier.CreateRiayahKontak(context.Background(), queries.CreateRiayahKontakParams{
+		SantriID: santriID,
+		AuthorUserID: sql.NullInt64{Int64: actorID, Valid: true},
+		Tanggal: today.Format("2006-01-02"),
+		Media: "lainnya",
+		Jenis: "tutup_alpa",
+		Catatan: alasan,
+	})
+	if err == nil { s.jumlahAlpa.reset() }
 	return err
 }
 

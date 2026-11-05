@@ -107,3 +107,71 @@ func TestTindakLanjutAlpaKontakDiHariAlpaMenutupPenanda(t *testing.T) {
 	require.Empty(t, perlu)
 	require.Len(t, sudah, 1)
 }
+
+func TestTindakLanjutAlpaBertahanSetelahHadirDanLebihDari12Pertemuan(t *testing.T) {
+	f := setupRiayahSantri(t)
+	santri := f.insertSantri(t, "Rizki", f.kelasA)
+	f.absen(t, f.kelasA, santri, 50, "alpa", "")
+	f.absen(t, f.kelasA, santri, 49, "alpa", "")
+	for hari := 45; hari >= 32; hari-- { f.absen(t, f.kelasA, santri, hari, "hadir", "") }
+	perlu, sudah, err := f.service.ListTindakLanjutAlpa(f.today)
+	require.NoError(t, err)
+	require.Empty(t, sudah)
+	require.Len(t, perlu, 1)
+	require.Equal(t, santri, perlu[0].ID)
+	require.Equal(t, 2, perlu[0].TindakLanjutAlpa.AlpaBeruntun)
+	require.Equal(t, models.PenanggungAdminKelas, perlu[0].Penanda[len(perlu[0].Penanda)-1].Penanggung)
+	admin := models.RiayahViewer{UserID: insertTestUser(t, f.db, "alpa-new@example.com", "Admin Kelas"), CanWrite: true}
+	require.NoError(t, f.service.CatatKontak(admin, santri, models.RiayahKontakInput{
+		Media: "telepon", Jenis: "tindak_lanjut_alpa", Catatan: "Sudah dihubungi dan lanjut belajar",
+	}, f.today))
+	perlu, sudah, err = f.service.ListTindakLanjutAlpa(f.today)
+	require.NoError(t, err)
+	require.Empty(t, perlu)
+	require.Len(t, sudah, 1)
+	require.Equal(t, "tindak_lanjut_alpa", sudah[0].TindakLanjutAlpa.KontakJenis)
+}
+
+func TestTindakLanjutAlpaPenutupanBeradabDanBukaUlang(t *testing.T) {
+	f := setupRiayahSantri(t)
+	santri := f.insertSantri(t, "Santri ditindaklanjuti", f.kelasA)
+	f.absen(t, f.kelasA, santri, 14, "alpa", "")
+	f.absen(t, f.kelasA, santri, 7, "alpa", "")
+	adminID := insertTestUser(t, f.db, "alpa-closure@example.com", "Admin Kelas")
+	require.ErrorContains(t, f.service.SelesaikanTindakLanjutAlpa(adminID, santri, "pendek", f.today), "minimal 10")
+	require.ErrorContains(t, f.service.CatatKontak(models.RiayahViewer{UserID: adminID, CanWrite: true},
+		santri, models.RiayahKontakInput{Media: "wa", Jenis: "tindak_lanjut_alpa"}, f.today), "minimal 10")
+	require.NoError(t, f.service.SelesaikanTindakLanjutAlpa(adminID, santri, "Sudah didampingi dan kembali hadir", f.today))
+	perlu, sudah, err := f.service.ListTindakLanjutAlpa(f.today)
+	require.NoError(t, err)
+	require.Empty(t, perlu)
+	require.Len(t, sudah, 1)
+	require.Equal(t, "tutup_alpa", sudah[0].TindakLanjutAlpa.KontakJenis)
+	require.Equal(t, "Sudah didampingi dan kembali hadir", sudah[0].TindakLanjutAlpa.KontakCatatan)
+	require.ErrorContains(t, f.service.SelesaikanTindakLanjutAlpa(adminID, santri, "Coba tutup ulang", f.today), "sudah selesai")
+	items, _, err := f.service.ListPerhatian(models.RiayahViewer{}, f.today)
+	require.NoError(t, err)
+	require.Empty(t, findItem(items, santri).KontakTerakhir)
+	// Pertemuan berikutnya harus benar-benar terjadi sesudah tanggal penutupan.
+	f.absen(t, f.kelasA, santri, -1, "hadir", "")
+	f.absen(t, f.kelasA, santri, -2, "alpa", "")
+	f.absen(t, f.kelasA, santri, -3, "alpa", "")
+	perlu, _, err = f.service.ListTindakLanjutAlpa(f.today.AddDate(0, 0, 3))
+	require.NoError(t, err)
+	require.Len(t, perlu, 1)
+}
+
+func TestTindakLanjutAlpaKontakSebelumAlpaTakMenutupKasus(t *testing.T) {
+	f := setupRiayahSantri(t)
+	santri := f.insertSantri(t, "Santri", f.kelasA)
+	admin := models.RiayahViewer{UserID: insertTestUser(t, f.db, "alpa-before@example.com", "Admin"), CanWrite: true}
+	require.NoError(t, f.service.CatatKontak(admin, santri, models.RiayahKontakInput{
+		Media: "wa", Tanggal: f.today.AddDate(0, 0, -20).Format("2006-01-02"),
+	}, f.today))
+	f.absen(t, f.kelasA, santri, 14, "alpa", "")
+	f.absen(t, f.kelasA, santri, 7, "alpa", "")
+	f.absen(t, f.kelasA, santri, 0, "hadir", "")
+	perlu, _, err := f.service.ListTindakLanjutAlpa(f.today)
+	require.NoError(t, err)
+	require.Len(t, perlu, 1)
+}

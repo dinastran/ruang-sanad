@@ -28,7 +28,7 @@ type RiayahPenanda struct {
 }
 
 // RiayahTindakLanjutAlpa adalah status tindak lanjut santri yang alpa
-// berturut-turut. Diisi selama rangkaian alpa masih berjalan.
+// berturut-turut. Tetap terbuka sampai tindak lanjut dicatat.
 type RiayahTindakLanjutAlpa struct {
 	Status       string `json:"status"` // perlu / selesai
 	AlpaBeruntun int    `json:"alpa_beruntun"`
@@ -38,6 +38,8 @@ type RiayahTindakLanjutAlpa struct {
 	KontakTanggal string   `json:"kontak_tanggal"`
 	KontakMedia   string   `json:"kontak_media"`
 	KontakOleh    string   `json:"kontak_oleh"`
+	KontakJenis   string   `json:"kontak_jenis"`
+	KontakCatatan string   `json:"kontak_catatan"`
 }
 
 // RiayahSantriItem adalah satu baris di halaman Riayah Santri.
