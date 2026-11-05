@@ -201,3 +201,50 @@ func TestBerandaKinerjaDanAgenda(t *testing.T) {
 	require.Equal(t, models.GuruAgendaItem{Jenis: "pembinaan", Tanggal: "2026-10-01", Judul: "Adab guru"}, b.Agenda[0])
 	require.Equal(t, "rapat", b.Agenda[1].Jenis)
 }
+
+func TestBerandaMenyembunyikanKelasNonaktifDanSantriNonaktif(t *testing.T) {
+	f := setupBeranda(t)
+	nonaktif := f.kelas(t, "Kelas Nonaktif", "Senin, jam 07.00 WIB", f.guruA, "2026-09-01", 1)
+	tanpaSantri := f.kelas(t, "Santri Nonaktif", "Senin, jam 08.00 WIB", f.guruA, "2026-09-01", 1)
+	aktif := f.kelas(t, "Kelas Aktif", "Senin, jam 09.00 WIB", f.guruA, "2026-09-01", 1)
+
+	for _, item := range []struct {
+		id  int64
+		jam string
+	}{{nonaktif, "07:00"}, {tanpaSantri, "08:00"}, {aktif, "09:00"}} {
+		f.jadwal(t, item.id, "2026-09-28", item.jam, "dijadwalkan", "", 0)
+	}
+	_, err := f.db.Exec("UPDATE kelas SET is_aktif = 0 WHERE id = ?", nonaktif)
+	require.NoError(t, err)
+	_, err = f.db.Exec("UPDATE santri SET status = 'nonaktif' WHERE kelas_id = ?", tanpaSantri)
+	require.NoError(t, err)
+
+	beranda, err := f.service.GetBeranda(&f.guruA, f.today)
+	require.NoError(t, err)
+	require.Empty(t, slotKelas(beranda.HariIni, nonaktif))
+	require.Empty(t, slotKelas(beranda.Tertunda, nonaktif))
+	require.Empty(t, slotKelas(beranda.HariIni, tanpaSantri))
+	require.Empty(t, slotKelas(beranda.Tertunda, tanpaSantri))
+	require.Len(t, slotKelas(beranda.HariIni, aktif), 1)
+
+	jadwal, err := NewJadwalPertemuanService(queries.NewQuerier(f.db)).List(&f.guruA)
+	require.NoError(t, err)
+	for _, item := range jadwal {
+		require.NotEqual(t, nonaktif, item.KelasID, "kelas nonaktif tidak boleh muncul di jadwal guru")
+	}
+
+	// Agenda disembunyikan tanpa menghapus jadwal yang pernah tersimpan.
+	var jumlah int
+	require.NoError(t, f.db.QueryRow("SELECT COUNT(*) FROM jadwal_pertemuan WHERE kelas_id = ?", nonaktif).Scan(&jumlah))
+	require.Equal(t, 1, jumlah)
+
+	// Status yang kembali aktif langsung diikuti oleh daftar mengajar.
+	_, err = f.db.Exec("UPDATE kelas SET is_aktif = 1 WHERE id = ?", nonaktif)
+	require.NoError(t, err)
+	_, err = f.db.Exec("UPDATE santri SET status = 'aktif' WHERE kelas_id = ?", tanpaSantri)
+	require.NoError(t, err)
+	beranda, err = f.service.GetBeranda(&f.guruA, f.today)
+	require.NoError(t, err)
+	require.Len(t, slotKelas(beranda.HariIni, nonaktif), 1)
+	require.Len(t, slotKelas(beranda.HariIni, tanpaSantri), 1)
+}

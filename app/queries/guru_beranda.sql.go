@@ -90,7 +90,8 @@ FROM jadwal_pertemuan jp
 JOIN kelas k ON k.id = jp.kelas_id
 LEFT JOIN guru gu ON gu.id = k.guru_id
 LEFT JOIN guru gb ON gb.id = jp.guru_pengganti_id
-WHERE (
+WHERE k.is_aktif = 1
+  AND (
         (jp.tanggal >= CAST(?1 AS TEXT) AND jp.tanggal < CAST(?2 AS TEXT))
      OR (jp.jadwal_semula >= CAST(?1 AS TEXT) AND jp.jadwal_semula < CAST(?2 AS TEXT))
   )
