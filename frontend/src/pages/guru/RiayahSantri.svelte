@@ -306,7 +306,7 @@
 										</div>
 
 										<div class="mt-2 flex flex-wrap gap-1.5">
-											{#each s.penanda.filter((p) => !is_koordinator || p.kode !== "kontak") as p (p.kode)}<PenandaBadge penanda={p} showAlasan />{/each}
+											{#each s.penanda.filter((p) => !is_koordinator || p.kode !== "kontak") as p, i (`${p.kode}-${i}`)}<PenandaBadge penanda={p} showAlasan />{/each}
 											{#if s.tindak_lanjut_alpa?.status === "selesai"}
 												<span class="rounded-lg border border-neutral-200 px-2 py-1 text-xs text-neutral-600 dark:border-neutral-700 dark:text-neutral-400">Alpa {s.tindak_lanjut_alpa.alpa_beruntun}× · dihubungi {hariLalu(s.tindak_lanjut_alpa.kontak_tanggal)}{s.tindak_lanjut_alpa.kontak_oleh ? ` oleh ${s.tindak_lanjut_alpa.kontak_oleh}` : ""}</span>
 											{/if}
