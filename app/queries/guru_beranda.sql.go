@@ -234,8 +234,8 @@ ORDER BY tanggal, id
 `
 
 type ListPertemuanKelasSejakParams struct {
-	KelasIds []int64
 	Sejak    string
+	KelasIds []int64
 }
 
 type ListPertemuanKelasSejakRow struct {
@@ -247,7 +247,8 @@ type ListPertemuanKelasSejakRow struct {
 
 func (q *Queries) ListPertemuanKelasSejak(ctx context.Context, arg ListPertemuanKelasSejakParams) ([]ListPertemuanKelasSejakRow, error) {
 	query := listPertemuanKelasSejak
-	queryParams := []interface{}{arg.Sejak}
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.Sejak)
 	if len(arg.KelasIds) > 0 {
 		for _, v := range arg.KelasIds {
 			queryParams = append(queryParams, v)
