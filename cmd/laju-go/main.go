@@ -546,33 +546,46 @@ func startMetaCAPIWorker(capi *services.MetaCAPIService) {
 	}()
 }
 
-// startMetaAdsWorker syncs Meta Ads Insights once a day after 02.00 WIB
-// (checked hourly). It does nothing until META_ADS_TOKEN and
-// META_AD_ACCOUNT_IDS are set.
+// nextMetaAdsSyncTime aligns the next check with 02.00 WIB, regardless of
+// when the app process started. WIB is UTC+7 without daylight saving time.
+func nextMetaAdsSyncTime(now time.Time) time.Time {
+	wib := time.FixedZone("WIB", 7*60*60)
+	local := now.In(wib)
+	next := time.Date(local.Year(), local.Month(), local.Day(), 2, 0, 0, 0, wib)
+	if !local.Before(next) {
+		next = next.AddDate(0, 0, 1)
+	}
+	return next
+}
+
+// startMetaAdsWorker syncs at 02.00 WIB, catches up after a server restart,
+// and retries failures every 15 minutes. A successful sync suppresses another
+// automatic run until the next WIB day.
 func startMetaAdsWorker(ads *services.MetaAdsService) {
 	if !ads.Enabled() {
 		slog.Info("Sinkron Meta Ads nonaktif: META_ADS_TOKEN / META_AD_ACCOUNT_IDS belum diisi")
 		return
 	}
 	go func() {
-		ticker := time.NewTicker(time.Hour)
-		defer ticker.Stop()
-		for range ticker.C {
-			ctx := context.Background()
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			due, err := ads.DueForDailySync(ctx)
+			if err == nil && due {
+				var rows int
+				rows, err = ads.Sync(ctx, "otomatis")
+				if err == nil {
+					slog.Info("sinkron Meta Ads selesai", "baris", rows)
+				}
+			}
+			cancel()
+
+			wait := time.Until(nextMetaAdsSyncTime(time.Now()))
 			if err != nil {
-				slog.Error("cek jadwal sinkron Meta Ads gagal", "error", err)
-				continue
+				slog.Error("sinkron Meta Ads otomatis gagal", "error", err)
+				wait = 15 * time.Minute
 			}
-			if !due {
-				continue
-			}
-			rows, err := ads.Sync(ctx, "otomatis")
-			if err != nil {
-				slog.Error("sinkron Meta Ads gagal", "error", err)
-				continue
-			}
-			slog.Info("sinkron Meta Ads selesai", "baris", rows)
+			timer := time.NewTimer(wait)
+			<-timer.C
 		}
 	}()
 }

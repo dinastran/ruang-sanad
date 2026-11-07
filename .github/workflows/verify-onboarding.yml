@@ -40,6 +40,10 @@ jobs:
         run: GOFLAGS=-mod=mod go test ./app/handlers -run '^TestLeadOverviewRoutingCompatibility$' -count=1
       - name: Guru rekap date filters and CSV export tests
         run: GOFLAGS=-mod=mod go test ./app/handlers -run '^TestRekap(PeriodFilters|CSVIncludesPeriodNotesAndNeutralizesFormulas)$' -count=1
+      - name: Targeted Meta Ads daily-sync tests
+        run: |
+          GOFLAGS=-mod=mod go test ./app/services -run '^TestMetaAds' -count=1
+          GOFLAGS=-mod=mod go test ./cmd/laju-go -run '^TestNextMetaAdsSyncTimeWIB$' -count=1
       - name: Targeted Meta CAPI tests
         run: GOFLAGS=-mod=mod go test ./app/services -run '^(TestMetaCAPIAuditSearchesFullHistoryBeforePaging|TestMetaCAPIAnalyticsSeparatesProductionTestAndPurchaseValue|TestMetaCAPISendsFunnelOnceWithHashedData)$' -count=1
       - name: Alpa follow-up regression tests
