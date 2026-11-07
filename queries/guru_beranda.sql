@@ -41,8 +41,8 @@ ORDER BY jp.tanggal, jp.jam_mulai, jp.id;
 -- name: ListPertemuanKelasSejak :many
 SELECT id, kelas_id, tanggal, status
 FROM pertemuan
-WHERE kelas_id IN (sqlc.slice('kelas_ids'))
-  AND tanggal >= CAST(sqlc.arg('sejak') AS TEXT)
+WHERE tanggal >= CAST(sqlc.arg('sejak') AS TEXT)
+  AND kelas_id IN (sqlc.slice('kelas_ids'))
   AND status IN ('berlangsung', 'selesai')
 ORDER BY tanggal, id;
 
