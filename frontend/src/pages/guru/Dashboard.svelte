@@ -195,7 +195,7 @@
 									<li class="flex items-start gap-3 px-5 py-3.5">
 										<a href={`/app/guru/santri/${s.id}`} use:inertia class="min-w-0 flex-1">
 											<p class="text-sm font-medium text-neutral-900 dark:text-white">{s.nama} <span class="font-normal text-neutral-500">· {s.nama_kelas}</span></p>
-											<div class="mt-1.5 flex flex-wrap gap-1.5">{#each s.penanda as p (p.kode)}<PenandaBadge penanda={p} showAlasan />{/each}</div>
+											<div class="mt-1.5 flex flex-wrap gap-1.5">{#each s.penanda as p, i (`${p.kode}-${i}`)}<PenandaBadge penanda={p} showAlasan />{/each}</div>
 										</a>
 										{#if canEdit && s.no_wa}
 											<button type="button" onclick={() => (waSantri = s)} class="inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-brand-600 px-3 text-xs font-semibold text-white hover:bg-brand-700" aria-label={`Sapa ${s.nama} via WhatsApp`}><MessageCircle class="h-3.5 w-3.5" /><span class="hidden sm:inline">WA</span></button>
