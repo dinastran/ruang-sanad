@@ -130,10 +130,46 @@ func TestMetaAdsDueForDailySync(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, due, "synced today")
 
-	f.clock = f.clock.Add(21 * time.Hour)
+	f.clock = f.clock.Add(21 * time.Hour) // 23.30 WIB, still the same day
 	due, err = svc.DueForDailySync(t.Context())
 	require.NoError(t, err)
-	require.True(t, due, "next day")
+	require.False(t, due, "do not run twice on the same WIB date")
+
+	f.clock = f.clock.Add(3 * time.Hour) // 02.30 WIB the next day
+	due, err = svc.DueForDailySync(t.Context())
+	require.NoError(t, err)
+	require.True(t, due, "run again after next day's 02.00 WIB")
+}
+
+
+// A late-night manual run (or one at 01.45 WIB) must not suppress the
+// following morning's scheduled 02.00 WIB sync.
+func TestMetaAdsDailySyncNotSkippedByManualRun(t *testing.T) {
+	f := setupLeadFixture(t)
+	fake := &fakeInsights{pages: [][]string{{}}}
+	svc := newTestAds(t, f, fake, MetaAdsConfig{Token: "tok", AccountIDs: []string{"1"}})
+
+	f.clock = time.Date(2026, 10, 24, 16, 30, 0, 0, time.UTC) // 23.30 WIB
+	_, err := svc.Sync(t.Context(), "manual")
+	require.NoError(t, err)
+	f.clock = time.Date(2026, 10, 24, 19, 0, 0, 0, time.UTC) // 02.00 WIB, 2.5 hours later
+	due, err := svc.DueForDailySync(t.Context())
+	require.NoError(t, err)
+	require.True(t, due)
+
+	f.clock = time.Date(2026, 10, 25, 18, 45, 0, 0, time.UTC) // 01.45 WIB next day
+	_, err = svc.Sync(t.Context(), "manual")
+	require.NoError(t, err)
+	f.clock = time.Date(2026, 10, 25, 19, 0, 0, 0, time.UTC) // 02.00 WIB
+	due, err = svc.DueForDailySync(t.Context())
+	require.NoError(t, err)
+	require.True(t, due)
+
+	_, err = svc.Sync(t.Context(), "otomatis")
+	require.NoError(t, err)
+	due, err = svc.DueForDailySync(t.Context())
+	require.NoError(t, err)
+	require.False(t, due)
 }
 
 func TestMetaAdsReportJoinsCampaignsWithLeadSources(t *testing.T) {
