@@ -227,8 +227,8 @@ func (q *Queries) ListKelasAktifBeranda(ctx context.Context, guruID interface{})
 const listPertemuanKelasSejak = `-- name: ListPertemuanKelasSejak :many
 SELECT id, kelas_id, tanggal, status
 FROM pertemuan
-WHERE kelas_id IN (/*SLICE:kelas_ids*/?)
-  AND tanggal >= CAST(?2 AS TEXT)
+WHERE tanggal >= CAST(?1 AS TEXT)
+  AND kelas_id IN (/*SLICE:kelas_ids*/?)
   AND status IN ('berlangsung', 'selesai')
 ORDER BY tanggal, id
 `
@@ -247,7 +247,7 @@ type ListPertemuanKelasSejakRow struct {
 
 func (q *Queries) ListPertemuanKelasSejak(ctx context.Context, arg ListPertemuanKelasSejakParams) ([]ListPertemuanKelasSejakRow, error) {
 	query := listPertemuanKelasSejak
-	var queryParams []interface{}
+	queryParams := []interface{}{arg.Sejak}
 	if len(arg.KelasIds) > 0 {
 		for _, v := range arg.KelasIds {
 			queryParams = append(queryParams, v)
@@ -256,7 +256,6 @@ func (q *Queries) ListPertemuanKelasSejak(ctx context.Context, arg ListPertemuan
 	} else {
 		query = strings.Replace(query, "/*SLICE:kelas_ids*/?", "NULL", 1)
 	}
-	queryParams = append(queryParams, arg.Sejak)
 	rows, err := q.db.QueryContext(ctx, query, queryParams...)
 	if err != nil {
 		return nil, err
