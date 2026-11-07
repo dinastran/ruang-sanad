@@ -169,6 +169,30 @@ func TestBerandaHariIniDanAbsensiTertunda(t *testing.T) {
 	require.NotEmpty(t, slotKelas(admin.HariIni, milikB))
 }
 
+// Regression: the SQL uses a dynamic class-ID list. The date bind must
+// remain valid when the list grows beyond one class.
+func TestBerandaMultiKelasTanggalFilter(t *testing.T) {
+	f := setupBeranda(t)
+	kelasA := f.kelas(t, "Senin A", "Senin, jam 08.00 WIB", f.guruA, "2026-09-01", 1)
+	kelasB := f.kelas(t, "Senin B", "Senin, jam 09.00 WIB", f.guruA, "2026-09-01", 1)
+	f.pertemuan(t, kelasA, "2026-09-14", "selesai") // older than the query window
+	f.pertemuan(t, kelasA, "2026-09-21", "selesai")
+	f.pertemuan(t, kelasB, "2026-09-28", "berlangsung")
+
+	rows, err := queries.NewQuerier(f.db).ListPertemuanKelasSejak(t.Context(), queries.ListPertemuanKelasSejakParams{
+		KelasIds: []int64{kelasA, kelasB},
+		Sejak:    "2026-09-20",
+	})
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	require.Equal(t, kelasA, rows[0].KelasID)
+	require.Equal(t, kelasB, rows[1].KelasID)
+
+	beranda, err := f.service.GetBeranda(&f.guruA, f.today)
+	require.NoError(t, err, "dashboard must load when a teacher has multiple active classes")
+	require.Equal(t, models.SlotBerlangsung, slotKelas(beranda.HariIni, kelasB)[0].Status)
+}
+
 func TestBerandaPertemuanDimajukanSehariDianggapSelesai(t *testing.T) {
 	f := setupBeranda(t)
 	kelas := f.kelas(t, "Kamis", "Kamis, jam 19.00 WIB", f.guruA, "2026-09-01", 1)
