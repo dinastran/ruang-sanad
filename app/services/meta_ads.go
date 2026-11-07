@@ -85,10 +85,12 @@ func (s *MetaAdsService) Enabled() bool { return s.cfg.Token != "" && len(s.cfg.
 
 func (s *MetaAdsService) nowUTC() time.Time { return s.now().UTC().Truncate(time.Second) }
 
-// DueForDailySync is true once a day after 02.00 WIB: when there is no
-// successful sync in the last 20 hours.
+// DueForDailySync is true after 02.00 WIB if no sync has succeeded
+// since today's 02.00 WIB cutoff. A rolling 20-hour window can skip the
+// morning sync after a late manual run or trigger twice on the same WIB date.
 func (s *MetaAdsService) DueForDailySync(ctx context.Context) (bool, error) {
-	if !s.Enabled() || s.now().In(wib).Hour() < 2 {
+	now := s.now().In(wib)
+	if !s.Enabled() || now.Hour() < 2 {
 		return false, nil
 	}
 	last, err := s.querier.GetLastSuccessfulMetaAdsSyncRun(ctx)
@@ -98,7 +100,8 @@ func (s *MetaAdsService) DueForDailySync(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return last.StartedAt.Before(s.nowUTC().Add(-20 * time.Hour)), nil
+	cutoff := time.Date(now.Year(), now.Month(), now.Day(), 2, 0, 0, 0, wib)
+	return last.StartedAt.Before(cutoff), nil
 }
 
 // insightRow is one ad on one day from GET /{act}/insights.
