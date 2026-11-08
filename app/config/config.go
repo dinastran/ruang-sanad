@@ -61,6 +61,11 @@ type Config struct {
 	MetaAdsToken     string
 	MetaAdAccountIDs []string
 	MetaAppSecret    string
+
+	// OAuthRedirectHosts are the hosts an AI app may use as OAuth redirect
+	// (callback) when it registers to connect to /mcp. Loopback is always
+	// allowed for local MCP clients.
+	OAuthRedirectHosts []string
 }
 
 var AppConfig *Config
@@ -111,6 +116,8 @@ func Load() *Config {
 		MetaAdsToken:     strings.TrimSpace(getEnv("META_ADS_TOKEN", "")),
 		MetaAdAccountIDs: splitList(getEnv("META_AD_ACCOUNT_IDS", "")),
 		MetaAppSecret:    strings.TrimSpace(getEnv("META_APP_SECRET", "")),
+
+		OAuthRedirectHosts: splitList(getEnv("OAUTH_REDIRECT_HOSTS", "claude.ai,claude.com,chatgpt.com,chat.openai.com")),
 	}
 
 	return AppConfig

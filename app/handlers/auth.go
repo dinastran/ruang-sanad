@@ -74,7 +74,7 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		sess.Regenerate()
 	}
 
-	return h.inertiaService.Redirect(c, roleHome(user.Role))
+	return h.inertiaService.Redirect(c, afterLogin(c, user.Role))
 }
 
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
@@ -113,7 +113,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		sess.Regenerate()
 	}
 
-	return h.inertiaService.Redirect(c, roleHome(user.Role))
+	return h.inertiaService.Redirect(c, afterLogin(c, user.Role))
 }
 
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
@@ -177,7 +177,16 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 		sess.Regenerate()
 	}
 
-	return h.inertiaService.Redirect(c, roleHome(user.Role))
+	return h.inertiaService.Redirect(c, afterLogin(c, user.Role))
+}
+
+// afterLogin returns where to go after logging in: back to a pending AI app
+// connection request (OAuth consent page) if there is one, else the role home.
+func afterLogin(c *fiber.Ctx, role models.UserRole) string {
+	if p := popOAuthReturn(c); p != "" {
+		return p
+	}
+	return roleHome(role)
 }
 
 func roleHome(role models.UserRole) string {

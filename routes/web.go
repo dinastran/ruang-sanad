@@ -51,6 +51,7 @@ type Handlers struct {
 	ProductCRM                  *handlers.ProductCRMHandler
 	ProductOrders               *handlers.ProductOrderHandler
 	MCP                         *handlers.MCPHandler
+	OAuth                       *handlers.OAuthHandler
 	AIAkses                     *handlers.AIAksesHandler
 	CsAiIngest                  *handlers.CsAiIngestHandler
 	Leads                       *handlers.LeadHandler
@@ -71,6 +72,7 @@ func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *
 	setupAppRoutes(app, h, store, userService, csrfMiddleware)
 	setupAdminRoutes(app, h, store, userService, csrfMiddleware)
 	setupMCPRoutes(app, h.MCP)
+	setupOAuthRoutes(app, h.OAuth, store, csrfMiddleware)
 	setupIntegrationRoutes(app, h.CsAiIngest)
 }
 
@@ -94,6 +96,25 @@ func setupMCPRoutes(app *fiber.App, h *handlers.MCPHandler) {
 	app.Post("/mcp", middlewares.MCPRateLimit.Limit(), h.Handle)
 	app.Get("/mcp", h.MethodNotAllowed)
 	app.Delete("/mcp", h.MethodNotAllowed)
+}
+
+// setupOAuthRoutes exposes the OAuth 2.1 authorization server Claude.ai and
+// ChatGPT use to connect to /mcp. Discovery, registration, token and revoke
+// are machine endpoints (no session/CSRF); the consent page uses the normal
+// login session and CSRF protection.
+func setupOAuthRoutes(app *fiber.App, h *handlers.OAuthHandler, store *session.Store, csrfMiddleware *middlewares.CSRFMiddleware) {
+	if h == nil {
+		return
+	}
+	app.Get("/.well-known/oauth-protected-resource", h.ProtectedResourceMetadata)
+	app.Get("/.well-known/oauth-protected-resource/mcp", h.ProtectedResourceMetadata)
+	app.Get("/.well-known/oauth-authorization-server", h.AuthorizationServerMetadata)
+	app.Get("/.well-known/oauth-authorization-server/mcp", h.AuthorizationServerMetadata)
+	app.Post("/oauth/register", middlewares.OAuthRegisterRateLimit.Limit(), h.Register)
+	app.Post("/oauth/token", middlewares.OAuthTokenRateLimit.Limit(), h.Token)
+	app.Post("/oauth/revoke", middlewares.OAuthTokenRateLimit.Limit(), h.Revoke)
+	app.Get("/oauth/authorize", csrfMiddleware.Protect(), h.Authorize)
+	app.Post("/oauth/authorize", middlewares.AuthRequired(store), csrfMiddleware.Protect(), h.Approve)
 }
 
 func setupStaticRoutes(app *fiber.App) {

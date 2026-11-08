@@ -86,8 +86,14 @@ func (h *MCPHandler) originAllowed(c *fiber.Ctx) bool {
 	return h.allowedOrigins[origin] || origin == h.baseURL(c)
 }
 
-func mcpUnauthorized(c *fiber.Ctx, msg string) error {
-	c.Set(fiber.HeaderWWWAuthenticate, `Bearer realm="ruang-sanad", error="invalid_token"`)
+// unauthorized answers 401 with the RFC 9728 resource_metadata pointer so
+// OAuth MCP clients (Claude.ai, ChatGPT) can discover how to log in.
+func (h *MCPHandler) unauthorized(c *fiber.Ctx, msg string, tokenSent bool) error {
+	challenge := `Bearer realm="ruang-sanad", resource_metadata="` + h.baseURL(c) + `/.well-known/oauth-protected-resource/mcp"`
+	if tokenSent {
+		challenge += `, error="invalid_token"`
+	}
+	c.Set(fiber.HeaderWWWAuthenticate, challenge)
 	return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": msg})
 }
 
@@ -98,12 +104,12 @@ func (h *MCPHandler) Handle(c *fiber.Ctx) error {
 	}
 	auth := c.Get(fiber.HeaderAuthorization)
 	if !strings.HasPrefix(auth, "Bearer ") {
-		return mcpUnauthorized(c, "butuh header Authorization: Bearer <token AI dari halaman Akses AI>")
+		return h.unauthorized(c, "butuh login OAuth atau header Authorization: Bearer <token AI dari halaman Akses AI>", false)
 	}
 	principal, err := h.tokens.Authenticate(c.UserContext(), strings.TrimPrefix(auth, "Bearer "))
 	if err != nil {
 		if errors.Is(err, services.ErrAITokenInvalid) || errors.Is(err, services.ErrAIRoleDitolak) {
-			return mcpUnauthorized(c, err.Error())
+			return h.unauthorized(c, err.Error(), true)
 		}
 		slog.Error("mcp auth failed", "error", err)
 		return c.SendStatus(fiber.StatusInternalServerError)
