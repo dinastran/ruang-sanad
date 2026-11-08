@@ -247,6 +247,7 @@ func main() {
 		ProductCRM:                  productCRMHandler,
 		ProductOrders:               productOrderHandler,
 		MCP:                         handlers.NewMCPHandler(aiTokenService, aiAgentService, cfg.AppURL, cfg.AllowedOrigins, Version),
+		OAuth:                       handlers.NewOAuthHandler(services.NewOAuthService(querier, cfg.OAuthRedirectHosts), aiAgentService, userService, sessionStore, inertiaService, cfg.AppURL),
 		AIAkses:                     handlers.NewAIAksesHandler(aiTokenService, aiAgentService, userService, sessionStore, inertiaService, cfg.AppURL),
 		CsAiIngest:                  handlers.NewCsAiIngestHandler(leadService, cfg.CSBridgeIngestToken, cfg.CSBridgeAllowedCIDRs).WithJadwal(jadwalService),
 		JadwalPenawaran:             handlers.NewJadwalPenawaranHandler(jadwalService, sessionStore, inertiaService),

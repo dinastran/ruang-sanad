@@ -15,6 +15,8 @@
 		revoked_at: string | null;
 		created_at: string;
 		can_write: boolean;
+		jenis: "pribadi" | "oauth";
+		klien: string;
 	}
 
 	interface AuditEntry {
@@ -53,7 +55,16 @@
 	let membuat = $state(false);
 	let tokenBaru = $state<string | null>(null);
 	let copied = $state<string | null>(null);
-	let klien = $state<"claude-desktop" | "claude-code" | "hermes">("claude-desktop");
+	type Klien = "claude-web" | "chatgpt" | "claude-desktop" | "claude-code" | "hermes";
+	let klien = $state<Klien>("claude-web");
+	const pakaiOAuth = $derived(klien === "claude-web" || klien === "chatgpt");
+	const pilihanKlien: [Klien, string][] = [
+		["claude-web", "Claude.ai"],
+		["chatgpt", "ChatGPT"],
+		["claude-desktop", "Claude Desktop (token)"],
+		["claude-code", "Claude Code"],
+		["hermes", "Hermes Agent"],
+	];
 
 	const tokenTampil = $derived(tokenBaru ?? "<TOKEN_ANDA>");
 
@@ -61,6 +72,7 @@
 		if (klien === "claude-code") {
 			return `claude mcp add --transport http ruang-sanad ${mcp_url} \\\n  --header "Authorization: Bearer ${tokenTampil}"`;
 		}
+		if (klien === "claude-web" || klien === "chatgpt") return mcp_url;
 		if (klien === "hermes") {
 			return `# ~/.hermes/config.yaml\nmcp_servers:\n  ruang_sanad:\n    url: "${mcp_url}"\n    headers:\n      Authorization: "Bearer ${tokenTampil}"`;
 		}
@@ -135,7 +147,10 @@
 	}
 
 	function cabut(t: AIToken) {
-		if (!confirm(`Cabut token "${t.nama}"? AI agent yang memakainya langsung kehilangan akses.`)) return;
+		const pesan = t.jenis === "oauth"
+			? `Putuskan koneksi "${t.nama}"? Aplikasi itu langsung kehilangan akses dan harus Connect ulang.`
+			: `Cabut token "${t.nama}"? AI agent yang memakainya langsung kehilangan akses.`;
+		if (!confirm(pesan)) return;
 		router.delete(`/app/ai-akses/token/${t.id}`, {
 			preserveScroll: true,
 			onSuccess: (page) => {
@@ -159,8 +174,8 @@
 			</div>
 			<h1 class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white mb-2">Akses AI</h1>
 			<p class="text-neutral-600 dark:text-neutral-400 max-w-2xl">
-				Hubungkan Claude, Hermes, atau AI agent lain ke data dashboard. Aksesnya membaca sesuai role Anda (token tulis CRM
-				khusus dibuat super admin), dan tidak pernah mengirim nomor HP, email, domisili, atau voice note.
+				Hubungkan Claude.ai, ChatGPT, Hermes, atau AI agent lain ke data dashboard. Aksesnya membaca sesuai role Anda (izin tulis CRM
+				khusus super admin), dan tidak pernah mengirim nomor HP, email, domisili, atau voice note.
 			</p>
 		</div>
 	</div>
@@ -241,16 +256,39 @@
 			<section aria-labelledby="cara-pasang">
 				<h2 id="cara-pasang" class="text-lg font-semibold text-neutral-900 dark:text-white mb-1">Cara memasang</h2>
 				<p class="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
-					{tokenBaru ? "Token baru sudah dimasukkan ke contoh di bawah." : "Ganti <TOKEN_ANDA> dengan token yang Anda buat."}
+					{#if pakaiOAuth}
+						Tanpa token: cukup login dan setujui akses di dashboard ini.
+					{:else}
+						{tokenBaru ? "Token baru sudah dimasukkan ke contoh di bawah." : "Ganti <TOKEN_ANDA> dengan token yang Anda buat."}
+					{/if}
 				</p>
 				<div class="flex flex-wrap gap-2 mb-3" role="tablist" aria-label="Pilih aplikasi AI">
-					{#each [["claude-desktop", "Claude Desktop"], ["claude-code", "Claude Code"], ["hermes", "Hermes Agent"]] as [key, label] (key)}
-						<button type="button" role="tab" aria-selected={klien === key} onclick={() => (klien = key as typeof klien)}
+					{#each pilihanKlien as [key, label] (key)}
+						<button type="button" role="tab" aria-selected={klien === key} onclick={() => (klien = key)}
 							class="rounded-lg px-3 py-1.5 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-brand-400 {klien === key ? 'bg-brand-400/10 text-brand-700 dark:text-brand-400' : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'}">
 							{label}
 						</button>
 					{/each}
 				</div>
+				{#if pakaiOAuth}
+					<ol class="space-y-3 rounded-xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-5 text-sm text-neutral-700 dark:text-neutral-300 list-decimal list-inside marker:font-semibold marker:text-brand-600">
+						{#if klien === "claude-web"}
+							<li>Buka <span class="font-medium text-neutral-900 dark:text-white">claude.ai → Settings → Connectors</span>, pilih <span class="font-medium text-neutral-900 dark:text-white">Add custom connector</span>.</li>
+							<li>Isi nama <span class="font-mono">Ruang Sanad</span> dan URL server di atas. Kosongkan Advanced settings (Client ID/Secret).</li>
+							<li>Klik <span class="font-medium text-neutral-900 dark:text-white">Connect</span>. Anda dibawa ke dashboard ini: login bila diminta, lalu pilih <span class="font-medium text-neutral-900 dark:text-white">Izinkan</span>.</li>
+							<li>Di percakapan baru, aktifkan connector Ruang Sanad dari menu alat. Connector juga otomatis tersedia di Claude Desktop dan aplikasi HP.</li>
+						{:else}
+							<li>Di <span class="font-medium text-neutral-900 dark:text-white">chatgpt.com → Settings → Apps &amp; Connectors → Advanced</span>, nyalakan <span class="font-medium text-neutral-900 dark:text-white">Developer mode</span>.</li>
+							<li>Kembali ke Apps &amp; Connectors, pilih <span class="font-medium text-neutral-900 dark:text-white">Create</span>. Isi nama <span class="font-mono">Ruang Sanad</span>, URL server di atas, dan Authentication <span class="font-mono">OAuth</span>.</li>
+							<li>Klik <span class="font-medium text-neutral-900 dark:text-white">Create</span> lalu Connect. Login di dashboard ini bila diminta, lalu pilih <span class="font-medium text-neutral-900 dark:text-white">Izinkan</span>.</li>
+							<li>Di percakapan, pilih connector Ruang Sanad dari menu <span class="font-mono">+</span> → Developer mode.</li>
+						{/if}
+					</ol>
+					<p class="text-xs text-neutral-500 dark:text-neutral-400 mt-2">
+						Butuh paket berbayar yang mendukung custom connector{klien === "chatgpt" ? " (ChatGPT Plus/Pro/Business; menu bisa berbeda antar versi)" : " (Claude Pro/Max/Team/Enterprise)"}.
+						Koneksi aktif muncul di tabel di bawah dan bisa dicabut kapan saja.
+					</p>
+				{:else}
 				<div class="relative">
 					<pre class="overflow-x-auto rounded-xl bg-neutral-900 text-neutral-100 p-4 text-xs leading-relaxed"><code>{snippet}</code></pre>
 					<button type="button" onclick={() => salin(snippet, "snippet")}
@@ -266,17 +304,17 @@
 					{:else}
 						Tambahkan ke konfigurasi Hermes, lalu restart Hermes. Format bisa berbeda antar versi; cek dokumentasi Hermes Anda.
 					{/if}
-					Connect langsung dari claude.ai (web) dan ChatGPT menyusul di tahap 2 (login OAuth).
 				</p>
+				{/if}
 			</section>
 
 			<!-- Tokens -->
 			<section aria-labelledby="token-anda">
-				<h2 id="token-anda" class="text-lg font-semibold text-neutral-900 dark:text-white mb-3">Token Anda</h2>
+				<h2 id="token-anda" class="text-lg font-semibold text-neutral-900 dark:text-white mb-3">Token &amp; koneksi Anda</h2>
 				{#if tokens.length === 0}
 					<div class="rounded-2xl border border-dashed border-neutral-300 dark:border-white/[0.1] p-8 text-center">
 						<KeyRound class="w-8 h-8 mx-auto text-neutral-400 mb-2" />
-						<p class="text-sm text-neutral-600 dark:text-neutral-400">Belum ada token. Buat satu di atas untuk menghubungkan AI agent.</p>
+						<p class="text-sm text-neutral-600 dark:text-neutral-400">Belum ada token atau koneksi. Hubungkan Claude.ai/ChatGPT, atau buat token di atas.</p>
 					</div>
 				{:else}
 					<div class="overflow-x-auto rounded-2xl border border-neutral-200/80 dark:border-white/[0.06]">
@@ -296,7 +334,11 @@
 									<tr>
 										<td class="px-4 py-3">
 											<p class="font-medium text-neutral-900 dark:text-white">{t.nama}</p>
-											<p class="text-xs text-neutral-500 font-mono">{t.prefix}… · dibuat {tanggal(t.created_at)}</p>
+											{#if t.jenis === "oauth"}
+												<p class="text-xs text-neutral-500"><span class="rounded-full bg-sky-500/10 px-2 py-0.5 font-medium text-sky-700 dark:text-sky-300">Koneksi OAuth</span> · terhubung {tanggal(t.created_at)}</p>
+											{:else}
+												<p class="text-xs text-neutral-500 font-mono">{t.prefix}… · dibuat {tanggal(t.created_at)}</p>
+											{/if}
 											{#if t.can_write}<span class="mt-1 inline-block rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">Tulis CRM</span>{/if}
 										</td>
 										<td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-medium {st.cls}">{st.label}</span></td>

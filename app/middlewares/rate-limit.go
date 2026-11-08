@@ -168,6 +168,22 @@ var (
 		},
 	})
 
+	// OAuthRegisterRateLimit: AI apps register themselves (OAuth DCR) once per
+	// connector setup; 20 per hour per IP is plenty.
+	OAuthRegisterRateLimit = NewRateLimiter(RateLimiterConfig{
+		MaxRequests: 20,
+		Window:      time.Hour,
+		Message:     "Terlalu banyak pendaftaran aplikasi, coba lagi nanti",
+	})
+
+	// OAuthTokenRateLimit: token exchange and refresh from Claude/ChatGPT
+	// servers, 120 per minute per IP.
+	OAuthTokenRateLimit = NewRateLimiter(RateLimiterConfig{
+		MaxRequests: 120,
+		Window:      time.Minute,
+		Message:     "Terlalu banyak permintaan token, coba lagi sebentar lagi",
+	})
+
 	// CSAIIngestRateLimit: 600 event batches per minute from the CS AI bridge.
 	CSAIIngestRateLimit = NewRateLimiter(RateLimiterConfig{
 		MaxRequests: 600,

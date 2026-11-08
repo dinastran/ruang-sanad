@@ -15,6 +15,10 @@ type AIToken struct {
 	CreatedAt  time.Time  `json:"created_at"`
 	// CanWrite allows the limited CRM write tools (PRD CRM 9.1).
 	CanWrite bool `json:"can_write"`
+	// Jenis: "pribadi" (token tempel) atau "oauth" (koneksi Claude.ai/ChatGPT).
+	Jenis string `json:"jenis"`
+	// Klien is the registered OAuth client name for jenis "oauth".
+	Klien string `json:"klien"`
 }
 
 // AITokenAuth is the token row joined with its owner, used to authenticate

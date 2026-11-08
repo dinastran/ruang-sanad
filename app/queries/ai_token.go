@@ -33,8 +33,10 @@ func (q *Queries) CreateAIToken(ctx context.Context, userID int64, nama, tokenHa
 }
 
 func (q *Queries) ListAITokensByUser(ctx context.Context, userID int64) ([]models.AIToken, error) {
-	rows, err := q.db.QueryContext(ctx, `SELECT id, user_id, nama, prefix, expires_at, last_used_at, revoked_at, created_at, can_write
-	 FROM ai_tokens WHERE user_id = ? ORDER BY created_at DESC, id DESC`, userID)
+	rows, err := q.db.QueryContext(ctx, `SELECT t.id, t.user_id, t.nama, t.prefix, t.expires_at, t.last_used_at, t.revoked_at, t.created_at, t.can_write,
+	 t.jenis, COALESCE(c.client_name, '')
+	 FROM ai_tokens t LEFT JOIN oauth_clients c ON c.client_id = t.oauth_client_id
+	 WHERE t.user_id = ? ORDER BY t.created_at DESC, t.id DESC`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +45,7 @@ func (q *Queries) ListAITokensByUser(ctx context.Context, userID int64) ([]model
 	for rows.Next() {
 		var t models.AIToken
 		var lastUsed, revoked sql.NullTime
-		if err := rows.Scan(&t.ID, &t.UserID, &t.Nama, &t.Prefix, &t.ExpiresAt, &lastUsed, &revoked, &t.CreatedAt, &t.CanWrite); err != nil {
+		if err := rows.Scan(&t.ID, &t.UserID, &t.Nama, &t.Prefix, &t.ExpiresAt, &lastUsed, &revoked, &t.CreatedAt, &t.CanWrite, &t.Jenis, &t.Klien); err != nil {
 			return nil, err
 		}
 		t.LastUsedAt, t.RevokedAt = nullTimePtr(lastUsed), nullTimePtr(revoked)
@@ -53,7 +55,7 @@ func (q *Queries) ListAITokensByUser(ctx context.Context, userID int64) ([]model
 }
 
 func (q *Queries) CountActiveAITokensByUser(ctx context.Context, userID int64, now time.Time) (int64, error) {
-	rows, err := q.db.QueryContext(ctx, `SELECT expires_at FROM ai_tokens WHERE user_id = ? AND revoked_at IS NULL`, userID)
+	rows, err := q.db.QueryContext(ctx, `SELECT expires_at FROM ai_tokens WHERE user_id = ? AND revoked_at IS NULL AND jenis = 'pribadi'`, userID)
 	if err != nil {
 		return 0, err
 	}
@@ -75,7 +77,7 @@ func (q *Queries) GetAITokenAuthByHash(ctx context.Context, tokenHash string) (*
 	var a models.AITokenAuth
 	var revoked, lastUsed sql.NullTime
 	err := q.db.QueryRowContext(ctx, `SELECT t.id, t.user_id, u.name, u.role, t.expires_at, t.revoked_at, t.last_used_at, t.can_write
-	 FROM ai_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?`, tokenHash).
+	 FROM ai_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ? AND t.jenis = 'pribadi'`, tokenHash).
 		Scan(&a.TokenID, &a.UserID, &a.UserName, &a.Role, &a.ExpiresAt, &revoked, &lastUsed, &a.CanWrite)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrAITokenNotFound

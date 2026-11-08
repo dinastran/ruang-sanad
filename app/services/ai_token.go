@@ -137,6 +137,9 @@ func (s *AITokenService) Revoke(userID, tokenID int64) error {
 // is re-checked on every call, so demoting a user cuts AI access immediately.
 func (s *AITokenService) Authenticate(ctx context.Context, plain string) (*models.AIPrincipal, error) {
 	plain = strings.TrimSpace(plain)
+	if strings.HasPrefix(plain, OAuthAccessPrefix) {
+		return s.authenticateOAuth(ctx, plain)
+	}
 	if !strings.HasPrefix(plain, AITokenPrefix) || len(plain) < len(AITokenPrefix)+20 {
 		return nil, ErrAITokenInvalid
 	}
@@ -159,6 +162,32 @@ func (s *AITokenService) Authenticate(ctx context.Context, plain string) (*model
 		_ = s.querier.TouchAIToken(ctx, auth.TokenID, now)
 	}
 	return &models.AIPrincipal{UserID: auth.UserID, TokenID: auth.TokenID, UserName: auth.UserName, Role: auth.Role, CanWrite: auth.CanWrite}, nil
+}
+
+// authenticateOAuth resolves an OAuth access token issued to Claude.ai /
+// ChatGPT. The connection (ai_tokens row) must still be active and the
+// owner's current role allowed, like a personal token.
+func (s *AITokenService) authenticateOAuth(ctx context.Context, plain string) (*models.AIPrincipal, error) {
+	t, err := s.querier.GetOAuthTokenAuthByHash(ctx, hashAIToken(plain))
+	if errors.Is(err, queries.ErrOAuthTokenNotFound) {
+		return nil, ErrAITokenInvalid
+	}
+	if err != nil {
+		return nil, err
+	}
+	now := s.now()
+	if t.Jenis != "access" || t.RevokedAt != nil || !t.ExpiresAt.After(now) ||
+		t.GrantRevokedAt != nil || !t.GrantExpiresAt.After(now) {
+		return nil, ErrAITokenInvalid
+	}
+	if !AIRoleAllowed(t.Role) {
+		return nil, ErrAIRoleDitolak
+	}
+	if t.LastUsedAt == nil || now.Sub(*t.LastUsedAt) >= aiTokenTouchInterval {
+		_ = s.querier.TouchAIToken(ctx, t.GrantID, now)
+	}
+	canWrite := t.CanWrite && t.Role == "super_admin"
+	return &models.AIPrincipal{UserID: t.UserID, TokenID: t.GrantID, UserName: t.UserName, Role: t.Role, CanWrite: canWrite}, nil
 }
 
 // ListAudit returns the caller's own recent AI tool calls; super_admin sees
