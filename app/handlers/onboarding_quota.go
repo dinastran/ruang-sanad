@@ -3,9 +3,9 @@ package handlers
 import (
 	"strconv"
 	"strings"
-	"github.com/maulanashalihin/laju-go/app/queries"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/maulanashalihin/laju-go/app/queries"
 	"github.com/maulanashalihin/laju-go/app/services"
 )
 
