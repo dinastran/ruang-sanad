@@ -2,6 +2,9 @@ package models
 
 type OnboardingQuotaBoard struct {
 	Classes []OnboardingQuotaClass `json:"classes"`
+	Total int64 `json:"total"`
+	Page int64 `json:"page"`
+	PageSize int64 `json:"page_size"`
 }
 
 type OnboardingQuotaClass struct {
@@ -38,4 +41,21 @@ type OnboardingQuotaAction struct {
 	Note      string `json:"note"`
 	ActorName string `json:"actor_name"`
 	CreatedAt string `json:"created_at"`
+}
+
+type OnboardingClassMember struct {
+	ID int64 `json:"id"`
+	Nama string `json:"nama"`
+	IDMahasantri string `json:"id_mahasantri"`
+	Status string `json:"status"`
+	Stage string `json:"stage"`
+}
+
+type OnboardingClassMembers struct {
+	KelasID int64 `json:"kelas_id"`
+	Nama string `json:"nama"`
+	Members []OnboardingClassMember `json:"members"`
+	Total int64 `json:"total"`
+	Page int64 `json:"page"`
+	PageSize int64 `json:"page_size"`
 }
