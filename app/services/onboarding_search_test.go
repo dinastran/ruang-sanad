@@ -59,7 +59,8 @@ func TestOnboardingBoardSLAFiltersExcludeTerminal(t *testing.T) {
 	db, service, caseID, _, _ := onboardingFixture(t)
 	ctx := context.Background()
 	now := time.Date(2026, 11, 10, 10, 0, 0, 0, time.FixedZone("WIB", 7*3600))
-	_, err := db.Exec("UPDATE onboarding_cases SET deadline_at=? WHERE id=?", now.Add(-time.Hour).UTC(), caseID)
+	// Respect the schema invariant deadline_at > registered_at.
+	_, err := db.Exec("UPDATE onboarding_cases SET registered_at=?, deadline_at=? WHERE id=?", now.AddDate(0, 0, -16).UTC(), now.Add(-time.Hour).UTC(), caseID)
 	require.NoError(t, err)
 
 	overdue, err := service.BoardFiltered(ctx, 1, queries.OnboardingBoardFilter{SLA:"overdue",Now:now})
@@ -126,10 +127,7 @@ func TestOnboardingQuotaFilteredAndClassMemberRoster(t *testing.T) {
 func TestOnboardingQuotaSearchBeyondFormer200ClassLimit(t *testing.T) {
 	db, service, kelasID, _, _, _ := quotaFixture(t, "Reguler")
 	ctx := context.Background()
-	var firstSantri int64
-	require.NoError(t, db.QueryRow("SELECT santri_id FROM onboarding_cases LIMIT 1").Scan(&firstSantri))
 	_ = kelasID
-	_ = firstSantri
 
 	for i := 0; i < 205; i++ {
 		name := fmt.Sprintf("Kelas Uji %03d", i)
