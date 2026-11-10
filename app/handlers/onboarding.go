@@ -3,8 +3,10 @@ package handlers
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/maulanashalihin/laju-go/app/queries"
 	"github.com/maulanashalihin/laju-go/app/services"
 	"github.com/maulanashalihin/laju-go/app/session"
 )
@@ -53,7 +55,42 @@ func (h *OnboardingHandler) Index(c *fiber.Ctx) error {
 	if err != nil || page < 1 {
 		page = 1
 	}
-	board, err := h.service.Board(c.UserContext(), page)
+	if page > 10000 {
+		return c.Status(fiber.StatusBadRequest).SendString("Halaman tidak valid")
+	}
+	query := strings.TrimSpace(c.Query("q", ""))
+	if len([]rune(query)) > 100 {
+		return c.Status(fiber.StatusBadRequest).SendString("Pencarian terlalu panjang")
+	}
+	filter := queries.OnboardingBoardFilter{
+		Query:    query,
+		SLA:      c.Query("sla", ""),
+		Angkatan: strings.TrimSpace(c.Query("angkatan", "")),
+	}
+	if filter.SLA != "" && filter.SLA != "overdue" && filter.SLA != "at_risk" {
+		return c.Status(fiber.StatusBadRequest).SendString("Filter SLA tidak valid")
+	}
+	if len(filter.Angkatan) > 60 {
+		return c.Status(fiber.StatusBadRequest).SendString("Filter angkatan tidak valid")
+	}
+	pic := c.Query("pic", "")
+	if pic == "unassigned" {
+		filter.UnassignedPIC = true
+	} else if pic != "" {
+		id, parseErr := strconv.ParseInt(pic, 10, 64)
+		if parseErr != nil || id <= 0 {
+			return c.Status(fiber.StatusBadRequest).SendString("Filter PIC tidak valid")
+		}
+		filter.PICID = id
+	}
+	if class := c.Query("class_id", ""); class != "" {
+		id, parseErr := strconv.ParseInt(class, 10, 64)
+		if parseErr != nil || id <= 0 {
+			return c.Status(fiber.StatusBadRequest).SendString("Filter kelas tidak valid")
+		}
+		filter.ClassID = id
+	}
+	board, err := h.service.BoardFiltered(c.UserContext(), page, filter)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString("Gagal memuat onboarding")
 	}
@@ -65,7 +102,8 @@ func (h *OnboardingHandler) Index(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString("Gagal memuat notifikasi onboarding")
 	}
-	return h.inertia.Render(c, "app/OnboardingKanban", fiber.Map{"user": user, "board": board, "summary": summary, "notices": notices})
+	return h.inertia.Render(c, "app/OnboardingKanban", fiber.Map{"user": user, "board": board, "summary": summary, "notices": notices,
+		"filters": fiber.Map{"q": query, "pic": pic, "sla": filter.SLA, "class_id": c.Query("class_id", ""), "angkatan": filter.Angkatan}})
 }
 
 func onboardingCaseID(c *fiber.Ctx) (int64, error) {

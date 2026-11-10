@@ -47,27 +47,25 @@ func onboardingReason(raw string) (string, error) {
 }
 
 func (s *OnboardingService) Board(ctx context.Context, page int64) (models.OnboardingBoard, error) {
+	return s.BoardFiltered(ctx, page, queries.OnboardingBoardFilter{})
+}
+
+func (s *OnboardingService) BoardFiltered(ctx context.Context, page int64, filter queries.OnboardingBoardFilter) (models.OnboardingBoard, error) {
 	if page < 1 {
 		page = 1
 	}
 	if page > 10000 {
 		return models.OnboardingBoard{}, onboardingInputError("halaman tidak valid")
 	}
-	rows, err := s.querier.ListOnboardingBoard(ctx, queries.ListOnboardingBoardParams{
-		Limit: onboardingBoardPageSize, Offset: (page - 1) * onboardingBoardPageSize,
-	})
-	if err != nil {
-		return models.OnboardingBoard{}, err
-	}
-	total, err := s.querier.CountOnboardingBoard(ctx)
-	if err != nil {
-		return models.OnboardingBoard{}, err
-	}
-	counts, err := s.querier.CountOnboardingStages(ctx)
+	rows, total, counts, err := s.querier.ListOnboardingBoardFiltered(ctx, filter, onboardingBoardPageSize, (page-1)*onboardingBoardPageSize)
 	if err != nil {
 		return models.OnboardingBoard{}, err
 	}
 	users, err := s.querier.ListOnboardingPICs(ctx)
+	if err != nil {
+		return models.OnboardingBoard{}, err
+	}
+	options, err := s.querier.ListOnboardingClassOptions(ctx)
 	if err != nil {
 		return models.OnboardingBoard{}, err
 	}
@@ -82,6 +80,9 @@ func (s *OnboardingService) Board(ctx context.Context, page int64) (models.Onboa
 	}
 	for _, user := range users {
 		result.PICs = append(result.PICs, models.OnboardingPICOption{ID: user.ID, Name: user.Name, Email: user.Email})
+	}
+	for _, option := range options {
+		result.ClassOptions = append(result.ClassOptions, models.OnboardingClassOption{ID: option.ID, Name: option.Name})
 	}
 	for _, r := range rows {
 		card := models.OnboardingBoardCard{

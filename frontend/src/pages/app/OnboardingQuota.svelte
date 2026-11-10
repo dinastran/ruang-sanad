@@ -4,6 +4,8 @@
  import { getCSRFToken } from "@lib/utils/csrf";
  import AppLayout from "@layouts/AppLayout.svelte";
  import OnboardingWorkspaceHeader from "@components/OnboardingWorkspaceHeader.svelte";
+  import OnboardingClassFilters from "@components/OnboardingClassFilters.svelte";
+  import OnboardingClassRoster from "@components/OnboardingClassRoster.svelte";
  import ClassPlanApprovalInbox from "@components/ClassPlanApprovalInbox.svelte";
  import type { User } from "@lib/types";
  import { ClipboardCopy, History, CalendarClock, ShieldCheck } from "lucide-svelte";
@@ -26,7 +28,7 @@
  interface AlternateClassMatch {santri_id:number;class_id:number;offer_code:string;slots:MatchSlot[];reason:string}
  interface MatchingPreview {as_of:string;confirmed_demand:number;eligible_demand:number;skipped_ambiguous:number;truncated:boolean;suggestions:MatchOption[];alternative_matches?:AlternateClassMatch[];warnings:string[]}
  interface Action {id:number;event_type:string;note:string;actor_name:string;created_at:string}
- interface Props {user?:User;board:{classes:ClassControl[]};notices:{id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}[]}
+ interface Props {user?:User;board:{classes:ClassControl[];total:number;page:number;page_size:number};filters?:{q:string;status:string};notices:{id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}[]}
  let props:Props=$props();
  let user=$derived(props.user);
  let classes=$derived(props.board.classes??[]);
@@ -234,10 +236,11 @@
    </section>
   {/if}
 
-  {#if classes.length===0}
+  <OnboardingClassFilters total={props.board.total??0} page={props.board.page??1} pageSize={props.board.page_size??24} filters={props.filters}/>
+   {#if classes.length===0}
    <section class="rounded-xl border border-dashed border-neutral-300 p-10 text-center dark:border-white/15">
-    <h2 class="font-semibold">Belum ada kelas dengan kasus onboarding baru</h2>
-    <p class="mt-2 text-sm text-neutral-500">Kontrol kelas akan muncul ketika santri baru memiliki kelas dari engine existing. Data santri historis tidak di-backfill.</p>
+    <h2 class="font-semibold">{props.filters?.q||props.filters?.status?"Tidak ada kelas yang cocok dengan filter":"Belum ada kelas dengan kasus onboarding baru"}</h2>
+    <p class="mt-2 text-sm text-neutral-500">{props.filters?.q||props.filters?.status?"Ubah atau reset filter untuk melihat kelas lain.":"Kontrol kelas akan muncul ketika santri baru memiliki kelas dari engine existing. Data santri historis tidak di-backfill."}</p>
    </section>
   {:else}
    <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
@@ -257,6 +260,17 @@
       {:else if c.kekurangan>0}<p class="text-xs font-medium text-amber-700 dark:text-amber-300">Kurang {c.kekurangan} dari target operasional.</p>
       {:else}<p class="text-xs font-medium text-emerald-700 dark:text-emerald-300">Target kuota terpenuhi.</p>{/if}
       <p class="text-xs text-neutral-500">Guru: {c.guru_confirmed?"Terkonfirmasi":"Belum"} · Jadwal: {c.jadwal_confirmed?"Ada":"Belum"} · Status: {c.can_start?"Siap dicek pada Kanban":"Belum siap"}</p>
+       {#if !c.can_start}
+         <div class="rounded-md bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200" aria-label="Penghambat kesiapan kelas">
+           <p class="font-semibold">Perlu diselesaikan:</p>
+           {#if !c.is_active}<p>Kelas belum aktif</p>{/if}
+           {#if !c.guru_confirmed}<p>Guru belum ditetapkan</p>{/if}
+           {#if !c.jadwal_confirmed}<p>Jadwal belum tersedia</p>{/if}
+           {#if !c.target_kuota}<p>Target kuota belum diatur</p>
+           {:else if c.kekurangan>0 && !c.exception_approved}<p>Kuota kurang {c.kekurangan} dan belum ada exception</p>{/if}
+           {#if c.target_kuota>c.kapasitas}<p>Target melebihi kapasitas</p>{/if}
+         </div>
+       {/if}
       {#if c.private}
        <p class="rounded-md bg-neutral-100 p-2 text-xs text-neutral-600 dark:bg-white/10 dark:text-neutral-300">Private: dikecualikan dari Vacancy Alert reguler.</p>
       {:else if c.vacancy_required}
@@ -275,7 +289,8 @@
        <p class="rounded-md bg-emerald-50 p-2 text-xs text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300"><ShieldCheck size={13} class="inline"/> Exception disetujui {date(c.exception_approved_at)}. {c.exception_reason}</p>
       {/if}
       <div class="flex flex-wrap gap-2 border-t border-neutral-100 pt-3 dark:border-white/10">
-       {#if superAdmin}<button type="button" class={btn} onclick={()=>showForm(c,"quota")}>Atur target</button>{/if}
+       <OnboardingClassRoster kelasID={c.kelas_id} kelasNama={c.nama}/>
+        {#if superAdmin}<button type="button" class={btn} onclick={()=>showForm(c,"quota")}>Atur target</button>{/if}
        {#if c.target_kuota>0&&!c.private&&c.kekurangan>0&&c.day>=8}
         {#if cs||adminKelas}<button type="button" class={btn} onclick={()=>showForm(c,"cs_followup")}>Tindak lanjut CS</button>{/if}
         {#if adminKelas}<button type="button" class={btn} onclick={()=>showForm(c,"marketing_followup")}>Marketing</button>{/if}
@@ -290,7 +305,8 @@
     {/each}
    </div>
   {/if}
-  <p class="text-xs text-neutral-500">Kuota adalah target operasional, tidak menggantikan kapasitas maksimum kelas. Alert tidak dikirim otomatis; penandaan hanya dilakukan setelah pengiriman manual. Super Admin mengendalikan target dan exception.</p>
+  <OnboardingClassFilters total={props.board.total??0} page={props.board.page??1} pageSize={props.board.page_size??24} filters={props.filters} pagination={true}/>
+   <p class="text-xs text-neutral-500">Kuota adalah target operasional, tidak menggantikan kapasitas maksimum kelas. Alert tidak dikirim otomatis; penandaan hanya dilakukan setelah pengiriman manual. Super Admin mengendalikan target dan exception.</p>
  </div>
 
  {#if selected}

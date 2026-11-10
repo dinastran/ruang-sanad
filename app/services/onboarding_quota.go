@@ -103,6 +103,62 @@ func (s *OnboardingService) ClassControls(ctx context.Context) (models.Onboardin
 	}
 	return models.OnboardingQuotaBoard{Classes: items}, nil
 }
+
+// ClassControlsFiltered filters against the entire qualifying class set
+// before pagination. The older ClassControls API stays available to callers.
+func (s *OnboardingService) ClassControlsFiltered(ctx context.Context, page int64, filter queries.OnboardingQuotaFilter) (models.OnboardingQuotaBoard, error) {
+	const pageSize int64 = 24
+	if page < 1 {
+		page = 1
+	}
+	if page > 10000 {
+		return models.OnboardingQuotaBoard{}, onboardingInputError("halaman tidak valid")
+	}
+	rows, total, err := s.querier.ListOnboardingClassControlsFiltered(ctx, filter, pageSize, (page-1)*pageSize)
+	if err != nil {
+		return models.OnboardingQuotaBoard{}, err
+	}
+	classes := make([]models.OnboardingQuotaClass, 0, len(rows))
+	now := time.Now().UTC()
+	for _, row := range rows {
+		classes = append(classes, quotaRowToModel(row, now))
+	}
+	return models.OnboardingQuotaBoard{Classes: classes, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
+// ClassMembers returns only active/cuti santri currently linked to the class.
+// This is the same population used by the onboarding quota counter.
+func (s *OnboardingService) ClassMembers(ctx context.Context, id, page int64) (models.OnboardingClassMembers, error) {
+	const pageSize int64 = 50
+	if id <= 0 {
+		return models.OnboardingClassMembers{}, ErrOnboardingNotFound
+	}
+	if page < 1 {
+		page = 1
+	}
+	if page > 10000 {
+		return models.OnboardingClassMembers{}, onboardingInputError("halaman tidak valid")
+	}
+	class, err := s.querier.GetOnboardingClassControl(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return models.OnboardingClassMembers{}, ErrOnboardingNotFound
+	}
+	if err != nil {
+		return models.OnboardingClassMembers{}, err
+	}
+	rows, total, err := s.querier.ListOnboardingClassMembers(ctx, id, pageSize, (page-1)*pageSize)
+	if err != nil {
+		return models.OnboardingClassMembers{}, err
+	}
+	members := make([]models.OnboardingClassMember, 0, len(rows))
+	for _, row := range rows {
+		members = append(members, models.OnboardingClassMember{
+			ID: row.ID, Nama: row.Nama, IDMahasantri: row.IDMahasantri, Status: row.Status, Stage: row.Stage,
+		})
+	}
+	return models.OnboardingClassMembers{KelasID: id, Nama: class.KelasNama, Members: members, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
 func (s *OnboardingService) ClassActions(ctx context.Context, id int64) ([]models.OnboardingQuotaAction, error) {
 	if id <= 0 {
 		return nil, ErrOnboardingNotFound
