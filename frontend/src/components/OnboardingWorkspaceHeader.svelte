@@ -91,10 +91,10 @@
         <p class="text-xs text-neutral-500">Kelas ditampilkan</p><p class="mt-1 text-xl font-semibold tabular-nums">{number(classes.length)}</p>
       </div>
       <div class="rounded-xl border border-neutral-200 bg-white p-3 dark:border-white/10 dark:bg-neutral-900">
-        <p class="text-xs text-neutral-500">Target belum diatur</p><p class="mt-1 text-xl font-semibold tabular-nums">{number(missingQuota)}</p>
+        <p class="text-xs text-neutral-500">Target belum diatur (halaman ini)</p><p class="mt-1 text-xl font-semibold tabular-nums">{number(missingQuota)}</p>
       </div>
       <div class="rounded-xl border border-neutral-200 bg-white p-3 dark:border-white/10 dark:bg-neutral-900">
-        <p class="text-xs text-neutral-500">Vacancy Alert tertunda</p><p class="mt-1 text-xl font-semibold tabular-nums">{number(pendingVacancies)}</p>
+        <p class="text-xs text-neutral-500">Vacancy Alert tertunda (halaman ini)</p><p class="mt-1 text-xl font-semibold tabular-nums">{number(pendingVacancies)}</p>
       </div>
     {/if}
   </div>
