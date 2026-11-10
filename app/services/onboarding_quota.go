@@ -107,13 +107,21 @@ func (s *OnboardingService) ClassControls(ctx context.Context) (models.Onboardin
 // before pagination. The older ClassControls API stays available to callers.
 func (s *OnboardingService) ClassControlsFiltered(ctx context.Context, page int64, filter queries.OnboardingQuotaFilter) (models.OnboardingQuotaBoard, error) {
 	const pageSize int64 = 24
-	if page < 1 { page = 1 }
-	if page > 10000 { return models.OnboardingQuotaBoard{}, onboardingInputError("halaman tidak valid") }
+	if page < 1 {
+		page = 1
+	}
+	if page > 10000 {
+		return models.OnboardingQuotaBoard{}, onboardingInputError("halaman tidak valid")
+	}
 	rows, total, err := s.querier.ListOnboardingClassControlsFiltered(ctx, filter, pageSize, (page-1)*pageSize)
-	if err != nil { return models.OnboardingQuotaBoard{}, err }
+	if err != nil {
+		return models.OnboardingQuotaBoard{}, err
+	}
 	classes := make([]models.OnboardingQuotaClass, 0, len(rows))
 	now := time.Now().UTC()
-	for _, row := range rows { classes = append(classes, quotaRowToModel(row, now)) }
+	for _, row := range rows {
+		classes = append(classes, quotaRowToModel(row, now))
+	}
 	return models.OnboardingQuotaBoard{Classes: classes, Total: total, Page: page, PageSize: pageSize}, nil
 }
 
@@ -121,14 +129,26 @@ func (s *OnboardingService) ClassControlsFiltered(ctx context.Context, page int6
 // This is the same population used by the onboarding quota counter.
 func (s *OnboardingService) ClassMembers(ctx context.Context, id, page int64) (models.OnboardingClassMembers, error) {
 	const pageSize int64 = 50
-	if id <= 0 { return models.OnboardingClassMembers{}, ErrOnboardingNotFound }
-	if page < 1 { page = 1 }
-	if page > 10000 { return models.OnboardingClassMembers{}, onboardingInputError("halaman tidak valid") }
+	if id <= 0 {
+		return models.OnboardingClassMembers{}, ErrOnboardingNotFound
+	}
+	if page < 1 {
+		page = 1
+	}
+	if page > 10000 {
+		return models.OnboardingClassMembers{}, onboardingInputError("halaman tidak valid")
+	}
 	class, err := s.querier.GetOnboardingClassControl(ctx, id)
-	if errors.Is(err, sql.ErrNoRows) { return models.OnboardingClassMembers{}, ErrOnboardingNotFound }
-	if err != nil { return models.OnboardingClassMembers{}, err }
+	if errors.Is(err, sql.ErrNoRows) {
+		return models.OnboardingClassMembers{}, ErrOnboardingNotFound
+	}
+	if err != nil {
+		return models.OnboardingClassMembers{}, err
+	}
 	rows, total, err := s.querier.ListOnboardingClassMembers(ctx, id, pageSize, (page-1)*pageSize)
-	if err != nil { return models.OnboardingClassMembers{}, err }
+	if err != nil {
+		return models.OnboardingClassMembers{}, err
+	}
 	members := make([]models.OnboardingClassMember, 0, len(rows))
 	for _, row := range rows {
 		members = append(members, models.OnboardingClassMember{
