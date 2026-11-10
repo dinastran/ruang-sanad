@@ -57,7 +57,7 @@ func (s *OnboardingService) BoardFiltered(ctx context.Context, page int64, filte
 	if page > 10000 {
 		return models.OnboardingBoard{}, onboardingInputError("halaman tidak valid")
 	}
-	rows, total, counts, err := s.querier.ListOnboardingBoardFiltered(ctx, filter, onboardingBoardPageSize, (page - 1) * onboardingBoardPageSize)
+	rows, total, counts, err := s.querier.ListOnboardingBoardFiltered(ctx, filter, onboardingBoardPageSize, (page-1)*onboardingBoardPageSize)
 	if err != nil {
 		return models.OnboardingBoard{}, err
 	}
