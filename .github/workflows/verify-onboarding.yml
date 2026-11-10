@@ -52,8 +52,10 @@ jobs:
         run: GOFLAGS=-mod=mod go test ./app/services -run '^TestTindakLanjutAlpa' -count=1
       - name: Transactional CAPI Purchase regression tests
         run: GOFLAGS=-mod=mod go test ./app/services -run '^TestLeadConvert(QueuesPurchaseInTransaction|PurchaseOutboxFailureRollsBackEverything|DoesNotQueueCAPIWhenDisabled)$' -count=1
-      - name: Onboarding search, quota and roster sprint tests
-        run: GOFLAGS=-mod=mod go test ./app/services -run '^(TestOnboardingBoardSearchAcrossPaginationAndPIC|TestOnboardingBoardSLAFiltersExcludeTerminal|TestOnboardingQuotaFilteredAndClassMemberRoster|TestOnboardingQuotaSearchBeyondFormer200ClassLimit)        run: |
+      - name: Onboarding sprint regression tests
+        run: GOFLAGS=-mod=mod go test ./app/services -run '^(TestOnboardingBoardSearchAcrossPaginationAndPIC|TestOnboardingBoardSLAFiltersExcludeTerminal|TestOnboardingQuotaFilteredAndClassMemberRoster|TestOnboardingQuotaSearchBeyondFormer200ClassLimit)$' -count=1
+      - name: Targeted onboarding and CRM tests
+        run: |
           GOFLAGS=-mod=mod go test ./app/services -run '^(TestPriorityPageFiltersAndOrdering|TestOnboarding|TestSantriCreationOpensOnboarding|TestInvalidSantriCreation|TestImportedHistoricalSantri|TestLeadConvert|TestSantriCreate|TestGuruAvailability|TestValidatePlanningActivation|TestPlanningOverlapsBoundary|TestPlanningReadiness|TestPlanningMatching|TestTeachingLevels|TestValidateScheduleAlternativeConsent|TestScheduleAlternativeTransition|TestPlanningAlternateMatching|TestClassPlanWorkflow|TestClassPlanOfferMatchesExactSessions|TestClassPlanException|TestPlanningActivation)' -count=1
           GOFLAGS=-mod=mod go test ./app/queries ./routes -count=1
           GOFLAGS=-mod=mod go test ./app/config -run '^TestListenAddress' -count=1
