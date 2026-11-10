@@ -9,6 +9,7 @@ type OnboardingBoard struct {
 	Total    int64                 `json:"total"`
 	Page     int64                 `json:"page"`
 	PageSize int64                 `json:"page_size"`
+	ClassOptions []OnboardingClassOption `json:"class_options"`
 }
 
 type OnboardingBoardCard struct {
@@ -40,4 +41,10 @@ type OnboardingActivityItem struct {
 	Note      string `json:"note"`
 	ActorName string `json:"actor_name"`
 	CreatedAt string `json:"created_at"`
+}
+
+// OnboardingClassOption is a safe, read-only class filter label.
+type OnboardingClassOption struct {
+	ID int64 `json:"id"`
+	Name string `json:"name"`
 }
