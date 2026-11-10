@@ -55,13 +55,16 @@ func (h *OnboardingHandler) Index(c *fiber.Ctx) error {
 	if err != nil || page < 1 {
 		page = 1
 	}
+	if page > 10000 {
+		return c.Status(fiber.StatusBadRequest).SendString("Halaman tidak valid")
+	}
 	query := strings.TrimSpace(c.Query("q", ""))
 	if len([]rune(query)) > 100 {
 		return c.Status(fiber.StatusBadRequest).SendString("Pencarian terlalu panjang")
 	}
 	filter := queries.OnboardingBoardFilter{
-		Query: query,
-		SLA: c.Query("sla", ""),
+		Query:    query,
+		SLA:      c.Query("sla", ""),
 		Angkatan: strings.TrimSpace(c.Query("angkatan", "")),
 	}
 	if filter.SLA != "" && filter.SLA != "overdue" && filter.SLA != "at_risk" {
