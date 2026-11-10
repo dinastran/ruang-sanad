@@ -3,12 +3,12 @@ package models
 // OnboardingBoard is a paginated view of onboarding cases. Its stage counts
 // describe the whole dataset, not only the current page.
 type OnboardingBoard struct {
-	Cases    []OnboardingBoardCard `json:"cases"`
-	Counts   map[string]int64      `json:"counts"`
-	PICs     []OnboardingPICOption `json:"pics"`
-	Total    int64                 `json:"total"`
-	Page     int64                 `json:"page"`
-	PageSize int64                 `json:"page_size"`
+	Cases        []OnboardingBoardCard   `json:"cases"`
+	Counts       map[string]int64        `json:"counts"`
+	PICs         []OnboardingPICOption   `json:"pics"`
+	Total        int64                   `json:"total"`
+	Page         int64                   `json:"page"`
+	PageSize     int64                   `json:"page_size"`
 	ClassOptions []OnboardingClassOption `json:"class_options"`
 }
 
