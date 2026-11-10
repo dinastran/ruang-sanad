@@ -107,11 +107,16 @@ func (h *KoordinatorFeaturesHandler) PembinaanAbsenSave(c *fiber.Ctx) error {
 		h.store.Flash(c, "error", "Data tidak valid")
 		return h.inertiaService.Redirect(c, "/app/koordinator-guru/pembinaan/"+strconv.FormatInt(id, 10)+"/absen")
 	}
-	if err := h.svc.SavePembinaanAbsen(id, req.Absen); err != nil {
+	jadiTerlaksana, err := h.svc.SavePembinaanAbsen(id, req.Absen)
+	if err != nil {
 		h.store.Flash(c, "error", err.Error())
 		return h.inertiaService.Redirect(c, "/app/koordinator-guru/pembinaan/"+strconv.FormatInt(id, 10)+"/absen")
 	}
-	h.store.Flash(c, "success", "Absensi pembinaan tersimpan")
+	if jadiTerlaksana {
+		h.store.Flash(c, "success", "Absensi pembinaan tersimpan. Status pembinaan otomatis diubah menjadi Terlaksana.")
+	} else {
+		h.store.Flash(c, "success", "Absensi pembinaan tersimpan")
+	}
 	return h.inertiaService.Redirect(c, "/app/koordinator-guru/pembinaan/"+strconv.FormatInt(id, 10)+"/absen")
 }
 
@@ -193,11 +198,16 @@ func (h *KoordinatorFeaturesHandler) RapatAbsenSave(c *fiber.Ctx) error {
 		h.store.Flash(c, "error", "Data tidak valid")
 		return h.inertiaService.Redirect(c, "/app/koordinator-guru/rapat/"+strconv.FormatInt(id, 10)+"/absen")
 	}
-	if err := h.svc.SaveRapatAbsen(id, req.Absen); err != nil {
+	jadiTerlaksana, err := h.svc.SaveRapatAbsen(id, req.Absen)
+	if err != nil {
 		h.store.Flash(c, "error", err.Error())
 		return h.inertiaService.Redirect(c, "/app/koordinator-guru/rapat/"+strconv.FormatInt(id, 10)+"/absen")
 	}
-	h.store.Flash(c, "success", "Absensi rapat tersimpan")
+	if jadiTerlaksana {
+		h.store.Flash(c, "success", "Absensi rapat tersimpan. Status rapat otomatis diubah menjadi Terlaksana.")
+	} else {
+		h.store.Flash(c, "success", "Absensi rapat tersimpan")
+	}
 	return h.inertiaService.Redirect(c, "/app/koordinator-guru/rapat/"+strconv.FormatInt(id, 10)+"/absen")
 }
 

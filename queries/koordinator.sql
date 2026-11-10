@@ -72,6 +72,11 @@ INSERT INTO pembinaan_absen (pembinaan_id, guru_id, hadir, kehadiran, jam_masuk,
 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(pembinaan_id, guru_id) DO UPDATE SET hadir = excluded.hadir, kehadiran = excluded.kehadiran, jam_masuk = excluded.jam_masuk, keterangan = excluded.keterangan, alasan = excluded.alasan, updated_at = CURRENT_TIMESTAMP;
 
+-- name: MarkPembinaanTerlaksana :execrows
+-- Menyimpan absensi berarti sesi berlangsung: sesi yang masih dijadwalkan
+-- otomatis menjadi terlaksana (dalam transaksi yang sama dengan absensi).
+UPDATE pembinaan SET status = 'terlaksana', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'dijadwalkan';
+
 -- name: ListGuruWithPembinaanAbsen :many
 SELECT g.id AS guru_id, g.nama, g.status,
     COALESCE(pa.hadir, 0) AS hadir, COALESCE(pa.kehadiran, '') AS kehadiran, COALESCE(pa.jam_masuk, '') AS jam_masuk,
@@ -127,6 +132,9 @@ INSERT INTO rapat_absen (rapat_id, guru_id, hadir, kehadiran, jam_masuk, keteran
 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(rapat_id, guru_id) DO UPDATE SET hadir = excluded.hadir, kehadiran = excluded.kehadiran, jam_masuk = excluded.jam_masuk, keterangan = excluded.keterangan, alasan = excluded.alasan, updated_at = CURRENT_TIMESTAMP;
 
+-- name: MarkRapatTerlaksana :execrows
+UPDATE rapat_guru SET status = 'terlaksana', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'dijadwalkan';
+
 -- name: ListGuruWithRapatAbsen :many
 SELECT g.id AS guru_id, g.nama, g.status,
     COALESCE(ra.hadir, 0) AS hadir, COALESCE(ra.kehadiran, '') AS kehadiran, COALESCE(ra.jam_masuk, '') AS jam_masuk,
@@ -163,12 +171,14 @@ SELECT pa.guru_id, g.nama AS guru_nama, 'pembinaan' AS kegiatan, p.id AS kegiata
 FROM pembinaan_absen pa
 JOIN pembinaan p ON p.id = pa.pembinaan_id
 JOIN guru g ON g.id = pa.guru_id
+WHERE p.status = 'terlaksana'
 UNION ALL
 SELECT ra.guru_id, g.nama AS guru_nama, 'rapat' AS kegiatan, r.id AS kegiatan_id,
        r.tanggal, r.judul, ra.hadir, ra.kehadiran, ra.jam_masuk, ra.keterangan, ra.alasan
 FROM rapat_absen ra
 JOIN rapat_guru r ON r.id = ra.rapat_id
 JOIN guru g ON g.id = ra.guru_id
+WHERE r.status = 'terlaksana'
 UNION ALL
 SELECT k.guru_id, g.nama AS guru_nama, 'kunjungan' AS kegiatan, k.id AS kegiatan_id,
        k.tanggal, COALESCE(kl.nama_kelas, '') AS judul,

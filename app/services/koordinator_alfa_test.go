@@ -33,6 +33,14 @@ func TestHitungAlfaBeruntun(t *testing.T) {
 	require.Equal(t, "", levelAlfaBeruntun(1))
 }
 
+// requireAbsenTersimpan asserts a SavePembinaanAbsen/SaveRapatAbsen call succeeded.
+func requireAbsenTersimpan(t *testing.T) func(bool, error) {
+	return func(_ bool, err error) {
+		t.Helper()
+		require.NoError(t, err)
+	}
+}
+
 func absenTerisi(guru map[int64]string) []models.AbsenInput {
 	out := make([]models.AbsenInput, 0, len(guru))
 	for id, status := range guru {
@@ -62,12 +70,12 @@ func TestAnalisisAlfaPembinaanMenandaiAlfaBerturutTurut(t *testing.T) {
 	}
 
 	p1 := buatSesi("2026-09-01", "terlaksana")
-	require.NoError(t, svc.SavePembinaanAbsen(p1, absenTerisi(map[int64]string{f.guruUtamaID: "alfa", f.guruBadalID: "hadir", guruLainID: "hadir"})))
+	requireAbsenTersimpan(t)(svc.SavePembinaanAbsen(p1, absenTerisi(map[int64]string{f.guruUtamaID: "alfa", f.guruBadalID: "hadir", guruLainID: "hadir"})))
 	p2 := buatSesi("2026-09-08", "terlaksana")
-	require.NoError(t, svc.SavePembinaanAbsen(p2, absenTerisi(map[int64]string{f.guruUtamaID: "alfa", f.guruBadalID: "izin", guruLainID: "alfa"})))
+	requireAbsenTersimpan(t)(svc.SavePembinaanAbsen(p2, absenTerisi(map[int64]string{f.guruUtamaID: "alfa", f.guruBadalID: "izin", guruLainID: "alfa"})))
 	buatSesi("2026-09-15", "libur")
 	p4 := buatSesi("2026-09-22", "terlaksana")
-	require.NoError(t, svc.SavePembinaanAbsen(p4, absenTerisi(map[int64]string{f.guruUtamaID: "alfa", f.guruBadalID: "alfa", guruLainID: "alfa"})))
+	requireAbsenTersimpan(t)(svc.SavePembinaanAbsen(p4, absenTerisi(map[int64]string{f.guruUtamaID: "alfa", f.guruBadalID: "alfa", guruLainID: "alfa"})))
 	// Sesi terlaksana yang absensinya belum diisi tidak memutus hitungan.
 	buatSesi("2026-09-29", "terlaksana")
 	// Guru baru tanpa catatan absen tidak boleh langsung ditandai.
@@ -128,7 +136,7 @@ func TestAnalisisAlfaRapatTerpisahDariPembinaan(t *testing.T) {
 	for _, tanggal := range []string{"2026-07-01", "2026-08-01", "2026-09-01"} {
 		id, err := svc.CreateRapat(models.RapatRequest{Tanggal: tanggal, Judul: "Rapat " + tanggal, Status: "terlaksana"})
 		require.NoError(t, err)
-		require.NoError(t, svc.SaveRapatAbsen(id, absenTerisi(map[int64]string{f.guruUtamaID: "hadir", f.guruBadalID: "alfa", guruLainID: "sakit"})))
+		requireAbsenTersimpan(t)(svc.SaveRapatAbsen(id, absenTerisi(map[int64]string{f.guruUtamaID: "hadir", f.guruBadalID: "alfa", guruLainID: "sakit"})))
 	}
 	_, err := svc.CreateRapat(models.RapatRequest{Tanggal: "2026-10-01", Judul: "Batal", Status: "batal"})
 	require.NoError(t, err)
@@ -155,7 +163,7 @@ func TestSimpanAbsenMemvalidasiStatusKehadiran(t *testing.T) {
 	require.NoError(t, err)
 
 	// Izin wajib beralasan.
-	err = svc.SavePembinaanAbsen(id, []models.AbsenInput{
+	_, err = svc.SavePembinaanAbsen(id, []models.AbsenInput{
 		{GuruID: f.guruUtamaID, Kehadiran: "izin"},
 		{GuruID: f.guruBadalID, Kehadiran: "hadir", JamMasuk: "19:30"},
 		{GuruID: guruLainID, Kehadiran: "alfa"},
@@ -163,7 +171,7 @@ func TestSimpanAbsenMemvalidasiStatusKehadiran(t *testing.T) {
 	require.ErrorContains(t, err, "alasan izin/sakit wajib diisi")
 
 	// Status tidak dikenal ditolak.
-	err = svc.SavePembinaanAbsen(id, []models.AbsenInput{
+	_, err = svc.SavePembinaanAbsen(id, []models.AbsenInput{
 		{GuruID: f.guruUtamaID, Kehadiran: "bolos"},
 		{GuruID: f.guruBadalID, Kehadiran: "hadir", JamMasuk: "19:30"},
 		{GuruID: guruLainID, Kehadiran: "alfa"},
@@ -171,7 +179,7 @@ func TestSimpanAbsenMemvalidasiStatusKehadiran(t *testing.T) {
 	require.ErrorContains(t, err, "status kehadiran tidak valid")
 
 	// Alfa boleh tanpa alasan; klien lama (hanya Hadir) tetap didukung.
-	require.NoError(t, svc.SavePembinaanAbsen(id, []models.AbsenInput{
+	requireAbsenTersimpan(t)(svc.SavePembinaanAbsen(id, []models.AbsenInput{
 		{GuruID: f.guruUtamaID, Kehadiran: "sakit", Alasan: "demam"},
 		{GuruID: f.guruBadalID, Hadir: true, JamMasuk: "19:30"},
 		{GuruID: guruLainID, Kehadiran: "alfa"},

@@ -382,10 +382,10 @@ func (q *Queries) AIGuruMetrik(ctx context.Context, hariIni, sejak30, sejak90 st
 	 (SELECT COUNT(*) FROM kunjungan_tindak_lanjut t JOIN kunjungan_kelas kk ON kk.id = t.kunjungan_id WHERE kk.guru_id = g.id AND t.status = 'terbuka'
 	   AND t.target_tanggal IS NOT NULL AND substr(t.target_tanggal, 1, 10) < ?),
 	 COALESCE((SELECT MAX(substr(kk.tanggal, 1, 10)) FROM kunjungan_kelas kk WHERE kk.guru_id = g.id AND kk.status = 'terlaksana'), ''),
-	 (SELECT COUNT(*) FROM pembinaan_absen pa JOIN pembinaan pb ON pb.id = pa.pembinaan_id WHERE pa.guru_id = g.id AND pa.hadir = 1 AND substr(pb.tanggal, 1, 10) >= ?),
-	 (SELECT COUNT(*) FROM pembinaan_absen pa JOIN pembinaan pb ON pb.id = pa.pembinaan_id WHERE pa.guru_id = g.id AND substr(pb.tanggal, 1, 10) >= ?),
-	 (SELECT COUNT(*) FROM rapat_absen ra JOIN rapat_guru r ON r.id = ra.rapat_id WHERE ra.guru_id = g.id AND ra.hadir = 1 AND substr(r.tanggal, 1, 10) >= ?),
-	 (SELECT COUNT(*) FROM rapat_absen ra JOIN rapat_guru r ON r.id = ra.rapat_id WHERE ra.guru_id = g.id AND substr(r.tanggal, 1, 10) >= ?)
+	 (SELECT COUNT(*) FROM pembinaan_absen pa JOIN pembinaan pb ON pb.id = pa.pembinaan_id WHERE pb.status = 'terlaksana' AND pa.guru_id = g.id AND pa.hadir = 1 AND substr(pb.tanggal, 1, 10) >= ?),
+	 (SELECT COUNT(*) FROM pembinaan_absen pa JOIN pembinaan pb ON pb.id = pa.pembinaan_id WHERE pb.status = 'terlaksana' AND pa.guru_id = g.id AND substr(pb.tanggal, 1, 10) >= ?),
+	 (SELECT COUNT(*) FROM rapat_absen ra JOIN rapat_guru r ON r.id = ra.rapat_id WHERE r.status = 'terlaksana' AND ra.guru_id = g.id AND ra.hadir = 1 AND substr(r.tanggal, 1, 10) >= ?),
+	 (SELECT COUNT(*) FROM rapat_absen ra JOIN rapat_guru r ON r.id = ra.rapat_id WHERE r.status = 'terlaksana' AND ra.guru_id = g.id AND substr(r.tanggal, 1, 10) >= ?)
 	 FROM guru g WHERE (? > 0 AND g.id = ?) OR (? = 0 AND (g.is_aktif = 1 OR ? = 1)) ORDER BY g.is_aktif DESC, g.nama`,
 		sejak30, hariIni, hariIni, sejak90, sejak90, sejak90, sejak90, guruID, guruID, guruID, semua)
 	if err != nil {
