@@ -52,10 +52,10 @@ type OnboardingClassMember struct {
 }
 
 type OnboardingClassMembers struct {
-	KelasID   int64                    `json:"kelas_id"`
-	Nama      string                   `json:"nama"`
-	Members   []OnboardingClassMember `json:"members"`
-	Total     int64                    `json:"total"`
-	Page      int64                    `json:"page"`
-	PageSize  int64                    `json:"page_size"`
+	KelasID  int64                   `json:"kelas_id"`
+	Nama     string                  `json:"nama"`
+	Members  []OnboardingClassMember `json:"members"`
+	Total    int64                   `json:"total"`
+	Page     int64                   `json:"page"`
+	PageSize int64                   `json:"page_size"`
 }
