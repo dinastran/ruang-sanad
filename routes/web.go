@@ -231,6 +231,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	// PR 3: class quota visibility for CS; updates restricted by role and service.
 	protected.Get("/onboarding/classes", santriViewRole, h.Onboarding.ClassControls)
 	protected.Get("/onboarding/classes/:id/actions", santriViewRole, h.Onboarding.ClassHistory)
+	protected.Get("/onboarding/classes/:id/members", santriViewRole, h.Onboarding.ClassMembers)
 	protected.Put("/onboarding/classes/:id/quota", superAdminRole, h.Onboarding.ClassQuota)
 	protected.Post("/onboarding/classes/:id/actions", santriViewRole, h.Onboarding.ClassAction)
 	protected.Get("/onboarding/cases", akRole, h.Onboarding.List)
