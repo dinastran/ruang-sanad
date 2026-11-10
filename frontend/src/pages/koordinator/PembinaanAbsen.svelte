@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import { inertia, router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import type { AbsenRow, Kehadiran, Pembinaan, User } from "@lib/types";
-	import { ArrowLeft, Save, Download, MessageCircle, Copy, X } from "lucide-svelte";
+	import { ArrowLeft, Save, Download, MessageCircle, Copy, X, CircleAlert, Info, History } from "lucide-svelte";
+	import { pulihkanDraf, simpanDraf, hapusDraf, hariIniWIB } from "@lib/absenDraft";
 
 	interface LaporanAbsensi { jenis_kegiatan: string; judul: string; tanggal: string; keterangan: string; total: number; hadir: number; tidak_hadir: number; izin: number; sakit: number; alfa: number; absen: AbsenRow[]; }
 	interface Props { user?: User; pembinaan: Pembinaan; absen?: AbsenRow[]; laporan?: LaporanAbsensi; flash?: { success?: string; error?: string }; }
@@ -16,7 +18,16 @@
 	];
 	const LABEL: Record<Kehadiran, string> = { hadir: "Hadir", izin: "Izin", sakit: "Sakit", alfa: "Alfa" };
 
-	let rows = $state(absen.map((a) => ({ ...a })));
+	// Isian yang belum tersimpan dipulihkan dari draf di browser (lihat lib/absenDraft).
+	const awal = untrack(() => pulihkanDraf("pembinaan", pembinaan.id, absen));
+	let rows = $state(awal.rows);
+	let dipulihkan = $state(awal.dipulihkan);
+	$effect(() => simpanDraf("pembinaan", pembinaan.id, rows));
+
+	const hariIni = hariIniWIB();
+	// Sesi Libur atau yang tanggalnya belum tiba tidak bisa diabsen (server juga menolak).
+	const terkunci = $derived(pembinaan.status === "libur" ? "Pembinaan ini berstatus Libur, jadi tidak bisa diabsen. Ubah statusnya di daftar pembinaan bila ternyata tetap berlangsung." : pembinaan.tanggal > hariIni ? `Pembinaan ini dijadwalkan ${pembinaan.tanggal}. Absensi baru bisa disimpan mulai tanggal tersebut.` : "");
+	const akanDitandai = $derived(pembinaan.status === "dijadwalkan" && !terkunci);
 	let saving = $state(false);
 	let showExport = $state(false);
 	let copied = $state(false);
@@ -26,7 +37,16 @@
 		const invalid = rows.find((r) => (r.kehadiran === "hadir" && !r.jam_masuk) || ((r.kehadiran === "izin" || r.kehadiran === "sakit") && !r.alasan.trim()));
 		if (invalid) { alert(`Lengkapi absensi ${invalid.nama}: jam masuk untuk hadir atau alasan untuk izin/sakit.`); return; }
 		saving = true;
-		router.post(`/app/koordinator-guru/pembinaan/${pembinaan.id}/absen`, { absen: rows.map((r) => ({ guru_id: r.guru_id, hadir: r.kehadiran === "hadir", kehadiran: r.kehadiran, jam_masuk: r.jam_masuk, keterangan: r.keterangan, alasan: r.alasan })) }, { preserveScroll: true, onFinish: () => (saving = false) });
+		router.post(`/app/koordinator-guru/pembinaan/${pembinaan.id}/absen`, { absen: rows.map((r) => ({ guru_id: r.guru_id, hadir: r.kehadiran === "hadir", kehadiran: r.kehadiran, jam_masuk: r.jam_masuk, keterangan: r.keterangan, alasan: r.alasan })) }, {
+			preserveScroll: true,
+			// Bila ditolak server, isian di layar tetap (tidak dimuat ulang dari server).
+			preserveState: true,
+			onSuccess: (page) => {
+				const f = page.props.flash as { error?: string } | undefined;
+				if (!f?.error) { hapusDraf("pembinaan", pembinaan.id); dipulihkan = false; }
+			},
+			onFinish: () => (saving = false),
+		});
 	}
 	function terapkan<T extends (typeof rows)[number]>(r: T, kehadiran: Kehadiran | ""): T {
 		const hadir = kehadiran === "hadir";
@@ -60,7 +80,19 @@
 
 	<div class="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-4">
 		{#if flash?.success}<div class="rounded-xl bg-green-500/10 border border-green-500/20 p-4 text-sm font-medium text-green-700 dark:text-green-400">{flash.success}</div>{/if}
-		{#if flash?.error}<div class="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-sm font-medium text-red-700 dark:text-red-400">{flash.error}</div>{/if}
+		{#if flash?.error}<div class="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-sm font-medium text-red-700 dark:text-red-400" role="alert">{flash.error.replace(/[.\s]*$/, ".")} Isian Anda masih ada di bawah, tidak perlu mengisi ulang.</div>{/if}
+		{#if terkunci && !flash?.error}
+			<div class="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300"><CircleAlert class="h-5 w-5 shrink-0" /><p>{terkunci}</p></div>
+		{:else if akanDitandai}
+			<div class="flex gap-3 rounded-xl border border-sky-500/25 bg-sky-500/10 p-4 text-sm text-sky-800 dark:text-sky-300"><Info class="h-5 w-5 shrink-0" /><p>Status pembinaan masih <span class="font-semibold">Dijadwalkan</span>. Saat absensi disimpan, statusnya otomatis menjadi <span class="font-semibold">Terlaksana</span>.</p></div>
+		{/if}
+		{#if dipulihkan}
+			<div class="flex flex-wrap items-center gap-3 rounded-xl border border-neutral-200 dark:border-white/[0.08] bg-neutral-50 dark:bg-neutral-900 p-4 text-sm text-neutral-700 dark:text-neutral-300">
+				<History class="h-5 w-5 shrink-0 text-brand-600 dark:text-brand-400" />
+				<p class="flex-1 min-w-48">Isian yang belum tersimpan dipulihkan. Periksa lalu klik simpan.</p>
+				<button type="button" onclick={() => { hapusDraf("pembinaan", pembinaan.id); rows = absen.map((a) => ({ ...a })); dipulihkan = false; }} class="text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-red-600 underline">Buang isian ini</button>
+			</div>
+		{/if}
 
 		<div class="flex items-center justify-between gap-3 flex-wrap">
 			<p class="text-sm text-neutral-600 dark:text-neutral-400">Hadir: <span class="font-semibold text-neutral-900 dark:text-white">{hadirCount}</span> / {rows.length}{#if belumDiisi > 0}<span class="ml-2 text-amber-700 dark:text-amber-400">· {belumDiisi} belum diisi</span>{/if}</p>
@@ -87,7 +119,7 @@
 			{/each}
 		</div>
 
-		<div class="flex justify-end"><button onclick={save} disabled={saving} class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold disabled:opacity-50"><Save class="w-4 h-4" /> {saving ? "Menyimpan..." : "Simpan absensi"}</button></div>
+		<div class="flex justify-end"><button onclick={save} disabled={saving || !!terkunci} class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"><Save class="w-4 h-4" /> {saving ? "Menyimpan..." : akanDitandai ? "Simpan & tandai terlaksana" : "Simpan absensi"}</button></div>
 	</div>
 
 	{#if showExport && laporan}

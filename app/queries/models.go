@@ -34,16 +34,18 @@ type AiAuditLog struct {
 }
 
 type AiToken struct {
-	ID         int64
-	UserID     int64
-	Nama       string
-	TokenHash  string
-	Prefix     string
-	ExpiresAt  time.Time
-	LastUsedAt sql.NullTime
-	RevokedAt  sql.NullTime
-	CreatedAt  time.Time
-	CanWrite   int64
+	ID            int64
+	UserID        int64
+	Nama          string
+	TokenHash     string
+	Prefix        string
+	ExpiresAt     time.Time
+	LastUsedAt    sql.NullTime
+	RevokedAt     sql.NullTime
+	CreatedAt     time.Time
+	CanWrite      int64
+	Jenis         string
+	OauthClientID string
 }
 
 type Angkatan struct {
@@ -629,6 +631,37 @@ type Notification struct {
 	ReadAt        sql.NullTime
 	CreatedBy     sql.NullInt64
 	CreatedAt     time.Time
+}
+
+type OauthAuthorizationCode struct {
+	CodeHash      string
+	ClientID      string
+	UserID        int64
+	RedirectUri   string
+	CodeChallenge string
+	CanWrite      int64
+	ExpiresAt     time.Time
+	UsedAt        sql.NullTime
+	CreatedAt     time.Time
+}
+
+type OauthClient struct {
+	ClientID                string
+	ClientSecretHash        string
+	ClientName              string
+	RedirectUris            string
+	TokenEndpointAuthMethod string
+	CreatedAt               time.Time
+}
+
+type OauthToken struct {
+	ID        int64
+	AiTokenID int64
+	Jenis     string
+	TokenHash string
+	ExpiresAt time.Time
+	RevokedAt sql.NullTime
+	CreatedAt time.Time
 }
 
 type OnboardingActivityLog struct {

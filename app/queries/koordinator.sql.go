@@ -1265,12 +1265,14 @@ SELECT pa.guru_id, g.nama AS guru_nama, 'pembinaan' AS kegiatan, p.id AS kegiata
 FROM pembinaan_absen pa
 JOIN pembinaan p ON p.id = pa.pembinaan_id
 JOIN guru g ON g.id = pa.guru_id
+WHERE p.status = 'terlaksana'
 UNION ALL
 SELECT ra.guru_id, g.nama AS guru_nama, 'rapat' AS kegiatan, r.id AS kegiatan_id,
        r.tanggal, r.judul, ra.hadir, ra.kehadiran, ra.jam_masuk, ra.keterangan, ra.alasan
 FROM rapat_absen ra
 JOIN rapat_guru r ON r.id = ra.rapat_id
 JOIN guru g ON g.id = ra.guru_id
+WHERE r.status = 'terlaksana'
 UNION ALL
 SELECT k.guru_id, g.nama AS guru_nama, 'kunjungan' AS kegiatan, k.id AS kegiatan_id,
        k.tanggal, COALESCE(kl.nama_kelas, '') AS judul,
@@ -1400,6 +1402,32 @@ func (q *Queries) ListWaTemplate(ctx context.Context) ([]WaTemplate, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const markPembinaanTerlaksana = `-- name: MarkPembinaanTerlaksana :execrows
+UPDATE pembinaan SET status = 'terlaksana', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'dijadwalkan'
+`
+
+// Menyimpan absensi berarti sesi berlangsung: sesi yang masih dijadwalkan
+// otomatis menjadi terlaksana (dalam transaksi yang sama dengan absensi).
+func (q *Queries) MarkPembinaanTerlaksana(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markPembinaanTerlaksana, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const markRapatTerlaksana = `-- name: MarkRapatTerlaksana :execrows
+UPDATE rapat_guru SET status = 'terlaksana', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'dijadwalkan'
+`
+
+func (q *Queries) MarkRapatTerlaksana(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markRapatTerlaksana, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const toggleKalamShareOff = `-- name: ToggleKalamShareOff :exec

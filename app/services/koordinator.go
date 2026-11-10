@@ -14,10 +14,32 @@ import (
 
 type KoordinatorService struct {
 	querier *queries.Querier
+	// today returns the current date in WIB (overridable in tests).
+	today func() time.Time
 }
 
 func NewKoordinatorService(querier *queries.Querier) *KoordinatorService {
-	return &KoordinatorService{querier: querier}
+	return &KoordinatorService{querier: querier, today: HariIniRiayah}
+}
+
+// cekSesiBisaDiabsen checks that attendance may be saved for a pembinaan or
+// rapat session: not cancelled/holiday, and its date has arrived. A session
+// still "dijadwalkan" is allowed: saving attendance marks it terlaksana.
+func (s *KoordinatorService) cekSesiBisaDiabsen(jenis, status string, tanggal time.Time) error {
+	switch status {
+	case "terlaksana", "dijadwalkan":
+	case "libur":
+		return fmt.Errorf("%s ini berstatus Libur, jadi tidak bisa diabsen. Ubah statusnya bila ternyata tetap berlangsung", jenis)
+	case "batal":
+		return fmt.Errorf("%s ini berstatus Batal, jadi tidak bisa diabsen. Ubah statusnya bila ternyata tetap berlangsung", jenis)
+	default:
+		return fmt.Errorf("status %s tidak dikenal", jenis)
+	}
+	tgl := tanggal.Format("2006-01-02")
+	if hariIni := s.today().Format("2006-01-02"); tgl > hariIni {
+		return fmt.Errorf("%s ini dijadwalkan %s; absensi baru bisa disimpan mulai tanggal tersebut", jenis, tgl)
+	}
+	return nil
 }
 
 func parseDateStrict(s string) (time.Time, error) {
@@ -300,25 +322,28 @@ func (s *KoordinatorService) GetPembinaanAbsen(pembinaanID int64) ([]models.Abse
 	return out, nil
 }
 
-func (s *KoordinatorService) SavePembinaanAbsen(pembinaanID int64, inputs []models.AbsenInput) error {
+// SavePembinaanAbsen stores attendance for every active guru. A session
+// still "dijadwalkan" is marked terlaksana in the same transaction (filling
+// attendance means it took place); jadiTerlaksana reports that change.
+func (s *KoordinatorService) SavePembinaanAbsen(pembinaanID int64, inputs []models.AbsenInput) (jadiTerlaksana bool, err error) {
 	ctx := context.Background()
 	pembinaan, err := s.querier.GetPembinaan(ctx, pembinaanID)
 	if err != nil {
-		return fmt.Errorf("sesi pembinaan tidak ditemukan")
+		return false, fmt.Errorf("sesi pembinaan tidak ditemukan")
 	}
-	if pembinaan.Status != "terlaksana" {
-		return fmt.Errorf("absensi hanya dapat disimpan untuk pembinaan terlaksana")
+	if err := s.cekSesiBisaDiabsen("Pembinaan", pembinaan.Status, pembinaan.Tanggal); err != nil {
+		return false, err
 	}
 	expected, err := s.GetPembinaanAbsen(pembinaanID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := validateAbsenBatch(expected, inputs); err != nil {
-		return err
+		return false, err
 	}
 	tx, err := s.querier.BeginTx(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer tx.Rollback()
 	querier := s.querier.WithTx(tx)
@@ -336,10 +361,17 @@ func (s *KoordinatorService) SavePembinaanAbsen(pembinaanID int64, inputs []mode
 			Keterangan:  in.Keterangan,
 			Alasan:      in.Alasan,
 		}); err != nil {
-			return err
+			return false, err
 		}
 	}
-	return tx.Commit()
+	changed, err := querier.MarkPembinaanTerlaksana(ctx, pembinaanID)
+	if err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return changed > 0, nil
 }
 
 func (s *KoordinatorService) GetLaporanPembinaanAbsensi(pembinaanID int64) (*models.LaporanAbsensi, error) {
@@ -448,25 +480,26 @@ func (s *KoordinatorService) GetRapatAbsen(rapatID int64) ([]models.AbsenRow, er
 	return out, nil
 }
 
-func (s *KoordinatorService) SaveRapatAbsen(rapatID int64, inputs []models.AbsenInput) error {
+// SaveRapatAbsen works like SavePembinaanAbsen for rapat guru.
+func (s *KoordinatorService) SaveRapatAbsen(rapatID int64, inputs []models.AbsenInput) (jadiTerlaksana bool, err error) {
 	ctx := context.Background()
 	rapat, err := s.querier.GetRapat(ctx, rapatID)
 	if err != nil {
-		return fmt.Errorf("rapat tidak ditemukan")
+		return false, fmt.Errorf("rapat tidak ditemukan")
 	}
-	if rapat.Status != "terlaksana" {
-		return fmt.Errorf("absensi hanya dapat disimpan untuk rapat terlaksana")
+	if err := s.cekSesiBisaDiabsen("Rapat", rapat.Status, rapat.Tanggal); err != nil {
+		return false, err
 	}
 	expected, err := s.GetRapatAbsen(rapatID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := validateAbsenBatch(expected, inputs); err != nil {
-		return err
+		return false, err
 	}
 	tx, err := s.querier.BeginTx(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer tx.Rollback()
 	querier := s.querier.WithTx(tx)
@@ -484,10 +517,17 @@ func (s *KoordinatorService) SaveRapatAbsen(rapatID int64, inputs []models.Absen
 			Keterangan: in.Keterangan,
 			Alasan:     in.Alasan,
 		}); err != nil {
-			return err
+			return false, err
 		}
 	}
-	return tx.Commit()
+	changed, err := querier.MarkRapatTerlaksana(ctx, rapatID)
+	if err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return changed > 0, nil
 }
 
 func (s *KoordinatorService) GetLaporanRapatAbsensi(rapatID int64) (*models.LaporanAbsensi, error) {
