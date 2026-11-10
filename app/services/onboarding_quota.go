@@ -103,6 +103,7 @@ func (s *OnboardingService) ClassControls(ctx context.Context) (models.Onboardin
 	}
 	return models.OnboardingQuotaBoard{Classes: items}, nil
 }
+
 // ClassControlsFiltered filters against the entire qualifying class set
 // before pagination. The older ClassControls API stays available to callers.
 func (s *OnboardingService) ClassControlsFiltered(ctx context.Context, page int64, filter queries.OnboardingQuotaFilter) (models.OnboardingQuotaBoard, error) {
