@@ -44,18 +44,18 @@ type OnboardingQuotaAction struct {
 }
 
 type OnboardingClassMember struct {
-	ID int64 `json:"id"`
-	Nama string `json:"nama"`
+	ID           int64  `json:"id"`
+	Nama         string `json:"nama"`
 	IDMahasantri string `json:"id_mahasantri"`
-	Status string `json:"status"`
-	Stage string `json:"stage"`
+	Status       string `json:"status"`
+	Stage        string `json:"stage"`
 }
 
 type OnboardingClassMembers struct {
-	KelasID int64 `json:"kelas_id"`
-	Nama string `json:"nama"`
-	Members []OnboardingClassMember `json:"members"`
-	Total int64 `json:"total"`
-	Page int64 `json:"page"`
-	PageSize int64 `json:"page_size"`
+	KelasID   int64                    `json:"kelas_id"`
+	Nama      string                   `json:"nama"`
+	Members   []OnboardingClassMember `json:"members"`
+	Total     int64                    `json:"total"`
+	Page      int64                    `json:"page"`
+	PageSize  int64                    `json:"page_size"`
 }
