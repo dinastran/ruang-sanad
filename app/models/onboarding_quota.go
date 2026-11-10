@@ -1,10 +1,10 @@
 package models
 
 type OnboardingQuotaBoard struct {
-	Classes []OnboardingQuotaClass `json:"classes"`
-	Total int64 `json:"total"`
-	Page int64 `json:"page"`
-	PageSize int64 `json:"page_size"`
+	Classes  []OnboardingQuotaClass `json:"classes"`
+	Total    int64                  `json:"total"`
+	Page     int64                  `json:"page"`
+	PageSize int64                  `json:"page_size"`
 }
 
 type OnboardingQuotaClass struct {
