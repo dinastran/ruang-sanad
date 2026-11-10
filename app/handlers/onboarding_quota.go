@@ -45,9 +45,16 @@ func (h *OnboardingHandler) ClassMembers(c *fiber.Ctx) error {
 		return onboardingHTTPError(c, err)
 	}
 	page, err := strconv.ParseInt(c.Query("page", "1"), 10, 64)
-	if err != nil || page < 1 { page = 1 }
+	if err != nil || page < 1 {
+		page = 1
+	}
+	if page > 10000 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Halaman terlalu besar"})
+	}
 	result, err := h.service.ClassMembers(c.UserContext(), id, page)
-	if err != nil { return onboardingHTTPError(c, err) }
+	if err != nil {
+		return onboardingHTTPError(c, err)
+	}
 	return c.JSON(result)
 }
 
