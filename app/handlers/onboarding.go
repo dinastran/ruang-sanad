@@ -1,12 +1,12 @@
 package handlers
 
 import (
-	"github.com/maulanashalihin/laju-go/app/queries"
-	"strings"
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/maulanashalihin/laju-go/app/queries"
 	"github.com/maulanashalihin/laju-go/app/services"
 	"github.com/maulanashalihin/laju-go/app/session"
 )
