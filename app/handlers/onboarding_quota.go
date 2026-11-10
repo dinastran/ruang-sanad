@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"strconv"
+	"strings"
+	"github.com/maulanashalihin/laju-go/app/queries"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/services"
@@ -10,7 +12,15 @@ import (
 func (h *OnboardingHandler) ClassControls(c *fiber.Ctx) error {
 	sess, _ := h.store.Get(c)
 	user := sessionUser(sess)
-	board, err := h.service.ClassControls(c.UserContext())
+	page, err := strconv.ParseInt(c.Query("page", "1"), 10, 64)
+	if err != nil || page < 1 { page = 1 }
+	query := strings.TrimSpace(c.Query("q", ""))
+	status := c.Query("status", "")
+	if len([]rune(query)) > 100 { return c.Status(fiber.StatusBadRequest).SendString("Pencarian terlalu panjang") }
+	if status != "" && status != "needs_target" && status != "shortage" && status != "ready" {
+		return c.Status(fiber.StatusBadRequest).SendString("Filter status kelas tidak valid")
+	}
+	board, err := h.service.ClassControlsFiltered(c.UserContext(), page, queries.OnboardingQuotaFilter{Query: query, Status: status})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString("Gagal memuat kontrol kuota")
 	}
@@ -18,7 +28,18 @@ func (h *OnboardingHandler) ClassControls(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString("Gagal memuat notifikasi onboarding")
 	}
-	return h.inertia.Render(c, "app/OnboardingQuota", fiber.Map{"user": user, "board": board, "notices": notices})
+	return h.inertia.Render(c, "app/OnboardingQuota", fiber.Map{"user": user, "board": board, "notices": notices, "filters": fiber.Map{"q": query, "status": status}})
+}
+
+// ClassMembers is read-only and uses the existing santri-view role boundary.
+func (h *OnboardingHandler) ClassMembers(c *fiber.Ctx) error {
+	id, err := onboardingClassID(c)
+	if err != nil { return onboardingHTTPError(c, err) }
+	page, err := strconv.ParseInt(c.Query("page", "1"), 10, 64)
+	if err != nil || page < 1 { page = 1 }
+	result, err := h.service.ClassMembers(c.UserContext(), id, page)
+	if err != nil { return onboardingHTTPError(c, err) }
+	return c.JSON(result)
 }
 
 func onboardingClassID(c *fiber.Ctx) (int64, error) {
