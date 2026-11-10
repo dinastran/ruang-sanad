@@ -3,7 +3,7 @@
     import AppLayout from "@layouts/AppLayout.svelte";
     import OnboardingWorkspaceHeader from "@components/OnboardingWorkspaceHeader.svelte";
     import type { User, Flash } from "@lib/types";
-    import { CalendarClock, History, ArrowLeft, ArrowRight, Ban } from "lucide-svelte";
+    import { CalendarClock, History, ArrowLeft, ArrowRight, Ban, Search, X } from "lucide-svelte";
 
     type Stage = "onboarding_baru" | "matching_kelas" | "waiting_kuota" | "siap_mulai" | "masuk_kelas";
     interface PIC { id: number; name: string; email: string }
@@ -14,8 +14,8 @@
         kelas_id: number; kelas_nama: string;
     }
     interface Activity { id: number; event_type: string; from_stage: string; to_stage: string; note: string; actor_name: string; created_at: string }
-    interface Board { cases: Case[]; counts: Record<string, number>; pics: PIC[]; total: number; page: number; page_size: number }
-    interface Props { user?: User; board: Board; flash?: Flash; summary: {total:number;at_risk:number;overdue:number;alert_pending:number}; notices: {id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}[] }
+    interface Board { cases: Case[]; counts: Record<string, number>; pics: PIC[]; class_options: {id:number; name:string}[]; total: number; page: number; page_size: number }
+    interface Props { user?: User; board: Board; filters?: {q:string;pic:string;sla:string;class_id:string;angkatan:string}; flash?: Flash; summary: {total:number;at_risk:number;overdue:number;alert_pending:number}; notices: {id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}[] }
 
     let props: Props = $props();
     let board = $derived(props.board);
@@ -31,6 +31,30 @@
     let historyId = $state<number | null>(null);
     let history = $state<Activity[]>([]);
     let historyLoading = $state(false);
+    let filterQ = $state(props.filters?.q ?? "");
+    let filterPIC = $state(props.filters?.pic ?? "");
+    let filterSLA = $state(props.filters?.sla ?? "");
+    let filterClass = $state(props.filters?.class_id ?? "");
+    let filterAngkatan = $state(props.filters?.angkatan ?? "");
+    let filterActive = $derived(Boolean(props.filters?.q || props.filters?.pic || props.filters?.sla || props.filters?.class_id || props.filters?.angkatan));
+    function boardURL(page=1): string {
+        const query = new URLSearchParams();
+        const fields: Record<string,string> = { q:filterQ.trim(),pic:filterPIC,sla:filterSLA,class_id:filterClass,angkatan:filterAngkatan.trim() };
+        for (const [key,value] of Object.entries(fields)) if(value) query.set(key,value);
+        if(page>1) query.set("page",String(page));
+        return "/app/onboarding" + (query.size ? "?"+query.toString() : "");
+    }
+    function applyFilters() {
+        dragged=null;hovering=null;
+        router.get(boardURL(),{}, {preserveScroll:true});
+    }
+    function pageURL(page:number): string {
+        const params = new URLSearchParams();
+        const filters = props.filters ?? {q:"",pic:"",sla:"",class_id:"",angkatan:""};
+        for (const [key,value] of Object.entries(filters)) if(value) params.set(key,value);
+        if(page>1) params.set("page",String(page));
+        return "/app/onboarding" + (params.size?"?"+params.toString():"");
+    }
 
     const stages: {key:Stage; label:string; help:string}[] = [
         {key:"onboarding_baru",label:"Onboarding Baru",help:"Santri baru terdaftar"},
@@ -78,7 +102,7 @@
             const data: {error?:string;ok?:boolean}=await res.json().catch(()=>({}));
             if (!res.ok || !data.ok) throw new Error(data.error ?? "Permintaan gagal. Silakan muat ulang.");
             pending=null; feedback="Perubahan onboarding berhasil disimpan.";
-            router.get("/app/onboarding?page="+board.page,{}, {preserveScroll:true});
+            router.reload({preserveScroll:true});
             return true;
         } catch (e) {
             errorMessage=e instanceof Error ? e.message : "Terjadi kesalahan";
@@ -126,10 +150,40 @@
   <div class="mx-auto max-w-[1700px] space-y-5 px-4 py-6 sm:px-6">
     <OnboardingWorkspaceHeader role={user?.role??""} active="kanban" summary={props.summary} notices={props.notices??[]}/>
     <p class="text-sm text-neutral-500 dark:text-neutral-400">Papan Kanban: status dipindahkan manual. SLA 14 hari dihitung dari registrasi dan tidak berubah ketika kartu dipindah.</p>
+    <form class="rounded-xl border border-neutral-200 bg-white p-4 dark:border-white/10 dark:bg-neutral-900" onsubmit={(e)=>{e.preventDefault();applyFilters();}}>
+      <div class="flex flex-wrap items-end gap-3">
+        <label class="min-w-[220px] flex-1 text-xs font-medium text-neutral-600 dark:text-neutral-300">Cari mahasantri atau kelas
+          <div class="mt-1 flex items-center gap-2 rounded-lg border border-neutral-200 px-3 dark:border-white/15"><Search size={16}/><input type="search" aria-label="Cari onboarding" maxlength="100" bind:value={filterQ} placeholder="Nama, ID mahasantri, nama kelas" class="w-full bg-transparent py-2.5 text-sm outline-none"/></div>
+        </label>
+        <label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">PIC
+          <select bind:value={filterPIC} class="mt-1 block w-full rounded-lg border border-neutral-200 bg-white p-2.5 text-sm dark:border-white/15 dark:bg-neutral-800">
+            <option value="">Semua PIC</option><option value="unassigned">Belum ada PIC</option>
+            {#each board.pics as pic (pic.id)}<option value={String(pic.id)}>{pic.name}</option>{/each}
+          </select>
+        </label>
+        <label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">SLA
+          <select bind:value={filterSLA} class="mt-1 block w-full rounded-lg border border-neutral-200 bg-white p-2.5 text-sm dark:border-white/15 dark:bg-neutral-800">
+            <option value="">Semua SLA</option><option value="at_risk">Mendekati SLA</option><option value="overdue">Lewat SLA</option>
+          </select>
+        </label>
+        <label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">Kelas
+          <select bind:value={filterClass} class="mt-1 block w-full max-w-[220px] rounded-lg border border-neutral-200 bg-white p-2.5 text-sm dark:border-white/15 dark:bg-neutral-800">
+            <option value="">Semua kelas</option>
+            {#each board.class_options??[] as c (c.id)}<option value={String(c.id)}>{c.name}</option>{/each}
+          </select>
+        </label>
+        <label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">Angkatan
+          <input type="text" maxlength="60" bind:value={filterAngkatan} placeholder="Semua angkatan" class="mt-1 block w-36 rounded-lg border border-neutral-200 p-2.5 text-sm dark:border-white/15 dark:bg-neutral-800"/>
+        </label>
+        <button type="submit" class="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white">Terapkan</button>
+        {#if filterActive}<a href="/app/onboarding" use:inertia class="flex items-center gap-1 rounded-lg border border-neutral-200 px-3 py-2.5 text-sm dark:border-white/15"><X size={14}/> Reset</a>{/if}
+      </div>
+      <p class="mt-3 text-xs text-neutral-500" aria-live="polite">{board.total} kasus cocok di seluruh halaman{filterActive?" · Filter aktif":""}. Jumlah tiap kolom mengikuti filter.</p>
+    </form>
     {#if board.total===0}
       <div class="rounded-xl border border-dashed border-neutral-300 bg-white p-6 text-sm dark:border-white/15 dark:bg-neutral-900">
-        <p class="font-semibold">Belum ada kasus onboarding</p>
-        <p class="mt-1 text-neutral-500">Kasus baru muncul setelah pendaftaran santri baru atau konversi lead CRM. Data santri lama tidak dimasukkan otomatis.</p>
+        <p class="font-semibold">{filterActive?"Tidak ada kasus yang cocok dengan filter":"Belum ada kasus onboarding"}</p>
+        <p class="mt-1 text-neutral-500">{filterActive?"Ubah kata kunci atau reset filter untuk melihat kasus lain.":"Kasus baru muncul setelah pendaftaran santri baru atau konversi lead CRM. Data santri lama tidak dimasukkan otomatis."}</p>
         <a href="/app/santri" use:inertia class="mt-3 inline-flex font-medium text-brand-700 hover:underline dark:text-brand-300">Lihat Data Santri</a>
       </div>
     {/if}
@@ -164,6 +218,12 @@
                     {card.stage==="masuk_kelas"?"Selesai":daysRemaining(card.deadline_at)<=0?"Lewat SLA":`Batas ${dateWIB(card.deadline_at)}`}
                   </span>
                 </div>
+                {#if card.stage!=="masuk_kelas" && card.stage!=="batal" && (!card.pic_user_id || (index(card.stage)>=1 && !card.kelas_id))}
+                  <div class="mt-2 rounded-md bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200" aria-label="Penghambat progres">
+                    {#if !card.pic_user_id}<p>PIC belum ditetapkan</p>{/if}
+                    {#if index(card.stage)>=1 && !card.kelas_id}<p>Penempatan kelas belum ada</p>{/if}
+                  </div>
+                {/if}
                 <label class="mt-3 block text-xs text-neutral-500" for={`pic-${card.id}`}>PIC Admin Kelas</label>
                 <select id={`pic-${card.id}`} value={card.pic_user_id} disabled={busy||card.stage==="masuk_kelas"}
                   onchange={(e)=>assignPIC(card,e)}
@@ -207,9 +267,9 @@
 
     {#if board.total>board.page_size}
       <nav class="flex items-center justify-center gap-3 text-sm" aria-label="Halaman Kanban">
-        <a href={`/app/onboarding?page=${board.page-1}`} use:inertia aria-disabled={board.page<=1} class={btnClass+(board.page<=1?" pointer-events-none opacity-40":"")}>Sebelumnya</a>
+        <a href={pageURL(board.page-1)} use:inertia aria-disabled={board.page<=1} class={btnClass+(board.page<=1?" pointer-events-none opacity-40":"")}>Sebelumnya</a>
         <span>Halaman {board.page} dari {Math.ceil(board.total/board.page_size)} · 100 kasus per halaman</span>
-        <a href={`/app/onboarding?page=${board.page+1}`} use:inertia aria-disabled={board.page>=Math.ceil(board.total/board.page_size)} class={btnClass+(board.page>=Math.ceil(board.total/board.page_size)?" pointer-events-none opacity-40":"")}>Berikutnya</a>
+        <a href={pageURL(board.page+1)} use:inertia aria-disabled={board.page>=Math.ceil(board.total/board.page_size)} class={btnClass+(board.page>=Math.ceil(board.total/board.page_size)?" pointer-events-none opacity-40":"")}>Berikutnya</a>
       </nav>
     {/if}
 
