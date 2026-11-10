@@ -45,6 +45,6 @@ type OnboardingActivityItem struct {
 
 // OnboardingClassOption is a safe, read-only class filter label.
 type OnboardingClassOption struct {
-	ID int64 `json:"id"`
+	ID   int64  `json:"id"`
 	Name string `json:"name"`
 }
