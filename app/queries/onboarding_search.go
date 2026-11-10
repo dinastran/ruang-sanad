@@ -59,16 +59,18 @@ func onboardingBoardPredicate(f OnboardingBoardFilter) (string, []any) {
 			now = time.Now().UTC()
 		}
 		clauses = append(clauses, "oc.stage NOT IN ('masuk_kelas','batal')")
-		clauses = append(clauses, "julianday(oc.deadline_at) IS NOT NULL")
+		clauses = append(clauses, "julianday(substr(oc.deadline_at,1,19)) IS NOT NULL")
 		if f.SLA == "overdue" {
-			clauses = append(clauses, "julianday(oc.deadline_at) <= julianday(?)")
+			clauses = append(clauses, "julianday(substr(oc.deadline_at,1,19)) <= julianday(?)")
 			args = append(args, now.UTC().Format(time.RFC3339))
 		} else {
 			// The alert period starts on D11 (deadline is start of D15 WIB).
+			// SQLite TIME values include a Go timezone suffix which julianday cannot parse;
+			// the first 19 characters are a UTC calendar timestamp.
 			wib := time.FixedZone("WIB", 7*60*60)
 			local := now.In(wib)
 			dayStart := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, wib)
-			clauses = append(clauses, "julianday(oc.deadline_at) > julianday(?) AND julianday(oc.deadline_at) <= julianday(?)")
+			clauses = append(clauses, "julianday(substr(oc.deadline_at,1,19)) > julianday(?) AND julianday(substr(oc.deadline_at,1,19)) <= julianday(?)")
 			args = append(args, now.UTC().Format(time.RFC3339), dayStart.AddDate(0, 0, 4).UTC().Format(time.RFC3339))
 		}
 	}
