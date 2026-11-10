@@ -2,8 +2,6 @@ package queries
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 	"strings"
 	"time"
 )
@@ -37,7 +35,7 @@ func onboardingBoardPredicate(f OnboardingBoardFilter) (string, []any) {
 	clauses := []string{}
 	args := []any{}
 	if strings.TrimSpace(f.Query) != "" {
-		clauses = append(clauses, `(LOWER(s.nama) LIKE ? ESCAPE '' OR LOWER(COALESCE(s.id_mahasantri,'')) LIKE ? ESCAPE '' OR LOWER(COALESCE(k.nama_kelas,'')) LIKE ? ESCAPE '')`)
+		clauses = append(clauses, `(LOWER(s.nama) LIKE ? ESCAPE char(92) OR LOWER(COALESCE(s.id_mahasantri,'')) LIKE ? ESCAPE char(92) OR LOWER(COALESCE(k.nama_kelas,'')) LIKE ? ESCAPE char(92))`)
 		pattern := onboardingLike(f.Query)
 		args = append(args, pattern, pattern, pattern)
 	}
@@ -144,7 +142,7 @@ func onboardingQuotaPredicate(f OnboardingQuotaFilter) (string, []any) {
 	where := []string{}
 	args := []any{}
 	if strings.TrimSpace(f.Query) != "" {
-		where = append(where, `(LOWER(x.nama_kelas) LIKE ? ESCAPE '' OR CAST(x.id AS TEXT)=?)`)
+		where = append(where, `(LOWER(x.nama_kelas) LIKE ? ESCAPE char(92) OR CAST(x.id AS TEXT)=?)`)
 		args = append(args, onboardingLike(f.Query), strings.TrimSpace(f.Query))
 	}
 	switch f.Status {
@@ -201,6 +199,3 @@ func (q *Querier) ListOnboardingClassMembers(ctx context.Context, classID, limit
 	return items,total,rows.Err()
 }
 
-// Compile-time documentation for the stable nullable class references.
-var _ sql.NullInt64
-var _ = fmt.Sprintf
