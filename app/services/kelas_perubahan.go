@@ -19,6 +19,9 @@ const (
 	PerubahanJadwalRutin      = "jadwal_rutin"
 	PerubahanLevelSantri      = "level_santri"
 	PerubahanKoreksiPertemuan = "koreksi_pertemuan"
+	// PerubahanKoreksiLevel moves the start of the current level (admin
+	// changed the level late) without touching global numbers or billing.
+	PerubahanKoreksiLevel = "koreksi_pertemuan_level"
 )
 
 // KelasPerubahanService handles Admin Kelas changes to a class's level or

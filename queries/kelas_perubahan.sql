@@ -117,3 +117,37 @@ WHERE tagihan.kelas_id = CAST(sqlc.arg(kelas_id) AS INTEGER)
       WHERE p.id = tagihan.pertemuan_id
         AND p.kelas_id = sqlc.arg(kelas_id)
   );
+
+-- ============ Koreksi titik mulai level ============
+-- Dipakai bila admin telat mengganti level kelas: pertemuan level baru
+-- terlanjur tercatat dengan label level lama. Nomor global (pertemuan_ke),
+-- tagihan, dan pertemuan_awal santri tidak berubah; hanya label level dan
+-- nomor per level yang disusun ulang.
+
+-- name: ListPertemuanKoreksiLevel :many
+SELECT id, pertemuan_ke, tanggal, level_nama, pertemuan_level_ke
+FROM pertemuan
+WHERE kelas_id = ?
+ORDER BY pertemuan_ke ASC, id ASC;
+
+-- name: ListLevelChangeBoundaries :many
+-- Titik ganti level kelas, terbaru dulu.
+SELECT id, pertemuan_ke, nilai_lama, nilai_baru
+FROM kelas_perubahan
+WHERE kelas_id = CAST(sqlc.arg(kelas_id) AS INTEGER) AND jenis = 'level_kelas' AND pertemuan_ke > 0
+ORDER BY pertemuan_ke DESC, id DESC;
+
+-- name: RelabelPertemuanLevel :exec
+UPDATE pertemuan
+SET level_nama = sqlc.arg(level_nama),
+    pertemuan_level_ke = pertemuan_ke - sqlc.arg(offset_level),
+    updated_at = CURRENT_TIMESTAMP
+WHERE kelas_id = sqlc.arg(kelas_id)
+  AND pertemuan_ke > sqlc.arg(dari)
+  AND pertemuan_ke <= sqlc.arg(sampai);
+
+-- name: SetKelasLevelPertemuanAwal :exec
+UPDATE kelas SET level_pertemuan_awal = ? WHERE id = ?;
+
+-- name: SetKelasPerubahanPertemuanKe :exec
+UPDATE kelas_perubahan SET pertemuan_ke = ? WHERE id = ?;
