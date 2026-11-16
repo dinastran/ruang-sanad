@@ -212,6 +212,99 @@ func (q *Queries) ListKelasPerubahanByKelas(ctx context.Context, kelasID sql.Nul
 	return items, nil
 }
 
+const listLevelChangeBoundaries = `-- name: ListLevelChangeBoundaries :many
+SELECT id, pertemuan_ke, nilai_lama, nilai_baru
+FROM kelas_perubahan
+WHERE kelas_id = CAST(?1 AS INTEGER) AND jenis = 'level_kelas' AND pertemuan_ke > 0
+ORDER BY pertemuan_ke DESC, id DESC
+`
+
+type ListLevelChangeBoundariesRow struct {
+	ID          int64
+	PertemuanKe int64
+	NilaiLama   string
+	NilaiBaru   string
+}
+
+// Titik ganti level kelas, terbaru dulu.
+func (q *Queries) ListLevelChangeBoundaries(ctx context.Context, kelasID int64) ([]ListLevelChangeBoundariesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLevelChangeBoundaries, kelasID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLevelChangeBoundariesRow
+	for rows.Next() {
+		var i ListLevelChangeBoundariesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PertemuanKe,
+			&i.NilaiLama,
+			&i.NilaiBaru,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPertemuanKoreksiLevel = `-- name: ListPertemuanKoreksiLevel :many
+
+SELECT id, pertemuan_ke, tanggal, level_nama, pertemuan_level_ke
+FROM pertemuan
+WHERE kelas_id = ?
+ORDER BY pertemuan_ke ASC, id ASC
+`
+
+type ListPertemuanKoreksiLevelRow struct {
+	ID               int64
+	PertemuanKe      int64
+	Tanggal          time.Time
+	LevelNama        string
+	PertemuanLevelKe int64
+}
+
+// ============ Koreksi titik mulai level ============
+// Dipakai bila admin telat mengganti level kelas: pertemuan level baru
+// terlanjur tercatat dengan label level lama. Nomor global (pertemuan_ke),
+// tagihan, dan pertemuan_awal santri tidak berubah; hanya label level dan
+// nomor per level yang disusun ulang.
+func (q *Queries) ListPertemuanKoreksiLevel(ctx context.Context, kelasID int64) ([]ListPertemuanKoreksiLevelRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPertemuanKoreksiLevel, kelasID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPertemuanKoreksiLevelRow
+	for rows.Next() {
+		var i ListPertemuanKoreksiLevelRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PertemuanKe,
+			&i.Tanggal,
+			&i.LevelNama,
+			&i.PertemuanLevelKe,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const offsetPertemuanKeForRebase = `-- name: OffsetPertemuanKeForRebase :exec
 UPDATE pertemuan
 SET pertemuan_ke = pertemuan_ke + ?1
@@ -249,6 +342,35 @@ func (q *Queries) RebaseKelasMeetingAnchors(ctx context.Context, arg RebaseKelas
 	return err
 }
 
+const relabelPertemuanLevel = `-- name: RelabelPertemuanLevel :exec
+UPDATE pertemuan
+SET level_nama = ?1,
+    pertemuan_level_ke = pertemuan_ke - ?2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE kelas_id = ?3
+  AND pertemuan_ke > ?4
+  AND pertemuan_ke <= ?5
+`
+
+type RelabelPertemuanLevelParams struct {
+	LevelNama   string
+	OffsetLevel int64
+	KelasID     int64
+	Dari        int64
+	Sampai      int64
+}
+
+func (q *Queries) RelabelPertemuanLevel(ctx context.Context, arg RelabelPertemuanLevelParams) error {
+	_, err := q.db.ExecContext(ctx, relabelPertemuanLevel,
+		arg.LevelNama,
+		arg.OffsetLevel,
+		arg.KelasID,
+		arg.Dari,
+		arg.Sampai,
+	)
+	return err
+}
+
 const setKelasAwalPertemuan = `-- name: SetKelasAwalPertemuan :exec
 UPDATE kelas SET pertemuan_terakhir = ?, level_pertemuan_awal = ?, kapasitas = ? WHERE id = ?
 `
@@ -269,6 +391,34 @@ func (q *Queries) SetKelasAwalPertemuan(ctx context.Context, arg SetKelasAwalPer
 		arg.Kapasitas,
 		arg.ID,
 	)
+	return err
+}
+
+const setKelasLevelPertemuanAwal = `-- name: SetKelasLevelPertemuanAwal :exec
+UPDATE kelas SET level_pertemuan_awal = ? WHERE id = ?
+`
+
+type SetKelasLevelPertemuanAwalParams struct {
+	LevelPertemuanAwal int64
+	ID                 int64
+}
+
+func (q *Queries) SetKelasLevelPertemuanAwal(ctx context.Context, arg SetKelasLevelPertemuanAwalParams) error {
+	_, err := q.db.ExecContext(ctx, setKelasLevelPertemuanAwal, arg.LevelPertemuanAwal, arg.ID)
+	return err
+}
+
+const setKelasPerubahanPertemuanKe = `-- name: SetKelasPerubahanPertemuanKe :exec
+UPDATE kelas_perubahan SET pertemuan_ke = ? WHERE id = ?
+`
+
+type SetKelasPerubahanPertemuanKeParams struct {
+	PertemuanKe int64
+	ID          int64
+}
+
+func (q *Queries) SetKelasPerubahanPertemuanKe(ctx context.Context, arg SetKelasPerubahanPertemuanKeParams) error {
+	_, err := q.db.ExecContext(ctx, setKelasPerubahanPertemuanKe, arg.PertemuanKe, arg.ID)
 	return err
 }
 

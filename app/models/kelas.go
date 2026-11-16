@@ -27,16 +27,49 @@ type SetPertemuanTerakhirRequest struct {
 	PertemuanTerakhir int64 `json:"pertemuan_terakhir"`
 }
 
+// KoreksiLevelState describes the class's current level segment for the
+// "koreksi nomor di level saat ini" tool. Only global meeting numbers after
+// BatasBawah may change level label.
+type KoreksiLevelState struct {
+	LevelNama string `json:"level_nama"`
+	// TerakhirGlobal is the last global meeting number (incl. legacy anchor).
+	TerakhirGlobal int64 `json:"terakhir_global"`
+	// LevelAwal is the global number right before the current level begins.
+	LevelAwal int64 `json:"level_awal"`
+	// TerakhirSekarang is the current per-level number of the last meeting.
+	TerakhirSekarang int64 `json:"terakhir_sekarang"`
+	// MaksTerakhir is the largest per-level number the admin may set.
+	MaksTerakhir int64 `json:"maks_terakhir"`
+	// LevelSebelum / OffsetSebelum label meetings moved back to the previous
+	// level when the level actually started later than recorded.
+	LevelSebelum            string                  `json:"level_sebelum"`
+	OffsetSebelum           int64                   `json:"offset_sebelum"`
+	Pertemuan               []KoreksiLevelPertemuan `json:"pertemuan"`
+	AdaPertemuanBerlangsung bool                    `json:"ada_pertemuan_berlangsung"`
+}
+
+type KoreksiLevelPertemuan struct {
+	PertemuanKe int64  `json:"pertemuan_ke"`
+	Tanggal     string `json:"tanggal"`
+	LevelNama   string `json:"level_nama"`
+	LevelKe     int64  `json:"level_ke"`
+}
+
+type KoreksiLevelRequest struct {
+	TerakhirLevel int64  `json:"terakhir_level"`
+	Alasan        string `json:"alasan"`
+}
+
 type KoreksiPertemuanRequest struct {
 	PertemuanTerakhir int64  `json:"pertemuan_terakhir"`
-	Alasan             string `json:"alasan"`
+	Alasan            string `json:"alasan"`
 }
 
 type KoreksiPertemuanState struct {
-	AnchorSebelumSistem      int64 `json:"anchor_sebelum_sistem"`
-	JumlahPertemuan          int64 `json:"jumlah_pertemuan"`
-	PertemuanGlobalTerakhir  int64 `json:"pertemuan_global_terakhir"`
-	AdaPertemuanBerlangsung  bool  `json:"ada_pertemuan_berlangsung"`
+	AnchorSebelumSistem     int64 `json:"anchor_sebelum_sistem"`
+	JumlahPertemuan         int64 `json:"jumlah_pertemuan"`
+	PertemuanGlobalTerakhir int64 `json:"pertemuan_global_terakhir"`
+	AdaPertemuanBerlangsung bool  `json:"ada_pertemuan_berlangsung"`
 }
 
 type SetKelasMateriIndividualRequest struct {
@@ -57,8 +90,8 @@ type GantiJadwalKelasRequest struct {
 }
 
 type JadwalRutinSlotRequest struct {
-	Hari      int64  `json:"hari"`
-	JamMulai  string `json:"jam_mulai"`
+	Hari     int64  `json:"hari"`
+	JamMulai string `json:"jam_mulai"`
 }
 
 type SetJadwalRutinRequest struct {
@@ -66,12 +99,12 @@ type SetJadwalRutinRequest struct {
 }
 
 type JadwalRutinResponse struct {
-	ID            int64  `json:"id"`
-	KelasID       int64  `json:"kelas_id"`
-	Hari          int64  `json:"hari"`
-	JamMulai      string `json:"jam_mulai"`
-	BerlakuMulai  string `json:"berlaku_mulai"`
-	IsAktif       bool   `json:"is_aktif"`
+	ID           int64  `json:"id"`
+	KelasID      int64  `json:"kelas_id"`
+	Hari         int64  `json:"hari"`
+	JamMulai     string `json:"jam_mulai"`
+	BerlakuMulai string `json:"berlaku_mulai"`
+	IsAktif      bool   `json:"is_aktif"`
 }
 
 // GantiLevelSantriRequest moves selected santri to a class of another level.
@@ -90,7 +123,7 @@ type KelasPerubahanResponse struct {
 	NilaiLama       string `json:"nilai_lama"`
 	NilaiBaru       string `json:"nilai_baru"`
 	PertemuanKe     int64  `json:"pertemuan_ke"`
-	Alasan           string `json:"alasan"`
+	Alasan          string `json:"alasan"`
 	SantriNama      string `json:"santri_nama"`
 	KelasAsalID     *int64 `json:"kelas_asal_id"`
 	KelasAsalNama   string `json:"kelas_asal_nama"`

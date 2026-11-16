@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strconv"
 
@@ -86,6 +87,11 @@ func (h *KelasHandler) Show(c *fiber.Ctx) error {
 			koreksiPertemuan = &state
 		}
 	}
+	koreksiLevel, err := h.kelasPerubahanService.GetKoreksiLevelState(id)
+	if err != nil {
+		slog.Error("koreksi level state failed", "kelas_id", id, "error", err)
+		koreksiLevel = nil
+	}
 	guruList, _ := h.masterService.ListGuruAll()
 	kelasList, _ := h.kelasService.ListAll()
 	kelasLain := make([]models.KelasResponse, 0, len(kelasList))
@@ -130,6 +136,7 @@ func (h *KelasHandler) Show(c *fiber.Ctx) error {
 		"kelas_lain":        kelasLain,
 		"has_pertemuan":     hasPertemuan,
 		"koreksi_pertemuan": koreksiPertemuan,
+		"koreksi_level":     koreksiLevel,
 		"levels":            levelList,
 		"jadwals":           jadwalList,
 		"jadwal_rutin":      jadwalRutin,
@@ -265,6 +272,27 @@ func (h *KelasHandler) KoreksiPertemuan(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 	}
 	h.store.Flash(c, "success", "Nomor pertemuan berhasil dikoreksi")
+	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+}
+
+// KoreksiLevel moves the start of the class's current level so the last
+// meeting gets its real per-level number (admin changed the level late).
+func (h *KelasHandler) KoreksiLevel(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return h.inertiaService.Redirect(c, "/app/kelas")
+	}
+	var req models.KoreksiLevelRequest
+	if err := c.BodyParser(&req); err != nil {
+		h.store.Flash(c, "error", "Data koreksi pertemuan tidak valid")
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	sess, _ := h.store.Get(c)
+	if err := h.kelasPerubahanService.KoreksiNomorLevel(id, req.TerakhirLevel, sessionUser(sess).ID, req.Alasan); err != nil {
+		h.store.Flash(c, "error", err.Error())
+		return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
+	}
+	h.store.Flash(c, "success", "Nomor pertemuan level berhasil dikoreksi")
 	return h.inertiaService.Redirect(c, kelasDetailReturnURL(c, c.Params("id")))
 }
 

@@ -87,7 +87,7 @@
 
 	interface KelasPerubahan {
 		id: number;
-		jenis: "level_kelas" | "jadwal_kelas" | "jadwal_rutin" | "level_santri" | "koreksi_pertemuan" | "batal_pertemuan";
+		jenis: "level_kelas" | "jadwal_kelas" | "jadwal_rutin" | "level_santri" | "koreksi_pertemuan" | "koreksi_pertemuan_level" | "batal_pertemuan";
 		nilai_lama: string;
 		nilai_baru: string;
 		pertemuan_ke: number;
@@ -105,6 +105,18 @@
 		anchor_sebelum_sistem: number;
 		jumlah_pertemuan: number;
 		pertemuan_global_terakhir: number;
+		ada_pertemuan_berlangsung: boolean;
+	}
+
+	interface KoreksiLevelState {
+		level_nama: string;
+		terakhir_global: number;
+		level_awal: number;
+		terakhir_sekarang: number;
+		maks_terakhir: number;
+		level_sebelum: string;
+		offset_sebelum: number;
+		pertemuan: { pertemuan_ke: number; tanggal: string; level_nama: string; level_ke: number }[];
 		ada_pertemuan_berlangsung: boolean;
 	}
 
@@ -129,6 +141,7 @@
 		kelas_lain?: KelasResponse[];
 		has_pertemuan?: boolean;
 		koreksi_pertemuan?: KoreksiPertemuanState;
+		koreksi_level?: KoreksiLevelState | null;
 		levels?: LevelOption[];
 		jadwals?: JadwalOption[];
 		jadwal_rutin?: JadwalRutin[];
@@ -140,7 +153,7 @@
 		error?: string;
 	}
 
-	let { user, kelas, santri = [], gurus = [], kelas_lain = [], has_pertemuan = false, koreksi_pertemuan, levels = [], jadwals = [], jadwal_rutin = [], riwayat_perubahan = [], riwayat_status = [], return_to = "/app/kelas", flash, success, error }: Props = $props();
+	let { user, kelas, santri = [], gurus = [], kelas_lain = [], has_pertemuan = false, koreksi_pertemuan, koreksi_level = null, levels = [], jadwals = [], jadwal_rutin = [], riwayat_perubahan = [], riwayat_status = [], return_to = "/app/kelas", flash, success, error }: Props = $props();
 
 	// Kelas handlers report results via the session flash (props.flash); a failed
 	// action still redirects, so Inertia calls onSuccess and we must inspect it.
@@ -170,6 +183,48 @@
 		koreksiDelta !== 0 &&
 		koreksiAlasan.trim().length > 0 &&
 		koreksiAlasan.trim().length <= 500
+	);
+	let koreksiAnchorNegatif = $derived(Number(koreksiAnchor) < 0);
+
+	// Koreksi nomor di level saat ini: memindahkan titik mulai level (admin
+	// telat mengganti level). Nomor total & tagihan tidak berubah.
+	let koreksiLevelOpen = $state(false);
+	let levelTerakhir = $state(0);
+	let levelAlasan = $state("");
+	let isLevelKoreksiLoading = $state(false);
+	let levelInputError = $derived.by(() => {
+		if (!koreksi_level) return "";
+		const v = Number(levelTerakhir);
+		if (!Number.isInteger(v)) return "Isi dengan angka bulat.";
+		if (v < 0) return "Nomor pertemuan tidak boleh negatif.";
+		if (v > koreksi_level.maks_terakhir) {
+			return koreksi_level.maks_terakhir === koreksi_level.terakhir_global
+				? `Maksimal ke-${koreksi_level.maks_terakhir}, yaitu seluruh pertemuan kelas ini.`
+				: `Maksimal ke-${koreksi_level.maks_terakhir}: level sebelumnya harus tetap punya minimal satu pertemuan.`;
+		}
+		return "";
+	});
+	let levelPerubahan = $derived.by(() => {
+		if (!koreksi_level || levelInputError) return [];
+		const k = koreksi_level;
+		const awalBaru = k.terakhir_global - Number(levelTerakhir);
+		return k.pertemuan
+			.map((p) => {
+				let nama = p.level_nama;
+				let ke = p.level_ke;
+				if (p.pertemuan_ke > awalBaru) { nama = k.level_nama; ke = p.pertemuan_ke - awalBaru; }
+				else if (p.pertemuan_ke > k.level_awal) { nama = k.level_sebelum; ke = p.pertemuan_ke - k.offset_sebelum; }
+				return { ...p, nama_baru: nama, ke_baru: ke };
+			})
+			.filter((p) => p.nama_baru !== p.level_nama || p.ke_baru !== p.level_ke);
+	});
+	let levelFormValid = $derived(
+		!!koreksi_level &&
+		!koreksi_level.ada_pertemuan_berlangsung &&
+		!levelInputError &&
+		Number(levelTerakhir) !== koreksi_level.terakhir_sekarang &&
+		levelAlasan.trim().length > 0 &&
+		levelAlasan.trim().length <= 500
 	);
 	let isMateriIndividualLoading = $state(false);
 	let kapasitasBaru = $state(kelas.kapasitas);
@@ -385,7 +440,8 @@
 		if (item.jenis === "level_kelas") return "Ganti level kelas";
 		if (item.jenis === "jadwal_kelas") return "Ganti jadwal kelas";
 		if (item.jenis === "jadwal_rutin") return "Jadwal rutin otomatis";
-		if (item.jenis === "koreksi_pertemuan") return "Koreksi nomor pertemuan";
+		if (item.jenis === "koreksi_pertemuan") return "Koreksi nomor total pertemuan";
+		if (item.jenis === "koreksi_pertemuan_level") return "Koreksi nomor pertemuan level";
 		if (item.jenis === "batal_pertemuan") return "Pertemuan dibatalkan";
 		return "Santri naik level";
 	}
@@ -454,6 +510,34 @@
 		koreksiAnchor = koreksi_pertemuan.anchor_sebelum_sistem;
 		koreksiAlasan = "";
 		koreksiModalOpen = true;
+	}
+
+	function openKoreksiLevel() {
+		if (!koreksi_level || koreksi_level.ada_pertemuan_berlangsung) return;
+		levelTerakhir = koreksi_level.terakhir_sekarang;
+		levelAlasan = "";
+		koreksiModalOpen = false;
+		koreksiLevelOpen = true;
+	}
+
+	function submitKoreksiLevel() {
+		if (!levelFormValid) return;
+		isLevelKoreksiLoading = true;
+		router.put(withReturnTo(`/app/kelas/${kelas.id}/koreksi-pertemuan-level`), {
+			terakhir_level: Number(levelTerakhir),
+			alasan: levelAlasan.trim(),
+		}, {
+			preserveScroll: true,
+			preserveState: true,
+			onSuccess: (p) => {
+				const err = flashError(p);
+				if (err) { Toast(err, "error"); return; }
+				koreksiLevelOpen = false;
+				Toast("Nomor pertemuan level berhasil dikoreksi", "success");
+			},
+			onError: () => Toast("Gagal mengoreksi nomor pertemuan", "error"),
+			onFinish: () => { isLevelKoreksiLoading = false; },
+		});
 	}
 
 	function submitKoreksiPertemuan() {
@@ -708,6 +792,26 @@
 					</div>
 				</div>
 
+				{#if koreksi_level}
+					<div class="mt-6 pt-6 border-t border-neutral-200/80 dark:border-white/[0.04]">
+						<div class="rounded-xl border border-neutral-200/80 bg-white p-4 dark:border-white/[0.06] dark:bg-neutral-900/40">
+							<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+								<div>
+									<h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Nomor pertemuan di level {koreksi_level.level_nama}</h3>
+									<p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
+										Pertemuan terakhir tercatat <span class="font-mono font-semibold text-neutral-900 dark:text-white">{koreksi_level.level_nama} ke-{koreksi_level.terakhir_sekarang}</span>.
+										Bila level terlambat diganti sehingga nomornya mulai dari 1 lagi, koreksi di sini. Nomor total dan tagihan tidak berubah.
+									</p>
+								</div>
+								<button onclick={openKoreksiLevel} disabled={koreksi_level.ada_pertemuan_berlangsung} class="shrink-0 rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-400">Koreksi nomor level</button>
+							</div>
+							{#if koreksi_level.ada_pertemuan_berlangsung}
+								<p class="mt-3 text-xs text-amber-700 dark:text-amber-400">Koreksi sementara diblokir karena ada pertemuan yang sedang berlangsung.</p>
+							{/if}
+						</div>
+					</div>
+				{/if}
+
 				<div class="mt-6 pt-6 border-t border-neutral-200/80 dark:border-white/[0.04]">
 					<div class="rounded-xl border border-brand-400/20 bg-brand-400/5 p-4">
 						<div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -718,7 +822,7 @@
 							<div class="flex items-center gap-2">
 								<input type="number" min="0" bind:value={pertemuanTerakhir} disabled={has_pertemuan} aria-label="Pertemuan terakhir sebelum sistem" class="w-24 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-mono text-neutral-900 outline-none focus:border-brand-400 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white" />
 								{#if has_pertemuan}
-									<button onclick={openKoreksiPertemuan} disabled={!koreksi_pertemuan || koreksi_pertemuan.ada_pertemuan_berlangsung} class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-400">Koreksi nomor</button>
+									<button onclick={openKoreksiPertemuan} disabled={!koreksi_pertemuan || koreksi_pertemuan.ada_pertemuan_berlangsung} class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-400">Koreksi nomor total</button>
 								{:else}
 									<button onclick={simpanPertemuanTerakhir} disabled={isPertemuanLoading || pertemuanTerakhir < 0} class="rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-400">Simpan</button>
 								{/if}
@@ -727,7 +831,7 @@
 						{#if has_pertemuan && koreksi_pertemuan?.ada_pertemuan_berlangsung}
 							<p class="mt-3 text-xs text-amber-700 dark:text-amber-400">Koreksi sementara diblokir karena ada pertemuan yang sedang berlangsung.</p>
 						{:else if has_pertemuan}
-							<p class="mt-3 text-xs text-amber-700 dark:text-amber-400">Anchor awal terkunci. Gunakan Koreksi nomor untuk menyesuaikan kondisi riil tanpa menghapus histori pertemuan.</p>
+							<p class="mt-3 text-xs text-amber-700 dark:text-amber-400">Anchor awal terkunci. Koreksi nomor total menggeser seluruh nomor pertemuan kelas beserta periode tagihan.{#if koreksi_level} Untuk nomor di level {koreksi_level.level_nama}, gunakan Koreksi nomor level di atas.{/if}</p>
 						{:else}
 							<p class="mt-3 text-xs text-amber-700 dark:text-amber-400">Pengaturan ini akan terkunci setelah pertemuan pertama dicatat di aplikasi.</p>
 						{/if}
@@ -1105,14 +1209,22 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
 		<button class="absolute inset-0 h-full w-full bg-neutral-900/50 backdrop-blur-sm" aria-label="Tutup modal koreksi" onclick={() => { koreksiModalOpen = false; }}></button>
 		<div class="relative w-full max-w-lg rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xl dark:border-white/[0.06] dark:bg-neutral-925" in:fly={{ y: 20, duration: 200 }}>
-			<h3 class="text-lg font-bold text-neutral-900 dark:text-white">Koreksi Nomor Pertemuan</h3>
-			<p class="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-400">Koreksi menggeser nomor pertemuan secara konsisten. Absensi, materi, dan record pertemuan tidak dihapus.</p>
+			<h3 class="text-lg font-bold text-neutral-900 dark:text-white">Koreksi Nomor Total Pertemuan</h3>
+			<p class="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-400">Menggeser nomor total seluruh pertemuan kelas dan periode tagihan. Absensi, materi, dan record pertemuan tidak dihapus.</p>
+			{#if koreksi_level}
+				<div class="mt-3 rounded-xl border border-sky-500/25 bg-sky-500/10 p-3 text-sm text-sky-800 dark:text-sky-300">
+					Ingin nomor <span class="font-semibold">{koreksi_level.level_nama}</span> (sekarang ke-{koreksi_level.terakhir_sekarang}) menjadi angka lain karena level terlambat diganti?
+					<button type="button" onclick={openKoreksiLevel} class="font-semibold underline">Gunakan Koreksi nomor level</button>. Tagihan tidak ikut bergeser.
+				</div>
+			{/if}
 
 			<label class="mt-5 block">
 				<span class="text-xs font-semibold uppercase tracking-wider text-neutral-500">Pertemuan terakhir sebelum sistem yang benar</span>
-				<input type="number" min="0" step="1" bind:value={koreksiAnchor} class="mt-1.5 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 font-mono text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white" />
+				<input type="number" min="0" step="1" bind:value={koreksiAnchor} aria-invalid={koreksiAnchorNegatif} class="mt-1.5 w-full rounded-xl border {koreksiAnchorNegatif ? 'border-red-500' : 'border-neutral-300'} bg-white px-3 py-2.5 font-mono text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white" />
+				{#if koreksiAnchorNegatif}<span class="mt-1 block text-xs text-red-600 dark:text-red-400">Nomor tidak boleh negatif.</span>{/if}
 			</label>
 
+			{#if !koreksiAnchorNegatif}
 			<div class="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-neutral-50 p-4 text-sm dark:bg-neutral-900/60">
 				<div>
 					<p class="text-xs text-neutral-500">Anchor</p>
@@ -1131,6 +1243,7 @@
 					<p class="mt-1 font-mono font-semibold text-neutral-900 dark:text-white">Ke-{koreksiGlobalBaru + 1}</p>
 				</div>
 			</div>
+			{/if}
 
 			<label class="mt-4 block">
 				<span class="text-xs font-semibold uppercase tracking-wider text-neutral-500">Alasan koreksi <span class="text-red-500">*</span></span>
@@ -1143,6 +1256,63 @@
 			<div class="mt-5 flex gap-3">
 				<button onclick={() => { koreksiModalOpen = false; }} class="flex-1 rounded-xl border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800">Batal</button>
 				<button onclick={submitKoreksiPertemuan} disabled={!koreksiFormValid || isKoreksiLoading} class="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-400">{isKoreksiLoading ? "Mengoreksi..." : "Terapkan koreksi"}</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+{#if koreksiLevelOpen && koreksi_level}
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+		<button class="absolute inset-0 h-full w-full bg-neutral-900/50 backdrop-blur-sm" aria-label="Tutup modal koreksi level" onclick={() => { koreksiLevelOpen = false; }}></button>
+		<div class="relative flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col overflow-y-auto rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xl dark:border-white/[0.06] dark:bg-neutral-925" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="judul-koreksi-level" in:fly={{ y: 20, duration: 200 }}>
+			<h3 id="judul-koreksi-level" class="text-lg font-bold text-neutral-900 dark:text-white">Koreksi Nomor Pertemuan {koreksi_level.level_nama}</h3>
+			<p class="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-400">Untuk kelas yang levelnya terlambat atau terlalu cepat diganti. Pertemuan yang terlanjur tercatat dengan level lain ikut dipindahkan labelnya.</p>
+
+			<label class="mt-5 block">
+				<span class="text-xs font-semibold uppercase tracking-wider text-neutral-500">Pertemuan {koreksi_level.level_nama} terakhir yang benar</span>
+				<input type="number" min="0" max={koreksi_level.maks_terakhir} step="1" bind:value={levelTerakhir} aria-invalid={!!levelInputError} aria-describedby="hint-koreksi-level" class="mt-1.5 w-full rounded-xl border {levelInputError ? 'border-red-500' : 'border-neutral-300 dark:border-neutral-700'} bg-white px-3 py-2.5 font-mono text-sm text-neutral-900 outline-none focus:border-brand-400 dark:bg-neutral-800 dark:text-white" />
+				<span id="hint-koreksi-level" class="mt-1 block text-xs {levelInputError ? 'text-red-600 dark:text-red-400' : 'text-neutral-500'}">
+					{levelInputError || `Sekarang tercatat ke-${koreksi_level.terakhir_sekarang}. Contoh: isi 6 bila pertemuan terakhir sebenarnya ${koreksi_level.level_nama} ke-6.`}
+				</span>
+			</label>
+
+			{#if !levelInputError}
+				<div class="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-neutral-50 p-4 text-sm dark:bg-neutral-900/60">
+					<div>
+						<p class="text-xs text-neutral-500">Pertemuan terakhir</p>
+						<p class="mt-1 font-mono font-semibold text-neutral-900 dark:text-white">ke-{koreksi_level.terakhir_sekarang} → ke-{Number(levelTerakhir)}</p>
+					</div>
+					<div>
+						<p class="text-xs text-neutral-500">Pertemuan berikutnya</p>
+						<p class="mt-1 font-mono font-semibold text-neutral-900 dark:text-white">{koreksi_level.level_nama} ke-{Number(levelTerakhir) + 1}</p>
+					</div>
+				</div>
+				{#if levelPerubahan.length > 0}
+					<div class="mt-3">
+						<p class="text-xs font-semibold text-neutral-500">{levelPerubahan.length} pertemuan berubah label</p>
+						<ul class="mt-1.5 max-h-44 overflow-y-auto divide-y divide-neutral-100 rounded-xl border border-neutral-200/80 text-xs dark:divide-white/[0.04] dark:border-white/[0.06]">
+							{#each levelPerubahan as p (p.pertemuan_ke)}
+								<li class="flex items-center justify-between gap-3 px-3 py-2">
+									<span class="text-neutral-500">{p.tanggal}</span>
+									<span class="font-mono text-neutral-700 dark:text-neutral-300"><span class="text-neutral-400 line-through">{p.level_nama} ke-{p.level_ke}</span> → <span class="font-semibold text-neutral-900 dark:text-white">{p.nama_baru} ke-{p.ke_baru}</span></span>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
+			{/if}
+
+			<label class="mt-4 block">
+				<span class="text-xs font-semibold uppercase tracking-wider text-neutral-500">Alasan koreksi <span class="text-red-500">*</span></span>
+				<textarea bind:value={levelAlasan} maxlength="500" rows="3" placeholder="Contoh: Talaqqi sudah dimulai 4 pertemuan sebelum level kelas diganti" class="mt-1.5 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-brand-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white"></textarea>
+				<p class="mt-1 text-right text-xs text-neutral-400">{levelAlasan.trim().length}/500</p>
+			</label>
+
+			<p class="mt-3 rounded-xl border border-brand-400/20 bg-brand-400/5 p-3 text-xs leading-5 text-neutral-700 dark:text-neutral-300">Nomor total pertemuan, periode tagihan, absensi, dan materi tidak berubah. Guru kelas mendapat notifikasi, dan koreksi tercatat di riwayat perubahan kelas.</p>
+
+			<div class="mt-5 flex gap-3">
+				<button onclick={() => { koreksiLevelOpen = false; }} class="flex-1 rounded-xl border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800">Batal</button>
+				<button onclick={submitKoreksiLevel} disabled={!levelFormValid || isLevelKoreksiLoading} class="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-400">{isLevelKoreksiLoading ? "Mengoreksi..." : "Terapkan koreksi"}</button>
 			</div>
 		</div>
 	</div>
