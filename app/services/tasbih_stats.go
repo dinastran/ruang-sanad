@@ -249,3 +249,17 @@ func (s *TasbihService) Riwayat(ctx context.Context, userID int64, halaman int, 
 	}
 	return out, adaLagi, nil
 }
+
+// KomposisiHariIni: total per dzikir hari ini (WIB), semua dzikir, terbanyak dulu.
+func (s *TasbihService) KomposisiHariIni(ctx context.Context, userID int64, now time.Time) ([]models.TasbihKomposisi, error) {
+	hari := tasbihTanggal(now)
+	rows, err := s.querier.ListTasbihKomposisi(ctx, queries.ListTasbihKomposisiParams{UserID: userID, Dari: hari, Sampai: hari})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.TasbihKomposisi, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, models.TasbihKomposisi{DzikirID: r.DzikirID, Latin: r.Latin, Total: r.Total})
+	}
+	return out, nil
+}

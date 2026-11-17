@@ -89,12 +89,8 @@ func (s *Store) Get(c *fiber.Ctx) (*Session, error) {
 				// Check if the DB session has expired (cache TTL may outlive session TTL)
 				if cached.ExpiresAt.Before(time.Now()) {
 					s.sessionCache.Invalidate(cookieValue)
-				} else if isPageRequest(c) && cached.UserAgent != "" && famili(cached.UserAgent) != famili(c.Get("User-Agent")) {
-					slog.Warn("session ditolak: browser/OS berbeda dari saat login", "alasan", "user-agent", "tersimpan", famili(cached.UserAgent), "sekarang", famili(c.Get("User-Agent")))
-					s.sessionCache.Invalidate(cookieValue)
-					s.deleteSession(context.Background(), cookieValue)
-					c.ClearCookie(s.sessionName)
 				} else {
+					catatUAberubah(c, cached.UserAgent)
 					session.id = cookieValue
 					session.userID = cached.UserID
 					session.expiresAt = cached.ExpiresAt
@@ -136,16 +132,7 @@ func (s *Store) Get(c *fiber.Ctx) (*Session, error) {
 				// Decode session data
 				var data SessionData
 				if err := json.Unmarshal([]byte(dbSession.Data), &data); err == nil {
-					if isPageRequest(c) && data.UserAgent != "" && famili(data.UserAgent) != famili(c.Get("User-Agent")) {
-						slog.Warn("session ditolak: browser/OS berbeda dari saat login", "alasan", "user-agent", "tersimpan", famili(data.UserAgent), "sekarang", famili(c.Get("User-Agent")))
-						s.deleteSession(context.Background(), cookieValue)
-						if s.sessionCache != nil {
-							s.sessionCache.Invalidate(cookieValue)
-						}
-						c.ClearCookie(s.sessionName)
-						c.Locals("session", session)
-						return session, nil
-					}
+					catatUAberubah(c, data.UserAgent)
 
 					session.values["user_id"] = data.UserID
 					if data.Name != "" {

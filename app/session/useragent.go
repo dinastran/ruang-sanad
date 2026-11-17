@@ -1,11 +1,28 @@
 package session
 
-import "strings"
+import (
+	"log/slog"
+	"strings"
 
-// famili meringkas User-Agent menjadi "sistem-operasi/browser" tanpa nomor versi.
-// Pemeriksaan sesi membandingkan famili, bukan teks utuh, supaya update browser
-// atau mode "situs desktop" tidak membuat user logout, sementara cookie yang
-// dipakai dari browser/OS lain tetap ditolak.
+	"github.com/gofiber/fiber/v2"
+)
+
+// catatUAberubah hanya MENCATAT bila browser/OS berbeda dari saat login; sesi
+// tidak dihapus. User-Agent mudah dipalsukan sehingga perlindungannya kecil,
+// sementara mode HP di DevTools dan Chrome iOS (request service worker memakai
+// UA "Safari") membuat user asli ter-logout. Keamanan sesi bersandar pada
+// cookie HttpOnly + Secure + SameSite.
+func catatUAberubah(c *fiber.Ctx, tersimpan string) {
+	if tersimpan == "" || !isPageRequest(c) {
+		return
+	}
+	if a, b := famili(tersimpan), famili(c.Get("User-Agent")); a != b {
+		slog.Info("sesi dipakai dari browser/OS berbeda (dibiarkan)", "tersimpan", a, "sekarang", b)
+	}
+}
+
+// famili meringkas User-Agent menjadi "sistem-operasi/browser" tanpa nomor versi
+// (dipakai untuk log).
 func famili(ua string) string {
 	return keluargaOS(ua) + "/" + keluargaBrowser(ua)
 }

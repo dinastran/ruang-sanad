@@ -178,3 +178,32 @@ func TestPutaranPaketItemTerbagi(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 1, n)
 }
+
+func TestKomposisiHariIni(t *testing.T) {
+	db, svc := newTasbihTestDB(t)
+	ctx := context.Background()
+	u, lain := seedUser(t, db, "user"), seedUser(t, db, "user")
+	kemarin := tasbihNow.Add(-24 * time.Hour)
+	var b []models.TasbihSesiInput
+	b = append(b, sesiT(t, db, "subhanallah", 33, 33, tasbihNow.Add(-2*time.Hour)), sesiT(t, db, "subhanallah", 33, 33, tasbihNow.Add(-time.Hour)),
+		sesiT(t, db, "istighfar", 100, 100, tasbihNow.Add(-time.Hour)), sesiT(t, db, "hauqalah", 10, 33, kemarin))
+	slugs := []string{"alhamdulillah", "allahu-akbar", "tahlil", "tasbih-tahmid", "shalawat", "hasbunallah", "tasbih-azhim"}
+	for i, s := range slugs {
+		b = append(b, sesiT(t, db, s, int64(i+1), 33, tasbihNow.Add(-time.Hour)))
+	}
+	_, err := svc.Sync(ctx, u, b, tasbihNow)
+	require.NoError(t, err)
+	_, err = svc.Sync(ctx, lain, []models.TasbihSesiInput{sesiT(t, db, "subhanallah", 500, 33, tasbihNow.Add(-time.Hour))}, tasbihNow)
+	require.NoError(t, err)
+
+	k, err := svc.KomposisiHariIni(ctx, u, tasbihNow)
+	require.NoError(t, err)
+	require.Len(t, k, 9, "semua dzikir hari ini, tanpa digabung 'Lainnya'")
+	require.Equal(t, "Astaghfirullah", k[0].Latin)
+	require.EqualValues(t, 100, k[0].Total)
+	require.Equal(t, "Subhanallah", k[1].Latin)
+	require.EqualValues(t, 66, k[1].Total)
+	for _, x := range k {
+		require.NotEqual(t, "Laa haula wa laa quwwata illaa billaah", x.Latin, "dzikir kemarin tidak ikut")
+	}
+}

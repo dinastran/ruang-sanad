@@ -85,9 +85,14 @@ func (h *TasbihHandler) Index(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	komposisi, err := h.tasbih.KomposisiHariIni(ctx, uid, now)
+	if err != nil {
+		return err
+	}
 	return h.inertiaService.Render(c, "app/tasbih/Index", fiber.Map{
 		"user": sessionUser(sess), "dzikir": dzikir, "paket": paket, "hari_ini": hariIni,
 		"target_harian": hariIni.Target, "streak": streak, "level": level, "badge_baru": h.badgeBaru(c),
+		"komposisi_hari_ini": komposisi,
 	})
 }
 
