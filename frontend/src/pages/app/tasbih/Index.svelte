@@ -111,6 +111,20 @@
 		if (h.diterima.length > 0) router.reload({ only: ["streak", "level"] });
 	}
 
+	/** Ambil ulang angka dari server (mis. setelah berdzikir di perangkat lain). */
+	async function segarkan() {
+		const h = await syncSekarang(true);
+		if (h) onSync(h);
+		await hitungAntreanHariIni();
+		router.reload({
+			only: ["hari_ini", "streak", "level", "target_harian"],
+			onSuccess: (page) => {
+				const hi = (page.props as unknown as { hari_ini?: HariIni }).hari_ini;
+				if (hi) serverHariIni = { tanggal: hi.tanggal, total: hi.total };
+			},
+		});
+	}
+
 	function tambah() {
 		if (!s || adaSheetTerbuka) return;
 		const berikut = jumlah + 1;
@@ -224,10 +238,19 @@
 		const stop = mulaiAutoSync(onSync);
 		const idle = setInterval(() => counter.cekIdle(), 30_000);
 		const onVis = () => {
-			if (document.visibilityState === "hidden") counter.flush();
-			else counter.cekIdle();
+			if (document.visibilityState === "hidden") {
+				// pindah tab/aplikasi/perangkat: kirim sesi berjalan sekarang
+				counter.simpanSementara();
+				counter.flush();
+			} else {
+				counter.cekIdle();
+				segarkan();
+			}
 		};
-		const onHide = () => counter.flush();
+		const onHide = () => {
+			counter.simpanSementara();
+			counter.flush();
+		};
 		const onFs = () => {
 			if (!document.fullscreenElement && fokus) fokus = false;
 		};
