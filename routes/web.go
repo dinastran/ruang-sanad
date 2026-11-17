@@ -33,6 +33,7 @@ type Handlers struct {
 	JadwalPertemuan             *handlers.JadwalPertemuanHandler
 	Riayah                      *handlers.RiayahHandler
 	RiayahSantri                *handlers.RiayahSantriHandler
+	Tasbih                      *handlers.TasbihHandler
 	RiayahTindakLanjut          *handlers.RiayahTindakLanjutHandler
 	KoordinatorGuru             *handlers.KoordinatorGuruHandler
 	KoordinatorGuruDirectory    *handlers.KoordinatorGuruDirectoryHandler
@@ -175,6 +176,18 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/profile", h.App.UpdateProfile)
 	protected.Put("/profile/password", h.App.UpdatePassword)
 	protected.Put("/notifications/:id/read", h.Notifications.MarkRead)
+
+	// Tasbih digital — pribadi, semua role yang login. Menu hanya untuk role user;
+	// role lain mengakses lewat link. Data di-scope ke user_id sesi.
+	protected.Get("/tasbih", h.Tasbih.Index)
+	protected.Get("/tasbih/dashboard", h.Tasbih.Dashboard)
+	protected.Get("/tasbih/riwayat", h.Tasbih.Riwayat)
+	protected.Post("/tasbih/sync", h.Tasbih.Sync)
+	protected.Put("/tasbih/target", h.Tasbih.SetTargetHarian)
+	protected.Post("/tasbih/dzikir", h.Tasbih.BuatDzikir)
+	protected.Put("/tasbih/dzikir/:id/target", h.Tasbih.SetTargetDzikir)
+	protected.Put("/tasbih/dzikir/:id", h.Tasbih.UbahDzikir)
+	protected.Delete("/tasbih/dzikir/:id", h.Tasbih.ArsipkanDzikir)
 
 	// Akses AI: personal tokens for AI agents (MCP). Role is checked in the
 	// service so the page can explain why a role has no access yet.

@@ -43,7 +43,7 @@ func TestDashboardUsesCurrentRoleAndProtectsPayload(t *testing.T) {
 		return h.Index(c)
 	})
 	for _, row := range []struct{ role, redirect string }{
-		{"cs", "/app/santri"}, {"admin_kelas", "/app/kelas"}, {"guru", "/app/guru"}, {"koordinator_guru", "/app/koordinator-guru"}, {"user", "/app/profile"},
+		{"cs", "/app/santri"}, {"admin_kelas", "/app/kelas"}, {"guru", "/app/guru"}, {"koordinator_guru", "/app/koordinator-guru"}, {"user", "/app/tasbih"},
 	} {
 		_, err := db.Exec(`UPDATE users SET role = ? WHERE id = 1`, row.role)
 		require.NoError(t, err)

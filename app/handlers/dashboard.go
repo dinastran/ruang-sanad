@@ -34,7 +34,7 @@ func (h *DashboardHandler) Index(c *fiber.Ctx) error {
 	user.Role = models.UserRole(role)
 	switch role {
 	case "user":
-		return h.inertiaService.Redirect(c, "/app/profile")
+		return h.inertiaService.Redirect(c, "/app/tasbih")
 	case "cs":
 		return h.inertiaService.Redirect(c, "/app/santri")
 	case "admin_kelas":

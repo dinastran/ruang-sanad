@@ -195,6 +195,7 @@ func main() {
 	jadwalPertemuanHandler := handlers.NewJadwalPertemuanHandler(guruService, jadwalPertemuanService, pertemuanService, sessionStore, inertiaService)
 	riayahHandler := handlers.NewRiayahHandler(guruService, riayahService, sessionStore, inertiaService)
 	riayahSantriHandler := handlers.NewRiayahSantriHandler(guruService, riayahSantriService, sessionStore, inertiaService)
+	tasbihHandler := handlers.NewTasbihHandler(services.NewTasbihService(querier), sessionStore, inertiaService)
 	riayahTindakLanjutHandler := handlers.NewRiayahTindakLanjutHandler(riayahSantriService, sessionStore, inertiaService)
 	koordinatorGuruHandler := handlers.NewKoordinatorGuruHandler(koordinatorService, koordinatorMonitoringService, pertemuanService, sessionStore, inertiaService)
 	koordinatorGuruDirectoryHandler := handlers.NewKoordinatorGuruDirectoryHandler(guruService, koordinatorService, riayahService, sessionStore, inertiaService).WithAvailability(services.NewGuruAvailabilityService(querier)).WithTeachingLevels(services.NewGuruTeachingLevelsService(querier))
@@ -229,6 +230,7 @@ func main() {
 		JadwalPertemuan:             jadwalPertemuanHandler,
 		Riayah:                      riayahHandler,
 		RiayahSantri:                riayahSantriHandler,
+		Tasbih:                      tasbihHandler,
 		RiayahTindakLanjut:          riayahTindakLanjutHandler,
 		KoordinatorGuru:             koordinatorGuruHandler,
 		KoordinatorGuruDirectory:    koordinatorGuruDirectoryHandler,

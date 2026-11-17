@@ -113,7 +113,7 @@ func TestRegisterEndpoint(t *testing.T) {
 	}{
 		{
 			"success", `{"name":"T","email":"a@b.com","password":"pass123"}`,
-			http.StatusSeeOther, "/app/profile", true,
+			http.StatusSeeOther, "/app/tasbih", true,
 		},
 		{
 			"empty fields", `{"name":"","email":"","password":""}`,
@@ -165,7 +165,7 @@ func TestLoginEndpoint(t *testing.T) {
 		wantStatus   int
 		wantLocation string
 	}{
-		{"success", `{"email":"user@example.com","password":"pass123"}`, http.StatusSeeOther, "/app/profile"},
+		{"success", `{"email":"user@example.com","password":"pass123"}`, http.StatusSeeOther, "/app/tasbih"},
 		{"wrong password", `{"email":"user@example.com","password":"wrong"}`, http.StatusSeeOther, "/login"},
 		{"unknown user", `{"email":"nobody@example.com","password":"any"}`, http.StatusSeeOther, "/login"},
 	}
@@ -199,7 +199,7 @@ func TestLoginEndpointReplacesStaleSessionCookie(t *testing.T) {
 	resp, err := app.Test(req)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusSeeOther, resp.StatusCode)
-	assert.Equal(t, "/app/profile", resp.Header.Get("Location"))
+	assert.Equal(t, "/app/tasbih", resp.Header.Get("Location"))
 
 	var persistedSession bool
 	for _, cookie := range resp.Cookies() {

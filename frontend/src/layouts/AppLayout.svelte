@@ -38,6 +38,7 @@
 		Plug,
 		PhoneCall,
 		Kanban,
+		CircleDot,
 	} from "lucide-svelte";
 	import DarkModeToggle from "@components/DarkModeToggle.svelte";
 	import Logo from "@components/Logo.svelte";
@@ -87,13 +88,16 @@
 	// Follow-up approval: cs, super_admin (services.FollowupApproverRoles).
 	let canApproveFollowup = $derived(role === "cs" || isSuperAdmin);
 	let canAIAkses = $derived(["super_admin", "admin", "keuangan", "cs", "admin_kelas", "koordinator_guru"].includes(role));
-	let homeHref = $derived(role === "guru" ? "/app/guru" : role === "koordinator_guru" ? "/app/koordinator-guru" : role === "user" ? "/app/profile" : "/app");
+	let homeHref = $derived(role === "guru" ? "/app/guru" : role === "koordinator_guru" ? "/app/koordinator-guru" : role === "user" ? "/app/tasbih" : "/app");
 
 	let sidebarW = $derived(sidebarCollapsed ? "w-16" : "w-72");
 	let headerLeft = $derived(sidebarCollapsed ? "left-16" : "left-72");
 	let showLabel = $derived(!sidebarCollapsed);
 
 	let menuLinks = $derived([
+		// Tasbih: menu hanya untuk role user; role lain mengakses lewat link /app/tasbih.
+		{ href: "/app/tasbih", label: "Tasbih", group: "tasbih", category: "Ibadah", show: role === "user", icon: CircleDot },
+		{ href: "/app/tasbih/dashboard", label: "Dashboard Tasbih", group: "tasbih-dashboard", category: "Ibadah", show: role === "user", icon: ChartColumn },
 		{ href: "/app", label: "Dashboard", group: "dashboard", category: "Utama", show: role !== "guru" && role !== "koordinator_guru" && role !== "user" && role !== "cs" && role !== "admin_kelas", icon: LayoutDashboard },
 		{ href: "/app/analitik-santri", label: "Analisis Santri", group: "analitik-santri", category: "Utama", show: isSuperAdmin, icon: Users },
 		{ href: "/app/santri", label: "Data Santri", group: "santri", category: "Akademik", show: isCS || isAdminKelas, icon: Users },
@@ -140,7 +144,7 @@
 	].filter((item) => item.show));
 
 	let menuCategories = $derived(
-		["Utama", "CRM", "Akademik", "Keuangan", "Administrasi", "Guru", "Koordinator Guru"]
+		["Ibadah", "Utama", "CRM", "Akademik", "Keuangan", "Administrasi", "Guru", "Koordinator Guru"]
 			.map((label) => ({ label, items: menuLinks.filter((item) => item.category === label) }))
 			.filter((category) => category.items.length > 0),
 	);
@@ -150,6 +154,8 @@
 		if (typeof window === "undefined") return "";
 		const path = window.location.pathname;
 		if (path === "/app" || path === "/app/") return "dashboard";
+		if (path.startsWith("/app/tasbih/dashboard")) return "tasbih-dashboard";
+		if (path.startsWith("/app/tasbih")) return "tasbih";
 		if (path.startsWith("/app/analitik-santri")) return "analitik-santri";
 		if (path.startsWith("/app/leads/dashboard")) return "leads-dashboard";
 		if (path.startsWith("/app/leads/prioritas")) return "leads-prioritas";
