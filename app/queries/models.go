@@ -1064,6 +1064,73 @@ type TagihanNominalOverride struct {
 	UpdatedAt time.Time
 }
 
+type TasbihBadgeUser struct {
+	UserID    int64
+	BadgeKode string
+	DiraihAt  time.Time
+}
+
+type TasbihDzikir struct {
+	ID            int64
+	UserID        sql.NullInt64
+	Slug          sql.NullString
+	TeksArab      string
+	Latin         string
+	Arti          string
+	Rujukan       string
+	TargetDefault int64
+	Urutan        int64
+	DiarsipkanAt  sql.NullTime
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+type TasbihPaket struct {
+	ID        int64
+	Slug      string
+	Nama      string
+	Deskripsi string
+	Rujukan   string
+	Urutan    int64
+	CreatedAt time.Time
+}
+
+type TasbihPaketItem struct {
+	PaketID  int64
+	Urutan   int64
+	DzikirID int64
+	Target   int64
+}
+
+type TasbihPengaturan struct {
+	UserID       int64
+	TargetHarian int64
+	UpdatedAt    time.Time
+}
+
+type TasbihSesi struct {
+	ID            string
+	UserID        int64
+	DzikirID      int64
+	PaketID       sql.NullInt64
+	PaketRunID    sql.NullString
+	Jumlah        int64
+	Target        int64
+	SelesaiTarget int64
+	MulaiAt       time.Time
+	SelesaiAt     time.Time
+	TanggalWib    string
+	JamWib        int64
+	CreatedAt     time.Time
+}
+
+type TasbihTargetUser struct {
+	UserID    int64
+	DzikirID  int64
+	Target    int64
+	UpdatedAt time.Time
+}
+
 type TilawahHarian struct {
 	ID        int64
 	GuruID    int64

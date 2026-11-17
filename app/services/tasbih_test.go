@@ -1,8 +1,12 @@
 package services
 
 import (
+	"context"
+	"strings"
+
 	"database/sql"
 	"fmt"
+	"github.com/maulanashalihin/laju-go/app/models"
 	"path/filepath"
 	"testing"
 
@@ -54,4 +58,108 @@ func TestTasbihSeed(t *testing.T) {
 	require.EqualValues(t, 1, countRows(t, db, "SELECT i.target FROM tasbih_paket_item i JOIN tasbih_paket p ON p.id = i.paket_id WHERE p.slug = 'badah-shalat' AND i.urutan = 4"))
 	require.EqualValues(t, 34, countRows(t, db, "SELECT i.target FROM tasbih_paket_item i JOIN tasbih_paket p ON p.id = i.paket_id WHERE p.slug = 'tasbih-fatimah' AND i.urutan = 3"))
 	require.EqualValues(t, 0, countRows(t, db, "SELECT COUNT(*) FROM tasbih_paket_item WHERE dzikir_id IS NULL"))
+}
+
+func dzikirIDBySlug(t *testing.T, db *sql.DB, slug string) int64 {
+	t.Helper()
+	return countRows(t, db, "SELECT id FROM tasbih_dzikir WHERE slug = ?", slug)
+}
+
+func TestKatalogGabungBawaanDanCustom(t *testing.T) {
+	db, svc := newTasbihTestDB(t)
+	ctx := context.Background()
+	a, b := seedUser(t, db, "user"), seedUser(t, db, "user")
+	_, err := svc.BuatDzikir(ctx, a, models.TasbihDzikirInput{Latin: "Ya Hayyu ya Qayyum", Target: 33})
+	require.NoError(t, err)
+
+	dz, paket, err := svc.Katalog(ctx, a)
+	require.NoError(t, err)
+	require.Len(t, dz, 13)
+	require.Len(t, paket, 3)
+	require.Len(t, paket[0].Items, 4)
+	require.True(t, dz[12].Custom)
+
+	dzB, _, err := svc.Katalog(ctx, b)
+	require.NoError(t, err)
+	require.Len(t, dzB, 12)
+}
+
+func TestTargetEfektifOverride(t *testing.T) {
+	db, svc := newTasbihTestDB(t)
+	ctx := context.Background()
+	u := seedUser(t, db, "user")
+	id := dzikirIDBySlug(t, db, "subhanallah")
+	require.NoError(t, svc.SetTargetDzikir(ctx, u, id, 99))
+	dz, _, err := svc.Katalog(ctx, u)
+	require.NoError(t, err)
+	for _, d := range dz {
+		if d.ID == id {
+			require.EqualValues(t, 99, d.Target)
+			require.EqualValues(t, 33, d.TargetDefault)
+		}
+	}
+	require.ErrorIs(t, svc.SetTargetDzikir(ctx, u, id, 0), ErrTasbihValidasi)
+}
+
+func TestUbahDzikirMilikLain(t *testing.T) {
+	db, svc := newTasbihTestDB(t)
+	ctx := context.Background()
+	a, b := seedUser(t, db, "user"), seedUser(t, db, "user")
+	id, err := svc.BuatDzikir(ctx, a, models.TasbihDzikirInput{Latin: "Dzikir A", Target: 10})
+	require.NoError(t, err)
+	in := models.TasbihDzikirInput{Latin: "Diubah", Target: 10}
+	require.ErrorIs(t, svc.UbahDzikir(ctx, b, id, in), ErrTasbihTidakDitemukan)
+	require.ErrorIs(t, svc.UbahDzikir(ctx, a, dzikirIDBySlug(t, db, "subhanallah"), in), ErrTasbihTidakDitemukan)
+	require.ErrorIs(t, svc.ArsipkanDzikir(ctx, b, id), ErrTasbihTidakDitemukan)
+	require.ErrorIs(t, svc.SetTargetDzikir(ctx, b, id, 5), ErrTasbihTidakDitemukan)
+	require.NoError(t, svc.UbahDzikir(ctx, a, id, in))
+}
+
+func TestBuatDzikirValidasi(t *testing.T) {
+	db, svc := newTasbihTestDB(t)
+	ctx := context.Background()
+	u := seedUser(t, db, "user")
+	for _, in := range []models.TasbihDzikirInput{
+		{Latin: "   ", Target: 33},
+		{Latin: strings.Repeat("a", 301), Target: 33},
+		{Latin: "ok", Arab: strings.Repeat("ب", 501), Target: 33},
+		{Latin: "ok", Target: 0},
+		{Latin: "ok", Target: 100001},
+	} {
+		_, err := svc.BuatDzikir(ctx, u, in)
+		require.ErrorIs(t, err, ErrTasbihValidasi)
+	}
+	for i := 0; i < 50; i++ {
+		_, err := svc.BuatDzikir(ctx, u, models.TasbihDzikirInput{Latin: fmt.Sprintf("D%d", i), Target: 1})
+		require.NoError(t, err)
+	}
+	_, err := svc.BuatDzikir(ctx, u, models.TasbihDzikirInput{Latin: "ke-51", Target: 1})
+	require.ErrorIs(t, err, ErrTasbihValidasi)
+}
+
+func TestArsipkanDzikir(t *testing.T) {
+	db, svc := newTasbihTestDB(t)
+	ctx := context.Background()
+	u := seedUser(t, db, "user")
+	id, err := svc.BuatDzikir(ctx, u, models.TasbihDzikirInput{Latin: "Arsip", Target: 3})
+	require.NoError(t, err)
+	require.NoError(t, svc.ArsipkanDzikir(ctx, u, id))
+	dz, _, err := svc.Katalog(ctx, u)
+	require.NoError(t, err)
+	require.Len(t, dz, 12)
+	require.EqualValues(t, 1, countRows(t, db, "SELECT COUNT(*) FROM tasbih_dzikir WHERE id = ?", id))
+}
+
+func TestTargetHarianDefault(t *testing.T) {
+	db, svc := newTasbihTestDB(t)
+	ctx := context.Background()
+	u := seedUser(t, db, "user")
+	v, err := svc.TargetHarian(ctx, u)
+	require.NoError(t, err)
+	require.EqualValues(t, 100, v)
+	require.NoError(t, svc.SetTargetHarian(ctx, u, 300))
+	v, err = svc.TargetHarian(ctx, u)
+	require.NoError(t, err)
+	require.EqualValues(t, 300, v)
+	require.ErrorIs(t, svc.SetTargetHarian(ctx, u, 0), ErrTasbihValidasi)
 }
