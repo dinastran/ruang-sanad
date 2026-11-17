@@ -89,8 +89,8 @@ func (s *Store) Get(c *fiber.Ctx) (*Session, error) {
 				// Check if the DB session has expired (cache TTL may outlive session TTL)
 				if cached.ExpiresAt.Before(time.Now()) {
 					s.sessionCache.Invalidate(cookieValue)
-				} else if isPageRequest(c) && cached.UserAgent != "" && cached.UserAgent != c.Get("User-Agent") {
-					slog.Warn("session user-agent mismatch — invalidating", "session_id", cookieValue)
+				} else if isPageRequest(c) && cached.UserAgent != "" && famili(cached.UserAgent) != famili(c.Get("User-Agent")) {
+					slog.Warn("session ditolak: browser/OS berbeda dari saat login", "alasan", "user-agent", "tersimpan", famili(cached.UserAgent), "sekarang", famili(c.Get("User-Agent")))
 					s.sessionCache.Invalidate(cookieValue)
 					s.deleteSession(context.Background(), cookieValue)
 					c.ClearCookie(s.sessionName)
@@ -112,6 +112,7 @@ func (s *Store) Get(c *fiber.Ctx) (*Session, error) {
 						session.values["csrf_token"] = cached.CSRFToken
 						session.values["csrf_expiry"] = cached.CSRFExpiry
 					}
+					s.perpanjang(c, session)
 					c.Locals("session", session)
 					return session, nil
 				}
@@ -135,8 +136,8 @@ func (s *Store) Get(c *fiber.Ctx) (*Session, error) {
 				// Decode session data
 				var data SessionData
 				if err := json.Unmarshal([]byte(dbSession.Data), &data); err == nil {
-					if isPageRequest(c) && data.UserAgent != "" && data.UserAgent != c.Get("User-Agent") {
-						slog.Warn("session user-agent mismatch — invalidating", "session_id", cookieValue)
+					if isPageRequest(c) && data.UserAgent != "" && famili(data.UserAgent) != famili(c.Get("User-Agent")) {
+						slog.Warn("session ditolak: browser/OS berbeda dari saat login", "alasan", "user-agent", "tersimpan", famili(data.UserAgent), "sekarang", famili(c.Get("User-Agent")))
 						s.deleteSession(context.Background(), cookieValue)
 						if s.sessionCache != nil {
 							s.sessionCache.Invalidate(cookieValue)
@@ -179,6 +180,7 @@ func (s *Store) Get(c *fiber.Ctx) (*Session, error) {
 							ExpiresAt:     dbSession.ExpiresAt,
 						})
 					}
+					s.perpanjang(c, session)
 				}
 			}
 		} else if errors.Is(err, queries.ErrSessionNotFound) {
@@ -202,6 +204,47 @@ func (s *Store) Get(c *fiber.Ctx) (*Session, error) {
 
 	c.Locals("session", session)
 	return session, nil
+}
+
+// ambangPerpanjang: sesi aktif diperpanjang paling sering sekali per periode ini
+// agar tidak ada tulis DB di setiap request.
+const ambangPerpanjang = 24 * time.Hour
+
+// perpanjang menerapkan sliding expiration: sesi yang dipakai diperpanjang
+// kembali ke TTL penuh (maksimal sekali per hari), sehingga user aktif tidak
+// pernah logout; sesi hanya berakhir bila tidak dipakai selama TTL.
+func (s *Store) perpanjang(c *fiber.Ctx, sess *Session) {
+	if sess.id == "" {
+		return
+	}
+	batas := s.sessionTTL - ambangPerpanjang
+	if batas < s.sessionTTL/2 {
+		batas = s.sessionTTL / 2
+	}
+	if time.Until(sess.expiresAt) > batas {
+		return
+	}
+	baru := time.Now().Add(s.sessionTTL)
+	if _, err := s.querier.TouchSession(context.Background(), queries.TouchSessionParams{ExpiresAt: baru, UpdatedAt: time.Now(), ID: sess.id}); err != nil {
+		slog.Error("gagal memperpanjang sesi", "error", err)
+		return
+	}
+	sess.expiresAt = baru
+	if s.sessionCache != nil {
+		if cached, ok := s.sessionCache.Get(sess.id); ok {
+			cached.ExpiresAt = baru
+			s.sessionCache.Set(sess.id, *cached)
+		}
+	}
+	c.Cookie(&fiber.Cookie{
+		Name:     s.sessionName,
+		Value:    sess.id,
+		Path:     "/",
+		HTTPOnly: true,
+		Secure:   s.secure,
+		SameSite: "Lax",
+		MaxAge:   int(time.Until(baru).Seconds()),
+	})
 }
 
 // generateSessionID generates a random session ID

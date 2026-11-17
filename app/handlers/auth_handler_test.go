@@ -247,3 +247,25 @@ func TestLogout(t *testing.T) {
 	assert.Equal(t, http.StatusSeeOther, logoutResp.StatusCode)
 	assert.Equal(t, "/login", logoutResp.Header.Get("Location"))
 }
+
+func TestLoginKembaliKeHalamanSemula(t *testing.T) {
+	app, querier := setupTestApp(t)
+	require.NoError(t, querier.CreateUser(context.Background(), &models.User{
+		Email: "balik@example.com", Name: "Balik",
+		Password: sql.NullString{String: hashPW(t, "pass123"), Valid: true},
+		Role:     models.RoleUser,
+	}))
+	login := func(cookie string) *http.Response {
+		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"balik@example.com","password":"pass123"}`))
+		req.Header.Set("Content-Type", "application/json")
+		if cookie != "" {
+			req.AddCookie(&http.Cookie{Name: "login_return", Value: cookie})
+		}
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		return resp
+	}
+	assert.Equal(t, "/app/tasbih/dashboard", login("%2Fapp%2Ftasbih%2Fdashboard").Header.Get("Location"))
+	assert.Equal(t, "/app/tasbih", login("%2F%2Fevil.com").Header.Get("Location"), "tujuan tidak aman diabaikan")
+	assert.Equal(t, "/app/tasbih", login("").Header.Get("Location"))
+}
