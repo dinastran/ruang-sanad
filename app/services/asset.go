@@ -107,7 +107,7 @@ func (s *AssetService) GetCSS(entry string) string {
 			return "/" + e.CSS[0]
 		}
 	}
-	
+
 	// Try to get CSS from app.css entry
 	if e, ok := s.manifest.Entries["src/app.css"]; ok {
 		return "/" + e.File
@@ -130,6 +130,20 @@ func (s *AssetService) GetEntry(entry string) *ManifestEntry {
 	}
 
 	return nil
+}
+
+// Entries returns a copy of all manifest entries (nil-safe).
+func (s *AssetService) Entries() map[string]ManifestEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := map[string]ManifestEntry{}
+	if s.manifest == nil {
+		return out
+	}
+	for k, v := range s.manifest.Entries {
+		out[k] = v
+	}
+	return out
 }
 
 // ReloadManifest reloads the manifest (useful after build)

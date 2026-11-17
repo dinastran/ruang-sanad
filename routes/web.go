@@ -64,10 +64,15 @@ type Handlers struct {
 	LeadFollowups               *handlers.LeadFollowupHandler
 	IntegrasiWhatsApp           *handlers.IntegrasiWhatsAppHandler
 	JadwalPenawaran             *handlers.JadwalPenawaranHandler
+	PWA                         *handlers.PWAHandler
 }
 
 func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, mailerService *services.MailerService, csrfMiddleware *middlewares.CSRFMiddleware) {
 	setupStaticRoutes(app)
+	// Service worker aplikasi Tasbih (PWA) — harus di root agar scope = seluruh situs.
+	if h.PWA != nil {
+		app.Get("/sw.js", h.PWA.ServiceWorker)
+	}
 	setupPublicRoutes(app, h.Public)
 	setupAuthRoutes(app, h.Auth, h.PasswordReset, store, mailerService, csrfMiddleware)
 	setupAppRoutes(app, h, store, userService, csrfMiddleware)

@@ -83,6 +83,15 @@ func renderInertiaHTML(c *fiber.Ctx, page *fiberinertia.Page, assetService *Asse
 	}
 	isDev := assetService.IsDevelopment()
 
+	// Manifest & meta PWA: halaman tasbih memakai manifest aplikasi Tasbih.
+	role := ""
+	if store != nil {
+		if sess, err := store.Get(c); err == nil && sess != nil {
+			role, _ = sess.Get("role").(string)
+		}
+	}
+	pwaHead := pwaHeadTags(ManifestUntuk(page.Component, role))
+
 	// Vite dev server URL (from .vite-port file)
 	viteURL := ""
 	if isDev {
@@ -107,15 +116,13 @@ func renderInertiaHTML(c *fiber.Ctx, page *fiberinertia.Page, assetService *Asse
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>%s</title>
     <meta name="description" content="Sistem pengelolaan mahasantri Ruang Sanad — pendaftaran, pembagian kelas, jadwal, dan laporan keuangan.">
     <link rel="icon" href="/public/favicon.ico" sizes="any">
     <link rel="icon" type="image/png" sizes="32x32" href="/public/favicon.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/public/favicon-16.png">
-    <link rel="apple-touch-icon" href="/public/android-chrome-512x512.png">
-    <link rel="manifest" href="/public/site.webmanifest">
-    <meta name="theme-color" content="#14b8a6">
+%s
     <meta name="csrf-token" content="%s">
 </head>
 <body class="bg-gray-50 text-gray-900">
@@ -125,21 +132,19 @@ func renderInertiaHTML(c *fiber.Ctx, page *fiberinertia.Page, assetService *Asse
     <link rel="stylesheet" href="%s/src/app.css">
     <script type="module" src="%s/src/main.ts"></script>
 </body>
-</html>`, title, csrfToken, pageJSON, viteURL, viteURL, viteURL)
+</html>`, title, pwaHead, csrfToken, pageJSON, viteURL, viteURL, viteURL)
 	} else {
 		html = fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>%s</title>
     <meta name="description" content="Sistem pengelolaan mahasantri Ruang Sanad — pendaftaran, pembagian kelas, jadwal, dan laporan keuangan.">
     <link rel="icon" href="/public/favicon.ico" sizes="any">
     <link rel="icon" type="image/png" sizes="32x32" href="/public/favicon.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/public/favicon-16.png">
-    <link rel="apple-touch-icon" href="/public/android-chrome-512x512.png">
-    <link rel="manifest" href="/public/site.webmanifest">
-    <meta name="theme-color" content="#14b8a6">
+%s
     <meta name="csrf-token" content="%s">
     <link rel="stylesheet" href="%s">
 </head>
@@ -148,9 +153,26 @@ func renderInertiaHTML(c *fiber.Ctx, page *fiberinertia.Page, assetService *Asse
     <script data-page="app" type="application/json">%s</script>
     <script type="module" src="%s"></script>
 </body>
-</html>`, title, csrfToken, mainCSS, pageJSON, mainJS)
+</html>`, title, pwaHead, csrfToken, mainCSS, pageJSON, mainJS)
 	}
 
 	c.Set(fiber.HeaderContentType, "text/html; charset=utf-8")
 	return c.SendString(html)
+}
+
+// pwaHeadTags: tag <head> untuk ikon, manifest, dan mode aplikasi.
+func pwaHeadTags(manifest string) string {
+	if manifest == PWAManifestTasbih {
+		return `    <link rel="apple-touch-icon" href="/public/icons/tasbih-apple-180.png">
+    <link rel="manifest" href="` + PWAManifestTasbih + `">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#070b16" media="(prefers-color-scheme: dark)">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Tasbih">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">`
+	}
+	return `    <link rel="apple-touch-icon" href="/public/android-chrome-512x512.png">
+    <link rel="manifest" href="` + PWAManifestSitus + `">
+    <meta name="theme-color" content="#14b8a6">`
 }
