@@ -67,16 +67,17 @@ type AITokenCreated struct {
 // AICRMWriteRoles may own a token with the CRM write permission (PRD CRM 9.1).
 var AICRMWriteRoles = []string{"cs", "keuangan", "super_admin"}
 
-// ErrAITokenWriteDitolak: only super_admin issues tokens that may write.
-var ErrAITokenWriteDitolak = errors.New("hanya super_admin yang bisa membuat token dengan izin menulis analisis CRM")
+// ErrAITokenWriteDitolak: only roles that have AI write tools (AIWriteRoles)
+// may issue a token that writes.
+var ErrAITokenWriteDitolak = errors.New("role Anda tidak punya tool tulis AI, jadi token tidak bisa diberi izin menulis")
 
 // Create issues a new token. The plaintext is returned once and never stored.
-// canWrite (CRM write tools) is reserved for super_admin.
+// canWrite (write tools) needs a role that has AI write tools.
 func (s *AITokenService) Create(userID int64, role, nama string, masaBerlakuHari int, canWrite bool) (*AITokenCreated, error) {
 	if !AIRoleAllowed(role) {
 		return nil, ErrAIRoleDitolak
 	}
-	if canWrite && role != "super_admin" {
+	if canWrite && !AIRoleCanWrite(role) {
 		return nil, ErrAITokenWriteDitolak
 	}
 	nama = strings.TrimSpace(nama)
@@ -161,7 +162,7 @@ func (s *AITokenService) Authenticate(ctx context.Context, plain string) (*model
 	if auth.LastUsedAt == nil || now.Sub(*auth.LastUsedAt) >= aiTokenTouchInterval {
 		_ = s.querier.TouchAIToken(ctx, auth.TokenID, now)
 	}
-	return &models.AIPrincipal{UserID: auth.UserID, TokenID: auth.TokenID, UserName: auth.UserName, Role: auth.Role, CanWrite: auth.CanWrite}, nil
+	return &models.AIPrincipal{UserID: auth.UserID, TokenID: auth.TokenID, UserName: auth.UserName, Role: auth.Role, CanWrite: auth.CanWrite && AIRoleCanWrite(auth.Role)}, nil
 }
 
 // authenticateOAuth resolves an OAuth access token issued to Claude.ai /
@@ -186,7 +187,7 @@ func (s *AITokenService) authenticateOAuth(ctx context.Context, plain string) (*
 	if t.LastUsedAt == nil || now.Sub(*t.LastUsedAt) >= aiTokenTouchInterval {
 		_ = s.querier.TouchAIToken(ctx, t.GrantID, now)
 	}
-	canWrite := t.CanWrite && t.Role == "super_admin"
+	canWrite := t.CanWrite && AIRoleCanWrite(t.Role)
 	return &models.AIPrincipal{UserID: t.UserID, TokenID: t.GrantID, UserName: t.UserName, Role: t.Role, CanWrite: canWrite}, nil
 }
 

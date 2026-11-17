@@ -102,15 +102,22 @@ func TestAICRMWriteToolsNeedWritePermission(t *testing.T) {
 	require.Equal(t, 1, n)
 }
 
-func TestAITokenWritePermissionOnlyForSuperAdmin(t *testing.T) {
+// The write permission follows the dashboard: roles that have AI write tools
+// (e.g. CS for Sumber Lead) may grant it; a role without any (admin) may not.
+func TestAITokenWritePermissionFollowsRole(t *testing.T) {
 	c := setupCRMAgent(t)
 	tokens := NewAITokenService(c.querier)
 	tokens.now = func() time.Time { return c.clock }
-	_, err := tokens.Create(c.csID, "cs", "Hermes", 30, true)
+	_, err := tokens.Create(c.csID, "admin", "Hermes", 30, true)
 	require.ErrorIs(t, err, ErrAITokenWriteDitolak)
+	csToken, err := tokens.Create(c.csID, "cs", "Claude", 30, true)
+	require.NoError(t, err)
+	p, err := tokens.Authenticate(context.Background(), csToken.Plaintext)
+	require.NoError(t, err)
+	require.True(t, p.CanWrite)
 	created, err := tokens.Create(c.adminID, "super_admin", "Hermes", 30, true)
 	require.NoError(t, err)
-	p, err := tokens.Authenticate(context.Background(), created.Plaintext)
+	p, err = tokens.Authenticate(context.Background(), created.Plaintext)
 	require.NoError(t, err)
 	require.True(t, p.CanWrite)
 	plain, err := tokens.Create(c.adminID, "super_admin", "Claude", 30, false)

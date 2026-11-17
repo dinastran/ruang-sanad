@@ -138,8 +138,8 @@
 							<label class="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm cursor-pointer">
 								<input type="checkbox" bind:checked={izinTulis} class="mt-0.5 h-4 w-4 accent-brand-600" />
 								<span>
-									<span class="flex items-center gap-1.5 font-medium text-neutral-900 dark:text-white"><PencilLine class="h-4 w-4" /> Izinkan juga menulis data CRM</span>
-									<span class="block mt-0.5 text-xs text-neutral-600 dark:text-neutral-400">{fiturTulis.length} fitur tulis, misalnya {fiturTulis.slice(0, 3).map((t) => t.title.toLowerCase()).join(", ")}. Biarkan kosong bila hanya untuk bertanya.</span>
+									<span class="flex items-center gap-1.5 font-medium text-neutral-900 dark:text-white"><PencilLine class="h-4 w-4" /> Izinkan juga membuat & mengubah data</span>
+									<span class="block mt-0.5 text-xs text-neutral-600 dark:text-neutral-400">{fiturTulis.length} fitur tulis, misalnya {fiturTulis.slice(0, 3).map((t) => t.title.toLowerCase()).join(", ")}. Aturannya sama dengan tombol di dashboard dan tidak bisa menghapus data. Biarkan kosong bila hanya untuk bertanya.</span>
 								</span>
 							</label>
 						{/if}

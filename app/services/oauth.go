@@ -291,7 +291,7 @@ func sameResource(a, b string) bool {
 	return strings.TrimRight(a, "/") == strings.TrimRight(b, "/")
 }
 
-var ErrOAuthTulisDitolak = errors.New("hanya super_admin yang bisa memberi izin menulis")
+var ErrOAuthTulisDitolak = errors.New("role Anda tidak punya tool tulis AI, jadi tidak bisa memberi izin menulis")
 
 // Approve issues a one-time authorization code for a user who approved the
 // request on the consent page. role is the user's current role from the DB.
@@ -299,7 +299,7 @@ func (s *OAuthService) Approve(userID int64, role string, req *OAuthAuthorizeReq
 	if !AIRoleAllowed(role) {
 		return "", ErrAIRoleDitolak
 	}
-	if canWrite && role != "super_admin" {
+	if canWrite && !AIRoleCanWrite(role) {
 		return "", ErrOAuthTulisDitolak
 	}
 	code, err := randomToken(oauthCodePrefix)
@@ -400,7 +400,7 @@ func (s *OAuthService) ExchangeCode(clientID, clientSecret, code, redirectURI, v
 	if err != nil || !AIRoleAllowed(role) {
 		return nil, oauthErr(400, "invalid_grant", "role pengguna tidak punya akses AI")
 	}
-	canWrite := c.CanWrite && role == "super_admin"
+	canWrite := c.CanWrite && AIRoleCanWrite(role)
 
 	secret, err := randomToken("grant_")
 	if err != nil {

@@ -191,7 +191,7 @@ func (h *OAuthHandler) Authorize(c *fiber.Ctx) error {
 		return err
 	}
 	tools := make([]fiber.Map, 0)
-	for _, t := range h.agent.ToolsFor(role, role == "super_admin") {
+	for _, t := range h.agent.ToolsFor(role, services.AIRoleCanWrite(role)) {
 		tools = append(tools, fiber.Map{"name": t.Name, "title": t.Title, "write": t.Write})
 	}
 	redirectHost := req.RedirectURI
@@ -203,7 +203,7 @@ func (h *OAuthHandler) Authorize(c *fiber.Ctx) error {
 		"user":        user,
 		"role":        role,
 		"diizinkan":   services.AIRoleAllowed(role),
-		"boleh_tulis": role == "super_admin",
+		"boleh_tulis": services.AIRoleCanWrite(role),
 		"tools":       tools,
 		"klien":       fiber.Map{"nama": req.Client.ClientName, "redirect_host": redirectHost},
 		"permintaan": fiber.Map{

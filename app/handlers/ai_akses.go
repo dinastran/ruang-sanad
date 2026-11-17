@@ -54,9 +54,9 @@ func (h *AIAksesHandler) Index(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	// super_admin also sees the CRM write tools a write token unlocks.
+	// Roles with write tools also see what a write token unlocks.
 	tools := make([]fiber.Map, 0)
-	for _, t := range h.agent.ToolsFor(role, role == "super_admin") {
+	for _, t := range h.agent.ToolsFor(role, services.AIRoleCanWrite(role)) {
 		tools = append(tools, fiber.Map{"name": t.Name, "title": t.Title, "description": t.Description, "write": t.Write})
 	}
 	base := h.appURL
@@ -71,7 +71,7 @@ func (h *AIAksesHandler) Index(c *fiber.Ctx) error {
 		"audit":       audit,
 		"audit_semua": role == "super_admin",
 		"tools":       tools,
-		"boleh_tulis": role == "super_admin",
+		"boleh_tulis": services.AIRoleCanWrite(role),
 	})
 }
 
