@@ -125,6 +125,26 @@ func (q *Queries) GetSessionsByUserID(ctx context.Context, userID int64) ([]Sess
 	return items, nil
 }
 
+const touchSession = `-- name: TouchSession :execrows
+UPDATE sessions
+SET expires_at = ?, updated_at = ?
+WHERE id = ?
+`
+
+type TouchSessionParams struct {
+	ExpiresAt time.Time
+	UpdatedAt time.Time
+	ID        string
+}
+
+func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, touchSession, arg.ExpiresAt, arg.UpdatedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const updateSession = `-- name: UpdateSession :execrows
 UPDATE sessions
 SET data = ?, expires_at = ?, updated_at = ?

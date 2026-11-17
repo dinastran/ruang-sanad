@@ -28,3 +28,8 @@ WHERE user_id = ?;
 -- name: DeleteExpiredSessions :exec
 DELETE FROM sessions
 WHERE expires_at < ?;
+
+-- name: TouchSession :execrows
+UPDATE sessions
+SET expires_at = ?, updated_at = ?
+WHERE id = ?;

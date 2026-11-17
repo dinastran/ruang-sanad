@@ -32,6 +32,8 @@ func AuthRequired(store *session.Store) fiber.Handler {
 		if userID == nil {
 			slog.Warn("not authenticated, redirecting to login")
 			store.Flash(c, "error", "Sesi berakhir. Silakan login kembali.")
+			// setelah login ulang, kembalikan user ke halaman yang tadi dibuka
+			store.SimpanTujuan(c)
 			// For Inertia XHR requests we must speak the Inertia protocol: a plain
 			// JSON body breaks the client ("must receive a valid Inertia response").
 			// Respond with 409 + X-Inertia-Location so Inertia performs a full-page
