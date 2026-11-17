@@ -396,3 +396,44 @@ type FollowupQueuePage struct {
 	OnlyLabel       string              `json:"only_label"`
 	CanApprove      bool                `json:"can_approve"`
 }
+
+// FollowupHistoryFilter is the query string of the history tab.
+type FollowupHistoryFilter struct {
+	Status string `query:"status"`
+	Step   string `query:"step"`
+	From   string `query:"from"` // YYYY-MM-DD (WIB)
+	To     string `query:"to"`   // YYYY-MM-DD (WIB), inclusive
+	Page   int64  `query:"page"`
+}
+
+type FollowupHistoryItem struct {
+	ID            int64  `json:"id"`
+	LeadID        int64  `json:"lead_id"`
+	LeadName      string `json:"lead_name"`
+	Step          string `json:"step"`
+	Status        string `json:"status"`
+	ScheduledAt   string `json:"scheduled_at"`
+	DraftText     string `json:"draft_text"`
+	CreatedByKind string `json:"created_by_kind"`
+	Note          string `json:"note"` // why it failed / was skipped / cancelled
+	Attempts      int64  `json:"attempts"`
+	OutboxID      int64  `json:"outbox_id"`
+	SentAt        string `json:"sent_at"`
+	At            string `json:"at"` // last change
+}
+
+type FollowupHistoryPage struct {
+	Items   []FollowupHistoryItem `json:"items"`
+	Counts  map[string]int64      `json:"counts"`
+	Filter  FollowupHistoryFilter `json:"filter"`
+	Page    int64                 `json:"page"`
+	HasMore bool                  `json:"has_more"`
+}
+
+// FollowupTimelineEntry is one step in a follow-up's trail.
+type FollowupTimelineEntry struct {
+	Type   string `json:"type"`
+	Actor  string `json:"actor"`
+	At     string `json:"at"`
+	Detail string `json:"detail"`
+}

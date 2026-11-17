@@ -46,6 +46,9 @@ func (h *LeadFollowupHandler) back(c *fiber.Ctx) string {
 	if lead, err := strconv.ParseInt(c.Query("lead"), 10, 64); err == nil && lead > 0 {
 		return leadPath(lead)
 	}
+	if c.Query("tab") == "riwayat" {
+		return followupQueuePath + "?tab=riwayat"
+	}
 	return followupQueuePath
 }
 
@@ -56,10 +59,30 @@ func (h *LeadFollowupHandler) Index(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return h.inertiaService.Render(c, "app/LeadFollowups", fiber.Map{
-		"user": sessionUser(sess),
-		"page": page,
-	})
+	props := fiber.Map{"user": sessionUser(sess), "page": page, "tab": "antrean"}
+	if c.Query("tab") == "riwayat" {
+		var f models.FollowupHistoryFilter
+		_ = c.QueryParser(&f)
+		history, err := h.leads.FollowupHistory(c.UserContext(), f)
+		if err != nil {
+			return err
+		}
+		props["tab"], props["history"] = "riwayat", history
+	}
+	return h.inertiaService.Render(c, "app/LeadFollowups", props)
+}
+
+// Timeline returns one follow-up's trail as JSON (history tab, on expand).
+func (h *LeadFollowupHandler) Timeline(c *fiber.Ctx) error {
+	id, ok := followupIDParam(c)
+	if !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "data tidak valid"})
+	}
+	entries, err := h.leads.FollowupTimeline(c.UserContext(), id)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(fiber.Map{"entries": entries})
 }
 
 // Create is "Buat follow-up manual" on /app/leads/:id.
