@@ -11,6 +11,7 @@
 	import DzikirPicker from "@components/tasbih/DzikirPicker.svelte";
 	import DzikirFormSheet from "@components/tasbih/DzikirFormSheet.svelte";
 	import Sheet from "@components/tasbih/Sheet.svelte";
+	import InstallBanner from "@components/pwa/InstallBanner.svelte";
 	import { TasbihCounter } from "@lib/tasbih/counter.svelte";
 	import { antreanSemua, setPemilik } from "@lib/tasbih/db";
 	import { mulaiAutoSync, syncSekarang } from "@lib/tasbih/sync.svelte";
@@ -272,6 +273,7 @@
 
 <AppLayout {user}>
 	<div class="mx-auto w-full max-w-xl pb-6">
+		<InstallBanner />
 		<!-- Baris atas: pilih dzikir, status sync, aksi -->
 		<div class="mb-4 flex items-center gap-2">
 			<button

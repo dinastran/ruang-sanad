@@ -66,8 +66,10 @@ async function cacheDulu(request, cacheName) {
 	return res;
 }
 
+// Catatan: Cache API mengabaikan fragmen (#...), jadi pembeda HTML vs JSON
+// Inertia harus lewat query string agar keduanya tidak saling menimpa.
 function kunciHalaman(url, request) {
-	return url.origin + url.pathname + (request.headers.get("X-Inertia") ? "#inertia" : "#html");
+	return url.origin + url.pathname + (request.headers.get("X-Inertia") ? "?__sw=inertia" : "?__sw=html");
 }
 
 async function jaringanDulu(event, url) {
@@ -84,7 +86,8 @@ async function jaringanDulu(event, url) {
 		return res;
 	} catch (err) {
 		if (user) {
-			const hit = await (await caches.open(PAGE_PREFIX + user)).match(kunci);
+			// respons Inertia membawa "Vary: X-Inertia"; kunci kita sudah memisahkan html/inertia
+			const hit = await (await caches.open(PAGE_PREFIX + user)).match(kunci, { ignoreVary: true });
 			if (hit) return hit;
 		}
 		if (req.mode === "navigate") {

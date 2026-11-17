@@ -1,4 +1,5 @@
 import { createInertiaApp, router } from "@inertiajs/svelte";
+import { kirimUser, mulaiPWA } from "./lib/pwa.svelte";
 import GuruDashboard from "./pages/guru/Dashboard.svelte";
 import GuruKelasList from "./pages/guru/KelasList.svelte";
 import GuruKelasDetail from "./pages/guru/KelasDetail.svelte";
@@ -125,18 +126,26 @@ function applyMeta(component?: string) {
 	meta.setAttribute("content", desc);
 }
 
+// PWA Tasbih: service worker + ajakan pasang (event install bisa datang lebih awal).
+mulaiPWA();
+
 createInertiaApp();
 
 // Initial title from the server-rendered page payload.
 try {
 	const el = document.querySelector("script[data-page]");
-	if (el?.textContent) applyMeta(JSON.parse(el.textContent).component);
+	if (el?.textContent) {
+		const page = JSON.parse(el.textContent);
+		applyMeta(page.component);
+		kirimUser(page.props?.user?.id);
+	}
 } catch {
 	/* ignore malformed payload */
 }
 
 // Update title/description on every Inertia navigation.
 router.on("navigate", (event: unknown) => {
-	const detail = (event as CustomEvent<{ page?: { component?: string } }>)?.detail;
+	const detail = (event as CustomEvent<{ page?: { component?: string; props?: { user?: { id?: number } } } }>)?.detail;
 	applyMeta(detail?.page?.component);
+	kirimUser(detail?.page?.props?.user?.id);
 });

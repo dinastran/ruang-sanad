@@ -42,6 +42,8 @@
 	} from "lucide-svelte";
 	import DarkModeToggle from "@components/DarkModeToggle.svelte";
 	import Logo from "@components/Logo.svelte";
+	import TasbihShell from "@components/pwa/TasbihShell.svelte";
+	import { hapusCacheHalaman, pwa } from "@lib/pwa.svelte";
 
 	interface Props {
 		user?: { id: number; name: string; email: string; avatar: string; role: string };
@@ -214,9 +216,15 @@
 	let desktopMenuEl = $state<HTMLDivElement>();
 	let desktopNavEl = $state<HTMLElement>();
 
-	function handleLogout() {
+	async function handleLogout() {
+		// perangkat bersama: buang halaman tasbih yang tersimpan offline sebelum keluar
+		await hapusCacheHalaman();
 		router.post("/logout");
 	}
+
+	// Mode aplikasi Tasbih: role user selalu; role lain hanya saat dibuka sebagai aplikasi terpasang.
+	const pathAwal = typeof window !== "undefined" ? window.location.pathname : "";
+	let appMode = $derived(role === "user" || (pwa.standalone && pathAwal.startsWith("/app/tasbih")));
 
 	$effect(() => {
 		if ((!isDesktopUserMenuOpen && !openNavCategory) || typeof document === "undefined") return;
@@ -245,6 +253,12 @@
 		}
 	});
 </script>
+
+{#if appMode}
+<TasbihShell {user} onlogout={handleLogout}>
+	{@render children()}
+</TasbihShell>
+{:else}
 
 <header
 	class="hidden lg:flex fixed top-0 right-0 h-16 z-40 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-xl border-b border-neutral-200/80 dark:border-white/[0.04] items-center justify-between px-4 gap-3 transition-all duration-300"
@@ -503,3 +517,4 @@
 <div class="min-h-screen bg-neutral-50 dark:bg-neutral-950 transition-all duration-300 {sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-72'}">
 	{@render children()}
 </div>
+{/if}
