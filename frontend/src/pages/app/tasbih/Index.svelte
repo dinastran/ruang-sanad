@@ -11,6 +11,7 @@
 	import DzikirPicker from "@components/tasbih/DzikirPicker.svelte";
 	import DzikirFormSheet from "@components/tasbih/DzikirFormSheet.svelte";
 	import Sheet from "@components/tasbih/Sheet.svelte";
+	import InstallBanner from "@components/pwa/InstallBanner.svelte";
 	import { TasbihCounter } from "@lib/tasbih/counter.svelte";
 	import { antreanSemua, setPemilik } from "@lib/tasbih/db";
 	import { mulaiAutoSync, syncSekarang } from "@lib/tasbih/sync.svelte";
@@ -109,6 +110,20 @@
 		badges = [...badges, ...h.badge_baru.filter((b) => !ada.has(b.kode))];
 		hitungAntreanHariIni();
 		if (h.diterima.length > 0) router.reload({ only: ["streak", "level"] });
+	}
+
+	/** Ambil ulang angka dari server (mis. setelah berdzikir di perangkat lain). */
+	async function segarkan() {
+		const h = await syncSekarang(true);
+		if (h) onSync(h);
+		await hitungAntreanHariIni();
+		router.reload({
+			only: ["hari_ini", "streak", "level", "target_harian"],
+			onSuccess: (page) => {
+				const hi = (page.props as unknown as { hari_ini?: HariIni }).hari_ini;
+				if (hi) serverHariIni = { tanggal: hi.tanggal, total: hi.total };
+			},
+		});
 	}
 
 	function tambah() {
@@ -224,10 +239,19 @@
 		const stop = mulaiAutoSync(onSync);
 		const idle = setInterval(() => counter.cekIdle(), 30_000);
 		const onVis = () => {
-			if (document.visibilityState === "hidden") counter.flush();
-			else counter.cekIdle();
+			if (document.visibilityState === "hidden") {
+				// pindah tab/aplikasi/perangkat: kirim sesi berjalan sekarang
+				counter.simpanSementara();
+				counter.flush();
+			} else {
+				counter.cekIdle();
+				segarkan();
+			}
 		};
-		const onHide = () => counter.flush();
+		const onHide = () => {
+			counter.simpanSementara();
+			counter.flush();
+		};
 		const onFs = () => {
 			if (!document.fullscreenElement && fokus) fokus = false;
 		};
@@ -249,6 +273,7 @@
 
 <AppLayout {user}>
 	<div class="mx-auto w-full max-w-xl pb-6">
+		<InstallBanner />
 		<!-- Baris atas: pilih dzikir, status sync, aksi -->
 		<div class="mb-4 flex items-center gap-2">
 			<button

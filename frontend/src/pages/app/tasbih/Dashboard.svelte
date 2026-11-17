@@ -64,14 +64,22 @@
 		router.get("/app/tasbih/dashboard", { rentang: v }, { preserveScroll: true, preserveState: true, only: ["dashboard"] });
 	}
 
-	onMount(async () => {
+	async function segarkan(paksaReload: boolean) {
 		await bacaLokal();
 		const h = await syncSekarang(true);
 		await bacaLokal();
-		if (h) {
-			if (h.badge_baru.length) badgeToast = [...badgeToast, ...h.badge_baru];
-			if (h.diterima.length) router.reload({ only: ["dashboard", "badges", "riwayat"] });
-		}
+		if (h?.badge_baru.length) badgeToast = [...badgeToast, ...h.badge_baru];
+		if (paksaReload || (h?.diterima.length ?? 0) > 0) router.reload({ only: ["dashboard", "badges", "riwayat"] });
+	}
+
+	onMount(() => {
+		segarkan(false);
+		// kembali ke tab ini (mis. setelah berdzikir di perangkat lain): ambil data terbaru
+		const onVis = () => {
+			if (document.visibilityState === "visible") segarkan(true);
+		};
+		document.addEventListener("visibilitychange", onVis);
+		return () => document.removeEventListener("visibilitychange", onVis);
 	});
 </script>
 

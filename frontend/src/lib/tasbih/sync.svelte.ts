@@ -113,6 +113,31 @@ async function jalankanSync(paksa: boolean): Promise<SyncHasil | null> {
 	return terakhir;
 }
 
+/** Kirim satu sesi langsung dengan fetch keepalive — tetap terkirim walau tab
+ *  sedang ditutup. Sukses → hapus dari antrean; gagal → antrean menanganinya. */
+export function kirimSegera(sesi: SesiTertutup): void {
+	if (!online()) return;
+	try {
+		fetch("/app/tasbih/sync", {
+			method: "POST",
+			credentials: "same-origin",
+			keepalive: true,
+			headers: { "Content-Type": "application/json", Accept: "application/json", "X-XSRF-TOKEN": getCSRFToken() },
+			body: JSON.stringify({ sesi: [sesi] }),
+		})
+			.then(async (res) => {
+				if (!res.ok) return;
+				const h = (await res.json()) as SyncHasil;
+				const selesai = [...(h.diterima ?? []), ...(h.ditolak ?? []).map((d) => d.id)];
+				if (selesai.length) await hapusAntrean(selesai);
+				await hitungPending();
+			})
+			.catch(() => {});
+	} catch {
+		/* antrean akan mengirim ulang */
+	}
+}
+
 /** Sync otomatis: saat mulai, saat kembali online, dan tiap 60 detik selama ada antrean. */
 export function mulaiAutoSync(onHasil: (h: SyncHasil) => void): () => void {
 	const jalan = (paksa = false) =>

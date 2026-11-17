@@ -6,7 +6,7 @@
 //   ditinggalkan > 12 jam dimulai ulang saat dipulihkan.
 // Penutupan sesi + state aktif baru ditulis dalam satu transaksi IndexedDB.
 import { aktifAmbil, aktifSimpan, tutupDanSimpanAktif } from "./db";
-import { simpanDiMemori } from "./sync.svelte";
+import { kirimSegera, simpanDiMemori } from "./sync.svelte";
 import type { Dzikir, Paket, SesiTertutup, StateAktif } from "./types";
 import { uuid } from "./types";
 
@@ -56,11 +56,12 @@ export class TasbihCounter {
 		return id ? this.katalog.paket.find((p) => p.id === id) : undefined;
 	}
 
-	/** Hitungan yang ditampilkan: di paket = terkumpul untuk item ini + sesi berjalan. */
+	/** Hitungan yang ditampilkan = terkumpul dari sesi yang sudah ditutup sementara
+	 *  (pindah tab/perangkat, atau jeda di paket) + sesi yang sedang berjalan. */
 	get tampil(): number {
 		const s = this.state;
 		if (!s) return 0;
-		return (s.mode === "paket" ? (s.item_terkumpul ?? 0) : 0) + s.jumlah;
+		return (s.item_terkumpul ?? 0) + s.jumlah;
 	}
 
 	/** Pulihkan state dari IndexedDB; bila tidak ada, pilih dzikir pertama. */
@@ -131,7 +132,7 @@ export class TasbihCounter {
 	setTargetAktif(target: number): void {
 		if (!this.state || this.state.mode !== "dzikir") return;
 		this.state.target = target;
-		this.selesaiTarget = this.state.jumlah >= target;
+		this.selesaiTarget = this.tampil >= target;
 		this.simpan();
 	}
 
@@ -153,7 +154,7 @@ export class TasbihCounter {
 				this.selesaiItemPaket();
 				return;
 			}
-		} else if (s.jumlah === s.target) {
+		} else if (this.tampil === s.target) {
 			this.selesaiTarget = true;
 			this.cb.onTarget();
 		}
@@ -187,7 +188,7 @@ export class TasbihCounter {
 		const s = this.state;
 		if (!s || !s.sesi_id || s.jumlah <= 0) return;
 		s.jumlah -= 1;
-		if (s.mode === "dzikir" && s.jumlah < s.target) this.selesaiTarget = false;
+		if (s.mode === "dzikir" && this.tampil < s.target) this.selesaiTarget = false;
 		this.simpan();
 	}
 
@@ -205,6 +206,18 @@ export class TasbihCounter {
 	/** Selesai: sama dengan reset, dipakai tombol "Simpan sesi". */
 	selesai(): void {
 		this.reset();
+	}
+
+	/** Tab disembunyikan/ditutup: kirim sesi berjalan SEKARANG agar perangkat lain
+	 *  langsung melihatnya, tanpa mengubah angka di layar (bisa dilanjutkan). */
+	simpanSementara(): void {
+		const s = this.state;
+		if (!s || !s.sesi_id) return;
+		const sesi = this.lepasSesi();
+		if (!sesi) return;
+		s.item_terkumpul = (s.item_terkumpul ?? 0) + sesi.jumlah;
+		s.jumlah = 0;
+		this.commit(sesi, true);
 	}
 
 	/** Tutup sesi bila idle > 5 menit. Paket: posisi putaran dipertahankan. */
@@ -247,11 +260,14 @@ export class TasbihCounter {
 	}
 
 	/** Tulis sesi tertutup + state aktif saat ini secara atomik; cadangan memori bila gagal. */
-	private commit(sesi: SesiTertutup | null): void {
+	private commit(sesi: SesiTertutup | null, segera = false): void {
 		if (!sesi) {
 			this.simpan();
 			return;
 		}
+		// Halaman bisa segera mati: kirim langsung (keepalive) di samping antrean IndexedDB.
+		// Aman dobel karena server idempoten per ID sesi.
+		if (segera) kirimSegera(sesi);
 		if (this.timer) clearTimeout(this.timer);
 		this.timer = null;
 		const snap = this.state ? ($state.snapshot(this.state) as StateAktif) : null;

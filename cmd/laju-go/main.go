@@ -231,6 +231,7 @@ func main() {
 		Riayah:                      riayahHandler,
 		RiayahSantri:                riayahSantriHandler,
 		Tasbih:                      tasbihHandler,
+		PWA:                         handlers.NewPWAHandler(services.NewPWAService(assetService)),
 		RiayahTindakLanjut:          riayahTindakLanjutHandler,
 		KoordinatorGuru:             koordinatorGuruHandler,
 		KoordinatorGuruDirectory:    koordinatorGuruDirectoryHandler,
