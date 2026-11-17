@@ -560,6 +560,7 @@ func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, u
 	if h.LeadFollowups != nil {
 		approver := middlewares.RoleRequired(store, userService, services.FollowupApproverRoles...)
 		protected.Get("/leads/followups", approver, h.LeadFollowups.Index)
+		protected.Get("/leads/followups/:fid/timeline", approver, h.LeadFollowups.Timeline)
 		protected.Post("/leads/followups/bulk-approve", approver, h.LeadFollowups.BulkApprove)
 		protected.Put("/leads/followups/:fid/approve", approver, h.LeadFollowups.Approve)
 		protected.Put("/leads/followups/:fid/schedule", approver, h.LeadFollowups.Reschedule)

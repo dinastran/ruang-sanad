@@ -5,6 +5,7 @@
 	import { Toast } from "@lib/notifications/toast";
 	import { SENDER_LABELS, STAGE_LABELS, formatDateTime, relativeTime, toWIBInput } from "@lib/leads";
 	import { AlertTriangle, CheckCheck, Clock, RotateCcw, Send } from "lucide-svelte";
+	import FollowupHistory from "@components/lead-dashboard/FollowupHistory.svelte";
 
 	interface Message {
 		id: number;
@@ -57,11 +58,15 @@
 	interface Props {
 		user?: User;
 		page: Page;
+		tab?: "antrean" | "riwayat";
+		// Shape is owned by FollowupHistory.svelte.
+		history?: any;
 		flash?: Flash;
 	}
 
 	let props: Props = $props();
 	let page = $derived(props.page);
+	let tab = $derived(props.tab === "riwayat" && props.history ? "riwayat" : "antrean");
 
 	// Local edits per follow-up; untouched items fall back to the server value.
 	let drafts = $state<Record<number, string>>({});
@@ -112,6 +117,9 @@
 	function retry(f: Failed) {
 		act("post", `/app/leads/outbox/${f.outbox_id}/retry`);
 	}
+	function retryFromHistory(outboxID: number) {
+		act("post", `/app/leads/outbox/${outboxID}/retry?tab=riwayat`);
+	}
 
 	const card = "rounded-xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-4";
 	const field = "w-full px-3 py-2 rounded-lg bg-white dark:bg-neutral-900/60 border border-neutral-300 dark:border-neutral-700/80 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-400/30";
@@ -137,6 +145,18 @@
 			{#if !page.followup_enabled}<p class="w-full text-xs text-neutral-500">Follow-up yang disetujui akan menunggu sampai super admin menyalakan pengiriman di Integrasi WhatsApp.</p>{/if}
 		</section>
 
+		<nav class="flex gap-1 border-b border-neutral-200/80 dark:border-white/[0.06]" aria-label="Tampilan follow-up">
+			{#each [{ key: "antrean", label: "Antrean", href: "/app/leads/followups", count: page.pending.length + page.approved.length + page.failed.length }, { key: "riwayat", label: "Riwayat", href: "/app/leads/followups?tab=riwayat", count: -1 }] as t (t.key)}
+				<a href={t.href} use:inertia aria-current={tab === t.key ? "page" : undefined}
+					class="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors {tab === t.key ? 'border-brand-600 text-neutral-900 dark:border-brand-400 dark:text-white' : 'border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'}">
+					{t.label}{#if t.count > 0}<span class="ml-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800 px-1.5 py-px text-xs tabular-nums">{t.count}</span>{/if}
+				</a>
+			{/each}
+		</nav>
+
+		{#if tab === "riwayat"}
+			<FollowupHistory history={props.history} canApprove={page.can_approve} {busy} onRetry={retryFromHistory} />
+		{:else}
 		{#if page.failed.length > 0}
 			<section class="{card} border-error/30">
 				<h2 class="inline-flex items-center gap-1.5 text-sm font-semibold text-error"><AlertTriangle class="w-4 h-4" /> Gagal kirim ({page.failed.length})</h2>
@@ -242,5 +262,6 @@
 				</ul>
 			{/if}
 		</section>
+		{/if}
 	</div>
 </AppLayout>

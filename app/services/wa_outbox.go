@@ -270,8 +270,11 @@ func (s *WAOutboxService) send(ctx context.Context, o queries.WaOutbox, now time
 				return err
 			}
 		}
-		return writeLeadEvent(ctx, q, leadID, newLeadEventID("sys"), "outbox.failed", "system",
-			map[string]any{"purpose": o.Purpose, "reason": msg, "attempts": attempts}, done)
+		payload := map[string]any{"purpose": o.Purpose, "reason": msg, "attempts": attempts}
+		if o.Purpose == OutboxPurposeFollowup {
+			payload["followup_id"] = f.ID
+		}
+		return writeLeadEvent(ctx, q, leadID, newLeadEventID("sys"), "outbox.failed", "system", payload, done)
 	})
 }
 
@@ -287,7 +290,9 @@ func (s *WAOutboxService) Retry(ctx context.Context, outboxID, actorID int64) er
 			return err
 		}
 		leadID := o.ReferenceID.Int64
+		payload := map[string]any{"purpose": o.Purpose}
 		if o.Purpose == OutboxPurposeFollowup {
+			payload["followup_id"] = o.ReferenceID.Int64
 			f, err := q.GetLeadFollowupByID(ctx, o.ReferenceID.Int64)
 			if err != nil {
 				return err
@@ -307,6 +312,6 @@ func (s *WAOutboxService) Retry(ctx context.Context, outboxID, actorID int64) er
 		if n == 0 {
 			return leadInputErr("kiriman ini tidak berstatus gagal")
 		}
-		return writeLeadEvent(ctx, q, leadID, newLeadEventID("usr"), "outbox.retried", userActor(actorID), map[string]any{"purpose": o.Purpose}, now)
+		return writeLeadEvent(ctx, q, leadID, newLeadEventID("usr"), "outbox.retried", userActor(actorID), payload, now)
 	})
 }
