@@ -57,3 +57,51 @@ SELECT COUNT(*) FROM tasbih_paket WHERE id = ?;
 
 -- name: ListTasbihPaketItemTarget :many
 SELECT target FROM tasbih_paket_item WHERE paket_id = ? AND dzikir_id = ?;
+
+-- name: SumTasbihRentang :one
+SELECT CAST(COALESCE(SUM(jumlah), 0) AS INTEGER) AS total FROM tasbih_sesi
+WHERE user_id = sqlc.arg(user_id) AND tanggal_wib >= sqlc.arg(dari) AND tanggal_wib <= sqlc.arg(sampai);
+
+-- name: ListTasbihTotalHarian :many
+SELECT tanggal_wib, CAST(SUM(jumlah) AS INTEGER) AS total FROM tasbih_sesi
+WHERE user_id = sqlc.arg(user_id) AND tanggal_wib >= sqlc.arg(dari) AND tanggal_wib <= sqlc.arg(sampai)
+GROUP BY tanggal_wib ORDER BY tanggal_wib;
+
+-- name: ListTasbihHariTercapai :many
+SELECT tanggal_wib FROM tasbih_sesi WHERE user_id = sqlc.arg(user_id)
+GROUP BY tanggal_wib HAVING SUM(jumlah) >= sqlc.arg(target)
+ORDER BY tanggal_wib;
+
+-- name: ListTasbihPerJam :many
+SELECT jam_wib, CAST(SUM(jumlah) AS INTEGER) AS total FROM tasbih_sesi
+WHERE user_id = sqlc.arg(user_id) AND tanggal_wib >= sqlc.arg(dari) AND tanggal_wib <= sqlc.arg(sampai)
+GROUP BY jam_wib;
+
+-- name: ListTasbihKomposisi :many
+SELECT s.dzikir_id, d.latin, CAST(SUM(s.jumlah) AS INTEGER) AS total
+FROM tasbih_sesi s JOIN tasbih_dzikir d ON d.id = s.dzikir_id
+WHERE s.user_id = sqlc.arg(user_id) AND s.tanggal_wib >= sqlc.arg(dari) AND s.tanggal_wib <= sqlc.arg(sampai)
+GROUP BY s.dzikir_id, d.latin ORDER BY total DESC, s.dzikir_id;
+
+-- name: ListTasbihPutaranPaket :many
+-- Putaran selesai = setiap dzikir item paket punya sesi selesai_target=1 dalam run yang sama.
+SELECT p.id, p.nama, CAST(COUNT(r.paket_run_id) AS INTEGER) AS selesai
+FROM tasbih_paket p
+LEFT JOIN (
+    SELECT s.paket_id, s.paket_run_id FROM tasbih_sesi s
+    WHERE s.user_id = sqlc.arg(user_id) AND s.paket_run_id IS NOT NULL AND s.selesai_target = 1
+      AND s.tanggal_wib >= sqlc.arg(dari)
+    GROUP BY s.paket_id, s.paket_run_id
+    HAVING COUNT(DISTINCT s.dzikir_id) = (SELECT COUNT(DISTINCT i.dzikir_id) FROM tasbih_paket_item i WHERE i.paket_id = s.paket_id)
+) r ON r.paket_id = p.id
+GROUP BY p.id, p.nama, p.urutan ORDER BY p.urutan, p.id;
+
+-- name: ListTasbihRiwayat :many
+SELECT s.id, s.mulai_at, s.selesai_at, s.tanggal_wib, s.jumlah, s.target, d.latin,
+       COALESCE(p.nama, '') AS paket_nama
+FROM tasbih_sesi s
+JOIN tasbih_dzikir d ON d.id = s.dzikir_id
+LEFT JOIN tasbih_paket p ON p.id = s.paket_id
+WHERE s.user_id = sqlc.arg(user_id) AND (sqlc.narg(dzikir_id) IS NULL OR s.dzikir_id = sqlc.narg(dzikir_id))
+ORDER BY s.mulai_at DESC, s.id DESC
+LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);

@@ -39,6 +39,8 @@ func TestSyncIdempoten(t *testing.T) {
 		require.NoError(t, err)
 		require.ElementsMatch(t, []string{batch[0].ID, batch[1].ID}, h.Diterima)
 		require.Empty(t, h.Ditolak)
+		require.EqualValues(t, 43, h.HariIni.Total)
+		require.Equal(t, "2026-11-16", h.HariIni.Tanggal)
 	}
 	require.EqualValues(t, 2, countRows(t, db, "SELECT COUNT(*) FROM tasbih_sesi WHERE user_id = ?", u))
 	require.EqualValues(t, 1, countRows(t, db, "SELECT selesai_target FROM tasbih_sesi WHERE id = ?", batch[0].ID))

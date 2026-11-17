@@ -224,6 +224,82 @@ func (q *Queries) ListTasbihDzikirForUser(ctx context.Context, userID int64) ([]
 	return items, nil
 }
 
+const listTasbihHariTercapai = `-- name: ListTasbihHariTercapai :many
+SELECT tanggal_wib FROM tasbih_sesi WHERE user_id = ?1
+GROUP BY tanggal_wib HAVING SUM(jumlah) >= ?2
+ORDER BY tanggal_wib
+`
+
+type ListTasbihHariTercapaiParams struct {
+	UserID int64
+	Target int64
+}
+
+func (q *Queries) ListTasbihHariTercapai(ctx context.Context, arg ListTasbihHariTercapaiParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listTasbihHariTercapai, arg.UserID, arg.Target)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var tanggal_wib string
+		if err := rows.Scan(&tanggal_wib); err != nil {
+			return nil, err
+		}
+		items = append(items, tanggal_wib)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTasbihKomposisi = `-- name: ListTasbihKomposisi :many
+SELECT s.dzikir_id, d.latin, CAST(SUM(s.jumlah) AS INTEGER) AS total
+FROM tasbih_sesi s JOIN tasbih_dzikir d ON d.id = s.dzikir_id
+WHERE s.user_id = ?1 AND s.tanggal_wib >= ?2 AND s.tanggal_wib <= ?3
+GROUP BY s.dzikir_id, d.latin ORDER BY total DESC, s.dzikir_id
+`
+
+type ListTasbihKomposisiParams struct {
+	UserID int64
+	Dari   string
+	Sampai string
+}
+
+type ListTasbihKomposisiRow struct {
+	DzikirID int64
+	Latin    string
+	Total    int64
+}
+
+func (q *Queries) ListTasbihKomposisi(ctx context.Context, arg ListTasbihKomposisiParams) ([]ListTasbihKomposisiRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTasbihKomposisi, arg.UserID, arg.Dari, arg.Sampai)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTasbihKomposisiRow
+	for rows.Next() {
+		var i ListTasbihKomposisiRow
+		if err := rows.Scan(&i.DzikirID, &i.Latin, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTasbihPaket = `-- name: ListTasbihPaket :many
 SELECT id, slug, nama, deskripsi, rujukan FROM tasbih_paket ORDER BY urutan, id
 `
@@ -327,6 +403,218 @@ func (q *Queries) ListTasbihPaketItemTarget(ctx context.Context, arg ListTasbihP
 		return nil, err
 	}
 	return items, nil
+}
+
+const listTasbihPerJam = `-- name: ListTasbihPerJam :many
+SELECT jam_wib, CAST(SUM(jumlah) AS INTEGER) AS total FROM tasbih_sesi
+WHERE user_id = ?1 AND tanggal_wib >= ?2 AND tanggal_wib <= ?3
+GROUP BY jam_wib
+`
+
+type ListTasbihPerJamParams struct {
+	UserID int64
+	Dari   string
+	Sampai string
+}
+
+type ListTasbihPerJamRow struct {
+	JamWib int64
+	Total  int64
+}
+
+func (q *Queries) ListTasbihPerJam(ctx context.Context, arg ListTasbihPerJamParams) ([]ListTasbihPerJamRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTasbihPerJam, arg.UserID, arg.Dari, arg.Sampai)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTasbihPerJamRow
+	for rows.Next() {
+		var i ListTasbihPerJamRow
+		if err := rows.Scan(&i.JamWib, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTasbihPutaranPaket = `-- name: ListTasbihPutaranPaket :many
+SELECT p.id, p.nama, CAST(COUNT(r.paket_run_id) AS INTEGER) AS selesai
+FROM tasbih_paket p
+LEFT JOIN (
+    SELECT s.paket_id, s.paket_run_id FROM tasbih_sesi s
+    WHERE s.user_id = ?1 AND s.paket_run_id IS NOT NULL AND s.selesai_target = 1
+      AND s.tanggal_wib >= ?2
+    GROUP BY s.paket_id, s.paket_run_id
+    HAVING COUNT(DISTINCT s.dzikir_id) = (SELECT COUNT(DISTINCT i.dzikir_id) FROM tasbih_paket_item i WHERE i.paket_id = s.paket_id)
+) r ON r.paket_id = p.id
+GROUP BY p.id, p.nama, p.urutan ORDER BY p.urutan, p.id
+`
+
+type ListTasbihPutaranPaketParams struct {
+	UserID int64
+	Dari   string
+}
+
+type ListTasbihPutaranPaketRow struct {
+	ID      int64
+	Nama    string
+	Selesai int64
+}
+
+// Putaran selesai = setiap dzikir item paket punya sesi selesai_target=1 dalam run yang sama.
+func (q *Queries) ListTasbihPutaranPaket(ctx context.Context, arg ListTasbihPutaranPaketParams) ([]ListTasbihPutaranPaketRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTasbihPutaranPaket, arg.UserID, arg.Dari)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTasbihPutaranPaketRow
+	for rows.Next() {
+		var i ListTasbihPutaranPaketRow
+		if err := rows.Scan(&i.ID, &i.Nama, &i.Selesai); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTasbihRiwayat = `-- name: ListTasbihRiwayat :many
+SELECT s.id, s.mulai_at, s.selesai_at, s.tanggal_wib, s.jumlah, s.target, d.latin,
+       COALESCE(p.nama, '') AS paket_nama
+FROM tasbih_sesi s
+JOIN tasbih_dzikir d ON d.id = s.dzikir_id
+LEFT JOIN tasbih_paket p ON p.id = s.paket_id
+WHERE s.user_id = ?1 AND (?2 IS NULL OR s.dzikir_id = ?2)
+ORDER BY s.mulai_at DESC, s.id DESC
+LIMIT ?4 OFFSET ?3
+`
+
+type ListTasbihRiwayatParams struct {
+	UserID   int64
+	DzikirID interface{}
+	Off      int64
+	Lim      int64
+}
+
+type ListTasbihRiwayatRow struct {
+	ID         string
+	MulaiAt    time.Time
+	SelesaiAt  time.Time
+	TanggalWib string
+	Jumlah     int64
+	Target     int64
+	Latin      string
+	PaketNama  string
+}
+
+func (q *Queries) ListTasbihRiwayat(ctx context.Context, arg ListTasbihRiwayatParams) ([]ListTasbihRiwayatRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTasbihRiwayat,
+		arg.UserID,
+		arg.DzikirID,
+		arg.Off,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTasbihRiwayatRow
+	for rows.Next() {
+		var i ListTasbihRiwayatRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MulaiAt,
+			&i.SelesaiAt,
+			&i.TanggalWib,
+			&i.Jumlah,
+			&i.Target,
+			&i.Latin,
+			&i.PaketNama,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTasbihTotalHarian = `-- name: ListTasbihTotalHarian :many
+SELECT tanggal_wib, CAST(SUM(jumlah) AS INTEGER) AS total FROM tasbih_sesi
+WHERE user_id = ?1 AND tanggal_wib >= ?2 AND tanggal_wib <= ?3
+GROUP BY tanggal_wib ORDER BY tanggal_wib
+`
+
+type ListTasbihTotalHarianParams struct {
+	UserID int64
+	Dari   string
+	Sampai string
+}
+
+type ListTasbihTotalHarianRow struct {
+	TanggalWib string
+	Total      int64
+}
+
+func (q *Queries) ListTasbihTotalHarian(ctx context.Context, arg ListTasbihTotalHarianParams) ([]ListTasbihTotalHarianRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTasbihTotalHarian, arg.UserID, arg.Dari, arg.Sampai)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTasbihTotalHarianRow
+	for rows.Next() {
+		var i ListTasbihTotalHarianRow
+		if err := rows.Scan(&i.TanggalWib, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const sumTasbihRentang = `-- name: SumTasbihRentang :one
+SELECT CAST(COALESCE(SUM(jumlah), 0) AS INTEGER) AS total FROM tasbih_sesi
+WHERE user_id = ?1 AND tanggal_wib >= ?2 AND tanggal_wib <= ?3
+`
+
+type SumTasbihRentangParams struct {
+	UserID int64
+	Dari   string
+	Sampai string
+}
+
+func (q *Queries) SumTasbihRentang(ctx context.Context, arg SumTasbihRentangParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, sumTasbihRentang, arg.UserID, arg.Dari, arg.Sampai)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
 }
 
 const updateTasbihDzikirCustom = `-- name: UpdateTasbihDzikirCustom :execrows

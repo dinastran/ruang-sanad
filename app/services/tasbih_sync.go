@@ -49,6 +49,11 @@ func (s *TasbihService) Sync(ctx context.Context, userID int64, sesi []models.Ta
 	if err := tx.Commit(); err != nil {
 		return hasil, err
 	}
+	hariIni, err := s.HariIni(ctx, userID, now)
+	if err != nil {
+		return hasil, err
+	}
+	hasil.HariIni = hariIni
 	return hasil, nil
 }
 
