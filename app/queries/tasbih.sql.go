@@ -64,6 +64,17 @@ func (q *Queries) CountTasbihDzikirCustomAktif(ctx context.Context, userID sql.N
 	return count, err
 }
 
+const countTasbihPaket = `-- name: CountTasbihPaket :one
+SELECT COUNT(*) FROM tasbih_paket WHERE id = ?
+`
+
+func (q *Queries) CountTasbihPaket(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTasbihPaket, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createTasbihDzikirCustom = `-- name: CreateTasbihDzikirCustom :one
 INSERT INTO tasbih_dzikir (user_id, teks_arab, latin, arti, rujukan, target_default, urutan, created_at, updated_at)
 VALUES (?, ?, ?, ?, '', ?, 0, ?, ?)
@@ -95,6 +106,17 @@ func (q *Queries) CreateTasbihDzikirCustom(ctx context.Context, arg CreateTasbih
 	return id, err
 }
 
+const getTasbihSesiOwner = `-- name: GetTasbihSesiOwner :one
+SELECT user_id FROM tasbih_sesi WHERE id = ?
+`
+
+func (q *Queries) GetTasbihSesiOwner(ctx context.Context, id string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getTasbihSesiOwner, id)
+	var user_id int64
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const getTasbihTargetHarian = `-- name: GetTasbihTargetHarian :one
 SELECT target_harian FROM tasbih_pengaturan WHERE user_id = ?
 `
@@ -104,6 +126,50 @@ func (q *Queries) GetTasbihTargetHarian(ctx context.Context, userID int64) (int6
 	var target_harian int64
 	err := row.Scan(&target_harian)
 	return target_harian, err
+}
+
+const insertTasbihSesi = `-- name: InsertTasbihSesi :execrows
+INSERT INTO tasbih_sesi (id, user_id, dzikir_id, paket_id, paket_run_id, jumlah, target, selesai_target, mulai_at, selesai_at, tanggal_wib, jam_wib, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO NOTHING
+`
+
+type InsertTasbihSesiParams struct {
+	ID            string
+	UserID        int64
+	DzikirID      int64
+	PaketID       sql.NullInt64
+	PaketRunID    sql.NullString
+	Jumlah        int64
+	Target        int64
+	SelesaiTarget int64
+	MulaiAt       time.Time
+	SelesaiAt     time.Time
+	TanggalWib    string
+	JamWib        int64
+	CreatedAt     time.Time
+}
+
+func (q *Queries) InsertTasbihSesi(ctx context.Context, arg InsertTasbihSesiParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, insertTasbihSesi,
+		arg.ID,
+		arg.UserID,
+		arg.DzikirID,
+		arg.PaketID,
+		arg.PaketRunID,
+		arg.Jumlah,
+		arg.Target,
+		arg.SelesaiTarget,
+		arg.MulaiAt,
+		arg.SelesaiAt,
+		arg.TanggalWib,
+		arg.JamWib,
+		arg.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const listTasbihDzikirForUser = `-- name: ListTasbihDzikirForUser :many
@@ -221,6 +287,38 @@ func (q *Queries) ListTasbihPaketItem(ctx context.Context) ([]TasbihPaketItem, e
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTasbihPaketItemTarget = `-- name: ListTasbihPaketItemTarget :many
+SELECT target FROM tasbih_paket_item WHERE paket_id = ? AND dzikir_id = ?
+`
+
+type ListTasbihPaketItemTargetParams struct {
+	PaketID  int64
+	DzikirID int64
+}
+
+func (q *Queries) ListTasbihPaketItemTarget(ctx context.Context, arg ListTasbihPaketItemTargetParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listTasbihPaketItemTarget, arg.PaketID, arg.DzikirID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var target int64
+		if err := rows.Scan(&target); err != nil {
+			return nil, err
+		}
+		items = append(items, target)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

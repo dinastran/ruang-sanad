@@ -50,3 +50,27 @@ type TasbihHariIni struct {
 	Total   int64  `json:"total"`
 	Target  int64  `json:"target"`
 }
+
+// TasbihSesiInput: satu sesi hitungan yang dikirim klien saat sync.
+type TasbihSesiInput struct {
+	ID         string    `json:"id"`
+	DzikirID   int64     `json:"dzikir_id"`
+	PaketID    *int64    `json:"paket_id"`
+	PaketRunID *string   `json:"paket_run_id"`
+	Jumlah     int64     `json:"jumlah"`
+	Target     int64     `json:"target"`
+	MulaiAt    time.Time `json:"mulai_at"`
+	SelesaiAt  time.Time `json:"selesai_at"`
+}
+
+type TasbihSesiDitolak struct {
+	ID     string `json:"id"`
+	Alasan string `json:"alasan"`
+}
+
+type TasbihSyncHasil struct {
+	Diterima  []string            `json:"diterima"`
+	Ditolak   []TasbihSesiDitolak `json:"ditolak"`
+	BadgeBaru []TasbihBadge       `json:"badge_baru"`
+	HariIni   TasbihHariIni       `json:"hari_ini"`
+}

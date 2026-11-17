@@ -43,3 +43,17 @@ SELECT target_harian FROM tasbih_pengaturan WHERE user_id = ?;
 -- name: UpsertTasbihTargetHarian :exec
 INSERT INTO tasbih_pengaturan (user_id, target_harian, updated_at) VALUES (?, ?, ?)
 ON CONFLICT(user_id) DO UPDATE SET target_harian = excluded.target_harian, updated_at = excluded.updated_at;
+
+-- name: InsertTasbihSesi :execrows
+INSERT INTO tasbih_sesi (id, user_id, dzikir_id, paket_id, paket_run_id, jumlah, target, selesai_target, mulai_at, selesai_at, tanggal_wib, jam_wib, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO NOTHING;
+
+-- name: GetTasbihSesiOwner :one
+SELECT user_id FROM tasbih_sesi WHERE id = ?;
+
+-- name: CountTasbihPaket :one
+SELECT COUNT(*) FROM tasbih_paket WHERE id = ?;
+
+-- name: ListTasbihPaketItemTarget :many
+SELECT target FROM tasbih_paket_item WHERE paket_id = ? AND dzikir_id = ?;
