@@ -29,15 +29,19 @@ export class TasbihCounter {
 	/** Ringkasan putaran paket terakhir yang selesai (untuk sheet ringkasan). */
 	ringkasanPaket = $state<{ paket: Paket; items: { dzikir_id: number; jumlah: number }[]; durasiDetik: number } | null>(null);
 
-	katalog: Katalog;
+	private getKatalog: () => Katalog;
 	private cb: CounterCallbacks;
 	private timer: ReturnType<typeof setTimeout> | null = null;
 	private catatanRun: { dzikir_id: number; jumlah: number }[] = [];
 	private mulaiRun = 0;
 
-	constructor(katalog: Katalog, cb: CounterCallbacks) {
-		this.katalog = katalog;
+	constructor(katalog: () => Katalog, cb: CounterCallbacks) {
+		this.getKatalog = katalog;
 		this.cb = cb;
+	}
+
+	get katalog(): Katalog {
+		return this.getKatalog();
 	}
 
 	get dzikir(): Dzikir | undefined {

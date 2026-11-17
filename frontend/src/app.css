@@ -1,3 +1,5 @@
+/* Font Arab untuk teks dzikir (tasbih). Fallback ke font Arab sistem bila offline. */
+@import url("https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap");
 @import "tailwindcss";
 
 /* Scan templates folder for class usage */
@@ -22,6 +24,7 @@
 @theme {
     /* Typography */
     --font-family-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-arab: "Amiri", "Noto Naskh Arabic", "Scheherazade New", "Traditional Arabic", serif;
     --font-family-mono: "JetBrains Mono", "Fira Code", "SF Mono", ui-monospace, monospace;
 
     /* Brand: Electric Cyan-Teal — the color of velocity */
