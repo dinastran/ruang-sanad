@@ -196,7 +196,7 @@ func roleHome(role models.UserRole) string {
 	case models.RoleKoordinator:
 		return "/app/koordinator-guru"
 	case models.RoleUser:
-		return "/app/profile"
+		return "/app/tasbih"
 	default:
 		return "/app"
 	}
