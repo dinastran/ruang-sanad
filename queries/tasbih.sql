@@ -105,3 +105,28 @@ LEFT JOIN tasbih_paket p ON p.id = s.paket_id
 WHERE s.user_id = sqlc.arg(user_id) AND (sqlc.narg(dzikir_id) IS NULL OR s.dzikir_id = sqlc.narg(dzikir_id))
 ORDER BY s.mulai_at DESC, s.id DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
+
+-- name: CountTasbihSesi :one
+SELECT COUNT(*) FROM tasbih_sesi WHERE user_id = ?;
+
+-- name: SumTasbihBySlug :one
+SELECT CAST(COALESCE(SUM(s.jumlah), 0) AS INTEGER) AS total
+FROM tasbih_sesi s JOIN tasbih_dzikir d ON d.id = s.dzikir_id
+WHERE s.user_id = sqlc.arg(user_id) AND d.slug IN (sqlc.arg(slug1), sqlc.arg(slug2));
+
+-- name: CountTasbihHariJam :one
+SELECT COUNT(DISTINCT tanggal_wib) FROM tasbih_sesi
+WHERE user_id = sqlc.arg(user_id) AND jam_wib >= sqlc.arg(jam_dari) AND jam_wib <= sqlc.arg(jam_sampai);
+
+-- name: CountTasbihDzikirCustomPernah :one
+SELECT COUNT(*) FROM tasbih_dzikir WHERE user_id = ?;
+
+-- name: GetTasbihPaketIDBySlug :one
+SELECT id FROM tasbih_paket WHERE slug = ?;
+
+-- name: InsertTasbihBadge :execrows
+INSERT INTO tasbih_badge_user (user_id, badge_kode, diraih_at) VALUES (?, ?, ?)
+ON CONFLICT(user_id, badge_kode) DO NOTHING;
+
+-- name: ListTasbihBadgeUser :many
+SELECT badge_kode, diraih_at FROM tasbih_badge_user WHERE user_id = ?;

@@ -54,6 +54,13 @@ func (s *TasbihService) Sync(ctx context.Context, userID int64, sesi []models.Ta
 		return hasil, err
 	}
 	hasil.HariIni = hariIni
+	if len(hasil.Diterima) > 0 {
+		baru, err := s.EvaluasiBadge(ctx, userID, now)
+		if err != nil {
+			return hasil, err
+		}
+		hasil.BadgeBaru = baru
+	}
 	return hasil, nil
 }
 

@@ -64,12 +64,52 @@ func (q *Queries) CountTasbihDzikirCustomAktif(ctx context.Context, userID sql.N
 	return count, err
 }
 
+const countTasbihDzikirCustomPernah = `-- name: CountTasbihDzikirCustomPernah :one
+SELECT COUNT(*) FROM tasbih_dzikir WHERE user_id = ?
+`
+
+func (q *Queries) CountTasbihDzikirCustomPernah(ctx context.Context, userID sql.NullInt64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTasbihDzikirCustomPernah, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTasbihHariJam = `-- name: CountTasbihHariJam :one
+SELECT COUNT(DISTINCT tanggal_wib) FROM tasbih_sesi
+WHERE user_id = ?1 AND jam_wib >= ?2 AND jam_wib <= ?3
+`
+
+type CountTasbihHariJamParams struct {
+	UserID    int64
+	JamDari   int64
+	JamSampai int64
+}
+
+func (q *Queries) CountTasbihHariJam(ctx context.Context, arg CountTasbihHariJamParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTasbihHariJam, arg.UserID, arg.JamDari, arg.JamSampai)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countTasbihPaket = `-- name: CountTasbihPaket :one
 SELECT COUNT(*) FROM tasbih_paket WHERE id = ?
 `
 
 func (q *Queries) CountTasbihPaket(ctx context.Context, id int64) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countTasbihPaket, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTasbihSesi = `-- name: CountTasbihSesi :one
+SELECT COUNT(*) FROM tasbih_sesi WHERE user_id = ?
+`
+
+func (q *Queries) CountTasbihSesi(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTasbihSesi, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -106,6 +146,17 @@ func (q *Queries) CreateTasbihDzikirCustom(ctx context.Context, arg CreateTasbih
 	return id, err
 }
 
+const getTasbihPaketIDBySlug = `-- name: GetTasbihPaketIDBySlug :one
+SELECT id FROM tasbih_paket WHERE slug = ?
+`
+
+func (q *Queries) GetTasbihPaketIDBySlug(ctx context.Context, slug string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getTasbihPaketIDBySlug, slug)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getTasbihSesiOwner = `-- name: GetTasbihSesiOwner :one
 SELECT user_id FROM tasbih_sesi WHERE id = ?
 `
@@ -126,6 +177,25 @@ func (q *Queries) GetTasbihTargetHarian(ctx context.Context, userID int64) (int6
 	var target_harian int64
 	err := row.Scan(&target_harian)
 	return target_harian, err
+}
+
+const insertTasbihBadge = `-- name: InsertTasbihBadge :execrows
+INSERT INTO tasbih_badge_user (user_id, badge_kode, diraih_at) VALUES (?, ?, ?)
+ON CONFLICT(user_id, badge_kode) DO NOTHING
+`
+
+type InsertTasbihBadgeParams struct {
+	UserID    int64
+	BadgeKode string
+	DiraihAt  time.Time
+}
+
+func (q *Queries) InsertTasbihBadge(ctx context.Context, arg InsertTasbihBadgeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, insertTasbihBadge, arg.UserID, arg.BadgeKode, arg.DiraihAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const insertTasbihSesi = `-- name: InsertTasbihSesi :execrows
@@ -170,6 +240,38 @@ func (q *Queries) InsertTasbihSesi(ctx context.Context, arg InsertTasbihSesiPara
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const listTasbihBadgeUser = `-- name: ListTasbihBadgeUser :many
+SELECT badge_kode, diraih_at FROM tasbih_badge_user WHERE user_id = ?
+`
+
+type ListTasbihBadgeUserRow struct {
+	BadgeKode string
+	DiraihAt  time.Time
+}
+
+func (q *Queries) ListTasbihBadgeUser(ctx context.Context, userID int64) ([]ListTasbihBadgeUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTasbihBadgeUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTasbihBadgeUserRow
+	for rows.Next() {
+		var i ListTasbihBadgeUserRow
+		if err := rows.Scan(&i.BadgeKode, &i.DiraihAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listTasbihDzikirForUser = `-- name: ListTasbihDzikirForUser :many
@@ -597,6 +699,25 @@ func (q *Queries) ListTasbihTotalHarian(ctx context.Context, arg ListTasbihTotal
 		return nil, err
 	}
 	return items, nil
+}
+
+const sumTasbihBySlug = `-- name: SumTasbihBySlug :one
+SELECT CAST(COALESCE(SUM(s.jumlah), 0) AS INTEGER) AS total
+FROM tasbih_sesi s JOIN tasbih_dzikir d ON d.id = s.dzikir_id
+WHERE s.user_id = ?1 AND d.slug IN (?2, ?3)
+`
+
+type SumTasbihBySlugParams struct {
+	UserID int64
+	Slug1  sql.NullString
+	Slug2  sql.NullString
+}
+
+func (q *Queries) SumTasbihBySlug(ctx context.Context, arg SumTasbihBySlugParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, sumTasbihBySlug, arg.UserID, arg.Slug1, arg.Slug2)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
 }
 
 const sumTasbihRentang = `-- name: SumTasbihRentang :one
