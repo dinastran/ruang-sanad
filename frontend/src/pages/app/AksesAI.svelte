@@ -174,8 +174,8 @@
 			</div>
 			<h1 class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white mb-2">Akses AI</h1>
 			<p class="text-neutral-600 dark:text-neutral-400 max-w-2xl">
-				Hubungkan Claude.ai, ChatGPT, Hermes, atau AI agent lain ke data dashboard. Aksesnya membaca sesuai role Anda (izin tulis CRM
-				khusus super admin), dan tidak pernah mengirim nomor HP, email, domisili, atau voice note.
+				Hubungkan Claude.ai, ChatGPT, Hermes, atau AI agent lain ke data dashboard. Aksesnya membaca sesuai role Anda, bisa diberi izin
+				menulis (membuat & mengubah data yang memang boleh Anda edit di dashboard), dan tidak pernah mengirim nomor HP, email, domisili, atau voice note.
 			</p>
 		</div>
 	</div>
@@ -231,8 +231,8 @@
 						<label class="sm:col-span-3 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-neutral-700 dark:text-neutral-300">
 							<input type="checkbox" bind:checked={bolehMenulis} class="mt-0.5" />
 							<span>
-								<span class="font-medium text-neutral-900 dark:text-white">Boleh menulis analisis CRM</span>
-								<span class="block text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">Untuk job harian Hermes. AI bisa menyimpan analisis lead, mengusulkan follow-up (menunggu persetujuan CS), dan memasang label yang sudah ada. AI tetap tidak bisa mengubah tahap, memverifikasi, atau mengirim pesan.</span>
+								<span class="font-medium text-neutral-900 dark:text-white">Boleh menulis (membuat & mengubah data)</span>
+								<span class="block text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">AI bisa memakai fitur bertanda "tulis" di daftar bawah, dengan aturan yang sama seperti tombol di dashboard. AI tidak bisa menghapus data, mengubah tagihan/ujroh, memverifikasi pembayaran, atau mengirim pesan.</span>
 							</span>
 						</label>
 					{/if}
@@ -339,7 +339,7 @@
 											{:else}
 												<p class="text-xs text-neutral-500 font-mono">{t.prefix}… · dibuat {tanggal(t.created_at)}</p>
 											{/if}
-											{#if t.can_write}<span class="mt-1 inline-block rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">Tulis CRM</span>{/if}
+											{#if t.can_write}<span class="mt-1 inline-block rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">Boleh menulis</span>{/if}
 										</td>
 										<td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-medium {st.cls}">{st.label}</span></td>
 										<td class="px-4 py-3 text-neutral-600 dark:text-neutral-400">{tanggal(t.last_used_at, true)}</td>
@@ -363,7 +363,7 @@
 			<!-- Tools -->
 			<section aria-labelledby="data-ai">
 				<h2 id="data-ai" class="text-lg font-semibold text-neutral-900 dark:text-white mb-1 flex items-center gap-2"><ShieldCheck class="w-5 h-5 text-brand-600 dark:text-brand-400" />Data yang bisa dibaca AI dengan role Anda</h2>
-				<p class="text-sm text-neutral-600 dark:text-neutral-400 mb-4">AI memanggil fitur berikut sesuai pertanyaan. Fitur bertanda "tulis" hanya aktif untuk token dengan izin menulis analisis CRM; tidak ada fitur untuk menghapus data.</p>
+				<p class="text-sm text-neutral-600 dark:text-neutral-400 mb-4">AI memanggil fitur berikut sesuai pertanyaan. Fitur bertanda "tulis" hanya aktif untuk koneksi atau token yang diberi izin menulis; tidak ada fitur untuk menghapus data (yang tidak dipakai cukup dinonaktifkan).</p>
 				<ul class="divide-y divide-neutral-200/80 dark:divide-white/[0.06] border-y border-neutral-200/80 dark:border-white/[0.06]">
 					{#each tools as tool (tool.name)}
 						<li class="py-3">

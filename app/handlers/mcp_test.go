@@ -108,12 +108,22 @@ func TestMCPEndpointProtocolAndAuth(t *testing.T) {
 	require.NoError(t, err)
 	_, out, _ = mcpPost(t, app, writer.Plaintext, `{"jsonrpc":"2.0","id":3,"method":"tools/list"}`)
 	writeTools := map[string]bool{}
+	destructive := map[string]bool{}
 	for _, raw := range out["result"].(map[string]any)["tools"].([]any) {
 		tool := raw.(map[string]any)
 		writeTools[tool["name"].(string)] = tool["annotations"].(map[string]any)["readOnlyHint"] == false
+		destructive[tool["name"].(string)] = tool["annotations"].(map[string]any)["destructiveHint"] == true
 	}
-	require.Len(t, writeTools, 34)
+	// Changing existing data is flagged destructive so AI apps ask first;
+	// adding new data is not.
+	require.True(t, destructive["ubah_tahap_lead"])
+	require.True(t, destructive["ubah_sumber_lead"])
+	require.False(t, destructive["buat_sumber_lead"])
+	require.False(t, destructive["daftar_lead"])
+	require.Len(t, writeTools, 40)
 	require.True(t, writeTools["simpan_analisis_lead"])
+	require.True(t, writeTools["buat_sumber_lead"])
+	require.True(t, writeTools["cocokkan_ulang_sumber_lead"])
 	require.True(t, writeTools["ubah_tahap_lead"])
 	require.True(t, writeTools["petakan_kampanye_iklan"])
 	require.False(t, writeTools["atribusi_iklan"])

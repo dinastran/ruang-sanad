@@ -156,7 +156,7 @@ func (s *AIAgentService) crmMenuTools() []AITool {
 		{
 			Name:        "daftar_sumber_lead",
 			Title:       "Sumber lead",
-			Description: "Katalog sumber lead (landing page / iklan): id, nama, URL, status aktif, teks pemicu pesan pertama, dan total lead. Pakai sumber_id untuk filter daftar_lead atau set_sumber_lead.",
+			Description: "Katalog sumber lead (landing page / iklan): id, nama, URL, status aktif, teks pemicu pesan pertama (dengan pola_id), dan total lead. Pakai sumber_id untuk filter daftar_lead, set_sumber_lead, atau ubah_sumber_lead.",
 			InputSchema: aiSchema(map[string]any{}),
 			Roles:       aiRolesCRM,
 			run:         s.toolDaftarSumberLead,
@@ -216,9 +216,10 @@ func (s *AIAgentService) crmMenuTools() []AITool {
 				"tahap":    aiEnumProp("Tahap tujuan.", aiStagesWithout(LeadStageTerverifikasi)...),
 				"alasan":   aiProp("string", "Bukti singkat 10–300 karakter, mis. \"Lead sudah mengirim form lengkap pada 2 Nov\"."),
 			}, "lead_ref", "tahap", "alasan"),
-			Roles: aiRolesCRM,
-			Write: true,
-			run:   s.toolUbahTahapLead,
+			Roles:       aiRolesCRM,
+			Write:       true,
+			Destructive: true,
+			run:         s.toolUbahTahapLead,
 		},
 		{
 			Name:  "tugaskan_lead",
@@ -229,9 +230,10 @@ func (s *AIAgentService) crmMenuTools() []AITool {
 				"lead_ref": aiProp("string", "lead_ref, mis. L-12."),
 				"user_id":  aiIntProp("user_id PIC dari referensi_crm.", 0, math.MaxInt64),
 			}, "lead_ref", "user_id"),
-			Roles: aiRolesCRM,
-			Write: true,
-			run:   s.toolTugaskanLead,
+			Roles:       aiRolesCRM,
+			Write:       true,
+			Destructive: true,
+			run:         s.toolTugaskanLead,
 		},
 		{
 			Name:        "set_sumber_lead",
@@ -242,9 +244,10 @@ func (s *AIAgentService) crmMenuTools() []AITool {
 				"sumber_id": aiIntProp("id sumber; 0 = tanpa sumber.", 0, math.MaxInt64),
 				"alasan":    aiProp("string", "Bukti singkat 10–300 karakter."),
 			}, "lead_ref", "sumber_id", "alasan"),
-			Roles: aiRolesCRM,
-			Write: true,
-			run:   s.toolSetSumberLead,
+			Roles:       aiRolesCRM,
+			Write:       true,
+			Destructive: true,
+			run:         s.toolSetSumberLead,
 		},
 		{
 			Name:  "petakan_kampanye_iklan",
@@ -255,9 +258,10 @@ func (s *AIAgentService) crmMenuTools() []AITool {
 				"kampanye_id": aiProp("string", "id kampanye dari performa_iklan."),
 				"sumber_id":   aiIntProp("id sumber dari daftar_sumber_lead; 0 = lepas.", 0, math.MaxInt64),
 			}, "kampanye_id", "sumber_id"),
-			Roles: aiRolesIklan,
-			Write: true,
-			run:   s.toolPetakanKampanye,
+			Roles:       aiRolesIklan,
+			Write:       true,
+			Destructive: true,
+			run:         s.toolPetakanKampanye,
 		},
 	}
 }
@@ -397,9 +401,9 @@ func (s *AIAgentService) toolDaftarSumberLead(ctx context.Context, p *models.AIP
 	}
 	out := make([]map[string]any, 0, len(srcs))
 	for _, src := range srcs {
-		pemicu := make([]string, 0, len(src.Patterns))
+		pemicu := make([]map[string]any, 0, len(src.Patterns))
 		for _, pt := range src.Patterns {
-			pemicu = append(pemicu, pt.Teks)
+			pemicu = append(pemicu, map[string]any{"pola_id": pt.ID, "teks": pt.Teks})
 		}
 		out = append(out, map[string]any{
 			"sumber_id": src.ID, "nama": src.Nama, "keterangan": src.Keterangan, "url": src.URL,

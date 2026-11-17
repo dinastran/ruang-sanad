@@ -38,7 +38,7 @@ var DefaultAIAmbang = AIAmbang{
 }
 
 var (
-	ErrAITokenTanpaIzinTulis = errors.New("token ini tidak punya izin menulis; minta super_admin membuat token dengan izin menulis analisis CRM")
+	ErrAITokenTanpaIzinTulis = errors.New("koneksi ini tidak punya izin menulis; hubungkan ulang (atau buat token) dengan mencentang izin menulis")
 	ErrAIToolTidakAda        = errors.New("tool tidak dikenal")
 	ErrAIToolDitolak         = errors.New("role Anda tidak memiliki akses ke data ini")
 	errAIArgumenInvalid      = errors.New("argumen tidak valid")
@@ -62,9 +62,12 @@ type AITool struct {
 	Description string         `json:"description"`
 	InputSchema map[string]any `json:"inputSchema"`
 	Roles       []string       `json:"-"`
-	// Write marks a CRM write tool: it also needs a token with can_write.
+	// Write marks a write tool: it also needs a connection with can_write.
 	Write bool `json:"-"`
-	run   aiToolFunc
+	// Destructive marks a write tool that changes or removes existing data
+	// (MCP destructiveHint); additive tools (buat_*, tambah_*) leave it false.
+	Destructive bool `json:"-"`
+	run         aiToolFunc
 }
 
 func (t AITool) allows(role string) bool {
@@ -86,9 +89,13 @@ type AIAgentService struct {
 	leads    *LeadService
 	metaAds  *MetaAdsService  // nil = Performa Iklan tools answer "belum tersedia"
 	metaCAPI *MetaCAPIService // nil = Meta CAPI tool answers "belum tersedia"
-	ambang   AIAmbang
-	now      func() time.Time
-	tools    []AITool
+	// koordinator / produk back the Koordinator Guru and Produk CRM write
+	// tools (SetLayananTulis); nil = those tools are not offered.
+	koordinator *KoordinatorService
+	produk      *ProductCRMService
+	ambang      AIAmbang
+	now         func() time.Time
+	tools       []AITool
 }
 
 func NewAIAgentService(q *queries.Querier, overview *OverviewService, finance *KeuanganDashboardService, riayah *RiayahSantriService, tsi *TSIService, santri *SantriService, leads *LeadService, metaAds *MetaAdsService, metaCAPI *MetaCAPIService) *AIAgentService {
@@ -216,12 +223,11 @@ func (s *AIAgentService) call(ctx context.Context, p *models.AIPrincipal, name s
 // and rules for answering from this data.
 func (s *AIAgentService) Instructions(p *models.AIPrincipal) string {
 	akses := "Akses bersifat BACA SAJA."
-	if p.CanWrite && aiHasRole(p.Role, aiRolesCRM) {
-		akses = "Akses BACA, plus TULIS TERBATAS untuk CRM: simpan_analisis_lead, usulkan_followup, tambah_label_lead, ubah_tahap_lead (bukan ke/dari terverifikasi), tugaskan_lead, set_sumber_lead"
-		if aiHasRole(p.Role, aiRolesIklan) {
-			akses += ", petakan_kampanye_iklan"
-		}
-		akses += ". Anda tidak bisa mengubah status won/lost, memverifikasi pembayaran, mengonversi jadi santri, mengirim pesan, menyetujui follow-up, sinkron iklan, atau retry CAPI; itu wewenang manusia. Ubah data hanya bila buktinya jelas dan sebutkan apa yang Anda ubah."
+	if tulis := s.aiTulisRingkas(p); p.CanWrite && tulis != "" {
+		akses = "Akses BACA, plus TULIS TERBATAS lewat tool: " + tulis + ". " +
+			"Tool tulis memakai aturan yang sama dengan tombol di dashboard dan tidak menghapus data (menonaktifkan, bukan menghapus). " +
+			"Anda tidak bisa mengubah status won/lost, memverifikasi pembayaran, mengonversi jadi santri, mengirim pesan, menyetujui follow-up, mengubah tagihan/ujroh, sinkron iklan, atau retry CAPI; itu wewenang manusia. " +
+			"Sebelum menulis, cek data yang ada dengan tool daftar agar tidak dobel; ubah data hanya bila permintaan atau buktinya jelas, lalu sebutkan apa yang Anda buat/ubah beserta link-nya."
 	}
 	return fmt.Sprintf(`Anda terhubung ke dashboard Ruang Sanad (lembaga belajar Al-Qur'an/tahsin) sebagai %s (role: %s). %s
 

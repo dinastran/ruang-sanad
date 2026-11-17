@@ -36,9 +36,9 @@ func setupOAuth(t *testing.T) (*fiber.App, *sql.DB) {
 	t.Cleanup(func() { _ = db.Close() })
 	require.NoError(t, goose.SetDialect("sqlite3"))
 	require.NoError(t, goose.Up(db, filepath.Join("..", "..", "migrations")))
-	_, err = db.Exec(`INSERT INTO users (id,email,name,role) VALUES (1,'boss@example.test','Boss','super_admin'),(2,'cs@example.test','CS','cs'),(3,'guru@example.test','Guru','guru')`)
+	_, err = db.Exec(`INSERT INTO users (id,email,name,role) VALUES (1,'boss@example.test','Boss','super_admin'),(2,'cs@example.test','CS','cs'),(3,'guru@example.test','Guru','guru'),(4,'admin@example.test','Admin','admin')`)
 	require.NoError(t, err)
-	for id, role := range map[int]string{1: "super_admin", 2: "cs", 3: "guru"} {
+	for id, role := range map[int]string{1: "super_admin", 2: "cs", 3: "guru", 4: "admin"} {
 		data, _ := json.Marshal(map[string]any{"user_id": id, "name": "U", "email": "u@example.test", "role": role})
 		_, err = db.Exec(`INSERT INTO sessions (id,user_id,data,expires_at) VALUES (?,?,?,?)`, "sess"+string(rune('0'+id)), id, string(data), time.Now().Add(time.Hour).UTC())
 		require.NoError(t, err)
@@ -194,12 +194,12 @@ func TestOAuthFullFlowPublicClient(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &page))
 	assert.Equal(t, "oauth/Authorize", page.Component)
 	assert.Equal(t, true, page.Props["diizinkan"])
-	assert.Equal(t, false, page.Props["boleh_tulis"])
+	assert.Equal(t, true, page.Props["boleh_tulis"], "CS has write tools (Sumber Lead)")
 	assert.Equal(t, "claude.ai", page.Props["klien"].(map[string]any)["redirect_host"])
 
-	// CS approves (asking for write is refused: only super_admin may).
+	// admin has no AI write tools, so asking for write is refused.
 	consent := map[string]any{"client_id": clientID, "redirect_uri": redirect, "code_challenge": challenge, "state": "xyz", "resource": oauthTestBase + "/mcp", "izinkan": true, "can_write": true}
-	loc := approve(t, app, "sess2", consent)
+	loc := approve(t, app, "sess4", consent)
 	assert.Equal(t, "access_denied", loc.Query().Get("error"))
 
 	consent["can_write"] = false

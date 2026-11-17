@@ -203,7 +203,7 @@ func (h *MCPHandler) dispatch(c *fiber.Ctx, p *models.AIPrincipal, raw []byte) *
 		for _, t := range tools {
 			list = append(list, fiber.Map{
 				"name": t.Name, "title": t.Title, "description": t.Description, "inputSchema": t.InputSchema,
-				"annotations": fiber.Map{"title": t.Title, "readOnlyHint": !t.Write, "destructiveHint": false, "idempotentHint": !t.Write, "openWorldHint": false},
+				"annotations": fiber.Map{"title": t.Title, "readOnlyHint": !t.Write, "destructiveHint": t.Destructive, "idempotentHint": !t.Write, "openWorldHint": false},
 			})
 		}
 		resp.Result = fiber.Map{"tools": list}
