@@ -153,3 +153,28 @@ func TestRiwayatPaginasi(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, f, 5)
 }
+
+// Review #3: item paket yang terbagi ke beberapa sesi (jeda > 5 menit) tetap
+// terhitung tuntas bila jumlah per (run, dzikir) mencapai target item.
+func TestPutaranPaketItemTerbagi(t *testing.T) {
+	db, svc := newTasbihTestDB(t)
+	ctx := context.Background()
+	u := seedUser(t, db, "user")
+	pid := paketIDBySlug(t, db, "badah-shalat")
+	run := uuidT()
+	m := tasbihNow.Add(-time.Hour)
+	mk := func(slug string, jumlah, target int64) models.TasbihSesiInput {
+		x := sesiT(t, db, slug, jumlah, target, m)
+		x.PaketID, x.PaketRunID = &pid, &run
+		return x
+	}
+	batch := []models.TasbihSesiInput{
+		mk("subhanallah", 10, 33), mk("subhanallah", 23, 33),
+		mk("alhamdulillah", 33, 33), mk("allahu-akbar", 33, 33), mk("tahlil-lengkap", 1, 1),
+	}
+	_, err := svc.Sync(ctx, u, batch, tasbihNow)
+	require.NoError(t, err)
+	n, err := svc.JumlahPutaranPaket(ctx, u, &pid, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, n)
+}

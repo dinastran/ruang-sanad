@@ -83,18 +83,7 @@ FROM tasbih_sesi s JOIN tasbih_dzikir d ON d.id = s.dzikir_id
 WHERE s.user_id = sqlc.arg(user_id) AND s.tanggal_wib >= sqlc.arg(dari) AND s.tanggal_wib <= sqlc.arg(sampai)
 GROUP BY s.dzikir_id, d.latin ORDER BY total DESC, s.dzikir_id;
 
--- name: ListTasbihPutaranPaket :many
--- Putaran selesai = setiap dzikir item paket punya sesi selesai_target=1 dalam run yang sama.
-SELECT p.id, p.nama, CAST(COUNT(r.paket_run_id) AS INTEGER) AS selesai
-FROM tasbih_paket p
-LEFT JOIN (
-    SELECT s.paket_id, s.paket_run_id FROM tasbih_sesi s
-    WHERE s.user_id = sqlc.arg(user_id) AND s.paket_run_id IS NOT NULL AND s.selesai_target = 1
-      AND s.tanggal_wib >= sqlc.arg(dari)
-    GROUP BY s.paket_id, s.paket_run_id
-    HAVING COUNT(DISTINCT s.dzikir_id) = (SELECT COUNT(DISTINCT i.dzikir_id) FROM tasbih_paket_item i WHERE i.paket_id = s.paket_id)
-) r ON r.paket_id = p.id
-GROUP BY p.id, p.nama, p.urutan ORDER BY p.urutan, p.id;
+-- ListTasbihPutaranPaket: ditulis manual di app/queries/tasbih_putaran.go (CTE tidak didukung parser sqlc sqlite).
 
 -- name: ListTasbihRiwayat :many
 SELECT s.id, s.mulai_at, s.selesai_at, s.tanggal_wib, s.jumlah, s.target, d.latin,

@@ -12,7 +12,7 @@
 	import DzikirFormSheet from "@components/tasbih/DzikirFormSheet.svelte";
 	import Sheet from "@components/tasbih/Sheet.svelte";
 	import { TasbihCounter } from "@lib/tasbih/counter.svelte";
-	import { antreanSemua } from "@lib/tasbih/db";
+	import { antreanSemua, setPemilik } from "@lib/tasbih/db";
 	import { mulaiAutoSync, syncSekarang } from "@lib/tasbih/sync.svelte";
 	import { bacaPref, getar, klik, kunciLayar, simpanPref } from "@lib/tasbih/feedback";
 	import { tanggalWIB } from "@lib/tasbih/types";
@@ -30,6 +30,9 @@
 		badge_baru: Badge[];
 	}
 	let { user, dzikir, paket, hari_ini, target_harian, streak, level, badge_baru }: Props = $props();
+
+	// Antrean offline dipisah per user (perangkat bersama).
+	if (user?.id) setPemilik(user.id);
 
 	let siap = $state(false);
 	let pref = $state(bacaPref());
@@ -78,11 +81,12 @@
 	const s = $derived(counter.state);
 	const d = $derived(counter.dzikir);
 	const pk = $derived(counter.paket);
-	const jumlah = $derived(s?.jumlah ?? 0);
+	const jumlah = $derived(s ? counter.tampil : 0);
+	const jumlahSesi = $derived(s?.sesi_id ? s.jumlah : 0);
 	const target = $derived(s?.target ?? 33);
 	const progress = $derived(target > 0 ? Math.min(jumlah / target, 1) : 0);
 	const lebih = $derived(s?.mode === "dzikir" && jumlah > target ? jumlah - target : 0);
-	const totalHariIni = $derived(serverHariIni.total + antreanHariIni + (s?.sesi_id ? jumlah : 0));
+	const totalHariIni = $derived(serverHariIni.total + antreanHariIni + jumlahSesi);
 	const progressHarian = $derived(target_harian > 0 ? Math.min(totalHariIni / target_harian, 1) : 0);
 	const streakTampil = $derived(streak.saat + (!streak.hari_ini_tercapai && totalHariIni >= target_harian ? 1 : 0));
 	const levelProgress = $derived(
@@ -92,7 +96,11 @@
 
 	async function hitungAntreanHariIni() {
 		const hari = tanggalWIB(new Date());
-		antreanHariIni = (await antreanSemua()).filter((x) => tanggalWIB(x.mulai_at) === hari).reduce((a, x) => a + x.jumlah, 0);
+		try {
+			antreanHariIni = (await antreanSemua()).filter((x) => tanggalWIB(x.mulai_at) === hari).reduce((a, x) => a + x.jumlah, 0);
+		} catch {
+			antreanHariIni = 0; // IndexedDB tidak tersedia; status sync menampilkan "gagal"
+		}
 	}
 
 	function onSync(h: SyncHasil) {
@@ -346,13 +354,13 @@
 
 			<!-- Kontrol -->
 			<div class="mt-3 grid w-full max-w-sm grid-cols-3 gap-2">
-				<button type="button" onclick={() => counter.undo()} disabled={!s?.sesi_id || jumlah === 0} class="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl bg-neutral-100 text-xs font-medium text-neutral-700 transition active:scale-[0.97] disabled:opacity-40 dark:bg-neutral-800 dark:text-neutral-200">
+				<button type="button" onclick={() => counter.undo()} disabled={jumlahSesi === 0} class="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl bg-neutral-100 text-xs font-medium text-neutral-700 transition active:scale-[0.97] disabled:opacity-40 dark:bg-neutral-800 dark:text-neutral-200">
 					<Undo2 size={16} aria-hidden="true" /> Batal 1
 				</button>
 				<button type="button" onclick={() => counter.reset()} disabled={jumlah === 0 && !(s?.mode === "paket" && (s?.item_index ?? 0) > 0)} class="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl bg-neutral-100 text-xs font-medium text-neutral-700 transition active:scale-[0.97] disabled:opacity-40 dark:bg-neutral-800 dark:text-neutral-200">
 					<RotateCcw size={16} aria-hidden="true" /> Ulang
 				</button>
-				<button type="button" onclick={() => counter.selesai()} disabled={jumlah === 0} class="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl bg-brand-600 text-xs font-semibold text-white transition active:scale-[0.97] disabled:opacity-40 dark:bg-brand-500 dark:text-neutral-950" data-testid="selesai">
+				<button type="button" onclick={() => counter.selesai()} disabled={jumlah === 0 && !(s?.mode === "paket" && (s?.item_index ?? 0) > 0)} class="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl bg-brand-600 text-xs font-semibold text-white transition active:scale-[0.97] disabled:opacity-40 dark:bg-brand-500 dark:text-neutral-950" data-testid="selesai">
 					<CheckCheck size={16} aria-hidden="true" /> Simpan sesi
 				</button>
 			</div>

@@ -1,9 +1,12 @@
 // Mesin sesi tasbih. Satu sesi = hitungan berturut-turut untuk satu dzikir.
-// Mode "dzikir": sesi ditutup saat ganti/reset/selesai atau idle > 5 menit.
-// Mode "paket": satu sesi per item; sesi item tetap terbuka (tersimpan di
-// IndexedDB) sampai targetnya tercapai, sehingga putaran bisa dilanjutkan
-// setelah reload/jeda. Putaran yang ditinggalkan > 12 jam ditutup saat pulih.
-import { aktifAmbil, aktifSimpan, antreanTambah } from "./db";
+// - Mode "dzikir": sesi ditutup saat ganti/reset/selesai atau idle > 5 menit.
+// - Mode "paket": idle > 5 menit menutup sesi item yang berjalan, tetapi posisi
+//   putaran (item & hitungan terkumpul) tetap, sehingga bisa dilanjutkan; server
+//   menjumlahkan semua sesi per item dalam satu putaran. Putaran yang
+//   ditinggalkan > 12 jam dimulai ulang saat dipulihkan.
+// Penutupan sesi + state aktif baru ditulis dalam satu transaksi IndexedDB.
+import { aktifAmbil, aktifSimpan, tutupDanSimpanAktif } from "./db";
+import { simpanDiMemori } from "./sync.svelte";
 import type { Dzikir, Paket, SesiTertutup, StateAktif } from "./types";
 import { uuid } from "./types";
 
@@ -53,36 +56,60 @@ export class TasbihCounter {
 		return id ? this.katalog.paket.find((p) => p.id === id) : undefined;
 	}
 
+	/** Hitungan yang ditampilkan: di paket = terkumpul untuk item ini + sesi berjalan. */
+	get tampil(): number {
+		const s = this.state;
+		if (!s) return 0;
+		return (s.mode === "paket" ? (s.item_terkumpul ?? 0) : 0) + s.jumlah;
+	}
+
 	/** Pulihkan state dari IndexedDB; bila tidak ada, pilih dzikir pertama. */
 	async pulihkan(): Promise<void> {
 		const a = await aktifAmbil();
-		const now = Date.now();
-		if (a && this.katalog.dzikir.some((d) => d.id === a.dzikir_id)) {
+		if (a) {
 			this.state = a;
-			const umur = now - Date.parse(a.tap_terakhir_at);
-			if (a.sesi_id && ((a.mode === "dzikir" && umur > IDLE_MS) || (a.mode === "paket" && umur > PAKET_KADALUARSA_MS))) {
-				await this.tutupSesi();
-				if (a.mode === "paket") this.mulaiPaket(a.paket_id!);
+			const umur = Date.now() - Date.parse(a.tap_terakhir_at);
+			const dikenal = this.katalog.dzikir.some((d) => d.id === a.dzikir_id);
+			if (!dikenal) {
+				// dzikir sudah diarsipkan: simpan sesinya, lalu pilih dzikir lain
+				const sesi = this.lepasSesi();
+				this.state = null;
+				this.pilihPertama();
+				this.commit(sesi);
+				return;
 			}
-			this.selesaiTarget = this.state?.mode === "dzikir" && (this.state?.jumlah ?? 0) >= (this.state?.target ?? Infinity);
+			if (a.mode === "paket" && umur > PAKET_KADALUARSA_MS) {
+				const sesi = this.lepasSesi();
+				this.mulaiPaket(a.paket_id!);
+				this.commit(sesi);
+			} else if (a.sesi_id && umur > IDLE_MS) {
+				this.tutupKarenaIdle();
+			}
+			this.selesaiTarget = this.state?.mode === "dzikir" && this.tampil >= (this.state?.target ?? Infinity);
 			return;
 		}
-		if (this.katalog.dzikir.length > 0) this.pilihDzikir(this.katalog.dzikir[0].id);
+		this.pilihPertama();
+		this.simpan();
+	}
+
+	private pilihPertama(): void {
+		const d = this.katalog.dzikir[0];
+		if (d) this.state = this.kosong("dzikir", d.id, d.target, null, null, 0);
 	}
 
 	pilihDzikir(id: number): void {
 		const d = this.katalog.dzikir.find((x) => x.id === id);
 		if (!d) return;
-		void this.tutupSesi();
+		const sesi = this.lepasSesi();
 		this.selesaiTarget = false;
 		this.state = this.kosong("dzikir", d.id, d.target, null, null, 0);
-		this.simpan();
+		this.commit(sesi);
 	}
 
 	pilihPaket(id: number): void {
-		void this.tutupSesi();
+		const sesi = this.lepasSesi();
 		this.mulaiPaket(id);
-		this.simpan();
+		this.commit(sesi);
 	}
 
 	private mulaiPaket(id: number): void {
@@ -97,7 +124,7 @@ export class TasbihCounter {
 
 	private kosong(mode: StateAktif["mode"], dzikirID: number, target: number, paketID: number | null, runID: string | null, idx: number): StateAktif {
 		const now = new Date().toISOString();
-		return { mode, dzikir_id: dzikirID, paket_id: paketID, paket_run_id: runID, item_index: idx, sesi_id: null, jumlah: 0, target, mulai_at: now, tap_terakhir_at: now };
+		return { mode, dzikir_id: dzikirID, paket_id: paketID, paket_run_id: runID, item_index: idx, item_terkumpul: 0, sesi_id: null, jumlah: 0, target, mulai_at: now, tap_terakhir_at: now };
 	}
 
 	/** Ubah target dzikir aktif (mode dzikir) tanpa menutup sesi. */
@@ -116,13 +143,16 @@ export class TasbihCounter {
 			s.sesi_id = uuid();
 			s.mulai_at = now;
 			s.jumlah = 0;
-			if (s.mode === "paket" && s.item_index === 0 && this.mulaiRun === 0) this.mulaiRun = Date.now();
+			if (s.mode === "paket" && s.item_index === 0 && !s.item_terkumpul && this.mulaiRun === 0) this.mulaiRun = Date.now();
 		}
 		s.jumlah += 1;
 		s.tap_terakhir_at = now;
 
 		if (s.mode === "paket") {
-			if (s.jumlah >= s.target) this.selesaiItemPaket();
+			if (this.tampil >= s.target) {
+				this.selesaiItemPaket();
+				return;
+			}
 		} else if (s.jumlah === s.target) {
 			this.selesaiTarget = true;
 			this.cb.onTarget();
@@ -133,18 +163,23 @@ export class TasbihCounter {
 	private selesaiItemPaket(): void {
 		const s = this.state!;
 		const p = this.paket;
-		this.catatanRun.push({ dzikir_id: s.dzikir_id, jumlah: s.jumlah });
-		void this.tutupSesi();
-		if (!p) return;
+		this.catatanRun.push({ dzikir_id: s.dzikir_id, jumlah: this.tampil });
+		const sesi = this.lepasSesi();
+		if (!p) {
+			this.commit(sesi);
+			return;
+		}
 		const next = s.item_index + 1;
 		if (next >= p.items.length) {
 			this.ringkasanPaket = { paket: p, items: [...this.catatanRun], durasiDetik: this.mulaiRun ? Math.round((Date.now() - this.mulaiRun) / 1000) : 0 };
-			this.cb.onPaketSelesai(p);
 			this.mulaiPaket(p.id);
+			this.commit(sesi);
+			this.cb.onPaketSelesai(p);
 			return;
 		}
 		const it = p.items[next];
 		this.state = this.kosong("paket", it.dzikir_id, it.target, p.id, s.paket_run_id, next);
+		this.commit(sesi);
 		this.cb.onItemPaketSelesai(next);
 	}
 
@@ -160,34 +195,43 @@ export class TasbihCounter {
 	reset(): void {
 		const s = this.state;
 		if (!s) return;
-		void this.tutupSesi();
+		const sesi = this.lepasSesi();
 		if (s.mode === "paket" && s.paket_id) this.mulaiPaket(s.paket_id);
 		else this.state = this.kosong("dzikir", s.dzikir_id, s.target, null, null, 0);
 		this.selesaiTarget = false;
-		this.simpan();
+		this.commit(sesi);
 	}
 
-	/** Selesai: sama dengan reset, dipakai tombol "Selesai". */
+	/** Selesai: sama dengan reset, dipakai tombol "Simpan sesi". */
 	selesai(): void {
 		this.reset();
 	}
 
-	/** Mode dzikir: tutup sesi bila idle > 5 menit. */
+	/** Tutup sesi bila idle > 5 menit. Paket: posisi putaran dipertahankan. */
 	cekIdle(now: Date = new Date()): void {
 		const s = this.state;
-		if (!s || s.mode !== "dzikir" || !s.sesi_id) return;
-		if (now.getTime() - Date.parse(s.tap_terakhir_at) > IDLE_MS) {
-			void this.tutupSesi();
-			this.state = this.kosong("dzikir", s.dzikir_id, s.target, null, null, 0);
-			this.selesaiTarget = false;
-			this.simpan();
-		}
+		if (!s || !s.sesi_id) return;
+		if (now.getTime() - Date.parse(s.tap_terakhir_at) > IDLE_MS) this.tutupKarenaIdle();
 	}
 
-	/** Pindahkan sesi terbuka (bila jumlah > 0) ke antrean sync. */
-	private async tutupSesi(): Promise<void> {
+	private tutupKarenaIdle(): void {
 		const s = this.state;
-		if (!s || !s.sesi_id) return;
+		if (!s) return;
+		const terkumpul = (s.item_terkumpul ?? 0) + s.jumlah;
+		const sesi = this.lepasSesi();
+		if (s.mode === "paket") {
+			this.state = { ...this.kosong("paket", s.dzikir_id, s.target, s.paket_id, s.paket_run_id, s.item_index), item_terkumpul: terkumpul };
+		} else {
+			this.state = this.kosong("dzikir", s.dzikir_id, s.target, null, null, 0);
+			this.selesaiTarget = false;
+		}
+		this.commit(sesi);
+	}
+
+	/** Lepas sesi terbuka dari state (sinkron). Mengembalikan sesi bila jumlah > 0. */
+	private lepasSesi(): SesiTertutup | null {
+		const s = this.state;
+		if (!s || !s.sesi_id) return null;
 		const sesi: SesiTertutup = {
 			id: s.sesi_id,
 			dzikir_id: s.dzikir_id,
@@ -199,14 +243,24 @@ export class TasbihCounter {
 			selesai_at: s.tap_terakhir_at,
 		};
 		s.sesi_id = null;
-		if (sesi.jumlah <= 0) return;
-		try {
-			await antreanTambah(sesi);
-		} catch (e) {
-			console.warn("[tasbih] gagal menyimpan sesi ke antrean", e);
+		return sesi.jumlah > 0 ? sesi : null;
+	}
+
+	/** Tulis sesi tertutup + state aktif saat ini secara atomik; cadangan memori bila gagal. */
+	private commit(sesi: SesiTertutup | null): void {
+		if (!sesi) {
+			this.simpan();
 			return;
 		}
-		this.cb.onSesiTutup(sesi);
+		if (this.timer) clearTimeout(this.timer);
+		this.timer = null;
+		const snap = this.state ? ($state.snapshot(this.state) as StateAktif) : null;
+		tutupDanSimpanAktif(sesi, snap)
+			.catch((e) => {
+				console.warn("[tasbih] IndexedDB gagal, sesi disimpan di memori", e);
+				simpanDiMemori(sesi);
+			})
+			.finally(() => this.cb.onSesiTutup(sesi));
 	}
 
 	/** Debounce 300ms penyimpanan state aktif. */
@@ -219,6 +273,8 @@ export class TasbihCounter {
 		if (this.timer) clearTimeout(this.timer);
 		this.timer = null;
 		const snap = this.state ? ($state.snapshot(this.state) as StateAktif) : null;
-		aktifSimpan(snap).catch((e) => console.warn("[tasbih] gagal menyimpan state", e));
+		aktifSimpan(snap).catch(() => {
+			/* IndexedDB tidak tersedia: state aktif hanya di memori */
+		});
 	}
 }

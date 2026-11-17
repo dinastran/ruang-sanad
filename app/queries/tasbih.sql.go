@@ -547,55 +547,8 @@ func (q *Queries) ListTasbihPerJam(ctx context.Context, arg ListTasbihPerJamPara
 	return items, nil
 }
 
-const listTasbihPutaranPaket = `-- name: ListTasbihPutaranPaket :many
-SELECT p.id, p.nama, CAST(COUNT(r.paket_run_id) AS INTEGER) AS selesai
-FROM tasbih_paket p
-LEFT JOIN (
-    SELECT s.paket_id, s.paket_run_id FROM tasbih_sesi s
-    WHERE s.user_id = ?1 AND s.paket_run_id IS NOT NULL AND s.selesai_target = 1
-      AND s.tanggal_wib >= ?2
-    GROUP BY s.paket_id, s.paket_run_id
-    HAVING COUNT(DISTINCT s.dzikir_id) = (SELECT COUNT(DISTINCT i.dzikir_id) FROM tasbih_paket_item i WHERE i.paket_id = s.paket_id)
-) r ON r.paket_id = p.id
-GROUP BY p.id, p.nama, p.urutan ORDER BY p.urutan, p.id
-`
-
-type ListTasbihPutaranPaketParams struct {
-	UserID int64
-	Dari   string
-}
-
-type ListTasbihPutaranPaketRow struct {
-	ID      int64
-	Nama    string
-	Selesai int64
-}
-
-// Putaran selesai = setiap dzikir item paket punya sesi selesai_target=1 dalam run yang sama.
-func (q *Queries) ListTasbihPutaranPaket(ctx context.Context, arg ListTasbihPutaranPaketParams) ([]ListTasbihPutaranPaketRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTasbihPutaranPaket, arg.UserID, arg.Dari)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListTasbihPutaranPaketRow
-	for rows.Next() {
-		var i ListTasbihPutaranPaketRow
-		if err := rows.Scan(&i.ID, &i.Nama, &i.Selesai); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listTasbihRiwayat = `-- name: ListTasbihRiwayat :many
+
 SELECT s.id, s.mulai_at, s.selesai_at, s.tanggal_wib, s.jumlah, s.target, d.latin,
        COALESCE(p.nama, '') AS paket_nama
 FROM tasbih_sesi s
@@ -624,6 +577,7 @@ type ListTasbihRiwayatRow struct {
 	PaketNama  string
 }
 
+// ListTasbihPutaranPaket: ditulis manual di app/queries/tasbih_putaran.go (CTE tidak didukung parser sqlc sqlite).
 func (q *Queries) ListTasbihRiwayat(ctx context.Context, arg ListTasbihRiwayatParams) ([]ListTasbihRiwayatRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTasbihRiwayat,
 		arg.UserID,

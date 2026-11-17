@@ -3,7 +3,9 @@
 	import { syncState } from "@lib/tasbih/sync.svelte";
 
 	const info = $derived(
-		syncState.status === "menyinkron"
+		syncState.status === "gagal"
+			? { label: syncState.pending > 0 ? `Penyimpanan perangkat gagal · ${syncState.pending} belum terkirim` : "Penyimpanan perangkat gagal · jangan tutup tab sebelum tersinkron", icon: CloudOff, cls: "text-red-600 dark:text-red-400", spin: false }
+			: syncState.status === "menyinkron"
 			? { label: "Menyinkron…", icon: RefreshCw, cls: "text-brand-600 dark:text-brand-400", spin: true }
 			: syncState.status === "offline"
 				? { label: `Offline · ${syncState.pending} menunggu`, icon: CloudOff, cls: "text-warning", spin: false }

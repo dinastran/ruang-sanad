@@ -42,6 +42,7 @@ export interface StateAktif {
 	paket_id: number | null;
 	paket_run_id: string | null;
 	item_index: number;
+	item_terkumpul?: number; // paket: hitungan item ini dari sesi sebelumnya (setelah jeda)
 	sesi_id: string | null; // null = belum ada sesi terbuka
 	jumlah: number;
 	target: number;

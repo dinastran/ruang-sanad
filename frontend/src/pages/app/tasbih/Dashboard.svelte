@@ -13,7 +13,7 @@
 	import RiwayatList from "@components/tasbih/RiwayatList.svelte";
 	import SyncIndicator from "@components/tasbih/SyncIndicator.svelte";
 	import { angka } from "@components/tasbih/format";
-	import { antreanSemua } from "@lib/tasbih/db";
+	import { antreanSemua, setPemilik } from "@lib/tasbih/db";
 	import { syncSekarang } from "@lib/tasbih/sync.svelte";
 	import { tanggalWIB } from "@lib/tasbih/types";
 	import type { Badge, DashboardData, Dzikir, RiwayatItem, SesiTertutup } from "@lib/tasbih/types";
@@ -30,7 +30,17 @@
 	}
 	let { user, dashboard, badges, riwayat, dzikir, target_harian, badge_baru }: Props = $props();
 
+	if (user?.id) setPemilik(user.id);
+
 	let lokal = $state<SesiTertutup[]>([]);
+
+	async function bacaLokal() {
+		try {
+			lokal = await antreanSemua();
+		} catch {
+			lokal = [];
+		}
+	}
 	let badgeToast = $state<Badge[]>([...(badge_baru ?? [])]);
 
 	const d = $derived(dashboard);
@@ -55,9 +65,9 @@
 	}
 
 	onMount(async () => {
-		lokal = await antreanSemua();
+		await bacaLokal();
 		const h = await syncSekarang(true);
-		lokal = await antreanSemua();
+		await bacaLokal();
 		if (h) {
 			if (h.badge_baru.length) badgeToast = [...badgeToast, ...h.badge_baru];
 			if (h.diterima.length) router.reload({ only: ["dashboard", "badges", "riwayat"] });

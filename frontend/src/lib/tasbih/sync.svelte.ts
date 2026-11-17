@@ -2,9 +2,40 @@
 // di server. Hanya ID yang dikonfirmasi (diterima/ditolak) yang dihapus.
 import { getCSRFToken } from "@lib/utils/csrf";
 import { antreanHapus, antreanSemua } from "./db";
-import type { SyncHasil } from "./types";
+import type { SesiTertutup, SyncHasil } from "./types";
 
-export type StatusSync = "tersimpan" | "menunggu" | "offline" | "menyinkron";
+export type StatusSync = "tersimpan" | "menunggu" | "offline" | "menyinkron" | "gagal";
+
+/** Cadangan di memori bila IndexedDB tidak bisa ditulis (review #2).
+ *  Tetap dikirim ke server; hilang hanya bila tab ditutup sebelum terkirim. */
+const antreanMemori: SesiTertutup[] = [];
+let idbGagal = false;
+
+export function simpanDiMemori(s: SesiTertutup): void {
+	idbGagal = true;
+	if (!antreanMemori.some((x) => x.id === s.id)) antreanMemori.push(s);
+}
+
+async function semuaAntrean(): Promise<SesiTertutup[]> {
+	let disk: SesiTertutup[] = [];
+	try {
+		disk = await antreanSemua();
+	} catch {
+		idbGagal = true;
+	}
+	const ids = new Set(disk.map((x) => x.id));
+	return [...disk, ...antreanMemori.filter((x) => !ids.has(x.id))];
+}
+
+async function hapusAntrean(ids: string[]): Promise<void> {
+	const set = new Set(ids);
+	for (let i = antreanMemori.length - 1; i >= 0; i--) if (set.has(antreanMemori[i].id)) antreanMemori.splice(i, 1);
+	try {
+		await antreanHapus(ids);
+	} catch {
+		idbGagal = true;
+	}
+}
 
 export const syncState = $state<{ status: StatusSync; pending: number }>({ status: "tersimpan", pending: 0 });
 
@@ -20,9 +51,11 @@ function online(): boolean {
 }
 
 export async function hitungPending(): Promise<number> {
-	const n = (await antreanSemua()).length;
+	const n = (await semuaAntrean()).length;
 	syncState.pending = n;
-	if (syncState.status !== "menyinkron") syncState.status = n === 0 ? "tersimpan" : online() ? "menunggu" : "offline";
+	if (syncState.status !== "menyinkron") {
+		syncState.status = idbGagal ? "gagal" : n === 0 ? "tersimpan" : online() ? "menunggu" : "offline";
+	}
 	return n;
 }
 
@@ -46,7 +79,7 @@ async function jalankanSync(paksa: boolean): Promise<SyncHasil | null> {
 	const badge: SyncHasil["badge_baru"] = [];
 	try {
 		for (;;) {
-			const antrean = await antreanSemua();
+			const antrean = await semuaAntrean();
 			syncState.pending = antrean.length;
 			if (antrean.length === 0) break;
 			syncState.status = "menyinkron";
@@ -62,7 +95,7 @@ async function jalankanSync(paksa: boolean): Promise<SyncHasil | null> {
 			for (const d of hasil.ditolak ?? []) console.warn("[tasbih] sesi ditolak server", d.id, d.alasan);
 			const selesai = [...(hasil.diterima ?? []), ...(hasil.ditolak ?? []).map((d) => d.id)];
 			if (selesai.length === 0) throw new Error("sync tanpa konfirmasi");
-			await antreanHapus(selesai);
+			await hapusAntrean(selesai);
 			badge.push(...(hasil.badge_baru ?? []));
 			terakhir = hasil;
 		}
