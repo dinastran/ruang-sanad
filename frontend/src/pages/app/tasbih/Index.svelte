@@ -12,6 +12,7 @@
 	import DzikirFormSheet from "@components/tasbih/DzikirFormSheet.svelte";
 	import Sheet from "@components/tasbih/Sheet.svelte";
 	import InstallBanner from "@components/pwa/InstallBanner.svelte";
+	import KomposisiBar from "@components/tasbih/KomposisiBar.svelte";
 	import { TasbihCounter } from "@lib/tasbih/counter.svelte";
 	import { antreanSemua, setPemilik } from "@lib/tasbih/db";
 	import { mulaiAutoSync, syncSekarang } from "@lib/tasbih/sync.svelte";
@@ -29,8 +30,10 @@
 		streak: Streak;
 		level: Level;
 		badge_baru: Badge[];
+		komposisi_hari_ini?: Komposisi[];
 	}
-	let { user, dzikir, paket, hari_ini, target_harian, streak, level, badge_baru }: Props = $props();
+	type Komposisi = { dzikir_id: number; latin: string; total: number };
+	let { user, dzikir, paket, hari_ini, target_harian, streak, level, badge_baru, komposisi_hari_ini }: Props = $props();
 
 	// Antrean offline dipisah per user (perangkat bersama).
 	if (user?.id) setPemilik(user.id);
@@ -95,35 +98,68 @@
 	);
 	const adaSheetTerbuka = $derived(pickerOpen || formOpen || pengaturanOpen || targetOpen || ringkasanOpen);
 
-	async function hitungAntreanHariIni() {
+	// Komposisi hari ini = data server + antrean lokal belum tersinkron + sesi berjalan.
+	let komposisiServer = $state<Komposisi[]>(komposisi_hari_ini ?? []);
+	let lokalPerDzikir = $state<Record<number, number>>({});
+	const komposisi = $derived.by(() => {
+		const m = new Map<number, Komposisi>();
+		for (const k of komposisiServer) m.set(k.dzikir_id, { ...k });
+		const tambahKe = (id: number, n: number) => {
+			if (!n) return;
+			const cur = m.get(id) ?? { dzikir_id: id, latin: dzikir.find((x) => x.id === id)?.latin ?? "Dzikir", total: 0 };
+			cur.total += n;
+			m.set(id, cur);
+		};
+		for (const [id, n] of Object.entries(lokalPerDzikir)) tambahKe(Number(id), n);
+		if (s?.sesi_id) tambahKe(s.dzikir_id, s.jumlah);
+		return [...m.values()].sort((a, b) => b.total - a.total);
+	});
+
+	/** perbaruiKomposisi=false dipakai tepat setelah sync, sampai komposisi server
+	 *  terbaru dimuat — supaya hitungan yang baru tersinkron tidak "hilang" sesaat. */
+	async function hitungAntreanHariIni(perbaruiKomposisi = true) {
 		const hari = tanggalWIB(new Date());
+		let antrean: { dzikir_id: number; jumlah: number; mulai_at: string }[] = [];
 		try {
-			antreanHariIni = (await antreanSemua()).filter((x) => tanggalWIB(x.mulai_at) === hari).reduce((a, x) => a + x.jumlah, 0);
+			antrean = (await antreanSemua()).filter((x) => tanggalWIB(x.mulai_at) === hari);
 		} catch {
-			antreanHariIni = 0; // IndexedDB tidak tersedia; status sync menampilkan "gagal"
+			antrean = []; // IndexedDB tidak tersedia; status sync menampilkan "gagal"
 		}
+		antreanHariIni = antrean.reduce((a, x) => a + x.jumlah, 0);
+		if (perbaruiKomposisi) {
+			const per: Record<number, number> = {};
+			for (const x of antrean) per[x.dzikir_id] = (per[x.dzikir_id] ?? 0) + x.jumlah;
+			lokalPerDzikir = per;
+		}
+	}
+
+	function muatUlangDataServer(props: string[]) {
+		router.reload({
+			only: props,
+			onSuccess: (page) => {
+				const p = page.props as unknown as { hari_ini?: HariIni; komposisi_hari_ini?: Komposisi[] };
+				// page.props berisi SEMUA prop (yang tidak diminta = nilai lama): ambil yang diminta saja
+				if (props.includes("hari_ini") && p.hari_ini) serverHariIni = { tanggal: p.hari_ini.tanggal, total: p.hari_ini.total };
+				if (props.includes("komposisi_hari_ini") && p.komposisi_hari_ini) komposisiServer = p.komposisi_hari_ini;
+				hitungAntreanHariIni();
+			},
+		});
 	}
 
 	function onSync(h: SyncHasil) {
 		serverHariIni = { tanggal: h.hari_ini.tanggal, total: h.hari_ini.total };
 		const ada = new Set(badges.map((b) => b.kode));
 		badges = [...badges, ...h.badge_baru.filter((b) => !ada.has(b.kode))];
-		hitungAntreanHariIni();
-		if (h.diterima.length > 0) router.reload({ only: ["streak", "level"] });
+		hitungAntreanHariIni(false);
+		if (h.diterima.length > 0) muatUlangDataServer(["streak", "level", "komposisi_hari_ini"]);
 	}
 
 	/** Ambil ulang angka dari server (mis. setelah berdzikir di perangkat lain). */
 	async function segarkan() {
 		const h = await syncSekarang(true);
 		if (h) onSync(h);
-		await hitungAntreanHariIni();
-		router.reload({
-			only: ["hari_ini", "streak", "level", "target_harian"],
-			onSuccess: (page) => {
-				const hi = (page.props as unknown as { hari_ini?: HariIni }).hari_ini;
-				if (hi) serverHariIni = { tanggal: hi.tanggal, total: hi.total };
-			},
-		});
+		await hitungAntreanHariIni(false);
+		muatUlangDataServer(["hari_ini", "streak", "level", "target_harian", "komposisi_hari_ini"]);
 	}
 
 	function tambah() {
@@ -234,7 +270,10 @@
 	});
 
 	onMount(() => {
-		counter.pulihkan().then(() => (siap = true));
+		// state awal disiapkan sinkron di dalam pulihkan(); counter langsung bisa dipakai
+		// walau IndexedDB lambat/macet (iPhone).
+		counter.pulihkan().catch((e) => console.warn("[tasbih] pemulihan state gagal", e));
+		siap = true;
 		hitungAntreanHariIni();
 		const stop = mulaiAutoSync(onSync);
 		const idle = setInterval(() => counter.cekIdle(), 30_000);
@@ -415,6 +454,18 @@
 				<span class="text-lg font-bold tabular-nums leading-none">{streakTampil}</span>
 				<span class="text-[10px] font-medium">hari</span>
 			</div>
+		</section>
+
+		<section class="mt-4 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900" aria-label="Komposisi dzikir hari ini" data-testid="komposisi-hari-ini">
+			<div class="mb-3 flex items-baseline justify-between gap-2">
+				<h2 class="text-sm font-semibold text-neutral-900 dark:text-white">Komposisi hari ini</h2>
+				{#if komposisi.length}<span class="text-xs text-neutral-500 dark:text-neutral-400">{komposisi.length} dzikir</span>{/if}
+			</div>
+			{#if komposisi.length}
+				<KomposisiBar data={komposisi} />
+			{:else}
+				<p class="text-sm text-neutral-500 dark:text-neutral-400">Belum ada dzikir hari ini.</p>
+			{/if}
 		</section>
 
 		<a href="/app/tasbih/dashboard" use:inertia class="mt-3 flex min-h-12 items-center justify-center gap-2 rounded-xl text-sm font-medium text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-950/40">

@@ -114,15 +114,21 @@ func TestUpdateVersiBrowserTidakMembuatLogout(t *testing.T) {
 	}
 }
 
-func TestBrowserBerbedaDitolak(t *testing.T) {
+// Keputusan user (2026-11-17): perubahan User-Agent hanya dicatat, tidak lagi
+// menghapus sesi (DevTools mode HP & Chrome iOS mengirim UA "Safari").
+func TestBrowserBerbedaTetapLogin(t *testing.T) {
 	st := siapkan(t)
 	st.buatSesi(t, "s4", uaChrome130Android, time.Now().Add(ttl30))
 	uid, _ := st.minta(t, "s4", uaChrome130Android) // isi cache
 	require.EqualValues(t, 1, uid)
 	uid, _ = st.minta(t, "s4", uaFirefoxWindows)
-	require.Nil(t, uid)
+	require.EqualValues(t, 1, uid)
 	_, err := st.q.GetSessionByID(context.Background(), "s4")
-	require.ErrorIs(t, err, queries.ErrSessionNotFound)
+	require.NoError(t, err, "sesi tidak dihapus")
+
+	st.buatSesi(t, "s5", uaChrome130Android, time.Now().Add(ttl30))
+	uid, _ = st.minta(t, "s5", uaFirefoxWindows) // jalur DB
+	require.EqualValues(t, 1, uid)
 }
 
 func TestFamiliUserAgent(t *testing.T) {

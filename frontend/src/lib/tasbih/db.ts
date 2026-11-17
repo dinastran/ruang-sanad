@@ -20,6 +20,36 @@ export function setPemilik(userID: number): void {
 	dbPromise = null;
 }
 
+// iPhone (WebKit): indexedDB.open() kadang tidak pernah merespons di aplikasi
+// terpasang. Dua pengaman: "bangunkan" IndexedDB lewat databases() (pola
+// safari-14-idb-fix) dan batas waktu; setelah macet sekali, operasi berikutnya
+// langsung gagal agar pemanggil memakai cadangan memori tanpa menunggu.
+const BATAS_BUKA_MS = 2500;
+let idbMacet = false;
+
+function bangunkanSafari(): Promise<void> {
+	const idb = indexedDB as IDBFactory & { databases?: () => Promise<unknown> };
+	if (typeof idb.databases !== "function") return Promise.resolve();
+	return new Promise((resolve) => {
+		let beres = false;
+		let n = 0;
+		const akhiri = () => {
+			if (!beres) {
+				beres = true;
+				resolve();
+			}
+		};
+		// panggil databases() tiap 100 ms sampai ada yang merespons (maks ~1 detik)
+		const coba = () => {
+			if (beres) return;
+			n++;
+			idb.databases!().then(akhiri, akhiri);
+			setTimeout(n < 10 ? coba : akhiri, 100);
+		};
+		coba();
+	});
+}
+
 function bukaDB(): Promise<IDBDatabase> {
 	if (dbPromise) return dbPromise;
 	dbPromise = new Promise((resolve, reject) => {
@@ -27,18 +57,49 @@ function bukaDB(): Promise<IDBDatabase> {
 			reject(new Error("pemilik antrean tasbih belum diset"));
 			return;
 		}
-		if (typeof indexedDB === "undefined") {
+		if (idbMacet || typeof indexedDB === "undefined") {
 			reject(new Error("IndexedDB tidak tersedia"));
 			return;
 		}
-		const req = indexedDB.open(DB_PREFIX + pemilik, DB_VERSION);
-		req.onupgradeneeded = () => {
-			const db = req.result;
-			if (!db.objectStoreNames.contains(ANTREAN)) db.createObjectStore(ANTREAN, { keyPath: "id" });
-			if (!db.objectStoreNames.contains(AKTIF)) db.createObjectStore(AKTIF);
-		};
-		req.onsuccess = () => resolve(req.result);
-		req.onerror = () => reject(req.error);
+		let selesai = false;
+		const batas = setTimeout(() => {
+			if (selesai) return;
+			selesai = true;
+			idbMacet = true;
+			reject(new Error("IndexedDB tidak merespons"));
+		}, BATAS_BUKA_MS);
+		bangunkanSafari().then(() => {
+			if (selesai) return;
+			let req: IDBOpenDBRequest;
+			try {
+				req = indexedDB.open(DB_PREFIX + pemilik, DB_VERSION);
+			} catch (e) {
+				selesai = true;
+				clearTimeout(batas);
+				reject(e);
+				return;
+			}
+			req.onupgradeneeded = () => {
+				const db = req.result;
+				if (!db.objectStoreNames.contains(ANTREAN)) db.createObjectStore(ANTREAN, { keyPath: "id" });
+				if (!db.objectStoreNames.contains(AKTIF)) db.createObjectStore(AKTIF);
+			};
+			req.onsuccess = () => {
+				if (selesai) {
+					req.result.close();
+					return;
+				}
+				selesai = true;
+				clearTimeout(batas);
+				resolve(req.result);
+			};
+			req.onerror = () => {
+				if (selesai) return;
+				selesai = true;
+				clearTimeout(batas);
+				reject(req.error);
+			};
+		});
 	});
 	dbPromise.catch(() => (dbPromise = null));
 	return dbPromise;

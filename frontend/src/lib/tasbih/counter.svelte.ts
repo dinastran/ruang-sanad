@@ -65,32 +65,57 @@ export class TasbihCounter {
 	}
 
 	/** Pulihkan state dari IndexedDB; bila tidak ada, pilih dzikir pertama. */
+	/** true begitu user berinteraksi; state hasil pemulihan tidak boleh menimpanya. */
+	private sudahBertindak = false;
+
+	/** Siapkan state awal SEKARANG (counter langsung bisa dipakai), lalu pulihkan
+	 *  state tersimpan dari IndexedDB bila ada — IndexedDB bisa lambat/macet di iPhone. */
 	async pulihkan(): Promise<void> {
+		if (!this.state) this.pilihPertama();
 		const a = await aktifAmbil();
-		if (a) {
-			this.state = a;
-			const umur = Date.now() - Date.parse(a.tap_terakhir_at);
-			const dikenal = this.katalog.dzikir.some((d) => d.id === a.dzikir_id);
-			if (!dikenal) {
-				// dzikir sudah diarsipkan: simpan sesinya, lalu pilih dzikir lain
-				const sesi = this.lepasSesi();
-				this.state = null;
-				this.pilihPertama();
-				this.commit(sesi);
-				return;
-			}
-			if (a.mode === "paket" && umur > PAKET_KADALUARSA_MS) {
-				const sesi = this.lepasSesi();
-				this.mulaiPaket(a.paket_id!);
-				this.commit(sesi);
-			} else if (a.sesi_id && umur > IDLE_MS) {
-				this.tutupKarenaIdle();
-			}
-			this.selesaiTarget = this.state?.mode === "dzikir" && this.tampil >= (this.state?.target ?? Infinity);
+		if (!a) {
+			if (!this.sudahBertindak) this.simpan();
 			return;
 		}
-		this.pilihPertama();
-		this.simpan();
+		if (this.sudahBertindak) {
+			// user sudah mulai menghitung: jangan timpa, tapi simpan sesi lama yang masih terbuka
+			const lama = this.sesiDari(a);
+			if (lama) this.commit(lama);
+			return;
+		}
+		this.state = a;
+		const umur = Date.now() - Date.parse(a.tap_terakhir_at);
+		const dikenal = this.katalog.dzikir.some((d) => d.id === a.dzikir_id);
+		if (!dikenal) {
+			// dzikir sudah diarsipkan: simpan sesinya, lalu pilih dzikir lain
+			const sesi = this.lepasSesi();
+			this.state = null;
+			this.pilihPertama();
+			this.commit(sesi);
+			return;
+		}
+		if (a.mode === "paket" && umur > PAKET_KADALUARSA_MS) {
+			const sesi = this.lepasSesi();
+			this.mulaiPaket(a.paket_id!);
+			this.commit(sesi);
+		} else if (a.sesi_id && umur > IDLE_MS) {
+			this.tutupKarenaIdle();
+		}
+		this.selesaiTarget = this.state?.mode === "dzikir" && this.tampil >= (this.state?.target ?? Infinity);
+	}
+
+	private sesiDari(a: StateAktif): SesiTertutup | null {
+		if (!a.sesi_id || a.jumlah <= 0) return null;
+		return {
+			id: a.sesi_id,
+			dzikir_id: a.dzikir_id,
+			paket_id: a.mode === "paket" ? a.paket_id : null,
+			paket_run_id: a.mode === "paket" ? a.paket_run_id : null,
+			jumlah: a.jumlah,
+			target: a.target,
+			mulai_at: a.mulai_at,
+			selesai_at: a.tap_terakhir_at,
+		};
 	}
 
 	private pilihPertama(): void {
@@ -99,6 +124,7 @@ export class TasbihCounter {
 	}
 
 	pilihDzikir(id: number): void {
+		this.sudahBertindak = true;
 		const d = this.katalog.dzikir.find((x) => x.id === id);
 		if (!d) return;
 		const sesi = this.lepasSesi();
@@ -108,6 +134,7 @@ export class TasbihCounter {
 	}
 
 	pilihPaket(id: number): void {
+		this.sudahBertindak = true;
 		const sesi = this.lepasSesi();
 		this.mulaiPaket(id);
 		this.commit(sesi);
@@ -137,6 +164,7 @@ export class TasbihCounter {
 	}
 
 	tap(): void {
+		this.sudahBertindak = true;
 		if (!this.state) return;
 		const s = this.state;
 		const now = new Date().toISOString();
@@ -194,6 +222,7 @@ export class TasbihCounter {
 
 	/** Reset: simpan sesi berjalan, mulai dari nol (paket: putaran baru). */
 	reset(): void {
+		this.sudahBertindak = true;
 		const s = this.state;
 		if (!s) return;
 		const sesi = this.lepasSesi();
