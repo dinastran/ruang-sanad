@@ -66,7 +66,7 @@
 </script>
 
 <AppLayout {user}>
-	<div class="mx-auto w-full max-w-6xl pb-10">
+	<div class="mx-auto w-full min-w-0 max-w-6xl pb-10">
 		<!-- Header -->
 		<header class="mb-5 flex flex-wrap items-end justify-between gap-3">
 			<div>
@@ -161,12 +161,12 @@
 			</dl>
 
 			<div class="mt-6 grid gap-4 lg:grid-cols-3">
-				<section class="rounded-2xl border border-neutral-200 bg-white p-5 lg:col-span-2 dark:border-neutral-800 dark:bg-neutral-900">
+				<section class="min-w-0 rounded-2xl border border-neutral-200 bg-white p-5 lg:col-span-2 dark:border-neutral-800 dark:bg-neutral-900">
 					<h2 class="text-sm font-semibold text-neutral-900 dark:text-white">Tren harian</h2>
 					<p class="mb-3 text-xs text-neutral-500">Batang gelap = target harian tercapai</p>
 					<DailyBar data={d.harian} target={target_harian} />
 				</section>
-				<section class="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+				<section class="min-w-0 rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
 					<h2 class="mb-4 text-sm font-semibold text-neutral-900 dark:text-white">Komposisi dzikir</h2>
 					{#if d.komposisi.length}
 						<KomposisiBar data={d.komposisi} />
@@ -182,12 +182,12 @@
 			</section>
 
 			<div class="mt-4 grid gap-4 lg:grid-cols-3">
-				<section class="rounded-2xl border border-neutral-200 bg-white p-5 lg:col-span-2 dark:border-neutral-800 dark:bg-neutral-900">
+				<section class="min-w-0 rounded-2xl border border-neutral-200 bg-white p-5 lg:col-span-2 dark:border-neutral-800 dark:bg-neutral-900">
 					<h2 class="text-sm font-semibold text-neutral-900 dark:text-white">Waktu berdzikir</h2>
 					<p class="mb-3 text-xs text-neutral-500">Jumlah per jam (WIB) · batang gelap = jam paling sering</p>
 					<HourBar data={d.per_jam} />
 				</section>
-				<section class="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+				<section class="min-w-0 rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
 					<h2 class="mb-4 text-sm font-semibold text-neutral-900 dark:text-white">Paket wirid tuntas</h2>
 					<ul class="space-y-3">
 						{#each d.paket as p (p.paket_id)}

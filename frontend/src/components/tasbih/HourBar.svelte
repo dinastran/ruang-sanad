@@ -6,9 +6,11 @@
 		data: number[]; // 24 jam WIB
 	}
 	let { data }: Props = $props();
-	const W = 480, H = 130, PB = 20, PT = 8;
+	let lebarBox = $state(480);
+	const W = $derived(Math.max(lebarBox, 240));
+	const H = 130, PB = 20, PT = 8;
 	const max = $derived(Math.max(...data, 1));
-	const lebar = (W - 8) / 24;
+	const lebar = $derived((W - 8) / 24);
 	const puncak = $derived(data.indexOf(Math.max(...data)));
 	let hover = $state<{ i: number; x: number; y: number } | null>(null);
 	let box = $state<HTMLDivElement | null>(null);
@@ -21,8 +23,8 @@
 	const jam = (i: number) => `${String(i).padStart(2, "0")}.00`;
 </script>
 
-<div bind:this={box} class="relative">
-	<svg viewBox="0 0 {W} {H}" class="h-auto w-full" role="img" aria-label="Jumlah dzikir per jam (WIB)">
+<div bind:this={box} bind:clientWidth={lebarBox} class="relative">
+	<svg viewBox="0 0 {W} {H}" width={W} height={H} class="block" role="img" aria-label="Jumlah dzikir per jam (WIB)">
 		{#each data as v, i}
 			{@const h = ((H - PB - PT) * v) / max}
 			<rect x={4 + i * lebar + 2} y={H - PB - Math.max(h, v > 0 ? 2 : 0)} width={lebar - 4} height={Math.max(h, v > 0 ? 2 : 0)} rx="3"
@@ -31,7 +33,7 @@
 				onpointerenter={(e) => tunjuk(i, e.currentTarget as SVGElement)} onpointerleave={() => (hover = null)} />
 		{/each}
 		{#each [0, 6, 12, 18, 23] as i}
-			<text x={4 + i * lebar + lebar / 2} y={H - 5} text-anchor="middle" class="fill-neutral-500 text-[10px] dark:fill-neutral-400">{jam(i).slice(0, 2)}</text>
+			<text x={4 + i * lebar + lebar / 2} y={H - 5} text-anchor="middle" class="fill-neutral-500 text-[11px] dark:fill-neutral-400">{jam(i).slice(0, 2)}</text>
 		{/each}
 	</svg>
 	{#if hover}

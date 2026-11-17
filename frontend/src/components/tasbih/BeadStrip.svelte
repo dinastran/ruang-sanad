@@ -11,7 +11,7 @@
 	const beads = $derived(
 		Array.from({ length: JUMLAH }, (_, i) => {
 			const n = count + (i - TENGAH);
-			return { n, aktif: i === TENGAH, lewat: i < TENGAH, penanda: n > 0 && n % pemisah === 0 };
+			return { n, aktif: i === TENGAH, lewat: i < TENGAH && n > 0, penanda: n > 0 && n % pemisah === 0 };
 		}),
 	);
 </script>

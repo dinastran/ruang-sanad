@@ -13,7 +13,7 @@
 	{#each data as d (d.latin)}
 		<li>
 			<div class="flex items-baseline justify-between gap-3 text-sm">
-				<span class="truncate font-medium text-neutral-800 dark:text-neutral-200">{d.latin}</span>
+				<span class="min-w-0 truncate font-medium text-neutral-800 dark:text-neutral-200">{d.latin}</span>
 				<span class="shrink-0 tabular-nums text-neutral-500 dark:text-neutral-400">{angka(d.total)} <span class="text-xs">· {total ? Math.round((d.total / total) * 100) : 0}%</span></span>
 			</div>
 			<div class="mt-1.5 h-2 rounded-full bg-neutral-100 dark:bg-neutral-800">
