@@ -119,3 +119,7 @@ ON CONFLICT(user_id, badge_kode) DO NOTHING;
 
 -- name: ListTasbihBadgeUser :many
 SELECT badge_kode, diraih_at FROM tasbih_badge_user WHERE user_id = ?;
+
+-- name: ListTasbihSesiRingkas :many
+SELECT jumlah, selesai_target, mulai_at, selesai_at FROM tasbih_sesi
+WHERE user_id = sqlc.arg(user_id) AND tanggal_wib >= sqlc.arg(dari) AND tanggal_wib <= sqlc.arg(sampai);

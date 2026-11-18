@@ -72,7 +72,7 @@ func (o *outboxFixture) approvedD1(t *testing.T, chatID string) (int64, int64) {
 	o.at(time.Date(2026, 10, 24, 5, 0, 0, 0, time.UTC))
 	fid, err := o.service.ProposeFollowup(context.Background(), l.ID, LeadFollowupInput{Step: "d1", ScheduledAt: fuAt(25, 4), DraftText: d1Draft}, "ai", o.tokenID)
 	require.NoError(t, err)
-	require.NoError(t, o.service.ApproveFollowup(context.Background(), fid, o.csID, models.LeadFollowupRequest{}))
+	require.Equal(t, "approved", o.followup(t, fid).Status, "follow-ups are approved on creation")
 	o.at(saved)
 	return l.ID, fid
 }
@@ -373,10 +373,16 @@ func TestFollowupApprovalActions(t *testing.T) {
 	)
 	l := o.lead(t)
 	ctx := context.Background()
-	f1, err := o.service.ProposeFollowup(ctx, l.ID, LeadFollowupInput{Step: "d1", ScheduledAt: fuAt(25, 4), DraftText: d1Draft}, "ai", o.tokenID)
-	require.NoError(t, err)
-	f3, err := o.service.ProposeFollowup(ctx, l.ID, LeadFollowupInput{Step: "d3", ScheduledAt: fuAt(27, 4), DraftText: "Info lengkap di https://ruangsanad.com Kak"}, "ai", o.tokenID)
-	require.NoError(t, err)
+	// New follow-ups are auto-approved; these actions still serve rows left
+	// pending from before auto-approval, so insert them pending directly.
+	pending := func(step string, at time.Time, draft, reason string) int64 {
+		id, err := o.querier.CreateLeadFollowup(ctx, queries.CreateLeadFollowupParams{
+			LeadID: l.ID, Step: step, ScheduledAt: at, DraftText: draft, Reason: reason, CreatedByKind: "ai", CreatedAt: o.clock, UpdatedAt: o.clock})
+		require.NoError(t, err)
+		return id
+	}
+	f1 := pending("d1", fuAt(25, 4), d1Draft, "")
+	f3 := pending("d3", fuAt(27, 4), "Info lengkap di https://ruangsanad.com Kak", "")
 
 	// Bulk approval skips drafts with a warning (link).
 	n, skipped, err := o.service.BulkApprove(ctx, []int64{f1, f3}, o.csID)
@@ -415,8 +421,7 @@ func TestFollowupApprovalActions(t *testing.T) {
 	require.Error(t, o.service.CancelFollowup(ctx, f3, o.csID))
 
 	// Approval is blocked when the lead asked to stop.
-	f7, err := o.service.ProposeFollowup(ctx, l.ID, LeadFollowupInput{Step: "d7", ScheduledAt: fuAt(31, 4), DraftText: d1Draft, Reason: "Jadwal kelas malam akhwat sudah dibuka"}, "ai", o.tokenID)
-	require.NoError(t, err)
+	f7 := pending("d7", fuAt(31, 4), d1Draft, "Jadwal kelas malam akhwat sudah dibuka")
 	_, err = o.db.Exec(`UPDATE leads SET followup_permission = 'no' WHERE id = ?`, l.ID)
 	require.NoError(t, err)
 	require.ErrorContains(t, o.service.ApproveFollowup(ctx, f7, o.csID, models.LeadFollowupRequest{}), "berhenti")

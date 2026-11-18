@@ -188,7 +188,7 @@ func (s *AIAgentService) crmTools() []AITool {
 			Title: "Kandidat follow-up pilot",
 			Description: "BACA. Deteksi lead WhatsApp dengan label uji-followup yang belum membalas pesan terakhir CS/AI dan sudah waktunya ditindaklanjuti. " +
 				"Hanya memberikan satu step yang relevan per lead, tanpa nomor kontak. Untuk setiap kandidat, gunakan detail_lead lalu, jika masuk akal, usulkan_followup. " +
-				"AI tidak mengirim pesan dan tidak menyetujui draft. D7/D30 wajib update nyata; D14 wajib opsi izin.",
+				"Follow-up yang dibuat langsung disetujui otomatis, jadi pastikan relevan. D7/D30 wajib update nyata; D14 wajib opsi izin.",
 			InputSchema: aiSchema(map[string]any{
 				"limit":  aiIntProp("Jumlah lead yang diperiksa per halaman (default 20, maksimal 50).", 1, pilotCandidateMax),
 				"cursor": aiProp("string", "Cursor halaman berikutnya, dari cursor_berikut."),
@@ -244,7 +244,7 @@ func (s *AIAgentService) crmTools() []AITool {
 		{
 			Name:  "usulkan_followup",
 			Title: "Usulkan follow-up",
-			Description: "TULIS. Usulkan satu follow-up (Script 30 Hari) yang menunggu persetujuan CS; tidak langsung terkirim. Ditolak bila lead minta berhenti, sudah membalas, " +
+			Description: "TULIS. Buat satu follow-up (Script 30 Hari) yang langsung disetujui otomatis dan dikirim worker sesuai jadwal, jam kirim, dan kuota harian. Ditolak bila lead minta berhenti, sudah membalas, " +
 				"terlalu cepat, sudah ada sentuhan di hari yang sama, atau draft memuat nominal/rekening. d7 dan d30 wajib reason berisi update nyata; d14 wajib memuat \"boleh kabari\"; " +
 				"d30 hanya untuk lead yang membalas \"boleh kabari\".",
 			InputSchema: aiSchema(map[string]any{
@@ -597,8 +597,8 @@ func (s *AIAgentService) toolUsulkanFollowup(ctx context.Context, p *models.AIPr
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"ok": true, "followup_id": fid, "lead_ref": aiLeadRef(id), "status": "pending_approval",
-		"catatan": "Belum terkirim. CS harus menyetujui di dashboard.", "link": s.leadLink(p, id)}, nil
+	return map[string]any{"ok": true, "followup_id": fid, "lead_ref": aiLeadRef(id), "status": "approved",
+		"catatan": "Disetujui otomatis; akan dikirim sesuai jadwal (jam kirim & kuota harian). CS bisa ubah jadwal atau batalkan di dashboard.", "link": s.leadLink(p, id)}, nil
 }
 
 func (s *AIAgentService) toolTambahLabelLead(ctx context.Context, p *models.AIPrincipal, a aiArgs) (any, error) {

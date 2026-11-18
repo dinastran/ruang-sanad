@@ -118,6 +118,20 @@ type TasbihDashboard struct {
 	Komposisi           []TasbihKomposisi    `json:"komposisi"`
 	PerJam              [24]int64            `json:"per_jam"`
 	Paket               []TasbihPaketPutaran `json:"paket"`
+	Sesi                TasbihSesiStat       `json:"sesi"`
+	HariTerbaik         *TasbihTitikHari     `json:"hari_terbaik"` // nil bila rentang kosong
+	RekorTahun          *TasbihTitikHari     `json:"rekor_tahun"`  // hari terbanyak 365 hari terakhir
+	HariIniDzikir       []TasbihKomposisi    `json:"hari_ini_dzikir"`
+}
+
+// TasbihSesiStat: ringkasan sesi dalam rentang dashboard.
+type TasbihSesiStat struct {
+	Jumlah      int64   `json:"jumlah"`       // banyak sesi
+	Tuntas      int64   `json:"tuntas"`       // sesi yang mencapai targetnya
+	DurasiDetik int64   `json:"durasi_detik"` // total durasi (per sesi dibatasi, lihat HitungSesiStat)
+	PerMenit    float64 `json:"per_menit"`    // hitungan per menit (0 bila durasi 0)
+	RataPerSesi float64 `json:"rata_per_sesi"`
+	Terbesar    int64   `json:"terbesar"` // hitungan terbanyak dalam satu sesi
 }
 
 type TasbihRiwayatItem struct {

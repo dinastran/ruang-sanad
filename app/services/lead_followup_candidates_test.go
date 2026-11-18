@@ -74,7 +74,7 @@ func TestHermesPilotPreservesProposalAndDeduplicates(t *testing.T) {
   "scheduled_at": "2026-10-25 13:00", "draft_text": d1Draft,
  })
  require.False(t, isErr, text)
- require.Contains(t, text, "pending_approval")
+ require.Contains(t, text, `"status":"approved"`)
  require.Equal(t, float64(0), pilotCandidateList(t, c, nil)["jumlah"], "existing pending proposal suppresses scan")
  text, isErr = c.call(t, c.writer(), "usulkan_followup", map[string]any{
   "lead_ref": fmt.Sprintf("L-%d", id), "step": "d1",

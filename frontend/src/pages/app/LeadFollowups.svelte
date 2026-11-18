@@ -132,7 +132,7 @@
 	<div class="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-5">
 		<div>
 			<h1 class="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">Follow-up</h1>
-			<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Usulan follow-up dari AI dan CS. Tidak ada yang terkirim sebelum disetujui; pengiriman lewat nomor CS dengan jeda dan batas harian.</p>
+			<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Follow-up dari AI dan CS langsung disetujui otomatis dan terkirim sesuai jadwal lewat nomor CS, dengan jam kirim, jeda, dan batas harian. Ubah jadwal atau batalkan di daftar Terjadwal.</p>
 		</div>
 
 		<section class="{card} flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
@@ -142,7 +142,7 @@
 			<span class="inline-flex items-center gap-1.5 text-neutral-600 dark:text-neutral-400"><Clock class="w-4 h-4" />{page.send_start}–{page.send_end} WIB</span>
 			<span class="text-neutral-600 dark:text-neutral-400">Terkirim hari ini {page.sent_today}/{page.daily_cap}</span>
 			{#if page.only_label}<span class="text-neutral-600 dark:text-neutral-400">Uji bertahap: hanya label <b>{page.only_label}</b></span>{/if}
-			{#if !page.followup_enabled}<p class="w-full text-xs text-neutral-500">Follow-up yang disetujui akan menunggu sampai super admin menyalakan pengiriman di Integrasi WhatsApp.</p>{/if}
+			{#if !page.followup_enabled}<p class="w-full text-xs text-neutral-500">Follow-up terjadwal akan menunggu sampai super admin menyalakan pengiriman di Integrasi WhatsApp.</p>{/if}
 		</section>
 
 		<nav class="flex gap-1 border-b border-neutral-200/80 dark:border-white/[0.06]" aria-label="Tampilan follow-up">
@@ -178,16 +178,14 @@
 			</section>
 		{/if}
 
+		{#if page.pending.length > 0}
 		<section class="space-y-3">
 			<div class="flex flex-wrap items-center justify-between gap-2">
-				<h2 class="text-sm font-semibold text-neutral-900 dark:text-white">Menunggu persetujuan ({page.pending.length})</h2>
+				<h2 class="text-sm font-semibold text-neutral-900 dark:text-white">Usulan lama menunggu persetujuan ({page.pending.length})</h2>
 				{#if page.can_approve && page.pending.some(bulkable)}
 					<button type="button" class={btnPrimary} disabled={busy || selectedIds.length === 0} onclick={bulkApprove}><CheckCheck class="w-4 h-4" /> Setujui terpilih ({selectedIds.length})</button>
 				{/if}
 			</div>
-			{#if page.pending.length === 0}
-				<div class="{card} text-sm text-neutral-500">Tidak ada usulan yang menunggu.</div>
-			{/if}
 			{#each page.pending as it (it.id)}
 				<article class="{card} space-y-3 {it.blocked ? 'opacity-80' : ''}">
 					<div class="flex flex-wrap items-start justify-between gap-2">
@@ -235,11 +233,12 @@
 				</article>
 			{/each}
 		</section>
+		{/if}
 
 		<section class={card}>
 			<h2 class="text-sm font-semibold text-neutral-900 dark:text-white">Terjadwal ({page.approved.length})</h2>
 			{#if page.approved.length === 0}
-				<p class="mt-2 text-sm text-neutral-500">Belum ada follow-up yang disetujui.</p>
+				<p class="mt-2 text-sm text-neutral-500">Belum ada follow-up terjadwal.</p>
 			{:else}
 				<ul class="mt-2 divide-y divide-neutral-200/80 dark:divide-white/[0.05]">
 					{#each page.approved as it (it.id)}
