@@ -44,7 +44,7 @@ func TestFollowupTimingRelativeToLastCSMessage(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, f, 1)
 	require.Equal(t, fid, f[0].ID)
-	require.Equal(t, "pending_approval", f[0].Status)
+	require.Equal(t, "approved", f[0].Status, "auto-approved on creation")
 	require.Equal(t, "ai", f[0].CreatedByKind)
 
 	// Same step already waiting → rejected.
@@ -162,7 +162,7 @@ func TestFollowupProposeViaMCP(t *testing.T) {
 		"lead_ref": "L-1", "step": "d1", "scheduled_at": "2026-10-25 11:00", "draft_text": d1Draft,
 	})
 	require.False(t, isErr, text)
-	require.Contains(t, text, "pending_approval")
+	require.Contains(t, text, `"status":"approved"`)
 	f, err := c.querier.ListLeadFollowups(context.Background(), id)
 	require.NoError(t, err)
 	require.Len(t, f, 1)

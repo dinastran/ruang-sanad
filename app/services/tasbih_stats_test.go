@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/maulanashalihin/laju-go/app/models"
+	"github.com/maulanashalihin/laju-go/app/queries"
 	"github.com/stretchr/testify/require"
 )
 
@@ -88,6 +89,32 @@ func TestDashboardAgregat(t *testing.T) {
 	require.Equal(t, 2, d.Level.Level)
 	require.Equal(t, 1, d.Streak.Saat) // tgl 15 hanya 40 < target 100
 	require.True(t, d.Streak.HariIniTercapai)
+
+	// Ringkasan sesi rentang 7 hari: 8 sesi tgl 16 + 1 sesi tgl 15, @1 menit.
+	require.EqualValues(t, 9, d.Sesi.Jumlah)
+	require.EqualValues(t, 6, d.Sesi.Tuntas) // jumlah >= 33: 80,70,60,50,40 (tgl 16) + 40 (tgl 15)
+	require.EqualValues(t, 9*60, d.Sesi.DurasiDetik)
+	require.InDelta(t, 400.0/9, d.Sesi.PerMenit, 0.001)
+	require.InDelta(t, 400.0/9, d.Sesi.RataPerSesi, 0.001)
+	require.EqualValues(t, 80, d.Sesi.Terbesar)
+	require.NotNil(t, d.HariTerbaik)
+	require.Equal(t, models.TasbihTitikHari{Tanggal: "2026-11-16", Total: 360}, *d.HariTerbaik)
+	require.Equal(t, models.TasbihTitikHari{Tanggal: "2026-11-16", Total: 360}, *d.RekorTahun)
+	require.Len(t, d.HariIniDzikir, 8)
+	require.Equal(t, "Subhanallah", d.HariIniDzikir[0].Latin)
+}
+
+func TestHitungSesiStatBatasiDurasi(t *testing.T) {
+	m := time.Date(2026, 11, 16, 1, 0, 0, 0, time.UTC)
+	st := HitungSesiStat([]queries.ListTasbihSesiRingkasRow{
+		{Jumlah: 100, SelesaiTarget: 1, MulaiAt: m, SelesaiAt: m.Add(10 * time.Hour)}, // lupa ditutup → 2 jam
+		{Jumlah: 20, MulaiAt: m, SelesaiAt: m.Add(-time.Minute)},                     // jam mundur → 0
+	})
+	require.EqualValues(t, 2, st.Jumlah)
+	require.EqualValues(t, 1, st.Tuntas)
+	require.EqualValues(t, 7200, st.DurasiDetik)
+	require.InDelta(t, 1.0, st.PerMenit, 0.001)
+	require.Nil(t, hariTerbanyak([]models.TasbihTitikHari{{Tanggal: "2026-11-16"}}))
 }
 
 func TestPutaranPaket(t *testing.T) {

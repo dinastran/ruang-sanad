@@ -121,8 +121,8 @@ func (s *LeadService) FollowupQueue(ctx context.Context, role string) (*models.F
 	return page, nil
 }
 
-// CreateManualFollowup is "Buat follow-up manual" on the lead page. It waits
-// for approval like an AI proposal.
+// CreateManualFollowup is "Buat follow-up manual" on the lead page. Like an
+// AI proposal it is approved automatically on creation.
 func (s *LeadService) CreateManualFollowup(ctx context.Context, leadID, actorID int64, req models.LeadFollowupRequest) (int64, error) {
 	at, err := parseWIBLocal(req.ScheduledAt)
 	if err != nil {

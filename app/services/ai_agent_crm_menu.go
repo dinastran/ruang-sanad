@@ -148,7 +148,7 @@ func (s *AIAgentService) crmMenuTools() []AITool {
 			Name:  "antrean_followup",
 			Title: "Antrean follow-up",
 			Description: "Isi halaman Follow-up: draft menunggu persetujuan, yang sudah disetujui/terjadwal, dan pengiriman gagal, plus pengaturan jam kirim & kuota harian. " +
-				"BACA saja: menyetujui dan mengirim tetap dilakukan CS di dashboard.",
+				"BACA saja: follow-up baru disetujui otomatis; ubah jadwal/batalkan dilakukan CS di dashboard.",
 			InputSchema: aiSchema(map[string]any{}),
 			Roles:       aiRolesFollowupApv,
 			run:         s.toolAntreanFollowup,

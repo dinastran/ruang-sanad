@@ -686,7 +686,7 @@
 									{/each}
 								</ul>
 							{/if}
-							{#if canApprove}<a href="/app/leads/followups" use:inertia class="mt-2 inline-block text-xs text-brand-600 dark:text-brand-400">Buka antrean persetujuan →</a>{/if}
+							{#if canApprove}<a href="/app/leads/followups" use:inertia class="mt-2 inline-block text-xs text-brand-600 dark:text-brand-400">Buka antrean follow-up →</a>{/if}
 						</section>
 					{/if}
 				</div>
@@ -766,7 +766,7 @@
 				<div class="mt-5 flex gap-2"><button class="{btnGhost} flex-1" onclick={() => (dialog = null)}>Batal</button><button class="{btnPrimary} flex-1" disabled={busy || !lostReason} onclick={() => send("put", `/app/leads/${lead.id}/status`, { status: "lost", lost_reason: lostReason }, () => (dialog = null))}>Simpan</button></div>
 			{:else if dialog === "followup"}
 				<h3 class="text-lg font-bold text-neutral-900 dark:text-white">Buat follow-up manual</h3>
-				<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Masuk antrean persetujuan dulu, lalu dikirim lewat nomor CS sesuai jam kirim. Tanpa nominal, nomor rekening, atau link.</p>
+				<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Langsung terjadwal (disetujui otomatis), lalu dikirim lewat nomor CS sesuai jam kirim. Tanpa nominal, nomor rekening, atau link.</p>
 				<div class="mt-4 space-y-3">
 					<label class={labelCls}>Langkah
 						<select class="{field} mt-1" bind:value={fu.step}>

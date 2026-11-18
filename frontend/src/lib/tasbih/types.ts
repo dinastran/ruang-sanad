@@ -102,6 +102,19 @@ export interface DashboardData {
 	komposisi: { dzikir_id: number; latin: string; total: number }[];
 	per_jam: number[];
 	paket: { paket_id: number; nama: string; selesai: number }[];
+	sesi: SesiStat;
+	hari_terbaik: TitikHari | null;
+	rekor_tahun: TitikHari | null;
+	hari_ini_dzikir: { dzikir_id: number; latin: string; total: number }[];
+}
+
+export interface SesiStat {
+	jumlah: number;
+	tuntas: number;
+	durasi_detik: number;
+	per_menit: number;
+	rata_per_sesi: number;
+	terbesar: number;
 }
 
 export interface RiwayatItem {

@@ -615,6 +615,52 @@ func (q *Queries) ListTasbihRiwayat(ctx context.Context, arg ListTasbihRiwayatPa
 	return items, nil
 }
 
+const listTasbihSesiRingkas = `-- name: ListTasbihSesiRingkas :many
+SELECT jumlah, selesai_target, mulai_at, selesai_at FROM tasbih_sesi
+WHERE user_id = ?1 AND tanggal_wib >= ?2 AND tanggal_wib <= ?3
+`
+
+type ListTasbihSesiRingkasParams struct {
+	UserID int64
+	Dari   string
+	Sampai string
+}
+
+type ListTasbihSesiRingkasRow struct {
+	Jumlah        int64
+	SelesaiTarget int64
+	MulaiAt       time.Time
+	SelesaiAt     time.Time
+}
+
+func (q *Queries) ListTasbihSesiRingkas(ctx context.Context, arg ListTasbihSesiRingkasParams) ([]ListTasbihSesiRingkasRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTasbihSesiRingkas, arg.UserID, arg.Dari, arg.Sampai)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTasbihSesiRingkasRow
+	for rows.Next() {
+		var i ListTasbihSesiRingkasRow
+		if err := rows.Scan(
+			&i.Jumlah,
+			&i.SelesaiTarget,
+			&i.MulaiAt,
+			&i.SelesaiAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTasbihTotalHarian = `-- name: ListTasbihTotalHarian :many
 SELECT tanggal_wib, CAST(SUM(jumlah) AS INTEGER) AS total FROM tasbih_sesi
 WHERE user_id = ?1 AND tanggal_wib >= ?2 AND tanggal_wib <= ?3

@@ -55,7 +55,7 @@
 				onpointerenter={(e) => tunjuk(i, e.currentTarget as SVGElement)}
 				onpointerleave={() => (hover = null)}
 			/>
-			{#if i % labelTiap === 0 || i === data.length - 1}
+			{#if (i % labelTiap === 0 && data.length - 1 - i >= labelTiap * 0.75) || i === data.length - 1}
 				<text x={i === data.length - 1 ? W - PR : PL + i * lebar + lebar / 2} y={H - 8} text-anchor={i === data.length - 1 ? "end" : "middle"} class="fill-neutral-500 text-[11px] dark:fill-neutral-400">{tglPendek(d.tanggal)}</text>
 			{/if}
 		{/each}

@@ -199,7 +199,61 @@ func (s *TasbihService) Dashboard(ctx context.Context, userID int64, rentang int
 	for _, p := range paket {
 		d.Paket = append(d.Paket, models.TasbihPaketPutaran{PaketID: p.ID, Nama: p.Nama, Selesai: p.Selesai})
 	}
+
+	sesi, err := s.querier.ListTasbihSesiRingkas(ctx, queries.ListTasbihSesiRingkasParams{UserID: userID, Dari: dari, Sampai: hariIni})
+	if err != nil {
+		return d, err
+	}
+	d.Sesi = HitungSesiStat(sesi)
+	d.HariTerbaik = hariTerbanyak(d.Harian)
+	d.RekorTahun = hariTerbanyak(d.Heatmap)
+	if d.HariIniDzikir, err = s.KomposisiHariIni(ctx, userID, now); err != nil {
+		return d, err
+	}
 	return d, nil
+}
+
+// tasbihDurasiMaksSesi membatasi durasi satu sesi agar sesi yang lupa ditutup
+// (aplikasi dibiarkan terbuka) tidak merusak total durasi dan kecepatan.
+const tasbihDurasiMaksSesi = 2 * time.Hour
+
+func HitungSesiStat(rows []queries.ListTasbihSesiRingkasRow) models.TasbihSesiStat {
+	var st models.TasbihSesiStat
+	var total int64
+	var dur time.Duration
+	for _, r := range rows {
+		st.Jumlah++
+		total += r.Jumlah
+		if r.SelesaiTarget == 1 {
+			st.Tuntas++
+		}
+		if r.Jumlah > st.Terbesar {
+			st.Terbesar = r.Jumlah
+		}
+		if dd := r.SelesaiAt.Sub(r.MulaiAt); dd > 0 {
+			dur += min(dd, tasbihDurasiMaksSesi)
+		}
+	}
+	st.DurasiDetik = int64(dur.Seconds())
+	if st.Jumlah > 0 {
+		st.RataPerSesi = float64(total) / float64(st.Jumlah)
+	}
+	if dur >= time.Minute {
+		st.PerMenit = float64(total) / dur.Minutes()
+	}
+	return st
+}
+
+// hariTerbanyak: hari dengan total terbesar (tanggal terbaru bila seri); nil bila semua nol.
+func hariTerbanyak(deret []models.TasbihTitikHari) *models.TasbihTitikHari {
+	var best *models.TasbihTitikHari
+	for i := range deret {
+		if deret[i].Total > 0 && (best == nil || deret[i].Total >= best.Total) {
+			h := deret[i]
+			best = &h
+		}
+	}
+	return best
 }
 
 // JumlahPutaranPaket: putaran paket selesai sejak tanggal (nil = sepanjang masa),

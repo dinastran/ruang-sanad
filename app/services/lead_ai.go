@@ -320,11 +320,30 @@ func (s *LeadService) ProposeFollowup(ctx context.Context, leadID int64, in Lead
 			return err
 		}
 		actor := userActor(createdBy)
+		approvedBy := createdBy
 		if createdByKind == "ai" {
 			actor = aiActor(createdBy)
+			approvedBy = 0 // AI token id is not a user id
 		}
-		return writeLeadEvent(ctx, q, leadID, newLeadEventID("fu"), "followup.proposed", actor, map[string]any{
+		if err := writeLeadEvent(ctx, q, leadID, newLeadEventID("fu"), "followup.proposed", actor, map[string]any{
 			"followup_id": id, "step": in.Step, "scheduled_at": formatWIB(in.ScheduledAt),
+		}, now); err != nil {
+			return err
+		}
+		// Auto-approve: follow-ups no longer wait for manual approval. The
+		// PRD 10.2 rules were just checked and the WA outbox worker checks
+		// them again (switch, send window, daily cap, label pilot) at send time.
+		n, err := q.ApproveLeadFollowup(ctx, queries.ApproveLeadFollowupParams{
+			DraftText: in.DraftText, ScheduledAt: in.ScheduledAt, ApprovedBy: nullInt(approvedBy), ApprovedAt: nullTime(now), UpdatedAt: now, ID: id,
+		})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return errors.New("follow-up gagal disetujui otomatis")
+		}
+		return writeLeadEvent(ctx, q, leadID, newLeadEventID("fu"), "followup.approved", "system", map[string]any{
+			"followup_id": id, "step": in.Step, "scheduled_at": formatWIB(in.ScheduledAt), "auto": true,
 		}, now)
 	})
 	return id, err

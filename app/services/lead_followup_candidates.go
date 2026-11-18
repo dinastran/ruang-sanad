@@ -136,6 +136,6 @@ func (s *AIAgentService) toolDaftarKandidatFollowup(ctx context.Context, p *mode
  return map[string]any{
   "data_per": aiWIB(now), "label_pilot": pilotFollowupLabel,
   "jumlah": len(items), "kandidat": items, "cursor_berikut": next,
-  "catatan": fmt.Sprintf("Hanya label %s. Baca detail_lead dahulu, lalu usulkan_followup dengan izin tulis. Bukan pengiriman otomatis; CS tetap wajib approve. Jangan melakukan follow-up jika tidak relevan atau tidak ada update nyata untuk D7/D30.", pilotFollowupLabel),
+  "catatan": fmt.Sprintf("Hanya label %s. Baca detail_lead dahulu, lalu usulkan_followup dengan izin tulis. Follow-up yang dibuat langsung disetujui otomatis dan terkirim sesuai jadwal. Jangan melakukan follow-up jika tidak relevan atau tidak ada update nyata untuk D7/D30.", pilotFollowupLabel),
  }, nil
 }

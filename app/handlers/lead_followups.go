@@ -93,7 +93,7 @@ func (h *LeadFollowupHandler) Create(c *fiber.Ctx) error {
 		return h.done(c, leadPath(id), errors.New("data follow-up tidak valid"), "")
 	}
 	_, err := h.leads.CreateManualFollowup(c.UserContext(), id, c.Locals("user_id").(int64), req)
-	return h.done(c, leadPath(id), err, "Follow-up dibuat dan menunggu persetujuan")
+	return h.done(c, leadPath(id), err, "Follow-up dibuat dan langsung dijadwalkan")
 }
 
 func (h *LeadFollowupHandler) Approve(c *fiber.Ctx) error {
