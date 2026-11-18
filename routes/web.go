@@ -59,6 +59,7 @@ type Handlers struct {
 	LeadClosing                 *handlers.LeadClosingHandler
 	LeadLaporan                 *handlers.LeadLaporanHandler
 	LeadSources                 *handlers.LeadSourceHandler
+	LeadPrograms                *handlers.LeadProgramHandler
 	MetaCAPI                    *handlers.MetaCAPIHandler
 	MetaAds                     *handlers.MetaAdsHandler
 	LeadFollowups               *handlers.LeadFollowupHandler
@@ -80,6 +81,18 @@ func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *
 	setupMCPRoutes(app, h.MCP)
 	setupOAuthRoutes(app, h.OAuth, store, csrfMiddleware)
 	setupIntegrationRoutes(app, h.CsAiIngest)
+	setupProgramPublicRoutes(app, h.LeadPrograms)
+}
+
+// setupProgramPublicRoutes exposes the public attendance link that hosts
+// share in the Zoom chat of a short program session. No login: participants
+// identify themselves with their registration WhatsApp number.
+func setupProgramPublicRoutes(app *fiber.App, h *handlers.LeadProgramHandler) {
+	if h == nil {
+		return
+	}
+	app.Get("/hadir/:token", h.HadirPage)
+	app.Post("/hadir/:token", middlewares.HadirRateLimit.Limit(), h.HadirSubmit)
 }
 
 // setupIntegrationRoutes exposes machine-to-machine endpoints. They sit
@@ -545,6 +558,21 @@ func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, u
 		protected.Delete("/leads/sumber/:sid", sourceRole, h.LeadSources.Delete)
 		protected.Post("/leads/sumber/:sid/pola", sourceRole, h.LeadSources.AddPattern)
 		protected.Put("/leads/:id/sumber", leadRole, h.LeadSources.SetForLead)
+	}
+	if h.LeadPrograms != nil {
+		programRole := middlewares.RoleRequired(store, userService, LeadSourceEditorRoles...)
+		protected.Get("/leads/program", leadRole, h.LeadPrograms.Index)
+		protected.Post("/leads/program", programRole, h.LeadPrograms.Create)
+		protected.Put("/leads/program/sesi/:sid", programRole, h.LeadPrograms.UpdateSesi)
+		protected.Delete("/leads/program/sesi/:sid", programRole, h.LeadPrograms.DeleteSesi)
+		protected.Put("/leads/program/sesi/:sid/hadir/:oid", programRole, h.LeadPrograms.SetHadir)
+		protected.Get("/leads/program/:pid", leadRole, h.LeadPrograms.Show)
+		protected.Put("/leads/program/:pid", programRole, h.LeadPrograms.Update)
+		protected.Put("/leads/program/:pid/sumber", programRole, h.LeadPrograms.SetSources)
+		protected.Post("/leads/program/:pid/sesi", programRole, h.LeadPrograms.CreateSesi)
+		protected.Put("/leads/:id/program", leadRole, h.LeadPrograms.SetLeadProgram)
+		protected.Post("/leads/:id/peserta", leadRole, h.LeadPrograms.DaftarkanPeserta)
+		protected.Post("/leads/:id/tawarkan-reguler", leadRole, h.LeadPrograms.TawarkanReguler)
 	}
 	if h.MetaAds != nil {
 		adsRole := middlewares.RoleRequired(store, userService, MetaAdsRoles...)

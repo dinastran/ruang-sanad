@@ -15,6 +15,9 @@ const DEFAULT_DESC =
 // Per-page browser tab title (component name -> label).
 const PAGE_TITLES: Record<string, string> = {
 	"auth/Login": "Masuk",
+	"app/LeadPrograms": "Program CRM",
+	"app/LeadProgramDetail": "Program CRM",
+	"public/HadirProgram": "Absensi",
 	"oauth/Authorize": "Hubungkan Aplikasi AI",
 	"auth/Register": "Daftar",
 	"auth/ForgotPassword": "Lupa Password",

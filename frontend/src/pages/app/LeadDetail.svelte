@@ -126,6 +126,11 @@
 		kode_kelas: string[];
 		duplicates: Duplicate[];
 	}
+	interface LeadProgramInfo {
+		program: { id: number; nama: string; jenis: "reguler" | "program"; produk_id: number; produk_nama: string; produk_harga: number };
+		manual: boolean;
+		order: { order_id: number; order_no: string; status: string } | null;
+	}
 	interface Props {
 		user?: User;
 		lead: Lead;
@@ -134,6 +139,8 @@
 		stages?: string[];
 		lost_reasons?: string[];
 		convert?: ConvertOptions;
+		program?: LeadProgramInfo;
+		programs?: { id: number; nama: string; jenis: string; is_aktif: boolean }[];
 		followup?: { can_approve: boolean; steps: string[] };
 		flash?: Flash;
 	}
@@ -154,7 +161,14 @@
 	let isOpen = $derived(lead.status === "open");
 	let isWon = $derived(lead.status === "won");
 	let canVerify = $derived(isOpen && (lead.stage === "info_bayar_dikirim" || lead.stage === "bukti_masuk"));
-	let canConvert = $derived(isOpen && lead.stage === "terverifikasi" && !lead.santri_id && !!props.convert);
+	// Short programs (e.g. Sepekan Bersama Al-Fatihah) close into a participant,
+	// not a santri.
+	let program = $derived(props.program);
+	let isProgramPendek = $derived(program?.program.jenis === "program");
+	let canConvert = $derived(isOpen && lead.stage === "terverifikasi" && !lead.santri_id && !!props.convert && !isProgramPendek);
+	let canDaftarPeserta = $derived(isOpen && lead.stage === "terverifikasi" && !lead.santri_id && isProgramPendek);
+	let canTawarkanReguler = $derived(isWon && !lead.santri_id && !!program?.order);
+	let programOptions = $derived((props.programs ?? []).filter((p) => p.is_aktif || p.id === program?.program.id));
 	let unusedLabels = $derived(allLabels.filter((l) => !lead.labels.some((x) => x.id === l.id)));
 
 	// --- Transcript: older pages are fetched and kept locally. ---
@@ -255,7 +269,7 @@
 	let review = $derived(new Set(lead.review_fields));
 
 	// --- Dialogs ---
-	type Dialog = "stage" | "lost" | "verify" | "convert" | "delete" | "followup" | null;
+	type Dialog = "stage" | "lost" | "verify" | "convert" | "peserta" | "delete" | "followup" | null;
 	let dialog = $state<Dialog>(null);
 
 	// svelte-ignore state_referenced_locally
@@ -312,6 +326,20 @@
 	function submitConvert() {
 		send("post", `/app/leads/${lead.id}/convert`, { ...convert, usia: Number(convert.usia) || 0, nominal: Number(convert.nominal) || 0 });
 	}
+	let peserta = $state({ nama: "", no_wa: "", nominal: 0, tanggal: "" });
+	function openPeserta() {
+		peserta = {
+			nama: lead.nama || lead.wa_name || "",
+			no_wa: lead.phone,
+			nominal: lead.verified_amount || lead.payment_amount || program?.program.produk_harga || 0,
+			tanggal: lead.verified_date || todayWIB(),
+		};
+		dialog = "peserta";
+	}
+	function tawarkanReguler() {
+		if (!confirm("Buka lagi lead ini di Tahsin Reguler (tahap rekomendasi) untuk ditawari kelas reguler? Data peserta & kehadirannya tetap tersimpan.")) return;
+		send("post", `/app/leads/${lead.id}/tawarkan-reguler`);
+	}
 	function linkTo(santriId: number) {
 		send("post", `/app/leads/${lead.id}/convert`, { link_santri_id: santriId });
 	}
@@ -332,7 +360,9 @@
 		"stage.changed": "Tahap diubah",
 		"stage.ai_suggestion_applied": "Saran tahap AI diterapkan",
 		"payment.verified": "Pembayaran diverifikasi",
-		"lead.converted": "Dijadikan santri",
+		"lead.converted": "Closing (santri / peserta program)",
+		"lead.program_changed": "Program diubah",
+		"lead.offered_reguler": "Ditawari kelas reguler",
 		"lead.lost": "Ditandai hilang",
 		"lead.do_not_contact": "Ditandai jangan hubungi",
 		"lead.reopened": "Dibuka kembali",
@@ -452,6 +482,22 @@
 							</select>
 						{/if}
 					</p>
+					{#if program}
+						<p class="mt-1 text-xs text-neutral-500">
+							Program: <span class="font-medium text-neutral-700 dark:text-neutral-300">{program.program.nama}</span>
+							{#if isProgramPendek}<span class="ml-1 rounded-full bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300">program pendek</span>{/if}
+							<span class="text-neutral-400">({program.manual ? "dipilih CS" : "ikut sumber"})</span>
+							{#if !isWon && programOptions.length > 1}
+								<select class="ml-1 rounded border border-neutral-300 dark:border-neutral-700 bg-transparent px-1 py-0.5 text-xs" aria-label="Ubah program lead" value={program.manual ? String(program.program.id) : "0"} disabled={busy} onchange={(e) => send("put", `/app/leads/${lead.id}/program`, { program_id: Number((e.currentTarget as HTMLSelectElement).value) || 0 })}>
+									<option value="0">Ikut sumber</option>
+									{#each programOptions as o}<option value={String(o.id)}>{o.nama}</option>{/each}
+								</select>
+							{/if}
+							{#if program.order}
+								· <a href="/app/produk-crm/orders" use:inertia class="font-medium text-brand-700 hover:underline dark:text-brand-400">Peserta {program.order.order_no}</a>
+							{/if}
+						</p>
+					{/if}
 				</div>
 
 				<div class="flex flex-wrap gap-2 lg:justify-end lg:max-w-md">
@@ -460,6 +506,12 @@
 					{/if}
 					{#if canConvert}
 						<button type="button" class={btnPrimary} onclick={openConvert}>Jadikan Santri</button>
+					{/if}
+					{#if canDaftarPeserta}
+						<button type="button" class={btnPrimary} onclick={openPeserta}>Daftarkan peserta</button>
+					{/if}
+					{#if canTawarkanReguler}
+						<button type="button" class={btnGhost} disabled={busy} onclick={tawarkanReguler}>Tawarkan kelas reguler</button>
 					{/if}
 					{#if canVerify}
 						<button type="button" class={btnPrimary} onclick={openVerify}>Verifikasi pembayaran</button>
@@ -788,6 +840,17 @@
 					</label>
 				</div>
 				<div class="mt-5 flex gap-2"><button class="{btnGhost} flex-1" onclick={() => (dialog = null)}>Batal</button><button class="{btnPrimary} flex-1" disabled={busy || !convertValid} onclick={submitConvert}>Buat santri</button></div>
+			{:else if dialog === "peserta" && program}
+				<h3 class="text-lg font-bold text-neutral-900 dark:text-white">Daftarkan peserta {program.program.nama}</h3>
+				<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Lead ditandai closing dan tercatat sebagai peserta (pesanan {program.program.produk_nama || "produk program"} di Produk CRM). Tidak dibuat santri, kelas, atau tagihan SPP.</p>
+				<div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+					<label class="{labelCls} sm:col-span-2">Nama peserta *<input class="{field} mt-1" bind:value={peserta.nama} /></label>
+					<label class={labelCls}>No. WhatsApp<input class="{field} mt-1" bind:value={peserta.no_wa} /></label>
+					<label class={labelCls}>Nominal (Rp)<input type="number" min="0" class="{field} mt-1" bind:value={peserta.nominal} /></label>
+					<label class={labelCls}>Tanggal daftar<input type="date" class="{field} mt-1" bind:value={peserta.tanggal} /></label>
+				</div>
+				<p class="mt-3 text-xs text-neutral-500">Nomor WhatsApp ini dipakai peserta untuk absensi lewat link di Zoom.</p>
+				<div class="mt-5 flex gap-2"><button class="{btnGhost} flex-1" onclick={() => (dialog = null)}>Batal</button><button class="{btnPrimary} flex-1" disabled={busy || !peserta.nama.trim()} onclick={() => send("post", `/app/leads/${lead.id}/peserta`, { ...peserta, nominal: Number(peserta.nominal) || 0 }, () => (dialog = null))}>Daftarkan</button></div>
 			{:else if dialog === "delete"}
 				<h3 class="text-lg font-bold text-neutral-900 dark:text-white">Hapus data lead?</h3>
 				<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Lead, transkrip, analisis, follow-up, dan riwayatnya dihapus permanen (hak hapus data). Santri yang sudah dibuat tidak ikut terhapus.</p>

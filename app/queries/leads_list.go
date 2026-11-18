@@ -19,6 +19,8 @@ type LeadListFilter struct {
 	SourceID   int64
 	SourceNone bool
 	LabelID     int64
+	// ProgramID > 0 filters one CRM program (effective: lead, source, reguler).
+	ProgramID   int64
 	AssignedTo  int64
 	NeedsReview bool
 	Search      string
@@ -49,6 +51,7 @@ type LeadListRow struct {
 	ActivityRaw    string
 	Prio           int64
 	AIPaused       bool
+	ProgramID      int64
 }
 
 const leadPrioExpr = `CASE WHEN l.stage = 'bukti_masuk' AND l.status = 'open' THEN 1 ELSE 0 END`
@@ -84,6 +87,11 @@ func leadListWhere(f LeadListFilter) ([]string, []any) {
   where = append(where, "l.status = 'lost' AND l.lost_reason = ?")
   args = append(args, f.LostReason)
  }
+	if f.ProgramID > 0 {
+		cond, a := leadProgramFilter(f.ProgramID)
+		where = append(where, cond)
+		args = append(args, a...)
+	}
 	if f.LabelID > 0 {
 		where = append(where, "EXISTS (SELECT 1 FROM lead_label_links k WHERE k.lead_id = l.id AND k.label_id = ?)")
 		args = append(args, f.LabelID)
@@ -131,7 +139,8 @@ func (q *Queries) ListLeads(ctx context.Context, f LeadListFilter) ([]LeadListRo
 	args = append(args, limit)
 	query := `SELECT l.id, l.nama, l.wa_name, l.phone, l.stage, l.status, l.paket_kode, l.needs_review,
 		l.assigned_user_id, COALESCE(u.name, ''), l.last_inbound_at, ` + leadActExpr + `, ` + leadPrioExpr + `,
-		COALESCE((SELECT e.type FROM lead_events e WHERE e.lead_id = l.id AND e.type IN ('ai.paused', 'ai.resumed') ORDER BY e.id DESC LIMIT 1), '') = 'ai.paused'
+		COALESCE((SELECT e.type FROM lead_events e WHERE e.lead_id = l.id AND e.type IN ('ai.paused', 'ai.resumed') ORDER BY e.id DESC LIMIT 1), '') = 'ai.paused',
+		` + LeadProgramExpr + `
 	FROM leads l LEFT JOIN users u ON u.id = l.assigned_user_id
 	WHERE ` + strings.Join(where, " AND ") + `
 	ORDER BY ` + leadPrioExpr + ` DESC, ` + leadActExpr + ` DESC, l.id DESC
@@ -145,7 +154,7 @@ func (q *Queries) ListLeads(ctx context.Context, f LeadListFilter) ([]LeadListRo
 	for rows.Next() {
 		var r LeadListRow
 		if err := rows.Scan(&r.ID, &r.Nama, &r.WaName, &r.Phone, &r.Stage, &r.Status, &r.PaketKode, &r.NeedsReview,
-			&r.AssignedUserID, &r.AssignedName, &r.LastInboundAt, &r.ActivityRaw, &r.Prio, &r.AIPaused); err != nil {
+			&r.AssignedUserID, &r.AssignedName, &r.LastInboundAt, &r.ActivityRaw, &r.Prio, &r.AIPaused, &r.ProgramID); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

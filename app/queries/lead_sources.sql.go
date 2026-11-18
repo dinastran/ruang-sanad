@@ -69,7 +69,7 @@ func (q *Queries) CountLeadsOfSource(ctx context.Context, leadSourceID sql.NullI
 const createLeadSource = `-- name: CreateLeadSource :one
 INSERT INTO lead_sources (nama, keterangan, url, is_aktif, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id, nama, keterangan, is_aktif, created_at, updated_at, url
+RETURNING id, nama, keterangan, is_aktif, created_at, updated_at, url, program_id
 `
 
 type CreateLeadSourceParams struct {
@@ -99,6 +99,7 @@ func (q *Queries) CreateLeadSource(ctx context.Context, arg CreateLeadSourcePara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Url,
+		&i.ProgramID,
 	)
 	return i, err
 }
@@ -159,7 +160,7 @@ func (q *Queries) DeleteLeadSourcePattern(ctx context.Context, id int64) (int64,
 }
 
 const getLeadSource = `-- name: GetLeadSource :one
-SELECT id, nama, keterangan, is_aktif, created_at, updated_at, url FROM lead_sources WHERE id = ?
+SELECT id, nama, keterangan, is_aktif, created_at, updated_at, url, program_id FROM lead_sources WHERE id = ?
 `
 
 func (q *Queries) GetLeadSource(ctx context.Context, id int64) (LeadSource, error) {
@@ -173,6 +174,7 @@ func (q *Queries) GetLeadSource(ctx context.Context, id int64) (LeadSource, erro
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Url,
+		&i.ProgramID,
 	)
 	return i, err
 }
@@ -313,7 +315,7 @@ func (q *Queries) ListLeadSourcePatterns(ctx context.Context) ([]LeadSourcePatte
 }
 
 const listLeadSources = `-- name: ListLeadSources :many
-SELECT id, nama, keterangan, is_aktif, created_at, updated_at, url FROM lead_sources ORDER BY is_aktif DESC, nama
+SELECT id, nama, keterangan, is_aktif, created_at, updated_at, url, program_id FROM lead_sources ORDER BY is_aktif DESC, nama
 `
 
 func (q *Queries) ListLeadSources(ctx context.Context) ([]LeadSource, error) {
@@ -333,6 +335,7 @@ func (q *Queries) ListLeadSources(ctx context.Context) ([]LeadSource, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Url,
+			&i.ProgramID,
 		); err != nil {
 			return nil, err
 		}

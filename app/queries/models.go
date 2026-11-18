@@ -453,6 +453,7 @@ type Lead struct {
 	JadwalKode            string
 	LeadSourceID          sql.NullInt64
 	LeadSourceBy          string
+	ProgramID             sql.NullInt64
 }
 
 type LeadAnalysis struct {
@@ -525,6 +526,18 @@ type LeadMessage struct {
 	CreatedAt   time.Time
 }
 
+type LeadProgram struct {
+	ID            int64
+	Nama          string
+	Jenis         string
+	ProdukID      sql.NullInt64
+	ProdukBatchID sql.NullInt64
+	Keterangan    string
+	IsAktif       int64
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
 type LeadSource struct {
 	ID         int64
 	Nama       string
@@ -533,6 +546,7 @@ type LeadSource struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	Url        string
+	ProgramID  sql.NullInt64
 }
 
 type LeadSourceMetaCampaign struct {
@@ -783,6 +797,7 @@ type ProductOrder struct {
 	DibatalkanOleh sql.NullInt64
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	LeadID         sql.NullInt64
 }
 
 type ProductOrderItem struct {
@@ -816,6 +831,25 @@ type ProdukBatch struct {
 	IsAktif        int64
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+type ProgramKehadiran struct {
+	ID        int64
+	SesiID    int64
+	OrderID   int64
+	Cara      string
+	CreatedAt time.Time
+}
+
+type ProgramSesi struct {
+	ID        int64
+	ProgramID int64
+	Ke        int64
+	Judul     string
+	Tanggal   string
+	JamMulai  string
+	Token     string
+	CreatedAt time.Time
 }
 
 type RapatAbsen struct {

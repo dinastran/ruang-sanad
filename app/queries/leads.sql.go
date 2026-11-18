@@ -198,7 +198,7 @@ func (q *Queries) CreateCustomLeadLabel(ctx context.Context, arg CreateCustomLea
 const createLead = `-- name: CreateLead :one
 INSERT INTO leads (wa_chat_id, phone, wa_name, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?)
-RETURNING id, wa_chat_id, phone, wa_name, nama, usia, domisili, jenis_kelamin, paket_kode, kelas_kode, waktu_belajar, riwayat_belajar, belajar_dimana, untuk_siapa, stage, status, lost_reason, followup_permission, source, assigned_user_id, payment_amount, payment_info_sent_at, proof_received_at, verified_at, verified_by, converted_at, converted_by, santri_id, needs_review, last_inbound_at, last_outbound_at, last_analyzed_message_id, created_at, updated_at, jadwal_kode, lead_source_id, lead_source_by
+RETURNING id, wa_chat_id, phone, wa_name, nama, usia, domisili, jenis_kelamin, paket_kode, kelas_kode, waktu_belajar, riwayat_belajar, belajar_dimana, untuk_siapa, stage, status, lost_reason, followup_permission, source, assigned_user_id, payment_amount, payment_info_sent_at, proof_received_at, verified_at, verified_by, converted_at, converted_by, santri_id, needs_review, last_inbound_at, last_outbound_at, last_analyzed_message_id, created_at, updated_at, jadwal_kode, lead_source_id, lead_source_by, program_id
 `
 
 type CreateLeadParams struct {
@@ -256,6 +256,7 @@ func (q *Queries) CreateLead(ctx context.Context, arg CreateLeadParams) (Lead, e
 		&i.JadwalKode,
 		&i.LeadSourceID,
 		&i.LeadSourceBy,
+		&i.ProgramID,
 	)
 	return i, err
 }
@@ -571,7 +572,7 @@ func (q *Queries) GetLatestLeadAnalysis(ctx context.Context, leadID int64) (Lead
 }
 
 const getLeadByChatID = `-- name: GetLeadByChatID :one
-SELECT id, wa_chat_id, phone, wa_name, nama, usia, domisili, jenis_kelamin, paket_kode, kelas_kode, waktu_belajar, riwayat_belajar, belajar_dimana, untuk_siapa, stage, status, lost_reason, followup_permission, source, assigned_user_id, payment_amount, payment_info_sent_at, proof_received_at, verified_at, verified_by, converted_at, converted_by, santri_id, needs_review, last_inbound_at, last_outbound_at, last_analyzed_message_id, created_at, updated_at, jadwal_kode, lead_source_id, lead_source_by FROM leads WHERE wa_chat_id = ?
+SELECT id, wa_chat_id, phone, wa_name, nama, usia, domisili, jenis_kelamin, paket_kode, kelas_kode, waktu_belajar, riwayat_belajar, belajar_dimana, untuk_siapa, stage, status, lost_reason, followup_permission, source, assigned_user_id, payment_amount, payment_info_sent_at, proof_received_at, verified_at, verified_by, converted_at, converted_by, santri_id, needs_review, last_inbound_at, last_outbound_at, last_analyzed_message_id, created_at, updated_at, jadwal_kode, lead_source_id, lead_source_by, program_id FROM leads WHERE wa_chat_id = ?
 `
 
 func (q *Queries) GetLeadByChatID(ctx context.Context, waChatID string) (Lead, error) {
@@ -615,13 +616,14 @@ func (q *Queries) GetLeadByChatID(ctx context.Context, waChatID string) (Lead, e
 		&i.JadwalKode,
 		&i.LeadSourceID,
 		&i.LeadSourceBy,
+		&i.ProgramID,
 	)
 	return i, err
 }
 
 const getLeadByID = `-- name: GetLeadByID :one
 
-SELECT id, wa_chat_id, phone, wa_name, nama, usia, domisili, jenis_kelamin, paket_kode, kelas_kode, waktu_belajar, riwayat_belajar, belajar_dimana, untuk_siapa, stage, status, lost_reason, followup_permission, source, assigned_user_id, payment_amount, payment_info_sent_at, proof_received_at, verified_at, verified_by, converted_at, converted_by, santri_id, needs_review, last_inbound_at, last_outbound_at, last_analyzed_message_id, created_at, updated_at, jadwal_kode, lead_source_id, lead_source_by FROM leads WHERE id = ?
+SELECT id, wa_chat_id, phone, wa_name, nama, usia, domisili, jenis_kelamin, paket_kode, kelas_kode, waktu_belajar, riwayat_belajar, belajar_dimana, untuk_siapa, stage, status, lost_reason, followup_permission, source, assigned_user_id, payment_amount, payment_info_sent_at, proof_received_at, verified_at, verified_by, converted_at, converted_by, santri_id, needs_review, last_inbound_at, last_outbound_at, last_analyzed_message_id, created_at, updated_at, jadwal_kode, lead_source_id, lead_source_by, program_id FROM leads WHERE id = ?
 `
 
 // CRM Leads (lead to closing). Dynamic list and report queries live in app/queries/leads_list.go.
@@ -666,6 +668,7 @@ func (q *Queries) GetLeadByID(ctx context.Context, id int64) (Lead, error) {
 		&i.JadwalKode,
 		&i.LeadSourceID,
 		&i.LeadSourceBy,
+		&i.ProgramID,
 	)
 	return i, err
 }

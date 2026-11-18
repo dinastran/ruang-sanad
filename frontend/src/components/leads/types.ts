@@ -31,6 +31,16 @@ export interface Filters {
 	lost_reason?: string;
 	/** Lead source id, or "none" for leads without a source. */
 	sumber?: string;
+	/** CRM program id (Tahsin Reguler, short programs); 0 = all. */
+	program?: number;
+}
+
+/** A CRM program for the program filter and the lead page. */
+export interface ProgramOption {
+	id: number;
+	nama: string;
+	jenis: "reguler" | "program";
+	is_aktif: boolean;
 }
 
 /** A lead source (landing page / iklan) for selects and filters. */

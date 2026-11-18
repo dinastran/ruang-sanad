@@ -18,12 +18,19 @@ type LeadHandler struct {
 	leads          *services.LeadService
 	ads            *services.MetaAdsService
 	capi           *services.MetaCAPIService
+	programs       *services.LeadProgramService // nil = no program filter/info
 	store          *session.Store
 	inertiaService *services.InertiaService
 }
 
 func NewLeadHandler(leads *services.LeadService, store *session.Store, inertiaService *services.InertiaService) *LeadHandler {
 	return &LeadHandler{leads: leads, store: store, inertiaService: inertiaService}
+}
+
+// WithPrograms enables CRM programs (filter, lead program, participant closing).
+func (h *LeadHandler) WithPrograms(programs *services.LeadProgramService) *LeadHandler {
+	h.programs = programs
+	return h
 }
 
 // WithIntegrations enables optional read-only Meta status for the CRM home.
@@ -124,8 +131,15 @@ func (h *LeadHandler) Index(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	programs := []models.LeadProgramOption{}
+	if h.programs != nil {
+		if programs, err = h.programs.Options(); err != nil {
+			return err
+		}
+	}
 	return h.inertiaService.Render(c, "app/Leads", fiber.Map{
-		"sources": sources,
+		"sources":  sources,
+		"programs": programs,
 		"user":    user,
 		"leads":   list.Items,
 		"next":    list.NextCursor,
@@ -178,6 +192,17 @@ func (h *LeadHandler) Show(c *fiber.Ctx) error {
 			return err
 		}
 		props["convert"] = opts
+	}
+	if h.programs != nil {
+		info, err := h.leads.ProgramInfo(c.UserContext(), id)
+		if err != nil {
+			return err
+		}
+		options, err := h.programs.Options()
+		if err != nil {
+			return err
+		}
+		props["program"], props["programs"] = info, options
 	}
 	return h.inertiaService.Render(c, "app/LeadDetail", props)
 }

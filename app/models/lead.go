@@ -55,6 +55,7 @@ type LeadListItem struct {
 	LastInboundAt  string              `json:"last_inbound_at"`
 	LastActivityAt string              `json:"last_activity_at"`
 	Labels         []LeadLabelResponse `json:"labels"`
+	ProgramID      int64               `json:"program_id"`
 }
 
 type LeadListParams struct {
@@ -65,6 +66,8 @@ type LeadListParams struct {
 	// Source: a lead_sources id, or "none" for leads without a source.
 	Source string `query:"sumber" json:"sumber"`
 	LabelID     int64  `query:"label" json:"label"`
+	// ProgramID: a lead_programs id; 0 = all programs.
+	ProgramID   int64  `query:"program" json:"program"`
 	Mine        bool   `query:"mine" json:"mine"`
 	NeedsReview bool   `query:"review" json:"review"`
 	Search      string `query:"q" json:"q"`

@@ -184,6 +184,14 @@ var (
 		Message:     "Terlalu banyak permintaan token, coba lagi sebentar lagi",
 	})
 
+	// HadirRateLimit: public attendance link, 30 tries per 10 minutes per IP
+	// (enough for a family sharing one connection, too few to guess numbers).
+	HadirRateLimit = NewRateLimiter(RateLimiterConfig{
+		MaxRequests: 30,
+		Window:      10 * time.Minute,
+		Message:     "Terlalu banyak percobaan absensi, coba lagi beberapa menit lagi",
+	})
+
 	// CSAIIngestRateLimit: 600 event batches per minute from the CS AI bridge.
 	CSAIIngestRateLimit = NewRateLimiter(RateLimiterConfig{
 		MaxRequests: 600,
