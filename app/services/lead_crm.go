@@ -108,6 +108,9 @@ func (s *LeadService) List(ctx context.Context, p models.LeadListParams) (*model
 		f.SourceID = id
 	}
 	f.LabelID = p.LabelID
+	if p.ProgramID > 0 {
+		f.ProgramID = p.ProgramID
+	}
 	if p.Mine {
 		f.AssignedTo = p.UserID
 	}
@@ -168,6 +171,7 @@ func (s *LeadService) List(ctx context.Context, p models.LeadListParams) (*model
 			PaketKode: r.PaketKode, NeedsReview: r.NeedsReview == 1, AIPaused: pauses[r.ID].paused,
 			AssignedUserID: r.AssignedUserID.Int64, AssignedName: r.AssignedName,
 			LastInboundAt: formatLeadNullTime(r.LastInboundAt), Labels: labelResponses(labels[r.ID]),
+			ProgramID: r.ProgramID,
 		}
 		if t, ok := queries.ParseStoredTime(r.ActivityRaw); ok {
 			item.LastActivityAt = formatLeadTime(t)

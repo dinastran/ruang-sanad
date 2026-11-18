@@ -58,6 +58,26 @@ func validateProductOrderBatch(ctx context.Context, q *queries.Querier, product 
 }
 
 func (s *ProductOrderService) Create(req models.CreateProductOrderRequest, userID int64) (int64, error) {
+	ctx := context.Background()
+	tx, err := s.querier.BeginTx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	orderID, err := CreateProductOrderWithQuerier(ctx, s.querier.WithTx(tx), req, userID)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return orderID, nil
+}
+
+// CreateProductOrderWithQuerier validates and writes an order (items and stock
+// mutations) using q, so callers can run it inside their own transaction
+// (e.g. a lead closing into a short program).
+func CreateProductOrderWithQuerier(ctx context.Context, q *queries.Querier, req models.CreateProductOrderRequest, userID int64) (int64, error) {
 	req.NamaPembeli = strings.TrimSpace(req.NamaPembeli)
 	req.NoWA = strings.TrimSpace(req.NoWA)
 	req.Sumber = strings.ToLower(strings.TrimSpace(req.Sumber))
@@ -75,14 +95,6 @@ func (s *ProductOrderService) Create(req models.CreateProductOrderRequest, userI
 	if len(req.Items) == 0 {
 		return 0, errors.New("minimal satu produk harus dipilih")
 	}
-
-	ctx := context.Background()
-	tx, err := s.querier.BeginTx(ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = tx.Rollback() }()
-	q := s.querier.WithTx(tx)
 
 	type validatedItem struct {
 		request models.CreateProductOrderItemRequest
@@ -163,10 +175,6 @@ func (s *ProductOrderService) Create(req models.CreateProductOrderRequest, userI
 				return 0, err
 			}
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return 0, err
 	}
 	return orderID, nil
 }

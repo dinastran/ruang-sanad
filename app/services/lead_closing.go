@@ -170,6 +170,12 @@ func (s *LeadService) Convert(ctx context.Context, id, actorID int64, req models
 		if l.Status != LeadStatusOpen || l.Stage != LeadStageTerverifikasi {
 			return ErrLeadNotVerified
 		}
+		// Short-program leads close into participants, never into santri.
+		if p, err := s.effectiveProgram(ctx, q, id); err != nil {
+			return err
+		} else if p.Jenis == LeadProgramJenisProgram {
+			return ErrLeadProgramPendek
+		}
 		now := s.nowUTC()
 
 		if req.LinkSantriID > 0 {
@@ -229,26 +235,8 @@ func (s *LeadService) Convert(ctx context.Context, id, actorID int64, req models
 		}, now); err != nil {
 			return err
 		}
-		// Enqueue Purchase atomically with the CRM conversion, so an interrupted
-		// reconciliation worker cannot lose the milestone. The worker still
-		// owns HTTP delivery/retry. Preserve CAPI's existing opt-in and phone
-		// eligibility rules, plus test-mode attribution.
-		if s.metaCAPI != nil && s.metaCAPI.Enabled() && NormalizeLeadPhone(l.Phone) != "" {
-			value, err := q.GetMetaCAPIPurchaseAmount(ctx, id)
-			if err != nil {
-				return err
-			}
-			if value <= 0 {
-				value = l.PaymentAmount
-			}
-			if _, err := q.InsertMetaCAPIEvent(ctx, queries.InsertMetaCAPIEventParams{
-				LeadID: id, EventName: MetaEventPurchase, EventID: metaEventID(id, MetaEventPurchase),
-				EventTime: now, Value: max(value, int64(0)),
-				TestMode: boolInt(s.metaCAPI.cfg.TestEventCode != ""),
-				NextAttemptAt: now, CreatedAt: now,
-			}); err != nil {
-				return err
-			}
+		if err := s.enqueuePurchase(ctx, q, id, l.Phone, l.PaymentAmount, now); err != nil {
+			return err
 		}
 		if !created {
 			return nil
@@ -300,4 +288,28 @@ func formatRupiahPlain(n int64) string {
 		b.WriteRune(r)
 	}
 	return "Rp" + b.String()
+}
+
+// enqueuePurchase queues the Meta CAPI Purchase atomically with the CRM
+// conversion, so an interrupted reconciliation worker cannot lose the
+// milestone. The worker still owns HTTP delivery/retry. Preserves CAPI's
+// opt-in and phone eligibility rules, plus test-mode attribution.
+func (s *LeadService) enqueuePurchase(ctx context.Context, q *queries.Querier, id int64, phone string, paymentAmount int64, now time.Time) error {
+	if s.metaCAPI == nil || !s.metaCAPI.Enabled() || NormalizeLeadPhone(phone) == "" {
+		return nil
+	}
+	value, err := q.GetMetaCAPIPurchaseAmount(ctx, id)
+	if err != nil {
+		return err
+	}
+	if value <= 0 {
+		value = paymentAmount
+	}
+	_, err = q.InsertMetaCAPIEvent(ctx, queries.InsertMetaCAPIEventParams{
+		LeadID: id, EventName: MetaEventPurchase, EventID: metaEventID(id, MetaEventPurchase),
+		EventTime: now, Value: max(value, int64(0)),
+		TestMode:      boolInt(s.metaCAPI.cfg.TestEventCode != ""),
+		NextAttemptAt: now, CreatedAt: now,
+	})
+	return err
 }

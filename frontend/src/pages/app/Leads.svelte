@@ -4,13 +4,13 @@
 	import type { Flash, User } from "@lib/types";
 	import { Toast } from "@lib/notifications/toast";
 	import type { LeadLabel } from "@lib/leads";
-	import { Activity, BadgeDollarSign, ChartColumn, Inbox, Kanban, LayoutDashboard, List, Megaphone } from "lucide-svelte";
+	import { Activity, BadgeDollarSign, CalendarRange, ChartColumn, Inbox, Kanban, LayoutDashboard, List, Megaphone } from "lucide-svelte";
 	import { fmt } from "@components/lead-dashboard/types";
 	import PipelineStrip from "@components/leads/PipelineStrip.svelte";
 	import LeadFilters from "@components/leads/LeadFilters.svelte";
 	import LeadTable from "@components/leads/LeadTable.svelte";
 	import LeadKanban from "@components/leads/LeadKanban.svelte";
-	import type { FilterChange, Filters, LeadItem, SourceOption } from "@components/leads/types";
+	import type { FilterChange, Filters, LeadItem, ProgramOption, SourceOption } from "@components/leads/types";
 
 	interface Props {
 		user?: User;
@@ -20,6 +20,7 @@
 		counts?: Record<string, number>;
 		labels?: LeadLabel[];
 		sources?: SourceOption[];
+		programs?: ProgramOption[];
 		stages?: string[];
 		filters?: Filters;
 		flash?: Flash;
@@ -43,9 +44,12 @@
 
 	let hasFilters = $derived(
 		(filters.status !== "" && filters.status !== "open") ||
-			!!(filters.stage || filters.label || filters.mine || filters.review || filters.q || filters.from || filters.to || filters.date_field || filters.reached_stage || filters.lost_reason || filters.sumber),
+			!!(filters.stage || filters.label || filters.mine || filters.review || filters.q || filters.from || filters.to || filters.date_field || filters.reached_stage || filters.lost_reason || filters.sumber || filters.program),
 	);
 	let view = $state<"list" | "kanban">(readView());
+	// Program chips: only shown once a short program exists besides Reguler.
+	let programs = $derived((props.programs ?? []).filter((p) => p.is_aktif || p.id === Number(filters.program)));
+	let programAktif = $derived(Number(filters.program ?? 0));
 
 	function readView(): "list" | "kanban" {
 		try {
@@ -128,6 +132,7 @@
 				<a href="/app/leads/prioritas" use:inertia class={ghost}><Inbox size={15} /> Prioritas</a>
 				<a href="/app/leads/laporan" use:inertia class={ghost}><ChartColumn size={15} /> Laporan</a>
 				<a href="/app/leads/sumber" use:inertia class={ghost}><Megaphone size={15} /> Sumber</a>
+				<a href="/app/leads/program" use:inertia class={ghost}><CalendarRange size={15} /> Program</a>
 				{#if user?.role === "super_admin" || user?.role === "cs"}<a href="/app/leads/iklan" use:inertia class={ghost}><BadgeDollarSign size={15} /> Iklan</a>{/if}
 				{#if user?.role === "super_admin"}<a href="/app/leads/meta-capi" use:inertia class={ghost}><Activity size={15} /> Meta CAPI</a>{/if}
 				<div class="ml-1 hidden gap-0.5 rounded-lg bg-neutral-100 p-1 lg:inline-flex dark:bg-neutral-900" role="group" aria-label="Tampilan">
@@ -142,6 +147,18 @@
 		{/if}
 		{#if error}
 			<div role="alert" class="rounded-lg border border-error/20 bg-error/10 px-4 py-3 text-sm font-medium text-red-700 dark:text-red-300">{error}</div>
+		{/if}
+
+		{#if programs.length > 1}
+			<div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Program">
+				<span class="mr-1 text-xs font-medium text-neutral-500 dark:text-neutral-400">Program</span>
+				{#each [{ id: 0, nama: "Semua" }, ...programs] as p (p.id)}
+					<button type="button" onclick={() => go({ program: p.id })} aria-pressed={programAktif === p.id}
+						class="rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 {programAktif === p.id ? 'border-brand-600 bg-brand-600 text-white dark:border-brand-500 dark:bg-brand-500' : 'border-neutral-200 text-neutral-700 hover:border-brand-400 dark:border-white/10 dark:text-neutral-300'}">
+						{p.nama}
+					</button>
+				{/each}
+			</div>
 		{/if}
 
 		<PipelineStrip {stages} {counts} {total} {filters} onfilter={go} />
