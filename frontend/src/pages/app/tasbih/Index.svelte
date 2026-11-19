@@ -7,6 +7,7 @@
 	import BeadCircle from "@components/tasbih/BeadCircle.svelte";
 	import SyncIndicator from "@components/tasbih/SyncIndicator.svelte";
 	import BadgeToast from "@components/tasbih/BadgeToast.svelte";
+	import KomposisiBar from "@components/tasbih/KomposisiBar.svelte";
 	import DzikirPicker from "@components/tasbih/DzikirPicker.svelte";
 	import DzikirFormSheet from "@components/tasbih/DzikirFormSheet.svelte";
 	import Sheet from "@components/tasbih/Sheet.svelte";
@@ -27,9 +28,11 @@
 		target_harian: number;
 		streak: Streak;
 		badge_baru: Badge[];
+		komposisi_hari_ini?: Komposisi[];
 	}
-	// level & komposisi_hari_ini tetap dikirim server; di layar hitung sengaja tidak ditampilkan (ada di Progres).
-	let { user, dzikir, paket, hari_ini, target_harian, streak, badge_baru }: Props = $props();
+	type Komposisi = { dzikir_id: number; latin: string; total: number };
+	// level tetap dikirim server; di layar hitung sengaja tidak ditampilkan (ada di Progres).
+	let { user, dzikir, paket, hari_ini, target_harian, streak, badge_baru, komposisi_hari_ini }: Props = $props();
 
 	// Antrean offline dipisah per user (perangkat bersama).
 	if (user?.id) setPemilik(user.id);
@@ -91,12 +94,38 @@
 	const streakTampil = $derived(streak.saat + (!streak.hari_ini_tercapai && totalHariIni >= target_harian ? 1 : 0));
 	const adaSheetTerbuka = $derived(pickerOpen || formOpen || pengaturanOpen || targetOpen || ringkasanOpen);
 
-	async function hitungAntreanHariIni() {
+	// Komposisi hari ini = data server + antrean lokal belum tersinkron + sesi berjalan.
+	let komposisiServer = $state<Komposisi[]>(komposisi_hari_ini ?? []);
+	let lokalPerDzikir = $state<Record<number, number>>({});
+	const komposisi = $derived.by(() => {
+		const m = new Map<number, Komposisi>();
+		for (const k of komposisiServer) m.set(k.dzikir_id, { ...k });
+		const tambahKe = (id: number, n: number) => {
+			if (!n) return;
+			const cur = m.get(id) ?? { dzikir_id: id, latin: dzikir.find((x) => x.id === id)?.latin ?? "Dzikir", total: 0 };
+			cur.total += n;
+			m.set(id, cur);
+		};
+		for (const [id, n] of Object.entries(lokalPerDzikir)) tambahKe(Number(id), n);
+		if (s?.sesi_id) tambahKe(s.dzikir_id, s.jumlah);
+		return [...m.values()].sort((a, b) => b.total - a.total);
+	});
+
+	/** perbaruiKomposisi=false dipakai tepat setelah sync, sampai komposisi server
+	 *  terbaru dimuat — supaya hitungan yang baru tersinkron tidak "hilang" sesaat. */
+	async function hitungAntreanHariIni(perbaruiKomposisi = true) {
 		const hari = tanggalWIB(new Date());
+		let antrean: { dzikir_id: number; jumlah: number; mulai_at: string }[] = [];
 		try {
-			antreanHariIni = (await antreanSemua()).filter((x) => tanggalWIB(x.mulai_at) === hari).reduce((a, x) => a + x.jumlah, 0);
+			antrean = (await antreanSemua()).filter((x) => tanggalWIB(x.mulai_at) === hari);
 		} catch {
-			antreanHariIni = 0; // IndexedDB tidak tersedia; status sync menampilkan "gagal"
+			antrean = []; // IndexedDB tidak tersedia; status sync menampilkan "gagal"
+		}
+		antreanHariIni = antrean.reduce((a, x) => a + x.jumlah, 0);
+		if (perbaruiKomposisi) {
+			const per: Record<number, number> = {};
+			for (const x of antrean) per[x.dzikir_id] = (per[x.dzikir_id] ?? 0) + x.jumlah;
+			lokalPerDzikir = per;
 		}
 	}
 
@@ -104,9 +133,10 @@
 		router.reload({
 			only: props,
 			onSuccess: (page) => {
-				const p = page.props as unknown as { hari_ini?: HariIni };
+				const p = page.props as unknown as { hari_ini?: HariIni; komposisi_hari_ini?: Komposisi[] };
 				// page.props berisi SEMUA prop (yang tidak diminta = nilai lama): ambil yang diminta saja
 				if (props.includes("hari_ini") && p.hari_ini) serverHariIni = { tanggal: p.hari_ini.tanggal, total: p.hari_ini.total };
+				if (props.includes("komposisi_hari_ini") && p.komposisi_hari_ini) komposisiServer = p.komposisi_hari_ini;
 				hitungAntreanHariIni();
 			},
 		});
@@ -116,16 +146,16 @@
 		serverHariIni = { tanggal: h.hari_ini.tanggal, total: h.hari_ini.total };
 		const ada = new Set(badges.map((b) => b.kode));
 		badges = [...badges, ...h.badge_baru.filter((b) => !ada.has(b.kode))];
-		hitungAntreanHariIni();
-		if (h.diterima.length > 0) muatUlangDataServer(["streak"]);
+		hitungAntreanHariIni(false);
+		if (h.diterima.length > 0) muatUlangDataServer(["streak", "komposisi_hari_ini"]);
 	}
 
 	/** Ambil ulang angka dari server (mis. setelah berdzikir di perangkat lain). */
 	async function segarkan() {
 		const h = await syncSekarang(true);
 		if (h) onSync(h);
-		await hitungAntreanHariIni();
-		muatUlangDataServer(["hari_ini", "streak", "target_harian"]);
+		await hitungAntreanHariIni(false);
+		muatUlangDataServer(["hari_ini", "streak", "target_harian", "komposisi_hari_ini"]);
 	}
 
 	function tambah() {
@@ -390,7 +420,7 @@
 			<div class="mt-3"><SyncIndicator /></div>
 		</section>
 
-		<!-- Hari ini: progres harian + streak (level & komposisi ada di Progres) -->
+		<!-- Hari ini: progres harian + streak (level ada di Progres) -->
 		<a
 			href="/app/tasbih/dashboard"
 			use:inertia
@@ -410,6 +440,19 @@
 				<Flame size={16} aria-hidden="true" />{streakTampil}
 			</span>
 		</a>
+
+		<!-- Komposisi hari ini: rincian per dzikir -->
+		<section class="mt-3 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-brand-200/10 dark:bg-brand-950/40" aria-label="Komposisi dzikir hari ini" data-testid="komposisi-hari-ini">
+			<div class="mb-3 flex items-baseline justify-between gap-2">
+				<h2 class="text-[15px] font-semibold text-neutral-900 dark:text-white">Komposisi hari ini</h2>
+				{#if komposisi.length}<span class="text-xs text-neutral-500 dark:text-brand-100/45">{komposisi.length} dzikir</span>{/if}
+			</div>
+			{#if komposisi.length}
+				<KomposisiBar data={komposisi} />
+			{:else}
+				<p class="text-sm text-neutral-500 dark:text-brand-100/50">Belum ada dzikir hari ini.</p>
+			{/if}
+		</section>
 	</div>
 
 	<p class="sr-only" aria-live="polite">{pengumuman}</p>
