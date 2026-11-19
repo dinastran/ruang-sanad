@@ -314,6 +314,8 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/produk-crm/produk/:id", akRole, h.ProductCRM.UpdateProduct)
 	protected.Post("/produk-crm/produk/:id/batch", akRole, h.ProductCRM.CreateBatch)
 	protected.Put("/produk-crm/batch/:id", akRole, h.ProductCRM.UpdateBatch)
+	protected.Post("/produk-crm/produk/:id/varian", akRole, h.ProductCRM.CreateVarian)
+	protected.Put("/produk-crm/varian/:id", akRole, h.ProductCRM.UpdateVarian)
 	protected.Post("/produk-crm/stok", akRole, h.ProductCRM.AddStock)
 	protected.Post("/produk-crm/opname", akRole, h.ProductCRM.Opname)
 	protected.Post("/produk-crm/mahasantri/:santriID/produk", akRole, h.ProductCRM.AssignProduct)
