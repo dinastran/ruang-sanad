@@ -120,6 +120,9 @@ type BayarInfo struct {
 	Status       string `json:"status"`
 	CatatanTolak string `json:"catatan_tolak,omitempty"`
 	WaURL        string `json:"wa_url"`
+	GatewayAktif bool   `json:"gateway_aktif"`
+	// SesiAktif: an online payment session is open (checkout started).
+	SesiAktif bool `json:"sesi_aktif"`
 }
 
 type LeadRegistrationRow struct {

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import Logo from "@components/Logo.svelte";
 	import { rupiah } from "@components/registration/types";
-	import { CircleAlert, CircleCheck, Clock, Copy, FileText, MessageCircle, Upload } from "lucide-svelte";
+	import { onMount } from "svelte";
+	import { ChevronDown, CircleAlert, CircleCheck, Clock, Copy, FileText, MessageCircle, QrCode, Upload } from "lucide-svelte";
 
 	interface BayarInfo {
 		lead_ref: string;
@@ -13,6 +14,8 @@
 		status: "belum" | "menunggu_verifikasi" | "ditolak" | "lunas";
 		catatan_tolak?: string;
 		wa_url: string;
+		gateway_aktif: boolean;
+		sesi_aktif: boolean;
 	}
 	interface Props { info?: BayarInfo; ref?: string; galat?: string }
 	let { info, ref = "", galat = "" }: Props = $props();
@@ -23,6 +26,51 @@
 	let mengirim = $state(false);
 	let pesanError = $state("");
 	let tersalin = $state(false);
+	let sesiAktif = $state(info?.sesi_aktif ?? false);
+	let membuka = $state(false);
+	let manualTerbuka = $state(!(info?.gateway_aktif ?? false) || info?.status === "ditolak");
+
+	// While an online session is open, poll so the page flips to "lunas" by
+	// itself after the registrant returns from the Xendit checkout.
+	onMount(() => {
+		if (!sesiAktif || status === "lunas") return;
+		const mulai = Date.now();
+		const t = setInterval(async () => {
+			if (Date.now() - mulai > 10 * 60 * 1000) return clearInterval(t);
+			try {
+				const res = await fetch(`/daftar/bayar/${encodeURIComponent(ref)}/status`, { headers: { Accept: "application/json" } });
+				if (!res.ok) return;
+				const d = await res.json();
+				sesiAktif = d.sesi_aktif;
+				if (d.status === "lunas") {
+					status = "lunas";
+					clearInterval(t);
+				}
+			} catch {
+				/* coba lagi di putaran berikutnya */
+			}
+		}, 5000);
+		return () => clearInterval(t);
+	});
+
+	async function bayarOnline() {
+		if (membuka) return;
+		pesanError = "";
+		membuka = true;
+		try {
+			const res = await fetch(`/daftar/bayar/${encodeURIComponent(ref)}/gateway`, { method: "POST", headers: { Accept: "application/json" } });
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok || !data.url) {
+				pesanError = data.error || "Pembayaran online belum bisa dibuka. Coba lagi atau gunakan transfer manual.";
+				membuka = false;
+				return;
+			}
+			window.location.href = data.url;
+		} catch {
+			pesanError = "Koneksi terputus. Periksa internet lalu coba lagi.";
+			membuka = false;
+		}
+	}
 
 	const MAKS = 2 * 1024 * 1024;
 
@@ -112,9 +160,32 @@
 							<Clock class="h-5 w-5 shrink-0" />
 							<p>Bukti transfer sudah kami terima dan sedang diperiksa tim keuangan. Biasanya selesai dalam 1×24 jam pada hari kerja.</p>
 						</div>
-					{:else if !info.izinkan_manual}
+					{:else if !info.izinkan_manual && !info.gateway_aktif}
 						<p class="text-sm text-neutral-700 dark:text-neutral-300">Silakan hubungi CS kami untuk menyelesaikan pembayaran.</p>
 					{:else}
+						{#if info.gateway_aktif}
+							{#if sesiAktif}
+								<div class="mb-4 flex gap-3 rounded-xl bg-sky-500/10 p-4 text-sm text-sky-800 dark:text-sky-300" role="status">
+									<Clock class="h-5 w-5 shrink-0" />
+									<p>Menunggu pembayaran Anda. Halaman ini akan berubah otomatis setelah pembayaran diterima.</p>
+								</div>
+							{/if}
+							<button type="button" onclick={bayarOnline} disabled={membuka}
+								class="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 text-base font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 dark:bg-brand-500">
+								<QrCode size="18" /> {membuka ? "Membuka…" : sesiAktif ? "Lanjutkan pembayaran" : "Bayar sekarang"}
+							</button>
+							<p class="mt-2 text-center text-xs text-neutral-500">QRIS, GoPay, DANA, OVO, ShopeePay, atau virtual account bank. Lunas langsung terverifikasi.</p>
+							{#if pesanError && !manualTerbuka}<p class="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300" role="alert">{pesanError}</p>{/if}
+						{/if}
+						{#if info.izinkan_manual}
+							{#if info.gateway_aktif}
+								<button type="button" onclick={() => (manualTerbuka = !manualTerbuka)} aria-expanded={manualTerbuka}
+									class="mt-6 flex w-full items-center justify-between border-t border-neutral-200/80 pt-4 text-sm font-medium text-neutral-700 dark:border-white/[0.06] dark:text-neutral-300">
+									Atau transfer manual <ChevronDown size="16" class="transition {manualTerbuka ? 'rotate-180' : ''}" />
+								</button>
+							{/if}
+							{#if manualTerbuka}
+								<div class={info.gateway_aktif ? "mt-4" : ""}>
 						{#if status === "ditolak"}
 							<div class="mb-5 flex gap-3 rounded-xl bg-red-500/10 p-4 text-sm text-red-800 dark:text-red-300" role="alert">
 								<CircleAlert class="h-5 w-5 shrink-0" />
@@ -152,6 +223,9 @@
 								{mengirim ? "Mengunggah…" : "Kirim bukti transfer"}
 							</button>
 						</form>
+								</div>
+							{/if}
+						{/if}
 					{/if}
 
 					<a href={info.wa_url} class="mt-6 flex items-center justify-center gap-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white">

@@ -66,6 +66,8 @@ func setupDaftarFixture(t *testing.T, mode, afterSubmit string) *daftarFixture {
 	app := fiber.New()
 	app.Get("/daftar/bayar/:ref", h.BayarPage)
 	app.Post("/daftar/bayar/:ref/bukti", h.UploadBukti)
+	app.Post("/daftar/bayar/:ref/gateway", h.StartGateway)
+	app.Get("/daftar/bayar/:ref/status", h.BayarStatus)
 	app.Get("/daftar/:slug", h.Page)
 	app.Post("/daftar/:slug", h.Submit)
 	return &daftarFixture{db: db, q: q, reg: reg, app: app}

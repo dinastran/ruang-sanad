@@ -51,6 +51,10 @@ type Config struct {
 	MetaCAPITestEventCode string
 	// Default landing page URL for event_source_url (sources may override).
 	MetaCAPIEventSourceURL string
+	// Xendit Payment Session (pendaftaran online). Secrets only in .env.
+	XenditSecretKey     string
+	XenditCallbackToken string
+	XenditAPIURL        string
 	MetaAPIVersion         string
 	// Only set when the CAPI token belongs to the app with this secret
 	// (e.g. a System User token); an Events Manager token may not.
@@ -110,6 +114,9 @@ func Load() *Config {
 		MetaCAPIToken:          strings.TrimSpace(getEnv("META_CAPI_TOKEN", "")),
 		MetaCAPITestEventCode:  strings.TrimSpace(getEnv("META_CAPI_TEST_EVENT_CODE", "")),
 		MetaCAPIEventSourceURL: strings.TrimSpace(getEnv("META_CAPI_EVENT_SOURCE_URL", "")),
+		XenditSecretKey:        strings.TrimSpace(getEnv("XENDIT_SECRET_KEY", "")),
+		XenditCallbackToken:    strings.TrimSpace(getEnv("XENDIT_CALLBACK_TOKEN", "")),
+		XenditAPIURL:           strings.TrimSpace(getEnv("XENDIT_API_URL", "https://api.xendit.co")),
 		MetaAPIVersion:         strings.TrimSpace(getEnv("META_API_VERSION", "")),
 		MetaCAPIAppSecret:      strings.TrimSpace(getEnv("META_CAPI_APP_SECRET", "")),
 

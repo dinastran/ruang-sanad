@@ -107,6 +107,33 @@ func (h *RegistrationPublicHandler) BayarPage(c *fiber.Ctx) error {
 	return h.inertiaService.Render(c, "public/DaftarBayar", fiber.Map{"info": info, "ref": ref})
 }
 
+// StartGateway creates (or reuses) the online checkout session.
+func (h *RegistrationPublicHandler) StartGateway(c *fiber.Ctx) error {
+	c.Set(fiber.HeaderCacheControl, "no-store")
+	url, err := h.reg.StartGatewayPayment(c.UserContext(), c.Params("ref"))
+	if errors.Is(err, services.ErrGatewayNonaktif) {
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "Pembayaran online belum tersedia. Silakan gunakan transfer manual."})
+	}
+	if err != nil {
+		var fe *services.FieldError
+		if errors.As(err, &fe) || errors.Is(err, services.ErrSudahDiproses) || errors.Is(err, services.ErrRefTidakAda) {
+			return registrationError(c, err)
+		}
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(fiber.Map{"url": url})
+}
+
+// BayarStatus is polled by the payment page while a session is open.
+func (h *RegistrationPublicHandler) BayarStatus(c *fiber.Ctx) error {
+	c.Set(fiber.HeaderCacheControl, "no-store")
+	info, err := h.reg.BayarInfo(c.UserContext(), c.Params("ref"))
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(fiber.Map{"status": info.Status, "sesi_aktif": info.SesiAktif})
+}
+
 func (h *RegistrationPublicHandler) UploadBukti(c *fiber.Ctx) error {
 	c.Set(fiber.HeaderCacheControl, "no-store")
 	fh, err := c.FormFile("bukti")

@@ -79,23 +79,33 @@ func (s *RegistrationService) BayarInfo(ctx context.Context, ref string) (*model
 		out.ProgramNama = prog.Nama
 	}
 	out.WaURL = waURL(settings.CsWaNumber, "Assalamu'alaikum, saya "+out.NamaDepan+" ("+out.LeadRef+") ingin konfirmasi pembayaran.")
+	out.GatewayAktif = s.gateway != nil
 	if l.Stage == LeadStageTerverifikasi || l.Status == LeadStatusWon {
 		out.Status = "lunas"
 		return out, nil
+	}
+	if _, err := s.querier.GetActiveGatewayPaymentByLead(ctx, queries.GetActiveGatewayPaymentByLeadParams{
+		LeadID: l.ID, Now: sql.NullTime{Time: s.nowUTC(), Valid: true},
+	}); err == nil {
+		out.SesiAktif = true
 	}
 	pays, err := s.querier.ListPaymentsByLead(ctx, l.ID)
 	if err != nil {
 		return nil, err
 	}
-	if len(pays) > 0 {
-		switch pays[0].Status {
+	for _, p := range pays {
+		if p.Metode == "gateway" && p.Status != "paid" {
+			continue
+		}
+		switch p.Status {
 		case "menunggu_verifikasi":
 			out.Status = "menunggu_verifikasi"
 		case "ditolak":
-			out.Status, out.CatatanTolak = "ditolak", pays[0].CatatanSistem
+			out.Status, out.CatatanTolak = "ditolak", p.CatatanSistem
 		case "paid":
 			out.Status = "lunas"
 		}
+		break
 	}
 	return out, nil
 }

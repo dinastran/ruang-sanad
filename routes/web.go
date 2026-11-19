@@ -62,6 +62,7 @@ type Handlers struct {
 	LeadPrograms                *handlers.LeadProgramHandler
 	RegistrationPublic          *handlers.RegistrationPublicHandler
 	RegistrationLinks           *handlers.RegistrationLinkHandler
+	XenditWebhook               *handlers.XenditWebhookHandler
 	MetaCAPI                    *handlers.MetaCAPIHandler
 	MetaAds                     *handlers.MetaAdsHandler
 	LeadFollowups               *handlers.LeadFollowupHandler
@@ -85,6 +86,10 @@ func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *
 	setupIntegrationRoutes(app, h.CsAiIngest)
 	setupProgramPublicRoutes(app, h.LeadPrograms)
 	setupRegistrationPublicRoutes(app, h.RegistrationPublic)
+	if h.XenditWebhook != nil {
+		// Machine endpoint: authenticated by x-callback-token, no session/CSRF.
+		app.Post("/webhooks/xendit", h.XenditWebhook.Handle)
+	}
 }
 
 // setupRegistrationPublicRoutes exposes the public registration form and the
@@ -96,6 +101,8 @@ func setupRegistrationPublicRoutes(app *fiber.App, h *handlers.RegistrationPubli
 	}
 	app.Get("/daftar/bayar/:ref", h.BayarPage)
 	app.Post("/daftar/bayar/:ref/bukti", middlewares.DaftarUploadRateLimit.Limit(), h.UploadBukti)
+	app.Post("/daftar/bayar/:ref/gateway", middlewares.DaftarUploadRateLimit.Limit(), h.StartGateway)
+	app.Get("/daftar/bayar/:ref/status", h.BayarStatus)
 	app.Get("/daftar/:slug", h.Page)
 	app.Post("/daftar/:slug", middlewares.DaftarRateLimit.Limit(), h.Submit)
 }

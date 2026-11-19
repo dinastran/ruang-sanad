@@ -155,6 +155,14 @@ func main() {
 	leadService.WithMetaCAPI(metaCAPIService)
 	startMetaCAPIWorker(metaCAPIService)
 	registrationService := services.NewRegistrationService(querier, leadService, jadwalService, []byte(cfg.SessionSecret))
+	switch {
+	case cfg.XenditSecretKey == "" || cfg.XenditCallbackToken == "":
+		slog.Info("xendit off: XENDIT_SECRET_KEY / XENDIT_CALLBACK_TOKEN not set; pendaftaran pakai transfer manual")
+	case !strings.HasPrefix(cfg.AppURL, "https://"):
+		slog.Warn("xendit off: APP_URL must be https for checkout return links")
+	default:
+		registrationService.WithGateway(services.NewXenditGateway(cfg.XenditAPIURL, cfg.XenditSecretKey), cfg.AppURL)
+	}
 	metaAdsService := services.NewMetaAdsService(querier, services.MetaAdsConfig{
 		Token: cfg.MetaAdsToken, AccountIDs: cfg.MetaAdAccountIDs, APIVersion: cfg.MetaAPIVersion, AppSecret: cfg.MetaAppSecret,
 	})
@@ -264,6 +272,7 @@ func main() {
 		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService).WithPrograms(leadProgramService).WithRegistration(registrationService),
 		RegistrationPublic:          handlers.NewRegistrationPublicHandler(registrationService, inertiaService),
 		RegistrationLinks:           handlers.NewRegistrationLinkHandler(registrationService, sessionStore, inertiaService),
+		XenditWebhook:               handlers.NewXenditWebhookHandler(registrationService, cfg.XenditCallbackToken),
 		LeadPrograms:                handlers.NewLeadProgramHandler(leadService, leadProgramService, productCRMService, sessionStore, inertiaService, routes.LeadSourceEditorRoles),
 		LeadClosing:                 handlers.NewLeadClosingHandler(leadService, sessionStore, inertiaService),
 		LeadLaporan:                 handlers.NewLeadLaporanHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService),
