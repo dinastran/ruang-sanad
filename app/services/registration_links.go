@@ -39,8 +39,9 @@ type RegistrationService struct {
 	now      func() time.Time
 	proofDir string
 
-	gateway PaymentGateway // nil = online payment off
-	appURL  string
+	gateway    PaymentGateway    // nil = online payment off
+	affiliates *AffiliateService // nil = no affiliate attribution
+	appURL     string
 
 	mu        sync.Mutex
 	phoneHits map[string][]time.Time
@@ -400,3 +401,9 @@ type FieldError struct {
 }
 
 func (e *FieldError) Error() string { return e.Pesan }
+
+// WithAffiliates enables affiliate attribution on form submits.
+func (s *RegistrationService) WithAffiliates(a *AffiliateService) *RegistrationService {
+	s.affiliates = a
+	return s
+}

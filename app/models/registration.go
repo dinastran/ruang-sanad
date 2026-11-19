@@ -158,3 +158,52 @@ type Option struct {
 	Info  string `json:"info,omitempty"`
 	Aktif bool   `json:"aktif"`
 }
+
+// --- Affiliate ---
+
+type AffiliateSignup struct {
+	Nama         string `json:"nama"`
+	NoWA         string `json:"no_wa"`
+	Email        string `json:"email"`
+	BankNama     string `json:"bank_nama"`
+	BankRekening string `json:"bank_rekening"`
+	BankAtasNama string `json:"bank_atas_nama"`
+	Setuju       bool   `json:"setuju"`
+	Honeypot     string `json:"website"`
+}
+
+type AffiliateRuleRequest struct {
+	Scope     string `json:"scope"`
+	TargetID  int64  `json:"target_id"`
+	Jenis     string `json:"jenis"`
+	Nilai     int64  `json:"nilai"`
+	Pola      string `json:"pola"`
+	MaksBulan *int64 `json:"maks_bulan"`
+	Nonaktif  bool   `json:"nonaktif"`
+}
+
+type AffiliateSettings struct {
+	MasaBerlakuHari     int64  `json:"masa_berlaku_hari"`
+	MasaTahanHari       int64  `json:"masa_tahan_hari"`
+	LinkTujuanDefaultID int64  `json:"link_tujuan_default_id"`
+	TemplateBagikan     string `json:"template_bagikan"`
+}
+
+type AffiliateRow struct {
+	ID           int64  `json:"id"`
+	Kode         string `json:"kode"`
+	Tipe         string `json:"tipe"`
+	Nama         string `json:"nama"`
+	NoWA         string `json:"no_wa"`
+	Email        string `json:"email"`
+	Status       string `json:"status"`
+	BankNama     string `json:"bank_nama"`
+	BankRekening string `json:"bank_rekening"`
+	BankAtasNama string `json:"bank_atas_nama"`
+	PunyaAkun    bool   `json:"punya_akun"`
+	Klik         int64  `json:"klik"`
+	Daftar       int64  `json:"daftar"`
+	Santri       int64  `json:"santri"`
+	KomisiSiap   int64  `json:"komisi_siap"`
+	KomisiTotal  int64  `json:"komisi_total"`
+}
