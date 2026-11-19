@@ -328,6 +328,11 @@ func (s *LeadService) applyMessageIn(ctx context.Context, q *queries.Querier, le
 	if err := detectLeadSource(ctx, q, lead, data.Body, now, payload); err != nil {
 		return err
 	}
+	if s.affiliates != nil {
+		if err := s.affiliates.detectWARef(ctx, q, *lead, data.Body, now); err != nil {
+			return err
+		}
+	}
 	lead.LastInboundAt = laterTime(lead.LastInboundAt, occurred)
 
 	switch lead.Status {

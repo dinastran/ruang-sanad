@@ -183,6 +183,10 @@ func (s *RegistrationService) Submit(ctx context.Context, slug string, raw model
 		return nil, err
 	}
 
+	var attribution submitAttribution
+	if s.affiliates != nil {
+		attribution = s.affiliates.resolveSubmit(ctx, meta.AffCookie, in.KodeReferal)
+	}
 	res := &models.RegistrationResult{Next: link.AfterSubmit}
 	actor := formActor(link.ID)
 	err = s.leads.withTx(ctx, func(q *queries.Querier) error {
@@ -280,6 +284,11 @@ func (s *RegistrationService) Submit(ctx context.Context, slug string, raw model
 			return err
 		}
 
+		if s.affiliates != nil {
+			if err := attributeSubmitTx(ctx, q, l, attribution, now); err != nil {
+				return err
+			}
+		}
 		payload := in.RegistrationSubmit
 		payload.FormToken, payload.Honeypot = "", ""
 		body, _ := json.Marshal(payload)

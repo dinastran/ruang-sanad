@@ -212,6 +212,13 @@ var (
 		Message:     "Terlalu banyak unggahan, coba lagi beberapa menit lagi",
 	})
 
+	// AffiliateClickRateLimit: affiliate links /r/:kode, 60 per minute per client IP.
+	AffiliateClickRateLimit = NewRateLimiter(RateLimiterConfig{
+		MaxRequests: 60,
+		Window:      time.Minute,
+		CustomKeyFn: func(c *fiber.Ctx) string { return "aff-klik:" + session.ClientIP(c) },
+	})
+
 	// CSAIIngestRateLimit: 600 event batches per minute from the CS AI bridge.
 	CSAIIngestRateLimit = NewRateLimiter(RateLimiterConfig{
 		MaxRequests: 600,

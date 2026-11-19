@@ -61,6 +61,7 @@ type Handlers struct {
 	LeadSources                 *handlers.LeadSourceHandler
 	LeadPrograms                *handlers.LeadProgramHandler
 	RegistrationPublic          *handlers.RegistrationPublicHandler
+	AffiliatePublic             *handlers.AffiliatePublicHandler
 	RegistrationLinks           *handlers.RegistrationLinkHandler
 	XenditWebhook               *handlers.XenditWebhookHandler
 	MetaCAPI                    *handlers.MetaCAPIHandler
@@ -86,6 +87,9 @@ func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *
 	setupIntegrationRoutes(app, h.CsAiIngest)
 	setupProgramPublicRoutes(app, h.LeadPrograms)
 	setupRegistrationPublicRoutes(app, h.RegistrationPublic)
+	if h.AffiliatePublic != nil {
+		app.Get("/r/:kode", middlewares.AffiliateClickRateLimit.Limit(), h.AffiliatePublic.Redirect)
+	}
 	if h.XenditWebhook != nil {
 		// Machine endpoint: authenticated by x-callback-token, no session/CSRF.
 		app.Post("/webhooks/xendit", h.XenditWebhook.Handle)

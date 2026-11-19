@@ -155,6 +155,9 @@ func main() {
 	leadService.WithMetaCAPI(metaCAPIService)
 	startMetaCAPIWorker(metaCAPIService)
 	registrationService := services.NewRegistrationService(querier, leadService, jadwalService, []byte(cfg.SessionSecret))
+	affiliateService := services.NewAffiliateService(querier, leadService, []byte(cfg.SessionSecret))
+	leadService.WithAffiliates(affiliateService)
+	registrationService.WithAffiliates(affiliateService)
 	switch {
 	case cfg.XenditSecretKey == "" || cfg.XenditCallbackToken == "":
 		slog.Info("xendit off: XENDIT_SECRET_KEY / XENDIT_CALLBACK_TOKEN not set; pendaftaran pakai transfer manual")
@@ -271,6 +274,7 @@ func main() {
 		JadwalPenawaran:             handlers.NewJadwalPenawaranHandler(jadwalService, sessionStore, inertiaService),
 		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService).WithPrograms(leadProgramService).WithRegistration(registrationService),
 		RegistrationPublic:          handlers.NewRegistrationPublicHandler(registrationService, inertiaService),
+		AffiliatePublic:             handlers.NewAffiliatePublicHandler(affiliateService),
 		RegistrationLinks:           handlers.NewRegistrationLinkHandler(registrationService, sessionStore, inertiaService),
 		XenditWebhook:               handlers.NewXenditWebhookHandler(registrationService, cfg.XenditCallbackToken),
 		LeadPrograms:                handlers.NewLeadProgramHandler(leadService, leadProgramService, productCRMService, sessionStore, inertiaService, routes.LeadSourceEditorRoles),

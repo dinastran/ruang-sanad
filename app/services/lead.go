@@ -61,14 +61,21 @@ func isValidLeadStage(stage string) bool { return leadStageIndex(stage) >= 0 }
 // LeadService owns the CRM pipeline: ingest from the CS AI bridge, manual
 // actions, verification and conversion to santri.
 type LeadService struct {
-	querier  *queries.Querier
-	santri   *SantriService
-	metaCAPI *MetaCAPIService
-	now      func() time.Time
+	querier    *queries.Querier
+	santri     *SantriService
+	metaCAPI   *MetaCAPIService
+	affiliates *AffiliateService // nil = no WA ref detection
+	now        func() time.Time
 }
 
 func NewLeadService(querier *queries.Querier, santri *SantriService) *LeadService {
 	return &LeadService{querier: querier, santri: santri, now: time.Now}
+}
+
+// WithAffiliates enables "ref: KODE" detection in inbound WhatsApp messages.
+func (s *LeadService) WithAffiliates(a *AffiliateService) *LeadService {
+	s.affiliates = a
+	return s
 }
 
 // WithMetaCAPI enables transactional Purchase outbox writes for configured CAPI.

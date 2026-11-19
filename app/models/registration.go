@@ -92,6 +92,7 @@ type RegistrationSubmit struct {
 	BelajarDimana  string `json:"belajar_dimana"`
 	UntukSiapa     string `json:"untuk_siapa"`
 	WaktuBelajar   string `json:"waktu_belajar"`
+	KodeReferal    string `json:"kode_referal"`
 	Honeypot       string `json:"website"`
 	FormToken      string `json:"form_token"`
 }
@@ -99,6 +100,7 @@ type RegistrationSubmit struct {
 type RequestMeta struct {
 	IP        string
 	UserAgent string
+	AffCookie string // raw rs_aff cookie value, if any
 }
 
 type RegistrationResult struct {

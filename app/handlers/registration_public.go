@@ -70,7 +70,7 @@ func (h *RegistrationPublicHandler) Submit(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Data tidak valid"})
 	}
 	ctx := c.UserContext()
-	res, err := h.reg.Submit(ctx, c.Params("slug"), in, models.RequestMeta{IP: session.ClientIP(c), UserAgent: c.Get(fiber.HeaderUserAgent)})
+	res, err := h.reg.Submit(ctx, c.Params("slug"), in, models.RequestMeta{IP: session.ClientIP(c), UserAgent: c.Get(fiber.HeaderUserAgent), AffCookie: c.Cookies(services.AffCookieName)})
 	var fe *services.FieldError
 	switch {
 	case errors.Is(err, services.ErrLinkTidakAktif):
