@@ -158,6 +158,8 @@ func main() {
 	affiliateService := services.NewAffiliateService(querier, leadService, []byte(cfg.SessionSecret))
 	leadService.WithAffiliates(affiliateService)
 	registrationService.WithAffiliates(affiliateService)
+	// Komisi affiliate: sinkron guru + rekonsiliasi buku komisi tiap 10 menit.
+	affiliateService.StartReconcileWorker(context.Background(), 10*time.Minute)
 	switch {
 	case cfg.XenditSecretKey == "" || cfg.XenditCallbackToken == "":
 		slog.Info("xendit off: XENDIT_SECRET_KEY / XENDIT_CALLBACK_TOKEN not set; pendaftaran pakai transfer manual")

@@ -26,6 +26,60 @@ func (q *Queries) BumpAffiliateClick(ctx context.Context, arg BumpAffiliateClick
 	return err
 }
 
+const cancelCommissionsSantriStopped = `-- name: CancelCommissionsSantriStopped :execrows
+UPDATE affiliate_commissions SET status = 'batal', alasan_batal = 'santri berhenti dalam masa tahan', updated_at = ?1
+WHERE status = 'pending'
+  AND lead_id IN (SELECT l.id FROM leads l JOIN santri s ON s.id = l.santri_id WHERE s.status IN ('nonaktif', 'tidak_lanjut'))
+`
+
+func (q *Queries) CancelCommissionsSantriStopped(ctx context.Context, now time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, cancelCommissionsSantriStopped, now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const cancelCommissionsVerificationUndone = `-- name: CancelCommissionsVerificationUndone :execrows
+UPDATE affiliate_commissions SET status = 'batal', alasan_batal = 'verifikasi dibatalkan', updated_at = ?1
+WHERE status = 'pending' AND sumber = 'pendaftaran'
+  AND lead_id IN (SELECT id FROM leads WHERE verified_at IS NULL)
+`
+
+func (q *Queries) CancelCommissionsVerificationUndone(ctx context.Context, now time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, cancelCommissionsVerificationUndone, now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const countTagihanSinceConversion = `-- name: CountTagihanSinceConversion :one
+SELECT COUNT(*) FROM tagihan
+WHERE santri_id = ?1 AND status != 'batal' AND created_at >= ?2
+  AND (created_at < ?3 OR (created_at = ?3 AND id <= ?4))
+`
+
+type CountTagihanSinceConversionParams struct {
+	SantriID    int64
+	ConvertedAt time.Time
+	CreatedAt   time.Time
+	ID          int64
+}
+
+// Urutan tagihan sejak konversi (termasuk yang dimaksud), tagihan batal tidak dihitung.
+func (q *Queries) CountTagihanSinceConversion(ctx context.Context, arg CountTagihanSinceConversionParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTagihanSinceConversion,
+		arg.SantriID,
+		arg.ConvertedAt,
+		arg.CreatedAt,
+		arg.ID,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAffiliate = `-- name: CreateAffiliate :one
 INSERT INTO affiliates (kode, tipe, guru_id, user_id, nama, no_wa, email, status, bank_nama, bank_rekening, bank_atas_nama, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -245,6 +299,41 @@ func (q *Queries) GetAffiliateByUser(ctx context.Context, userID sql.NullInt64) 
 		&i.CatatanAdmin,
 		&i.DisetujuiOleh,
 		&i.DisetujuiAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAffiliateCommission = `-- name: GetAffiliateCommission :one
+SELECT id, affiliate_id, lead_id, santri_id, sumber, sumber_id, bulan_ke, basis, jenis, nilai, pola, maks_bulan, jumlah, status, siap_at, dibayar_at, dibayar_oleh, metode_bayar, ujroh_bulan, catatan, alasan_batal, created_at, updated_at FROM affiliate_commissions WHERE id = ?
+`
+
+func (q *Queries) GetAffiliateCommission(ctx context.Context, id int64) (AffiliateCommission, error) {
+	row := q.db.QueryRowContext(ctx, getAffiliateCommission, id)
+	var i AffiliateCommission
+	err := row.Scan(
+		&i.ID,
+		&i.AffiliateID,
+		&i.LeadID,
+		&i.SantriID,
+		&i.Sumber,
+		&i.SumberID,
+		&i.BulanKe,
+		&i.Basis,
+		&i.Jenis,
+		&i.Nilai,
+		&i.Pola,
+		&i.MaksBulan,
+		&i.Jumlah,
+		&i.Status,
+		&i.SiapAt,
+		&i.DibayarAt,
+		&i.DibayarOleh,
+		&i.MetodeBayar,
+		&i.UjrohBulan,
+		&i.Catatan,
+		&i.AlasanBatal,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -509,6 +598,115 @@ func (q *Queries) ListAffiliates(ctx context.Context) ([]Affiliate, error) {
 	return items, nil
 }
 
+const listCommissionCandidatesPendaftaran = `-- name: ListCommissionCandidatesPendaftaran :many
+SELECT l.id AS lead_id, la.affiliate_id, CAST(COALESCE(l.program_id, 1) AS INTEGER) AS program_id,
+       l.payment_amount, l.santri_id
+FROM lead_affiliates la
+JOIN leads l ON l.id = la.lead_id
+JOIN affiliates a ON a.id = la.affiliate_id
+WHERE l.verified_at IS NOT NULL AND a.status = 'aktif'
+  AND (la.sumber = 'manual' OR l.verified_at >= la.dikunci_at)
+  AND NOT EXISTS (SELECT 1 FROM affiliate_commissions c WHERE c.sumber = 'pendaftaran' AND c.sumber_id = l.id)
+`
+
+type ListCommissionCandidatesPendaftaranRow struct {
+	LeadID        int64
+	AffiliateID   int64
+	ProgramID     int64
+	PaymentAmount int64
+	SantriID      sql.NullInt64
+}
+
+// Lead ber-affiliate yang terverifikasi setelah terkunci (atau dikunci manual)
+// dan belum punya komisi pendaftaran.
+func (q *Queries) ListCommissionCandidatesPendaftaran(ctx context.Context) ([]ListCommissionCandidatesPendaftaranRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCommissionCandidatesPendaftaran)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCommissionCandidatesPendaftaranRow
+	for rows.Next() {
+		var i ListCommissionCandidatesPendaftaranRow
+		if err := rows.Scan(
+			&i.LeadID,
+			&i.AffiliateID,
+			&i.ProgramID,
+			&i.PaymentAmount,
+			&i.SantriID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCommissionCandidatesSPP = `-- name: ListCommissionCandidatesSPP :many
+SELECT t.id AS tagihan_id, t.santri_id, t.nominal, t.created_at AS tagihan_created, l.id AS lead_id, l.converted_at,
+       c.affiliate_id, c.jenis, c.nilai, c.maks_bulan
+FROM tagihan t
+JOIN leads l ON l.santri_id = t.santri_id
+JOIN affiliate_commissions c ON c.sumber = 'pendaftaran' AND c.lead_id = l.id AND c.status != 'batal' AND c.pola = 'bulanan'
+JOIN affiliates a ON a.id = c.affiliate_id
+WHERE t.status = 'lunas' AND l.converted_at IS NOT NULL AND t.created_at >= l.converted_at AND a.status = 'aktif'
+  AND NOT EXISTS (SELECT 1 FROM affiliate_commissions x WHERE x.sumber = 'spp' AND x.sumber_id = t.id)
+`
+
+type ListCommissionCandidatesSPPRow struct {
+	TagihanID      int64
+	SantriID       int64
+	Nominal        int64
+	TagihanCreated time.Time
+	LeadID         int64
+	ConvertedAt    sql.NullTime
+	AffiliateID    int64
+	Jenis          string
+	Nilai          int64
+	MaksBulan      sql.NullInt64
+}
+
+// Tagihan lunas setelah konversi, untuk lead yang komisi pendaftarannya berpola bulanan.
+func (q *Queries) ListCommissionCandidatesSPP(ctx context.Context) ([]ListCommissionCandidatesSPPRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCommissionCandidatesSPP)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCommissionCandidatesSPPRow
+	for rows.Next() {
+		var i ListCommissionCandidatesSPPRow
+		if err := rows.Scan(
+			&i.TagihanID,
+			&i.SantriID,
+			&i.Nominal,
+			&i.TagihanCreated,
+			&i.LeadID,
+			&i.ConvertedAt,
+			&i.AffiliateID,
+			&i.Jenis,
+			&i.Nilai,
+			&i.MaksBulan,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGuruWithoutAffiliate = `-- name: ListGuruWithoutAffiliate :many
 SELECT g.id, g.nama, g.user_id FROM guru g
 WHERE g.user_id IS NOT NULL AND g.is_aktif = 1 AND NOT EXISTS (SELECT 1 FROM affiliates a WHERE a.guru_id = g.id)
@@ -541,6 +739,81 @@ func (q *Queries) ListGuruWithoutAffiliate(ctx context.Context) ([]ListGuruWitho
 		return nil, err
 	}
 	return items, nil
+}
+
+const listReactivatableCommissions = `-- name: ListReactivatableCommissions :many
+SELECT c.id, c.lead_id, l.payment_amount FROM affiliate_commissions c JOIN leads l ON l.id = c.lead_id
+WHERE c.sumber = 'pendaftaran' AND c.status = 'batal' AND c.alasan_batal = 'verifikasi dibatalkan' AND l.verified_at IS NOT NULL
+`
+
+type ListReactivatableCommissionsRow struct {
+	ID            int64
+	LeadID        int64
+	PaymentAmount int64
+}
+
+func (q *Queries) ListReactivatableCommissions(ctx context.Context) ([]ListReactivatableCommissionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listReactivatableCommissions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListReactivatableCommissionsRow
+	for rows.Next() {
+		var i ListReactivatableCommissionsRow
+		if err := rows.Scan(&i.ID, &i.LeadID, &i.PaymentAmount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const matureCommissions = `-- name: MatureCommissions :execrows
+UPDATE affiliate_commissions SET status = 'siap', siap_at = ?1, updated_at = ?1
+WHERE status = 'pending' AND created_at <= ?2
+`
+
+type MatureCommissionsParams struct {
+	Now    sql.NullTime
+	Cutoff time.Time
+}
+
+func (q *Queries) MatureCommissions(ctx context.Context, arg MatureCommissionsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, matureCommissions, arg.Now, arg.Cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const reactivateCommission = `-- name: ReactivateCommission :exec
+UPDATE affiliate_commissions SET status = 'pending', basis = ?, jumlah = ?, alasan_batal = '', created_at = ?, updated_at = ? WHERE id = ?
+`
+
+type ReactivateCommissionParams struct {
+	Basis     int64
+	Jumlah    int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	ID        int64
+}
+
+func (q *Queries) ReactivateCommission(ctx context.Context, arg ReactivateCommissionParams) error {
+	_, err := q.db.ExecContext(ctx, reactivateCommission,
+		arg.Basis,
+		arg.Jumlah,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	return err
 }
 
 const replaceLeadAffiliate = `-- name: ReplaceLeadAffiliate :exec
