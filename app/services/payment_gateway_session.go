@@ -10,7 +10,10 @@ import (
 	"github.com/maulanashalihin/laju-go/app/queries"
 )
 
-var ErrGatewayNonaktif = errors.New("pembayaran online belum tersedia")
+var (
+	ErrGatewayNonaktif  = errors.New("pembayaran online belum tersedia")
+	ErrSesiSedangDibuat = errors.New("pembayaran sedang disiapkan, tunggu beberapa detik lalu coba lagi")
+)
 
 // WithGateway enables online payment. appURL is the public HTTPS base URL
 // used for the hosted checkout return links.
@@ -30,6 +33,20 @@ func (s *RegistrationService) StartGatewayPayment(ctx context.Context, ref strin
 	if s.gateway == nil {
 		return "", ErrGatewayNonaktif
 	}
+	// One session creation per registration at a time: the Xendit call can
+	// take seconds and a second tap must not open a second session.
+	s.mu.Lock()
+	if s.starting[ref] {
+		s.mu.Unlock()
+		return "", ErrSesiSedangDibuat
+	}
+	s.starting[ref] = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.starting, ref)
+		s.mu.Unlock()
+	}()
 	reg, err := s.querier.GetLeadRegistrationByRef(ctx, ref)
 	if err != nil {
 		return "", ErrRefTidakAda
@@ -46,7 +63,16 @@ func (s *RegistrationService) StartGatewayPayment(ctx context.Context, ref strin
 	}
 	now := s.nowUTC()
 	if p, err := s.querier.GetActiveGatewayPaymentByLead(ctx, queries.GetActiveGatewayPaymentByLeadParams{LeadID: l.ID, Now: sql.NullTime{Time: now, Valid: true}}); err == nil {
-		return p.CheckoutUrl, nil
+		if p.Amount == l.PaymentAmount && p.JadwalKode == l.JadwalKode {
+			return p.CheckoutUrl, nil
+		}
+		// Amount or schedule changed since the session was opened: retire it
+		// locally (frees the seat) and open a fresh one at the current price.
+		if _, err := s.querier.SetPaymentStatusIfPending(ctx, queries.SetPaymentStatusIfPendingParams{
+			Status: "expired", CatatanSistem: "diganti sesi baru: nominal/jadwal berubah", UpdatedAt: now, ID: p.ID,
+		}); err != nil {
+			return "", err
+		}
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return "", err
 	}

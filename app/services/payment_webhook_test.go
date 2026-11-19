@@ -109,3 +109,28 @@ func TestWebhookOverbookFlagsCoordinator(t *testing.T) {
 	require.EqualValues(t, 1, pays[0].PerluTinjau)
 	require.Equal(t, 1, f.count(t, `SELECT COUNT(*) FROM notifications WHERE user_id = ?`, koorID))
 }
+
+func TestFixGatewayDoesNotSilentlyPayManualProof(t *testing.T) {
+	f, gw, ref, leadID := gatewayLead(t)
+	_, err := f.reg.StartGatewayPayment(t.Context(), ref)
+	require.NoError(t, err)
+	require.NoError(t, f.reg.SubmitManualProof(t.Context(), ref, proofFile(pngHead, 1000)))
+	extID := gw.created[0].ReferenceID
+	s := gw.sessions["ps-"+extID]
+	s.Status = "COMPLETED"
+	gw.sessions[s.ID] = s
+	require.NoError(t, f.reg.HandleXenditWebhook(t.Context(), webhookBody("payment_session.completed", extID, 150000)))
+	require.Equal(t, 1, f.count(t, `SELECT COUNT(*) FROM payments WHERE lead_id = ? AND metode = 'manual' AND status = 'menunggu_verifikasi' AND perlu_tinjau = 1`, leadID),
+		"bukti manual tertunda ditandai tinjau, bukan dianggap lunas")
+}
+
+func TestFixConcurrentDuplicateNoFalseReview(t *testing.T) {
+	f, gw, leadID, extID := paidSession(t)
+	gw.onGet = func() {
+		// A concurrent delivery finished first.
+		_, err := f.db.Exec(`UPDATE payments SET status = 'paid' WHERE external_id = ?`, extID)
+		require.NoError(t, err)
+	}
+	require.NoError(t, f.reg.HandleXenditWebhook(t.Context(), webhookBody("payment_session.completed", extID, 150000)))
+	require.Zero(t, f.count(t, `SELECT COUNT(*) FROM notifications WHERE reference_id = ? AND title = 'Pembayaran online perlu ditinjau'`, leadID))
+}

@@ -232,6 +232,23 @@ func (s *RegistrationService) RejectManualPayment(ctx context.Context, leadID, p
 	})
 }
 
+// flagPendingManualPayments marks waiting manual proofs for review when the
+// lead was paid another way (gateway): the registrant may have paid twice.
+func flagPendingManualPayments(ctx context.Context, q *queries.Querier, leadID int64, now time.Time) error {
+	pending, err := q.ListPendingManualPaymentsByLead(ctx, leadID)
+	if err != nil {
+		return err
+	}
+	for _, p := range pending {
+		if err := q.FlagPaymentReview(ctx, queries.FlagPaymentReviewParams{
+			CatatanSistem: "Lead sudah lunas lewat pembayaran online; cek kemungkinan transfer ganda.", UpdatedAt: now, ID: p.ID,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // markManualPaymentsPaid is called by VerifyPayment inside its transaction.
 func markManualPaymentsPaid(ctx context.Context, q *queries.Querier, leadID int64, now time.Time) error {
 	pending, err := q.ListPendingManualPaymentsByLead(ctx, leadID)

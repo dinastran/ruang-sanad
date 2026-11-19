@@ -280,9 +280,9 @@ func (q *Queries) GetPaymentByExternalID(ctx context.Context, externalID sql.Nul
 }
 
 const listActiveSeatHolds = `-- name: ListActiveSeatHolds :many
-SELECT p.lead_id, p.jadwal_kode, p.jenis_kelamin FROM payments p JOIN leads l ON l.id = p.lead_id
+SELECT DISTINCT p.lead_id, p.jadwal_kode, p.jenis_kelamin FROM payments p JOIN leads l ON l.id = p.lead_id
 WHERE p.metode = 'gateway' AND p.status = 'pending' AND p.expires_at > ?1
-  AND p.jadwal_kode != '' AND l.verified_at IS NULL
+  AND p.jadwal_kode != '' AND l.verified_at IS NULL AND l.status = 'open' AND l.jadwal_kode = p.jadwal_kode
 `
 
 type ListActiveSeatHoldsRow struct {

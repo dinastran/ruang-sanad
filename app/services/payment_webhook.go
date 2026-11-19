@@ -81,7 +81,7 @@ func (s *RegistrationService) HandleXenditWebhook(ctx context.Context, body []by
 		return err
 	}
 
-	var verified bool
+	var verified, alreadyPaid bool
 	var lead queries.Lead
 	err = s.leads.withTx(ctx, func(q *queries.Querier) error {
 		l, err := loadLead(ctx, q, pay.LeadID)
@@ -97,8 +97,12 @@ func (s *RegistrationService) HandleXenditWebhook(ctx context.Context, body []by
 			PaidAt: sql.NullTime{Time: now, Valid: true}, Channel: sess.PaymentID, PerluTinjau: tinjau,
 			CatatanSistem: catatan, RawWebhook: raw, UpdatedAt: now, ID: pay.ID,
 		})
-		if err != nil || n == 0 {
-			return err // n == 0: already paid by a concurrent delivery
+		if err != nil {
+			return err
+		}
+		if n == 0 { // already paid by a concurrent delivery
+			alreadyPaid = true
+			return nil
 		}
 		if pay.LinkID.Valid {
 			if err := q.BumpRegistrationStat(ctx, queries.BumpRegistrationStatParams{
@@ -128,6 +132,9 @@ func (s *RegistrationService) HandleXenditWebhook(ctx context.Context, body []by
 	})
 	if err != nil {
 		return err
+	}
+	if alreadyPaid {
+		return nil
 	}
 	msg := leadDisplayName(lead) + " (" + leadRef(lead.ID) + ") membayar " + rupiahLabel(pay.Amount) + " lewat Xendit."
 	if verified {

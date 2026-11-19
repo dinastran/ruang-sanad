@@ -45,9 +45,9 @@ WHERE id = ? AND status != 'paid';
 
 -- name: ListActiveSeatHolds :many
 -- Kursi yang ditahan sesi bayar online aktif (lead belum terverifikasi).
-SELECT p.lead_id, p.jadwal_kode, p.jenis_kelamin FROM payments p JOIN leads l ON l.id = p.lead_id
+SELECT DISTINCT p.lead_id, p.jadwal_kode, p.jenis_kelamin FROM payments p JOIN leads l ON l.id = p.lead_id
 WHERE p.metode = 'gateway' AND p.status = 'pending' AND p.expires_at > sqlc.arg(now)
-  AND p.jadwal_kode != '' AND l.verified_at IS NULL;
+  AND p.jadwal_kode != '' AND l.verified_at IS NULL AND l.status = 'open' AND l.jadwal_kode = p.jadwal_kode;
 
 -- name: FailPaymentForReview :execrows
 UPDATE payments SET status = 'failed', perlu_tinjau = 1, catatan_sistem = ?, raw_webhook = ?, updated_at = ?

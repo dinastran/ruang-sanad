@@ -421,7 +421,7 @@ Ringkasnya: edit → ./scripts/deploy.sh → selesai. 🚀
 ## Pembayaran online (Xendit) untuk Link Pendaftaran
 
 1. Di dashboard Xendit (akun yayasan, sudah lolos verifikasi), buat **Secret API key** dengan izin *Money-in* write.
-2. Settings → Webhooks: isi URL **Payment Session** (`completed` dan `expired`) dengan `https://<APP_URL>/webhooks/xendit`, lalu salin **Verification token**.
+2. Settings → Webhooks: isi URL **Payment Session** (`completed` dan `expired`) dengan `<APP_URL>/webhooks/xendit` (mis. `https://dashboard.ruangsanad.com/webhooks/xendit`), lalu salin **Verification token**.
 3. Isi `.env` lalu restart:
    ```
    XENDIT_SECRET_KEY=xnd_production_...

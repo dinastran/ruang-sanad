@@ -16,12 +16,19 @@ type fakeGateway struct {
 	created  []GatewaySessionRequest
 	failNext bool
 	sessions map[string]GatewaySession
+	onCreate func() // runs inside CreateSession (simulates a slow call)
+	onGet    func() // runs inside GetSession
 }
 
 func (g *fakeGateway) CreateSession(_ context.Context, r GatewaySessionRequest) (GatewaySession, error) {
 	if g.failNext {
 		g.failNext = false
 		return GatewaySession{}, errors.New("xendit 500")
+	}
+	if g.onCreate != nil {
+		hook := g.onCreate
+		g.onCreate = nil
+		hook()
 	}
 	g.created = append(g.created, r)
 	s := GatewaySession{ID: "ps-" + r.ReferenceID, ReferenceID: r.ReferenceID, Status: "ACTIVE", Amount: r.Amount,
@@ -34,6 +41,11 @@ func (g *fakeGateway) CreateSession(_ context.Context, r GatewaySessionRequest) 
 }
 
 func (g *fakeGateway) GetSession(_ context.Context, id string) (GatewaySession, error) {
+	if g.onGet != nil {
+		hook := g.onGet
+		g.onGet = nil
+		hook()
+	}
 	s, ok := g.sessions[id]
 	if !ok {
 		return s, errors.New("not found")
@@ -130,4 +142,41 @@ func TestStartGatewayPaymentRefusals(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.reg.StartGatewayPayment(t.Context(), ref)
 	require.True(t, errors.Is(err, ErrSudahDiproses))
+}
+
+func TestFixStartGatewayNoDoubleSession(t *testing.T) {
+	f, gw, ref, leadID := gatewayLead(t)
+	_, err0 := f.db.Exec(`UPDATE jadwal_penawaran SET kuota_per_gender = 5 WHERE kode = ?`, testJadwal)
+	require.NoError(t, err0)
+	var innerErr error
+	gw.onCreate = func() { _, innerErr = f.reg.StartGatewayPayment(t.Context(), ref) }
+	_, err := f.reg.StartGatewayPayment(t.Context(), ref)
+	require.NoError(t, err)
+	require.Error(t, innerErr, "klik kedua saat sesi sedang dibuat ditolak")
+	require.Len(t, gw.created, 1)
+	holds, err := f.querier.ListActiveSeatHolds(t.Context(), sql.NullTime{Time: f.reg.nowUTC(), Valid: true})
+	require.NoError(t, err)
+	require.Len(t, holds, 1)
+	_ = leadID
+}
+
+func TestFixStaleSessionAmountNotReused(t *testing.T) {
+	f, gw, ref, leadID := gatewayLead(t)
+	_, err := f.reg.StartGatewayPayment(t.Context(), ref)
+	require.NoError(t, err)
+	_, err = f.db.Exec(`UPDATE leads SET payment_amount = 200000 WHERE id = ?`, leadID)
+	require.NoError(t, err)
+	_, err = f.reg.StartGatewayPayment(t.Context(), ref)
+	require.NoError(t, err)
+	require.Len(t, gw.created, 2, "nominal berubah: sesi baru")
+	require.EqualValues(t, 200000, gw.created[1].Amount)
+	pays, err := f.querier.ListPaymentsByLead(t.Context(), leadID)
+	require.NoError(t, err)
+	var expired int
+	for _, p := range pays {
+		if p.Status == "expired" {
+			expired++
+		}
+	}
+	require.Equal(t, 1, expired, "sesi lama dimatikan lokal")
 }

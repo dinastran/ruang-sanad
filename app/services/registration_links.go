@@ -45,6 +45,7 @@ type RegistrationService struct {
 	mu        sync.Mutex
 	phoneHits map[string][]time.Time
 	clickSeen map[string]struct{}
+	starting  map[string]bool // refs whose gateway session is being created
 	clickDay  string
 }
 
@@ -52,7 +53,7 @@ func NewRegistrationService(q *queries.Querier, leads *LeadService, jadwal *Jadw
 	return &RegistrationService{
 		querier: q, leads: leads, jadwal: jadwal, secret: secret,
 		now: time.Now, proofDir: DefaultProofDir,
-		phoneHits: map[string][]time.Time{}, clickSeen: map[string]struct{}{},
+		phoneHits: map[string][]time.Time{}, clickSeen: map[string]struct{}{}, starting: map[string]bool{},
 	}
 }
 

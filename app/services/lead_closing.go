@@ -68,7 +68,12 @@ func verifyLeadTx(ctx context.Context, q *queries.Querier, l *queries.Lead, v le
 	if v.Date.After(now.In(wib)) {
 		return nil, errors.New("tanggal terima tidak boleh di masa depan")
 	}
-	if err := markManualPaymentsPaid(ctx, q, l.ID, now); err != nil {
+	if v.ActorUserID > 0 {
+		// Staff verified the transfer: waiting manual proofs are the payment.
+		if err := markManualPaymentsPaid(ctx, q, l.ID, now); err != nil {
+			return nil, err
+		}
+	} else if err := flagPendingManualPayments(ctx, q, l.ID, now); err != nil {
 		return nil, err
 	}
 	from := l.Stage
