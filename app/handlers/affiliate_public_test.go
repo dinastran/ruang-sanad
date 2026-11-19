@@ -16,7 +16,7 @@ func TestAffiliateRedirect(t *testing.T) {
 	f := setupDaftarFixture(t, "short", "wa")
 	leads := services.NewLeadService(f.q, services.NewSantriService(f.q, services.NewKelasEngineService(f.q)))
 	aff := services.NewAffiliateService(f.q, leads, []byte("s"))
-	id, err := aff.Register(t.Context(), models.AffiliateSignup{Nama: "Ahmad", NoWA: "081200000001"})
+	id, err := aff.Register(t.Context(), models.AffiliateSignup{Nama: "Ahmad", NoWA: "081200000001", Email: "ahmad@x.com"})
 	require.NoError(t, err)
 	require.NoError(t, aff.SetStatus(t.Context(), id, "aktif", 0))
 	h := NewAffiliatePublicHandler(aff)
