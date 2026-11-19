@@ -405,3 +405,21 @@ Pendaftaran akun & KYC Xendit dikerjakan paralel oleh lembaga selama fase 1a.
 - Lead ganda bila orang yang sama chat dari akun WA `@lid` setelah mengisi form.
 - Angka klik indikatif (dedup in-memory hilang saat restart).
 - Settlement gateway tidak instan; dana mengendap di saldo Xendit.
+
+## 10. Amandemen fase 1b (2026-11-19)
+
+- **Xendit Payment Session menggantikan Invoice.** Dokumentasi Xendit kini
+  menandai Invoice (`/v2/invoices`) sebagai *legacy* dan menyarankan
+  Payment Session (`POST /sessions`, `session_type: PAY`,
+  `mode: PAYMENT_LINK`). Alur pengguna sama (hosted checkout). Pemetaan:
+  `external_id` → `reference_id`, status `PAID` → `COMPLETED`, webhook
+  `payment_session.completed` / `payment_session.expired`, header
+  `x-callback-token`, sesi memakai `expires_at` (ISO 8601).
+- **Konfirmasi ulang ke API.** Payload webhook hanya memuat jumlah sesi,
+  bukan jumlah dibayar. Setiap webhook `completed` dikonfirmasi lewat
+  `GET /sessions/{id}` (status `COMPLETED`, `amount`, `reference_id` cocok)
+  sebelum lead diverifikasi. Webhook palsu tidak bisa menandai lunas walau
+  token bocor.
+- `payments.external_id` = `reference_id` sesi; `provider_ref` =
+  `payment_session_id`; `channel` diisi `payment_id` Xendit (channel QRIS/
+  e-wallet tidak ada di payload sesi).
