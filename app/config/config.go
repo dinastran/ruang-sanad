@@ -55,7 +55,7 @@ type Config struct {
 	XenditSecretKey     string
 	XenditCallbackToken string
 	XenditAPIURL        string
-	MetaAPIVersion         string
+	MetaAPIVersion      string
 	// Only set when the CAPI token belongs to the app with this secret
 	// (e.g. a System User token); an Events Manager token may not.
 	MetaCAPIAppSecret string
