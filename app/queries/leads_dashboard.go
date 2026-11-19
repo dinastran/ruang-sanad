@@ -104,6 +104,11 @@ func (q *Queries) LeadDashboardPriorityPage(ctx context.Context, search, reason 
  const category = `CASE WHEN stage = 'bukti_masuk' THEN 'verify'
  WHEN stage = 'terverifikasi' THEN 'convert'
  WHEN needs_review = 1 THEN 'review' ELSE 'reply' END`
+ // Sort by precedence, not by the category name (alphabetical order would
+ // put "convert" before "verify").
+ const categoryRank = `CASE WHEN stage = 'bukti_masuk' THEN 0
+ WHEN stage = 'terverifikasi' THEN 1
+ WHEN needs_review = 1 THEN 2 ELSE 3 END`
  where := ` FROM leads WHERE status = 'open' AND (
  stage IN ('bukti_masuk','terverifikasi') OR needs_review = 1 OR
  (last_inbound_at IS NOT NULL AND (last_outbound_at IS NULL OR last_inbound_at > last_outbound_at))
@@ -124,7 +129,7 @@ func (q *Queries) LeadDashboardPriorityPage(ctx context.Context, search, reason 
  }
  sqlQuery := `SELECT id, COALESCE(NULLIF(nama, ''), NULLIF(wa_name, ''), 'Lead L-' || id),
  stage, needs_review, last_inbound_at, last_outbound_at, created_at` +
-  where + " ORDER BY " + category +
+  where + " ORDER BY " + categoryRank +
   ", COALESCE(last_inbound_at, created_at) ASC, id ASC LIMIT ? OFFSET ?"
  rows, err := q.db.QueryContext(ctx, sqlQuery, append(args, limit, offset)...)
  if err != nil { return nil, 0, fmt.Errorf("list lead priorities: %w", err) }
