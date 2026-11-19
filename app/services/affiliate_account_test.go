@@ -53,23 +53,63 @@ func TestActivateExpiredToken(t *testing.T) {
 
 func TestApproveEmailOfStaffRefused(t *testing.T) {
 	f := setupAffiliateFixture(t)
-	id, err := f.aff.Register(t.Context(), models.AffiliateSignup{Nama: "Staf Ganda", NoWA: "081200000011", Email: "cs@example.com"})
-	require.NoError(t, err)
-	_, err = f.aff.Approve(t.Context(), id, f.adminID)
-	require.ErrorContains(t, err, "staf")
+	_, err := f.aff.Register(t.Context(), models.AffiliateSignup{Nama: "Staf Ganda", NoWA: "081200000011", Email: "cs@example.com"})
+	var fe *FieldError
+	require.True(t, errors.As(err, &fe), "email akun staf ditolak sejak pendaftaran")
+	require.Equal(t, "email", fe.Field)
 }
 
-func TestApproveExistingPlainUserBecomesAffiliate(t *testing.T) {
+func TestFixApproveRefusesExistingAccount(t *testing.T) {
 	f := setupAffiliateFixture(t)
-	_, err := f.db.Exec(`INSERT INTO users (email, name, role) VALUES ('alumni@x.com', 'Alumni', 'user')`)
+	_, err := f.db.Exec(`INSERT INTO users (email, name, role) VALUES ('korban@x.com', 'Korban', 'user')`)
 	require.NoError(t, err)
-	id, err := f.aff.Register(t.Context(), models.AffiliateSignup{Nama: "Alumni Satu", NoWA: "081200000012", Email: "alumni@x.com"})
+	_, err = f.aff.Register(t.Context(), models.AffiliateSignup{Nama: "Penyerang", NoWA: "081200000012", Email: "korban@x.com"})
+	var fe *FieldError
+	require.True(t, errors.As(err, &fe), "email akun yang sudah ada ditolak saat daftar")
+	require.Equal(t, "email", fe.Field)
+
+	id, err := f.aff.Register(t.Context(), models.AffiliateSignup{Nama: "Penyerang", NoWA: "081200000012", Email: "baru@x.com"})
+	require.NoError(t, err)
+	_, err = f.db.Exec(`INSERT INTO users (email, name, role) VALUES ('baru@x.com', 'Pemilik Asli', 'user')`)
 	require.NoError(t, err)
 	_, err = f.aff.Approve(t.Context(), id, f.adminID)
-	require.NoError(t, err)
+	require.Error(t, err, "akun yang muncul setelah daftar juga tidak diambil alih")
 	var role string
-	require.NoError(t, f.db.QueryRow(`SELECT role FROM users WHERE email = 'alumni@x.com'`).Scan(&role))
-	require.Equal(t, "affiliate", role)
+	require.NoError(t, f.db.QueryRow(`SELECT role FROM users WHERE email = 'baru@x.com'`).Scan(&role))
+	require.Equal(t, "user", role)
+}
+
+func TestFixInviteOnlyExternal(t *testing.T) {
+	f := setupAffiliateFixture(t)
+	res, err := f.db.Exec(`INSERT INTO users (email, name, role) VALUES ('g@x.com', 'Guru', 'guru')`)
+	require.NoError(t, err)
+	uid, _ := res.LastInsertId()
+	_, err = f.db.Exec(`INSERT INTO guru (nama, user_id) VALUES ('Hasan', ?)`, uid)
+	require.NoError(t, err)
+	_, err = f.aff.EnsureGuruAffiliates(t.Context())
+	require.NoError(t, err)
+	a, err := f.aff.ForUser(t.Context(), uid)
+	require.NoError(t, err)
+	_, err = f.aff.NewInvite(t.Context(), a.ID)
+	require.Error(t, err, "tidak boleh membuat link set-password untuk akun guru")
+}
+
+func TestFixNewInviteRevokesOld(t *testing.T) {
+	f := setupAffiliateFixture(t)
+	id, err := f.aff.Register(t.Context(), models.AffiliateSignup{Nama: "Eka Putri", NoWA: "081200000010", Email: "eka@x.com"})
+	require.NoError(t, err)
+	inv1, err := f.aff.Approve(t.Context(), id, f.adminID)
+	require.NoError(t, err)
+	_, err = f.aff.NewInvite(t.Context(), id)
+	require.NoError(t, err)
+	err = f.aff.Activate(t.Context(), strings.TrimPrefix(inv1.Path, "/affiliate/aktivasi/"), "rahasia-123")
+	require.True(t, errors.Is(err, ErrUndanganTidakValid), "link lama tidak berlaku setelah kirim ulang")
+
+	inv3, err := f.aff.NewInvite(t.Context(), id)
+	require.NoError(t, err)
+	require.NoError(t, f.aff.SetStatus(t.Context(), id, "nonaktif", f.adminID))
+	err = f.aff.Activate(t.Context(), strings.TrimPrefix(inv3.Path, "/affiliate/aktivasi/"), "rahasia-123")
+	require.True(t, errors.Is(err, ErrUndanganTidakValid), "affiliate nonaktif tidak bisa aktivasi")
 }
 
 func TestRegisterRequiresEmail(t *testing.T) {

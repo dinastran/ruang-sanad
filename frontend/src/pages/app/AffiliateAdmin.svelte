@@ -41,6 +41,10 @@
 	function simpanRule(e: Event) {
 		e.preventDefault();
 		const nilai = ruleForm.jenis === "persen" ? Math.round(parseFloat(ruleForm.nilai_text.replace(",", ".")) * 100) : parseInt(ruleForm.nilai_text.replace(/\D/g, ""), 10);
+		if (!Number.isFinite(nilai) || nilai < 0 || (ruleForm.jenis === "persen" && nilai > 10000)) {
+			alert(ruleForm.jenis === "persen" ? "Isi persen antara 0 dan 100" : "Isi nominal yang valid");
+			return;
+		}
 		const maks = ruleForm.pola !== "bulanan" ? null : ruleForm.maks === "aktif" ? -1 : Number(ruleForm.maks);
 		router.post("/app/leads/affiliate/aturan", { scope: ruleForm.scope, target_id: Number(ruleForm.target_id), jenis: ruleForm.jenis, nilai, pola: ruleForm.pola, maks_bulan: maks }, opts);
 	}
@@ -188,7 +192,7 @@
 					<form class={panel + " space-y-3 p-4"} onsubmit={simpanRule}>
 						<h2 class="text-sm font-semibold text-neutral-900 dark:text-white">Tambah / ubah aturan</h2>
 						<label class={lbl}>Berlaku untuk
-							<select class={field + " mt-1"} bind:value={ruleForm.scope} onchange={() => (ruleForm.target_id = 0)}>
+							<select class={field + " mt-1"} bind:value={ruleForm.scope} onchange={() => (ruleForm.target_id = ruleForm.scope === "program" ? (props.programs[0]?.id ?? 0) : ruleForm.scope === "affiliate" ? (aktif[0]?.id ?? 0) : 0)}>
 								<option value="global">Semua (default)</option><option value="program">Program tertentu</option><option value="affiliate">Affiliate tertentu</option>
 							</select>
 						</label>

@@ -82,13 +82,10 @@ func (s *AffiliateService) Approve(ctx context.Context, id, actorID int64) (Invi
 			userID = nu.ID
 		case err != nil:
 			return err
-		case u.Role == models.RoleUser || u.Role == models.RoleAffiliate:
-			userID = u.ID
-			if err := q.UpdateUserRole(ctx, queries.UpdateUserRoleParams{Role: string(models.RoleAffiliate), UpdatedAt: now, ID: u.ID}); err != nil {
-				return err
-			}
 		default:
-			return errors.New("email ini dipakai akun staf (" + string(u.Role) + "); minta affiliate memakai email lain")
+			// An account with this email appeared after the signup. Taking
+			// it over would hand its password link to the registrant.
+			return errors.New("email ini sudah dipakai akun lain (" + string(u.Role) + "); minta affiliate mendaftar ulang dengan email lain")
 		}
 		a.UserID = sql.NullInt64{Int64: userID, Valid: true}
 		a.Status = "aktif"
@@ -112,8 +109,11 @@ func (s *AffiliateService) NewInvite(ctx context.Context, id int64) (Invite, err
 	if err != nil {
 		return Invite{}, err
 	}
-	if !a.UserID.Valid {
-		return Invite{}, errors.New("affiliate belum disetujui")
+	if a.Tipe != "eksternal" {
+		return Invite{}, errors.New("link aktivasi hanya untuk affiliate eksternal")
+	}
+	if !a.UserID.Valid || a.Status != "aktif" {
+		return Invite{}, errors.New("affiliate belum disetujui atau tidak aktif")
 	}
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
@@ -121,6 +121,12 @@ func (s *AffiliateService) NewInvite(ctx context.Context, id int64) (Invite, err
 	}
 	token := base64.RawURLEncoding.EncodeToString(b)
 	now := s.nowUTC()
+	// Only the newest link works ("kirim ulang" revokes older ones).
+	if err := s.querier.RevokeAffiliateInvites(ctx, queries.RevokeAffiliateInvitesParams{
+		UsedAt: sql.NullTime{Time: now, Valid: true}, AffiliateID: a.ID,
+	}); err != nil {
+		return Invite{}, err
+	}
 	if _, err := s.querier.CreateAffiliateInvite(ctx, queries.CreateAffiliateInviteParams{
 		AffiliateID: a.ID, TokenHash: hashInviteToken(token), ExpiresAt: now.Add(inviteTTL), CreatedAt: now,
 	}); err != nil {
@@ -139,7 +145,10 @@ func (s *AffiliateService) Activate(ctx context.Context, token, password string)
 		return ErrUndanganTidakValid
 	}
 	a, err := s.get(ctx, inv.AffiliateID)
-	if err != nil || !a.UserID.Valid {
+	if err != nil || !a.UserID.Valid || a.Status != "aktif" || a.Tipe != "eksternal" {
+		return ErrUndanganTidakValid
+	}
+	if role, err := s.querier.GetUserRole(ctx, a.UserID.Int64); err != nil || role != string(models.RoleAffiliate) {
 		return ErrUndanganTidakValid
 	}
 	hash, err := HashPassword(password)

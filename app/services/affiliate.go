@@ -126,6 +126,16 @@ func (s *AffiliateService) Register(ctx context.Context, in models.AffiliateSign
 			if a.NoWa == phone && a.Status != "ditolak" {
 				return &FieldError{Field: "no_wa", Pesan: "Nomor ini sudah terdaftar sebagai affiliate"}
 			}
+			if a.Email == in.Email && a.Status != "ditolak" {
+				return &FieldError{Field: "email", Pesan: "Email ini sudah terdaftar sebagai affiliate"}
+			}
+		}
+		// Never attach an affiliate signup to an existing login: whoever
+		// registers would receive that account's set-password link.
+		if _, err := q.GetUserByEmail(ctx, in.Email); err == nil {
+			return &FieldError{Field: "email", Pesan: "Email ini sudah dipakai akun lain. Gunakan email yang berbeda."}
+		} else if !errors.Is(err, queries.ErrUserNotFound) {
+			return err
 		}
 		kode, err := s.uniqueKode(ctx, q, kodeBase(in.Nama))
 		if err != nil {

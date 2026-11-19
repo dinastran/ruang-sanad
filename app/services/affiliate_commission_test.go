@@ -120,6 +120,8 @@ func TestReconcileSantriStopsDuringHold(t *testing.T) {
 	f.reconcile(t)
 	_, err := f.db.Exec(`UPDATE santri SET status = 'tidak_lanjut' WHERE id = ?`, sid)
 	require.NoError(t, err)
+	_, err = f.db.Exec(`INSERT INTO santri_status_log (santri_id, status_lama, status_baru, created_at) VALUES (?, 'aktif', 'tidak_lanjut', ?)`, sid, f.clock.Add(time.Hour))
+	require.NoError(t, err)
 	f.clock = f.clock.Add(15 * 24 * time.Hour)
 	f.reconcile(t)
 	require.Equal(t, "batal", f.commissions(t)[0].Status)
@@ -187,4 +189,55 @@ func TestReconcileInactiveAffiliateNoNewCommission(t *testing.T) {
 	require.NoError(t, f.aff.SetStatus(t.Context(), a, "nonaktif", f.adminID))
 	f.reconcile(t)
 	require.Empty(t, f.commissions(t))
+}
+
+func TestFixReturningSantriKeepsCommission(t *testing.T) {
+	f, _, leadID := paidAffiliateLead(t, models.AffiliateRuleRequest{Scope: "global", Jenis: "flat", Nilai: 50000, Pola: "sekali"})
+	// Linked to an old santri whose status is still from before re-enrolment.
+	res, err := f.db.Exec(`INSERT INTO santri (nama, status) VALUES ('Lama', 'tidak_lanjut')`)
+	require.NoError(t, err)
+	sid, _ := res.LastInsertId()
+	_, err = f.db.Exec(`INSERT INTO santri_status_log (santri_id, status_lama, status_baru, created_at) VALUES (?, 'aktif', 'tidak_lanjut', ?)`, sid, f.clock.Add(-200*24*time.Hour))
+	require.NoError(t, err)
+	_, err = f.db.Exec(`UPDATE leads SET santri_id = ?, status = 'won', converted_at = ? WHERE id = ?`, sid, f.clock, leadID)
+	require.NoError(t, err)
+	f.reconcile(t)
+	f.clock = f.clock.Add(15 * 24 * time.Hour)
+	f.reconcile(t)
+	require.Equal(t, "siap", f.commissions(t)[0].Status, "status lama santri tidak membatalkan komisi")
+}
+
+func TestFixRuleUsesSourceProgram(t *testing.T) {
+	f := setupAffiliateFixture(t)
+	f.external(t, "Ahmad", "081200000001")
+	res, err := f.db.Exec(`INSERT INTO lead_programs (nama, jenis, produk_id) VALUES ('Program Gratis', 'program', ?)`, f.produkID)
+	require.NoError(t, err)
+	prog, _ := res.LastInsertId()
+	require.NoError(t, f.aff.SaveRule(t.Context(), models.AffiliateRuleRequest{Scope: "global", Jenis: "flat", Nilai: 50000, Pola: "sekali"}, f.adminID))
+	require.NoError(t, f.aff.SaveRule(t.Context(), models.AffiliateRuleRequest{Scope: "program", TargetID: prog, Jenis: "flat", Nilai: 0, Pola: "sekali"}, f.adminID))
+	_, err = f.db.Exec(`UPDATE lead_sources SET program_id = ? WHERE id = ?`, prog, f.sourceID)
+	require.NoError(t, err)
+	f.submitWith(t, "", "AHMAD")
+	l, err := f.querier.GetLeadByChatID(t.Context(), testChatID)
+	require.NoError(t, err)
+	_, err = f.db.Exec(`UPDATE leads SET program_id = NULL, stage = 'bukti_masuk', payment_amount = 150000 WHERE id = ?`, l.ID)
+	require.NoError(t, err)
+	f.clock = f.clock.Add(time.Minute)
+	require.NoError(t, f.service.VerifyPayment(t.Context(), l.ID, f.keuanganID, models.LeadVerifyRequest{Amount: 150000, Date: f.clock.In(wib).Format("2006-01-02")}))
+	f.reconcile(t)
+	require.Empty(t, f.commissions(t), "program dari sumber lead dengan aturan 0 = tanpa komisi")
+}
+
+func TestFixManualChangeMovesPendingCommission(t *testing.T) {
+	f, a, leadID := paidAffiliateLead(t, models.AffiliateRuleRequest{Scope: "global", Jenis: "flat", Nilai: 50000, Pola: "sekali"})
+	b := f.external(t, "Budi", "081200000002")
+	f.reconcile(t)
+	require.NoError(t, f.aff.SetLeadAffiliate(t.Context(), leadID, b, f.csID))
+	f.reconcile(t)
+	require.Equal(t, 1, f.count(t, `SELECT COUNT(*) FROM affiliate_commissions WHERE affiliate_id = ? AND status = 'pending'`, b), "komisi pindah ke affiliate baru")
+	require.Zero(t, f.count(t, `SELECT COUNT(*) FROM affiliate_commissions WHERE affiliate_id = ? AND status != 'batal'`, a))
+
+	f.clock = f.clock.Add(15 * 24 * time.Hour)
+	f.reconcile(t)
+	require.Error(t, f.aff.SetLeadAffiliate(t.Context(), leadID, a, f.csID), "komisi sudah siap cair: tidak boleh dipindah")
 }

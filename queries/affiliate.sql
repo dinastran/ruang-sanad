@@ -90,7 +90,8 @@ UPDATE affiliate_invites SET used_at = ? WHERE id = ? AND used_at IS NULL AND ex
 -- name: ListCommissionCandidatesPendaftaran :many
 -- Lead ber-affiliate yang terverifikasi setelah terkunci (atau dikunci manual)
 -- dan belum punya komisi pendaftaran.
-SELECT l.id AS lead_id, la.affiliate_id, CAST(COALESCE(l.program_id, 1) AS INTEGER) AS program_id,
+SELECT l.id AS lead_id, la.affiliate_id,
+       CAST(COALESCE(l.program_id, (SELECT s.program_id FROM lead_sources s WHERE s.id = l.lead_source_id), 1) AS INTEGER) AS program_id,
        l.payment_amount, l.santri_id
 FROM lead_affiliates la
 JOIN leads l ON l.id = la.lead_id
@@ -112,9 +113,16 @@ WHERE status = 'pending' AND sumber = 'pendaftaran'
   AND lead_id IN (SELECT id FROM leads WHERE verified_at IS NULL);
 
 -- name: CancelCommissionsSantriStopped :execrows
+-- Hanya bila santri berhenti SETELAH komisi dibuat (status lama santri yang
+-- kembali mendaftar tidak membatalkan). Waktu dibandingkan pada 19 karakter
+-- pertama karena nilai dari Go dan CURRENT_TIMESTAMP berbeda format.
 UPDATE affiliate_commissions SET status = 'batal', alasan_batal = 'santri berhenti dalam masa tahan', updated_at = sqlc.arg(now)
 WHERE status = 'pending'
-  AND lead_id IN (SELECT l.id FROM leads l JOIN santri s ON s.id = l.santri_id WHERE s.status IN ('nonaktif', 'tidak_lanjut'));
+  AND EXISTS (SELECT 1 FROM leads l JOIN santri s ON s.id = l.santri_id
+      JOIN santri_status_log sl ON sl.santri_id = s.id
+      WHERE l.id = affiliate_commissions.lead_id AND s.status IN ('nonaktif', 'tidak_lanjut')
+        AND sl.status_baru IN ('nonaktif', 'tidak_lanjut')
+        AND substr(sl.created_at, 1, 19) >= substr(affiliate_commissions.created_at, 1, 19));
 
 -- name: MatureCommissions :execrows
 UPDATE affiliate_commissions SET status = 'siap', siap_at = sqlc.arg(now), updated_at = sqlc.arg(now)
@@ -134,8 +142,10 @@ WHERE t.status = 'lunas' AND l.converted_at IS NOT NULL AND t.created_at >= l.co
 -- name: CountTagihanSinceConversion :one
 -- Urutan tagihan sejak konversi (termasuk yang dimaksud), tagihan batal tidak dihitung.
 SELECT COUNT(*) FROM tagihan
-WHERE santri_id = sqlc.arg(santri_id) AND status != 'batal' AND created_at >= sqlc.arg(converted_at)
-  AND (created_at < sqlc.arg(created_at) OR (created_at = sqlc.arg(created_at) AND id <= sqlc.arg(id)));
+WHERE santri_id = sqlc.arg(santri_id) AND status != 'batal'
+  AND substr(created_at, 1, 19) >= substr(sqlc.arg(converted_at), 1, 19)
+  AND (substr(created_at, 1, 19) < substr(sqlc.arg(created_at), 1, 19)
+       OR (substr(created_at, 1, 19) = substr(sqlc.arg(created_at), 1, 19) AND id <= sqlc.arg(id)));
 
 -- name: GetAffiliateCommission :one
 SELECT * FROM affiliate_commissions WHERE id = ?;
@@ -205,3 +215,12 @@ JOIN affiliates a ON a.id = c.affiliate_id
 JOIN leads l ON l.id = c.lead_id
 WHERE (sqlc.arg(status) = '' OR c.status = sqlc.arg(status))
 ORDER BY c.created_at DESC, c.id DESC LIMIT 300;
+
+-- name: RevokeAffiliateInvites :exec
+UPDATE affiliate_invites SET used_at = ? WHERE affiliate_id = ? AND used_at IS NULL;
+
+-- name: ListCommissionsByLead :many
+SELECT * FROM affiliate_commissions WHERE lead_id = ? AND status != 'batal';
+
+-- name: DeletePendingCommissionsByLead :execrows
+DELETE FROM affiliate_commissions WHERE lead_id = ? AND status IN ('pending', 'batal');

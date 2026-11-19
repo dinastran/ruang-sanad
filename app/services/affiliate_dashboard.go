@@ -105,7 +105,7 @@ func (s *AffiliateService) Dashboard(ctx context.Context, id int64) (*models.Aff
 			d.KomisiDibayar = x.Total
 		}
 	}
-	rule, err := s.ResolveRule(ctx, a.ID, 1)
+	rule, err := s.ResolveRule(ctx, a.ID, 0) // affiliate rule, else default
 	if err != nil {
 		return nil, err
 	}

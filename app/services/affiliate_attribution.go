@@ -177,6 +177,25 @@ func (s *AffiliateService) SetLeadAffiliate(ctx context.Context, leadID, affilia
 		if prev, err := q.GetLeadAffiliate(ctx, l.ID); err == nil {
 			payload["dari"] = prev.Kode
 		}
+		// Commissions follow the attribution: unpaid ones are removed so the
+		// next reconcile creates them for the new affiliate; ready or paid
+		// commissions block the change (correct them on the admin page first).
+		comms, err := q.ListCommissionsByLead(ctx, l.ID)
+		if err != nil {
+			return "", nil, err
+		}
+		for _, c := range comms {
+			if c.Status == "siap" || c.Status == "dibayar" {
+				return "", nil, errors.New("komisi lead ini sudah siap cair/dibayar; batalkan dulu di halaman Affiliate sebelum mengganti affiliate")
+			}
+		}
+		n, err := q.DeletePendingCommissionsByLead(ctx, l.ID)
+		if err != nil {
+			return "", nil, err
+		}
+		if n > 0 {
+			payload["komisi_dipindah"] = n
+		}
 		if affiliateID <= 0 {
 			if err := q.DeleteLeadAffiliate(ctx, l.ID); err != nil {
 				return "", nil, err

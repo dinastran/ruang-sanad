@@ -85,8 +85,8 @@ func (s *AffiliateService) Reconcile(ctx context.Context) (ReconcileResult, erro
 			if err != nil {
 				return err
 			}
-			if rule == nil {
-				continue
+			if rule == nil || rule.Nilai == 0 {
+				continue // no rule, or the program is excluded (rule 0)
 			}
 			basis, err := purchaseBasis(ctx, q, c.LeadID, c.PaymentAmount)
 			if err != nil {

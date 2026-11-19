@@ -11,7 +11,7 @@ import (
 func TestAffiliateRoleGuard(t *testing.T) {
 	role := "affiliate"
 	app := fiber.New()
-	app.Use("/app", AffiliateRoleGuard(func(*fiber.Ctx) string { return role }))
+	app.Use("/app", AffiliateRoleGuard(func(*fiber.Ctx) (string, bool) { return role, role != "error" }))
 	app.All("/app/*", func(c *fiber.Ctx) error { return c.SendString("ok") })
 	app.All("/app", func(c *fiber.Ctx) error { return c.SendString("ok") })
 
@@ -31,6 +31,10 @@ func TestAffiliateRoleGuard(t *testing.T) {
 	}
 	code, _ := do("POST", "/app/upload/avatar")
 	require.Equal(t, fiber.StatusForbidden, code)
+
+	role = "error"
+	code, _ = do("GET", "/app/leads")
+	require.Equal(t, fiber.StatusServiceUnavailable, code, "gagal membaca role: tolak (fail closed)")
 
 	role = "cs"
 	code, _ = do("GET", "/app/leads")

@@ -168,9 +168,16 @@ func (q *Queries) CancelCommission(ctx context.Context, arg CancelCommissionPara
 const cancelCommissionsSantriStopped = `-- name: CancelCommissionsSantriStopped :execrows
 UPDATE affiliate_commissions SET status = 'batal', alasan_batal = 'santri berhenti dalam masa tahan', updated_at = ?1
 WHERE status = 'pending'
-  AND lead_id IN (SELECT l.id FROM leads l JOIN santri s ON s.id = l.santri_id WHERE s.status IN ('nonaktif', 'tidak_lanjut'))
+  AND EXISTS (SELECT 1 FROM leads l JOIN santri s ON s.id = l.santri_id
+      JOIN santri_status_log sl ON sl.santri_id = s.id
+      WHERE l.id = affiliate_commissions.lead_id AND s.status IN ('nonaktif', 'tidak_lanjut')
+        AND sl.status_baru IN ('nonaktif', 'tidak_lanjut')
+        AND substr(sl.created_at, 1, 19) >= substr(affiliate_commissions.created_at, 1, 19))
 `
 
+// Hanya bila santri berhenti SETELAH komisi dibuat (status lama santri yang
+// kembali mendaftar tidak membatalkan). Waktu dibandingkan pada 19 karakter
+// pertama karena nilai dari Go dan CURRENT_TIMESTAMP berbeda format.
 func (q *Queries) CancelCommissionsSantriStopped(ctx context.Context, now time.Time) (int64, error) {
 	result, err := q.db.ExecContext(ctx, cancelCommissionsSantriStopped, now)
 	if err != nil {
@@ -195,14 +202,16 @@ func (q *Queries) CancelCommissionsVerificationUndone(ctx context.Context, now t
 
 const countTagihanSinceConversion = `-- name: CountTagihanSinceConversion :one
 SELECT COUNT(*) FROM tagihan
-WHERE santri_id = ?1 AND status != 'batal' AND created_at >= ?2
-  AND (created_at < ?3 OR (created_at = ?3 AND id <= ?4))
+WHERE santri_id = ?1 AND status != 'batal'
+  AND substr(created_at, 1, 19) >= substr(?2, 1, 19)
+  AND (substr(created_at, 1, 19) < substr(?3, 1, 19)
+       OR (substr(created_at, 1, 19) = substr(?3, 1, 19) AND id <= ?4))
 `
 
 type CountTagihanSinceConversionParams struct {
 	SantriID    int64
-	ConvertedAt time.Time
-	CreatedAt   time.Time
+	ConvertedAt interface{}
+	CreatedAt   interface{}
 	ID          int64
 }
 
@@ -326,6 +335,18 @@ DELETE FROM lead_affiliates WHERE lead_id = ?
 func (q *Queries) DeleteLeadAffiliate(ctx context.Context, leadID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteLeadAffiliate, leadID)
 	return err
+}
+
+const deletePendingCommissionsByLead = `-- name: DeletePendingCommissionsByLead :execrows
+DELETE FROM affiliate_commissions WHERE lead_id = ? AND status IN ('pending', 'batal')
+`
+
+func (q *Queries) DeletePendingCommissionsByLead(ctx context.Context, leadID int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deletePendingCommissionsByLead, leadID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const getAffiliate = `-- name: GetAffiliate :one
@@ -798,7 +819,8 @@ func (q *Queries) ListAffiliates(ctx context.Context) ([]Affiliate, error) {
 }
 
 const listCommissionCandidatesPendaftaran = `-- name: ListCommissionCandidatesPendaftaran :many
-SELECT l.id AS lead_id, la.affiliate_id, CAST(COALESCE(l.program_id, 1) AS INTEGER) AS program_id,
+SELECT l.id AS lead_id, la.affiliate_id,
+       CAST(COALESCE(l.program_id, (SELECT s.program_id FROM lead_sources s WHERE s.id = l.lead_source_id), 1) AS INTEGER) AS program_id,
        l.payment_amount, l.santri_id
 FROM lead_affiliates la
 JOIN leads l ON l.id = la.lead_id
@@ -991,6 +1013,57 @@ func (q *Queries) ListCommissionLedger(ctx context.Context, status interface{}) 
 			&i.BankAtasNama,
 			&i.LeadNama,
 			&i.LeadWaName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCommissionsByLead = `-- name: ListCommissionsByLead :many
+SELECT id, affiliate_id, lead_id, santri_id, sumber, sumber_id, bulan_ke, basis, jenis, nilai, pola, maks_bulan, jumlah, status, siap_at, dibayar_at, dibayar_oleh, metode_bayar, ujroh_bulan, catatan, alasan_batal, created_at, updated_at FROM affiliate_commissions WHERE lead_id = ? AND status != 'batal'
+`
+
+func (q *Queries) ListCommissionsByLead(ctx context.Context, leadID int64) ([]AffiliateCommission, error) {
+	rows, err := q.db.QueryContext(ctx, listCommissionsByLead, leadID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AffiliateCommission
+	for rows.Next() {
+		var i AffiliateCommission
+		if err := rows.Scan(
+			&i.ID,
+			&i.AffiliateID,
+			&i.LeadID,
+			&i.SantriID,
+			&i.Sumber,
+			&i.SumberID,
+			&i.BulanKe,
+			&i.Basis,
+			&i.Jenis,
+			&i.Nilai,
+			&i.Pola,
+			&i.MaksBulan,
+			&i.Jumlah,
+			&i.Status,
+			&i.SiapAt,
+			&i.DibayarAt,
+			&i.DibayarOleh,
+			&i.MetodeBayar,
+			&i.UjrohBulan,
+			&i.Catatan,
+			&i.AlasanBatal,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1250,6 +1323,20 @@ func (q *Queries) ReplaceLeadAffiliate(ctx context.Context, arg ReplaceLeadAffil
 		arg.DikunciAt,
 		arg.DiubahOleh,
 	)
+	return err
+}
+
+const revokeAffiliateInvites = `-- name: RevokeAffiliateInvites :exec
+UPDATE affiliate_invites SET used_at = ? WHERE affiliate_id = ? AND used_at IS NULL
+`
+
+type RevokeAffiliateInvitesParams struct {
+	UsedAt      sql.NullTime
+	AffiliateID int64
+}
+
+func (q *Queries) RevokeAffiliateInvites(ctx context.Context, arg RevokeAffiliateInvitesParams) error {
+	_, err := q.db.ExecContext(ctx, revokeAffiliateInvites, arg.UsedAt, arg.AffiliateID)
 	return err
 }
 
