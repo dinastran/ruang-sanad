@@ -61,6 +61,7 @@ type Handlers struct {
 	LeadSources                 *handlers.LeadSourceHandler
 	LeadPrograms                *handlers.LeadProgramHandler
 	RegistrationPublic          *handlers.RegistrationPublicHandler
+	RegistrationLinks           *handlers.RegistrationLinkHandler
 	MetaCAPI                    *handlers.MetaCAPIHandler
 	MetaAds                     *handlers.MetaAdsHandler
 	LeadFollowups               *handlers.LeadFollowupHandler
@@ -590,6 +591,15 @@ func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, u
 		protected.Put("/leads/:id/program", leadRole, h.LeadPrograms.SetLeadProgram)
 		protected.Post("/leads/:id/peserta", leadRole, h.LeadPrograms.DaftarkanPeserta)
 		protected.Post("/leads/:id/tawarkan-reguler", leadRole, h.LeadPrograms.TawarkanReguler)
+	}
+	if h.RegistrationLinks != nil {
+		linkRole := middlewares.RoleRequired(store, userService, LeadSourceEditorRoles...)
+		protected.Get("/leads/link-pendaftaran", leadRole, h.RegistrationLinks.Index)
+		protected.Post("/leads/link-pendaftaran", linkRole, h.RegistrationLinks.Create)
+		protected.Put("/leads/link-pendaftaran/pengaturan", linkRole, h.RegistrationLinks.SaveSettings)
+		protected.Put("/leads/link-pendaftaran/:lid", linkRole, h.RegistrationLinks.Update)
+		protected.Get("/leads/:id/payments/:pid/bukti", leadRole, h.RegistrationLinks.Bukti)
+		protected.Post("/leads/:id/payments/:pid/tolak", leadRole, h.RegistrationLinks.Tolak)
 	}
 	if h.MetaAds != nil {
 		adsRole := middlewares.RoleRequired(store, userService, MetaAdsRoles...)

@@ -56,7 +56,20 @@ func (s *LeadProgramService) normalize(ctx context.Context, id int64, r *models.
 	}
 	if id == queries.LeadProgramRegulerID {
 		// The built-in program always closes into a santri and stays active.
-		r.Jenis, r.ProdukID, r.ProdukBatchID, r.IsAktif = LeadProgramJenisReguler, 0, 0, true
+		// It may point at a produk (kategori program) only as the price
+		// source for public registration links; it never has a batch.
+		r.Jenis, r.ProdukBatchID, r.IsAktif = LeadProgramJenisReguler, 0, true
+		if r.ProdukID <= 0 {
+			r.ProdukID = 0
+			return nil
+		}
+		produk, err := s.querier.GetProduk(ctx, r.ProdukID)
+		if err != nil {
+			return errors.New("produk tidak ditemukan")
+		}
+		if produk.Kategori != "program" {
+			return errors.New("produk harus berkategori program, bukan buku")
+		}
 		return nil
 	}
 	if r.Jenis == "" {

@@ -3,6 +3,7 @@
 	import { inertia, router } from "@inertiajs/svelte";
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
+	import RegistrationPanel, { type RegistrasiPanel } from "@components/leads/RegistrationPanel.svelte";
 	import type { Flash, User } from "@lib/types";
 	import { Toast } from "@lib/notifications/toast";
 	import { getCSRFToken } from "@lib/utils/csrf";
@@ -142,6 +143,7 @@
 		program?: LeadProgramInfo;
 		programs?: { id: number; nama: string; jenis: string; is_aktif: boolean }[];
 		followup?: { can_approve: boolean; steps: string[] };
+		registrasi?: RegistrasiPanel;
 		flash?: Flash;
 	}
 
@@ -360,12 +362,15 @@
 		"stage.changed": "Tahap diubah",
 		"stage.ai_suggestion_applied": "Saran tahap AI diterapkan",
 		"payment.verified": "Pembayaran diverifikasi",
+		"payment.rejected": "Bukti transfer ditolak",
+		"registration.submitted": "Mengisi form pendaftaran",
 		"lead.converted": "Closing (santri / peserta program)",
 		"lead.program_changed": "Program diubah",
 		"lead.offered_reguler": "Ditawari kelas reguler",
 		"lead.lost": "Ditandai hilang",
 		"lead.do_not_contact": "Ditandai jangan hubungi",
 		"lead.reopened": "Dibuka kembali",
+		"lead.created": "Lead dibuat",
 		"lead.assigned": "Penanggung jawab diubah",
 		"source.detected": "Sumber lead dikenali",
 		"source.changed": "Sumber lead diubah",
@@ -597,6 +602,8 @@
 							{/if}
 						</section>
 					{/if}
+
+					{#if props.registrasi}<RegistrationPanel leadID={lead.id} panel={props.registrasi} />{/if}
 
 					<section class="rounded-xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-4">
 						<div class="flex items-center justify-between gap-2">

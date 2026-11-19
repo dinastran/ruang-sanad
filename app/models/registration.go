@@ -121,3 +121,37 @@ type BayarInfo struct {
 	CatatanTolak string `json:"catatan_tolak,omitempty"`
 	WaURL        string `json:"wa_url"`
 }
+
+type LeadRegistrationRow struct {
+	ID        int64  `json:"id"`
+	LinkJudul string `json:"link_judul"`
+	LinkSlug  string `json:"link_slug"`
+	LinkMode  string `json:"link_mode"`
+	CreatedAt string `json:"created_at"`
+}
+
+type PaymentRow struct {
+	ID            int64  `json:"id"`
+	Metode        string `json:"metode"`
+	Amount        int64  `json:"amount"`
+	Status        string `json:"status"`
+	Channel       string `json:"channel"`
+	AdaBukti      bool   `json:"ada_bukti"`
+	CatatanSistem string `json:"catatan_sistem"`
+	PerluTinjau   bool   `json:"perlu_tinjau"`
+	CreatedAt     string `json:"created_at"`
+	PaidAt        string `json:"paid_at"`
+}
+
+// LeadRegistrationPanel is the "Pendaftaran & Pembayaran" panel on a lead.
+type LeadRegistrationPanel struct {
+	Registrasi []LeadRegistrationRow `json:"registrasi"`
+	Payments   []PaymentRow          `json:"payments"`
+}
+
+type Option struct {
+	ID    int64  `json:"id"`
+	Nama  string `json:"nama"`
+	Info  string `json:"info,omitempty"`
+	Aktif bool   `json:"aktif"`
+}

@@ -155,3 +155,21 @@ func TestRejectManualPayment(t *testing.T) {
 	require.Equal(t, "ditolak", info.Status)
 	require.NoError(t, f.reg.SubmitManualProof(t.Context(), ref, proofFile(jpgHead, 1000)), "boleh unggah ulang setelah ditolak")
 }
+
+func TestLeadRegistrationPanelAndProofPath(t *testing.T) {
+	f, ref, leadID := bayarLead(t)
+	require.NoError(t, f.reg.SubmitManualProof(t.Context(), ref, proofFile(pngHead, 1000)))
+	panel, err := f.reg.LeadPanel(t.Context(), leadID)
+	require.NoError(t, err)
+	require.Len(t, panel.Registrasi, 1)
+	require.Equal(t, "tahsin-reguler", panel.Registrasi[0].LinkSlug)
+	require.Len(t, panel.Payments, 1)
+	require.Equal(t, "menunggu_verifikasi", panel.Payments[0].Status)
+	require.True(t, panel.Payments[0].AdaBukti)
+
+	path, err := f.reg.ProofPath(t.Context(), leadID, panel.Payments[0].ID)
+	require.NoError(t, err)
+	require.Equal(t, f.reg.proofDir, filepath.Dir(path))
+	_, err = f.reg.ProofPath(t.Context(), leadID+1, panel.Payments[0].ID)
+	require.Error(t, err, "pembayaran milik lead lain")
+}
