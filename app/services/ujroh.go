@@ -346,6 +346,17 @@ func (s *UjrohService) Kunci(bulan string, userID int64) error {
 			}
 		}
 	}
+	// Ready guru affiliate commissions are paid through this month's ujroh.
+	cutoff, err := ujrohKomisiCutoff(bulan)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	if _, err := q.MarkGuruCommissionsPaid(ctx, queries.MarkGuruCommissionsPaidParams{
+		Bulan: bulan, Now: sql.NullTime{Time: now, Valid: true}, Cutoff: sql.NullTime{Time: cutoff, Valid: true},
+	}); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -377,6 +388,9 @@ func (s *UjrohService) Buka(bulan string, userID int64) error {
 	}
 	if !unlocked {
 		return ErrUjrohBelumDikunci
+	}
+	if _, err := q.ReopenGuruCommissions(ctx, queries.ReopenGuruCommissionsParams{Now: time.Now().UTC(), Bulan: bulan}); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

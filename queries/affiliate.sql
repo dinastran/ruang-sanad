@@ -139,3 +139,31 @@ WHERE santri_id = sqlc.arg(santri_id) AND status != 'batal' AND created_at >= sq
 
 -- name: GetAffiliateCommission :one
 SELECT * FROM affiliate_commissions WHERE id = ?;
+
+-- name: ListSiapGuruCommissionTotals :many
+-- Komisi siap milik affiliate guru yang matang sebelum batas (akhir bulan ujroh).
+SELECT a.guru_id, g.nama AS guru_nama, g.status AS guru_status,
+       CAST(SUM(c.jumlah) AS INTEGER) AS total, COUNT(*) AS jumlah_komisi
+FROM affiliate_commissions c
+JOIN affiliates a ON a.id = c.affiliate_id
+JOIN guru g ON g.id = a.guru_id
+WHERE c.status = 'siap' AND a.tipe = 'guru' AND a.guru_id IS NOT NULL AND c.siap_at < sqlc.arg(cutoff)
+GROUP BY a.guru_id, g.nama, g.status;
+
+-- name: MarkGuruCommissionsPaid :execrows
+UPDATE affiliate_commissions SET status = 'dibayar', metode_bayar = 'ujroh', ujroh_bulan = sqlc.arg(bulan),
+    dibayar_at = sqlc.arg(now), updated_at = sqlc.arg(now)
+WHERE status = 'siap' AND siap_at < sqlc.arg(cutoff)
+  AND affiliate_id IN (SELECT id FROM affiliates WHERE tipe = 'guru' AND guru_id IS NOT NULL);
+
+-- name: ReopenGuruCommissions :execrows
+UPDATE affiliate_commissions SET status = 'siap', metode_bayar = '', ujroh_bulan = '', dibayar_at = NULL, updated_at = sqlc.arg(now)
+WHERE status = 'dibayar' AND metode_bayar = 'ujroh' AND ujroh_bulan = sqlc.arg(bulan);
+
+-- name: MarkCommissionTransferred :execrows
+UPDATE affiliate_commissions SET status = 'dibayar', metode_bayar = 'transfer', catatan = ?, dibayar_at = ?, dibayar_oleh = ?, updated_at = ?
+WHERE affiliate_commissions.id = ? AND status = 'siap'
+  AND affiliate_id IN (SELECT id FROM affiliates WHERE tipe = 'eksternal');
+
+-- name: CancelCommission :execrows
+UPDATE affiliate_commissions SET status = 'batal', alasan_batal = ?, updated_at = ? WHERE id = ? AND status IN ('pending', 'siap');

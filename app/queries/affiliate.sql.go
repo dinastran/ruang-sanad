@@ -26,6 +26,24 @@ func (q *Queries) BumpAffiliateClick(ctx context.Context, arg BumpAffiliateClick
 	return err
 }
 
+const cancelCommission = `-- name: CancelCommission :execrows
+UPDATE affiliate_commissions SET status = 'batal', alasan_batal = ?, updated_at = ? WHERE id = ? AND status IN ('pending', 'siap')
+`
+
+type CancelCommissionParams struct {
+	AlasanBatal string
+	UpdatedAt   time.Time
+	ID          int64
+}
+
+func (q *Queries) CancelCommission(ctx context.Context, arg CancelCommissionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, cancelCommission, arg.AlasanBatal, arg.UpdatedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const cancelCommissionsSantriStopped = `-- name: CancelCommissionsSantriStopped :execrows
 UPDATE affiliate_commissions SET status = 'batal', alasan_batal = 'santri berhenti dalam masa tahan', updated_at = ?1
 WHERE status = 'pending'
@@ -775,6 +793,103 @@ func (q *Queries) ListReactivatableCommissions(ctx context.Context) ([]ListReact
 	return items, nil
 }
 
+const listSiapGuruCommissionTotals = `-- name: ListSiapGuruCommissionTotals :many
+SELECT a.guru_id, g.nama AS guru_nama, g.status AS guru_status,
+       CAST(SUM(c.jumlah) AS INTEGER) AS total, COUNT(*) AS jumlah_komisi
+FROM affiliate_commissions c
+JOIN affiliates a ON a.id = c.affiliate_id
+JOIN guru g ON g.id = a.guru_id
+WHERE c.status = 'siap' AND a.tipe = 'guru' AND a.guru_id IS NOT NULL AND c.siap_at < ?1
+GROUP BY a.guru_id, g.nama, g.status
+`
+
+type ListSiapGuruCommissionTotalsRow struct {
+	GuruID       sql.NullInt64
+	GuruNama     string
+	GuruStatus   string
+	Total        int64
+	JumlahKomisi int64
+}
+
+// Komisi siap milik affiliate guru yang matang sebelum batas (akhir bulan ujroh).
+func (q *Queries) ListSiapGuruCommissionTotals(ctx context.Context, cutoff sql.NullTime) ([]ListSiapGuruCommissionTotalsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSiapGuruCommissionTotals, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSiapGuruCommissionTotalsRow
+	for rows.Next() {
+		var i ListSiapGuruCommissionTotalsRow
+		if err := rows.Scan(
+			&i.GuruID,
+			&i.GuruNama,
+			&i.GuruStatus,
+			&i.Total,
+			&i.JumlahKomisi,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markCommissionTransferred = `-- name: MarkCommissionTransferred :execrows
+UPDATE affiliate_commissions SET status = 'dibayar', metode_bayar = 'transfer', catatan = ?, dibayar_at = ?, dibayar_oleh = ?, updated_at = ?
+WHERE affiliate_commissions.id = ? AND status = 'siap'
+  AND affiliate_id IN (SELECT id FROM affiliates WHERE tipe = 'eksternal')
+`
+
+type MarkCommissionTransferredParams struct {
+	Catatan     string
+	DibayarAt   sql.NullTime
+	DibayarOleh sql.NullInt64
+	UpdatedAt   time.Time
+	ID          int64
+}
+
+func (q *Queries) MarkCommissionTransferred(ctx context.Context, arg MarkCommissionTransferredParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markCommissionTransferred,
+		arg.Catatan,
+		arg.DibayarAt,
+		arg.DibayarOleh,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const markGuruCommissionsPaid = `-- name: MarkGuruCommissionsPaid :execrows
+UPDATE affiliate_commissions SET status = 'dibayar', metode_bayar = 'ujroh', ujroh_bulan = ?1,
+    dibayar_at = ?2, updated_at = ?2
+WHERE status = 'siap' AND siap_at < ?3
+  AND affiliate_id IN (SELECT id FROM affiliates WHERE tipe = 'guru' AND guru_id IS NOT NULL)
+`
+
+type MarkGuruCommissionsPaidParams struct {
+	Bulan  string
+	Now    sql.NullTime
+	Cutoff sql.NullTime
+}
+
+func (q *Queries) MarkGuruCommissionsPaid(ctx context.Context, arg MarkGuruCommissionsPaidParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markGuruCommissionsPaid, arg.Bulan, arg.Now, arg.Cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const matureCommissions = `-- name: MatureCommissions :execrows
 UPDATE affiliate_commissions SET status = 'siap', siap_at = ?1, updated_at = ?1
 WHERE status = 'pending' AND created_at <= ?2
@@ -814,6 +929,24 @@ func (q *Queries) ReactivateCommission(ctx context.Context, arg ReactivateCommis
 		arg.ID,
 	)
 	return err
+}
+
+const reopenGuruCommissions = `-- name: ReopenGuruCommissions :execrows
+UPDATE affiliate_commissions SET status = 'siap', metode_bayar = '', ujroh_bulan = '', dibayar_at = NULL, updated_at = ?1
+WHERE status = 'dibayar' AND metode_bayar = 'ujroh' AND ujroh_bulan = ?2
+`
+
+type ReopenGuruCommissionsParams struct {
+	Now   time.Time
+	Bulan string
+}
+
+func (q *Queries) ReopenGuruCommissions(ctx context.Context, arg ReopenGuruCommissionsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, reopenGuruCommissions, arg.Now, arg.Bulan)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const replaceLeadAffiliate = `-- name: ReplaceLeadAffiliate :exec
