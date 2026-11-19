@@ -62,6 +62,7 @@ type Handlers struct {
 	LeadPrograms                *handlers.LeadProgramHandler
 	RegistrationPublic          *handlers.RegistrationPublicHandler
 	AffiliatePublic             *handlers.AffiliatePublicHandler
+	Affiliate                   *handlers.AffiliateHandler
 	RegistrationLinks           *handlers.RegistrationLinkHandler
 	XenditWebhook               *handlers.XenditWebhookHandler
 	MetaCAPI                    *handlers.MetaCAPIHandler
@@ -89,6 +90,12 @@ func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *
 	setupRegistrationPublicRoutes(app, h.RegistrationPublic)
 	if h.AffiliatePublic != nil {
 		app.Get("/r/:kode", middlewares.AffiliateClickRateLimit.Limit(), h.AffiliatePublic.Redirect)
+	}
+	if h.Affiliate != nil {
+		app.Get("/affiliate/daftar", h.Affiliate.SignupPage)
+		app.Post("/affiliate/daftar", middlewares.DaftarRateLimit.Limit(), h.Affiliate.SignupSubmit)
+		app.Get("/affiliate/aktivasi/:token", h.Affiliate.ActivatePage)
+		app.Post("/affiliate/aktivasi/:token", middlewares.DaftarRateLimit.Limit(), h.Affiliate.ActivateSubmit)
 	}
 	if h.XenditWebhook != nil {
 		// Machine endpoint: authenticated by x-callback-token, no session/CSRF.
@@ -218,6 +225,11 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 
 	// Profile
 	protected.Get("/profile", h.App.Profile)
+	if h.Affiliate != nil {
+		// Affiliate Saya: any login with an active affiliate row (guru or external).
+		protected.Get("/affiliate", h.Affiliate.Me)
+		protected.Put("/affiliate/rekening", h.Affiliate.UpdateRekening)
+	}
 	protected.Put("/profile", h.App.UpdateProfile)
 	protected.Put("/profile/password", h.App.UpdatePassword)
 	protected.Put("/notifications/:id/read", h.Notifications.MarkRead)
@@ -602,6 +614,22 @@ func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, u
 		protected.Put("/leads/:id/program", leadRole, h.LeadPrograms.SetLeadProgram)
 		protected.Post("/leads/:id/peserta", leadRole, h.LeadPrograms.DaftarkanPeserta)
 		protected.Post("/leads/:id/tawarkan-reguler", leadRole, h.LeadPrograms.TawarkanReguler)
+	}
+	if h.Affiliate != nil {
+		affAdmin := middlewares.RoleRequired(store, userService, "super_admin")
+		affView := middlewares.RoleRequired(store, userService, "super_admin", "keuangan")
+		protected.Get("/leads/affiliate", affView, h.Affiliate.Admin)
+		protected.Post("/leads/affiliate/hitung-ulang", affView, h.Affiliate.Reconcile)
+		protected.Post("/leads/affiliate/komisi/transfer", affView, h.Affiliate.Transfer)
+		protected.Post("/leads/affiliate/komisi/:cid/batal", affAdmin, h.Affiliate.CancelCommission)
+		protected.Post("/leads/affiliate/aturan", affAdmin, h.Affiliate.SaveRule)
+		protected.Delete("/leads/affiliate/aturan/:rid", affAdmin, h.Affiliate.DeleteRule)
+		protected.Put("/leads/affiliate/pengaturan", affAdmin, h.Affiliate.SaveSettings)
+		protected.Post("/leads/affiliate/:aid/setujui", affAdmin, h.Affiliate.Approve)
+		protected.Post("/leads/affiliate/:aid/undangan", affAdmin, h.Affiliate.Invite)
+		protected.Put("/leads/affiliate/:aid/status", affAdmin, h.Affiliate.SetStatus)
+		protected.Put("/leads/affiliate/:aid/kode", affAdmin, h.Affiliate.UpdateKode)
+		protected.Put("/leads/:id/affiliate", middlewares.RoleRequired(store, userService, LeadSourceEditorRoles...), h.Affiliate.SetLeadAffiliate)
 	}
 	if h.RegistrationLinks != nil {
 		linkRole := middlewares.RoleRequired(store, userService, LeadSourceEditorRoles...)

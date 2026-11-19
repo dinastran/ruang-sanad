@@ -3,6 +3,7 @@
 	import { fly, fade } from "svelte/transition";
 	import { inertia, router } from "@inertiajs/svelte";
 	import {
+		Share2,
 		LayoutDashboard,
 		Users,
 		BookOpen,
@@ -90,7 +91,7 @@
 	// Follow-up approval: cs, super_admin (services.FollowupApproverRoles).
 	let canApproveFollowup = $derived(role === "cs" || isSuperAdmin);
 	let canAIAkses = $derived(["super_admin", "admin", "keuangan", "cs", "admin_kelas", "koordinator_guru"].includes(role));
-	let homeHref = $derived(role === "guru" ? "/app/guru" : role === "koordinator_guru" ? "/app/koordinator-guru" : role === "user" ? "/app/tasbih" : "/app");
+	let homeHref = $derived(role === "guru" ? "/app/guru" : role === "koordinator_guru" ? "/app/koordinator-guru" : role === "user" ? "/app/tasbih" : role === "affiliate" ? "/app/affiliate" : "/app");
 
 	let sidebarW = $derived(sidebarCollapsed ? "w-16" : "w-72");
 	let headerLeft = $derived(sidebarCollapsed ? "left-16" : "left-72");
@@ -113,6 +114,8 @@
 		{ href: "/app/leads", label: "Pusat CRM", group: "leads", category: "CRM", show: canLeads, icon: MessageCircle },
 		{ href: "/app/leads/followups", label: "Follow-up", group: "leads-followups", category: "CRM", show: canApproveFollowup, icon: Send },
 		{ href: "/app/leads/laporan", label: "Laporan Leads", group: "leads-laporan", category: "CRM", show: canLeads, icon: ChartColumn },
+		{ href: "/app/leads/affiliate", label: "Affiliate", group: "leads-affiliate", category: "CRM", show: isSuperAdmin || role === "keuangan", icon: Share2 },
+		{ href: "/app/affiliate", label: "Affiliate Saya", group: "affiliate-saya", category: role === "affiliate" ? "Utama" : "Guru", show: role === "affiliate" || role === "guru" || role === "koordinator_guru", icon: Share2 },
 		{ href: "/app/keuangan", label: "Tagihan", group: "keuangan", category: "Keuangan", show: canViewKeuangan, icon: Wallet },
 		{ href: "/app/keuangan/tagihan", label: "Daftar Tagihan", group: "tagihan", category: "Keuangan", show: canViewKeuangan, icon: Receipt },
 		{ href: "/app/keuangan/ujroh", label: "Ujroh Guru", group: "ujroh", category: "Keuangan", show: canViewKeuangan, icon: HandCoins },
@@ -163,6 +166,8 @@
 		if (path.startsWith("/app/leads/prioritas")) return "leads-prioritas";
 		if (path.startsWith("/app/leads/laporan")) return "leads-laporan";
 		if (path.startsWith("/app/leads/followups")) return "leads-followups";
+		if (path.startsWith("/app/leads/affiliate")) return "leads-affiliate";
+		if (path.startsWith("/app/affiliate")) return "affiliate-saya";
 		if (path.startsWith("/app/leads")) return "leads";
 		if (path.startsWith("/app/integrasi-whatsapp")) return "integrasi-whatsapp";
 		if (path.startsWith("/app/santri")) return "santri";

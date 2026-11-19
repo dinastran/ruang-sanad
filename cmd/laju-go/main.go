@@ -274,9 +274,10 @@ func main() {
 		AIAkses:                     handlers.NewAIAksesHandler(aiTokenService, aiAgentService, userService, sessionStore, inertiaService, cfg.AppURL),
 		CsAiIngest:                  handlers.NewCsAiIngestHandler(leadService, cfg.CSBridgeIngestToken, cfg.CSBridgeAllowedCIDRs).WithJadwal(jadwalService),
 		JadwalPenawaran:             handlers.NewJadwalPenawaranHandler(jadwalService, sessionStore, inertiaService),
-		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService).WithPrograms(leadProgramService).WithRegistration(registrationService),
+		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService).WithPrograms(leadProgramService).WithRegistration(registrationService).WithAffiliates(affiliateService),
 		RegistrationPublic:          handlers.NewRegistrationPublicHandler(registrationService, inertiaService),
 		AffiliatePublic:             handlers.NewAffiliatePublicHandler(affiliateService),
+		Affiliate:                   handlers.NewAffiliateHandler(affiliateService, sessionStore, inertiaService),
 		RegistrationLinks:           handlers.NewRegistrationLinkHandler(registrationService, sessionStore, inertiaService),
 		XenditWebhook:               handlers.NewXenditWebhookHandler(registrationService, cfg.XenditCallbackToken),
 		LeadPrograms:                handlers.NewLeadProgramHandler(leadService, leadProgramService, productCRMService, sessionStore, inertiaService, routes.LeadSourceEditorRoles),
@@ -311,6 +312,9 @@ func main() {
 		cfg.FromName,
 		appURL,
 	)
+	if cfg.SMTPUser != "" && cfg.SMTPPass != "" && routeHandlers.Affiliate != nil {
+		routeHandlers.Affiliate.WithMailer(mailerService.SendEmail)
+	}
 
 	// Setup password reset handler
 	passwordResetHandler := routes.SetupPasswordResetHandler(

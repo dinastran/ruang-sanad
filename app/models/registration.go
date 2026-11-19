@@ -38,6 +38,8 @@ type RegistrationLinkRequest struct {
 	WaTemplate      string               `json:"wa_template"`
 	IzinkanManual   bool                 `json:"izinkan_manual"`
 	IsAktif         bool                 `json:"is_aktif"`
+	// TampilKodeReferal shows the optional "Kode referal" field (default on).
+	TampilKodeReferal *bool `json:"tampil_kode_referal"`
 }
 
 // RegistrationLinkRow is one link on the admin page, with 30-day stats.
@@ -72,6 +74,7 @@ type PublicRegistrationLink struct {
 	Varian        []PublicVarian       `json:"varian"`
 	FieldConfig   map[string]FieldRule `json:"field_config"`
 	IzinkanManual bool                 `json:"izinkan_manual"`
+	KodeReferal   bool                 `json:"kode_referal"`
 }
 
 type RegistrationSettings struct {
@@ -208,4 +211,67 @@ type AffiliateRow struct {
 	Santri       int64  `json:"santri"`
 	KomisiSiap   int64  `json:"komisi_siap"`
 	KomisiTotal  int64  `json:"komisi_total"`
+}
+
+type AffiliateRujukan struct {
+	NamaDepan string `json:"nama_depan"`
+	Program   string `json:"program"`
+	Tanggal   string `json:"tanggal"`
+	Status    string `json:"status"` // daftar | terverifikasi | santri | batal
+	Komisi    int64  `json:"komisi"`
+}
+
+type AffiliateRuleInfo struct {
+	Label  string `json:"label"`  // "10%" / "Rp50.000"
+	Pola   string `json:"pola"`   // sekali | bulanan
+	Durasi string `json:"durasi"` // "6 bulan" / "selama aktif"
+}
+
+type AffiliateTujuan struct {
+	Slug  string `json:"slug"`
+	Judul string `json:"judul"`
+}
+
+type AffiliateDashboard struct {
+	ID            int64              `json:"id"`
+	Kode          string             `json:"kode"`
+	Nama          string             `json:"nama"`
+	Tipe          string             `json:"tipe"`
+	BankNama      string             `json:"bank_nama"`
+	BankRekening  string             `json:"bank_rekening"`
+	BankAtasNama  string             `json:"bank_atas_nama"`
+	Klik30        int64              `json:"klik_30"`
+	Daftar30      int64              `json:"daftar_30"`
+	Santri        int64              `json:"santri"`
+	KomisiPending int64              `json:"komisi_pending"`
+	KomisiSiap    int64              `json:"komisi_siap"`
+	KomisiDibayar int64              `json:"komisi_dibayar"`
+	MasaBerlaku   int64              `json:"masa_berlaku_hari"`
+	MasaTahan     int64              `json:"masa_tahan_hari"`
+	Aturan        *AffiliateRuleInfo `json:"aturan"`
+	Rujukan       []AffiliateRujukan `json:"rujukan"`
+	Tujuan        []AffiliateTujuan  `json:"tujuan"`
+	TujuanDefault string             `json:"tujuan_default"`
+	TemplateBagi  string             `json:"template_bagikan"`
+}
+
+type AffiliateLedgerRow struct {
+	ID            int64  `json:"id"`
+	AffiliateID   int64  `json:"affiliate_id"`
+	AffiliateNama string `json:"affiliate_nama"`
+	AffiliateKode string `json:"affiliate_kode"`
+	AffiliateTipe string `json:"affiliate_tipe"`
+	Rekening      string `json:"rekening"`
+	LeadID        int64  `json:"lead_id"`
+	LeadNama      string `json:"lead_nama"`
+	Sumber        string `json:"sumber"`
+	BulanKe       int64  `json:"bulan_ke"`
+	Basis         int64  `json:"basis"`
+	Jumlah        int64  `json:"jumlah"`
+	Status        string `json:"status"`
+	MetodeBayar   string `json:"metode_bayar"`
+	UjrohBulan    string `json:"ujroh_bulan"`
+	Catatan       string `json:"catatan"`
+	AlasanBatal   string `json:"alasan_batal"`
+	CreatedAt     string `json:"created_at"`
 }

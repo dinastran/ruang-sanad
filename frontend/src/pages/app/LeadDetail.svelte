@@ -4,6 +4,7 @@
 	import { fly } from "svelte/transition";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import RegistrationPanel, { type RegistrasiPanel } from "@components/leads/RegistrationPanel.svelte";
+	import AffiliatePanel, { type AffiliatePanelData } from "@components/leads/AffiliatePanel.svelte";
 	import type { Flash, User } from "@lib/types";
 	import { Toast } from "@lib/notifications/toast";
 	import { getCSRFToken } from "@lib/utils/csrf";
@@ -144,6 +145,7 @@
 		programs?: { id: number; nama: string; jenis: string; is_aktif: boolean }[];
 		followup?: { can_approve: boolean; steps: string[] };
 		registrasi?: RegistrasiPanel;
+		affiliate?: AffiliatePanelData;
 		flash?: Flash;
 	}
 
@@ -604,6 +606,7 @@
 					{/if}
 
 					{#if props.registrasi}<RegistrationPanel leadID={lead.id} panel={props.registrasi} />{/if}
+					{#if props.affiliate}<AffiliatePanel leadID={lead.id} panel={props.affiliate} canEdit={user?.role === "cs" || user?.role === "super_admin"} />{/if}
 
 					<section class="rounded-xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925/50 p-4">
 						<div class="flex items-center justify-between gap-2">

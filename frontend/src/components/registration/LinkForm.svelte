@@ -15,6 +15,7 @@
 		wa_template: string;
 		izinkan_manual: boolean;
 		is_aktif: boolean;
+		tampil_kode_referal?: boolean;
 		program_nama?: string;
 		sumber_nama?: string;
 		harga_label?: string;
@@ -41,13 +42,13 @@
 	function awal() {
 		const base = initial ?? {
 			slug: "", judul: "", deskripsi: "", program_id: programs.find((p) => p.aktif && p.info !== "belum terhubung ke produk")?.id ?? 0,
-			lead_source_id: 0, mode: "short", after_submit: "wa", nominal_override: null, field_config: {}, wa_template: "", izinkan_manual: true, is_aktif: true,
+			lead_source_id: 0, mode: "short", after_submit: "wa", nominal_override: null, field_config: {}, wa_template: "", izinkan_manual: true, is_aktif: true, tampil_kode_referal: true,
 		};
 		const cfg: Record<string, FieldRule> = {};
 		for (const [k] of OPSIONAL) {
 			cfg[k] = base.field_config?.[k] ?? { tampil: base.mode === "full" || DEFAULT_SHORT.has(k), wajib: false };
 		}
-		return { ...base, field_config: cfg, nominal_text: base.nominal_override == null ? "" : String(base.nominal_override) };
+		return { ...base, tampil_kode_referal: base.tampil_kode_referal ?? true, field_config: cfg, nominal_text: base.nominal_override == null ? "" : String(base.nominal_override) };
 	}
 	let form = $state(awal());
 	let menyimpan = $state(false);
@@ -57,7 +58,7 @@
 	let preview = $derived<PublicLink>({
 		id: 0, slug: form.slug, judul: form.judul || "Judul halaman", deskripsi: form.deskripsi, mode: form.mode, after_submit: form.after_submit,
 		program_nama: programDipilih?.nama ?? "Program", butuh_jadwal: Number(form.program_id) === 1, harga: Number(form.nominal_text) || 0,
-		varian: [], field_config: form.field_config, izinkan_manual: form.izinkan_manual,
+		varian: [], field_config: form.field_config, izinkan_manual: form.izinkan_manual, kode_referal: form.tampil_kode_referal,
 	});
 
 	function slugDariJudul() {
@@ -150,6 +151,7 @@
 
 		<div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-neutral-700 dark:text-neutral-300">
 			{#if form.after_submit === "bayar" && form.mode !== "wa"}<label class="flex items-center gap-2"><input type="checkbox" bind:checked={form.izinkan_manual} /> Izinkan transfer manual + unggah bukti</label>{/if}
+			{#if form.mode !== "wa"}<label class="flex items-center gap-2"><input type="checkbox" bind:checked={form.tampil_kode_referal} /> Kolom kode referal affiliate</label>{/if}
 			<label class="flex items-center gap-2"><input type="checkbox" bind:checked={form.is_aktif} /> Link aktif</label>
 		</div>
 

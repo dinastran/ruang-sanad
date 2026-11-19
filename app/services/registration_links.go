@@ -190,6 +190,7 @@ func (s *RegistrationService) CreateLink(ctx context.Context, req models.Registr
 		Mode: req.Mode, AfterSubmit: req.AfterSubmit, NominalOverride: nullAmount(req.NominalOverride),
 		FieldConfig: string(cfg), WaTemplate: req.WaTemplate, IzinkanManual: boolInt(req.IzinkanManual),
 		IsAktif: boolInt(req.IsAktif), CreatedBy: sql.NullInt64{Int64: actorID, Valid: actorID > 0}, CreatedAt: now, UpdatedAt: now,
+		TampilKodeReferal: boolInt(req.TampilKodeReferal == nil || *req.TampilKodeReferal),
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
@@ -213,6 +214,7 @@ func (s *RegistrationService) UpdateLink(ctx context.Context, id int64, req mode
 		Mode: req.Mode, AfterSubmit: req.AfterSubmit, NominalOverride: nullAmount(req.NominalOverride),
 		FieldConfig: string(cfg), WaTemplate: req.WaTemplate, IzinkanManual: boolInt(req.IzinkanManual),
 		IsAktif: boolInt(req.IsAktif), UpdatedAt: s.nowUTC(), ID: id,
+		TampilKodeReferal: boolInt(req.TampilKodeReferal == nil || *req.TampilKodeReferal),
 	})
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return errors.New("slug sudah dipakai link lain")
@@ -221,6 +223,7 @@ func (s *RegistrationService) UpdateLink(ctx context.Context, id int64, req mode
 }
 
 func linkToRequest(l queries.RegistrationLink) models.RegistrationLinkRequest {
+	tampil := l.TampilKodeReferal == 1
 	var override *int64
 	if l.NominalOverride.Valid {
 		v := l.NominalOverride.Int64
@@ -230,6 +233,7 @@ func linkToRequest(l queries.RegistrationLink) models.RegistrationLinkRequest {
 		Slug: l.Slug, Judul: l.Judul, Deskripsi: l.Deskripsi, ProgramID: l.ProgramID, LeadSourceID: l.LeadSourceID,
 		Mode: l.Mode, AfterSubmit: l.AfterSubmit, NominalOverride: override, FieldConfig: parseFieldConfig(l.FieldConfig),
 		WaTemplate: l.WaTemplate, IzinkanManual: l.IzinkanManual == 1, IsAktif: l.IsAktif == 1,
+		TampilKodeReferal: &tampil,
 	}
 }
 
@@ -340,7 +344,8 @@ func (s *RegistrationService) PublicLink(ctx context.Context, slug string) (*mod
 		ID: l.ID, Slug: l.Slug, Judul: l.Judul, Deskripsi: l.Deskripsi, Mode: l.Mode, AfterSubmit: l.AfterSubmit,
 		ProgramNama: prog.Nama, ButuhJadwal: prog.Jenis == "reguler", Harga: produk.Harga,
 		FieldConfig: effectiveFields(l.Mode, parseFieldConfig(l.FieldConfig)), IzinkanManual: l.IzinkanManual == 1,
-		Varian: []models.PublicVarian{},
+		KodeReferal: s.affiliates != nil && l.TampilKodeReferal == 1,
+		Varian:      []models.PublicVarian{},
 	}
 	if l.NominalOverride.Valid {
 		out.Harga = l.NominalOverride.Int64

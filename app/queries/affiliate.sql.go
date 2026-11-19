@@ -11,6 +11,127 @@ import (
 	"time"
 )
 
+const affiliateCommissionSums = `-- name: AffiliateCommissionSums :many
+SELECT status, CAST(COALESCE(SUM(jumlah), 0) AS INTEGER) AS total, COUNT(*) AS jumlah
+FROM affiliate_commissions WHERE affiliate_id = ? GROUP BY status
+`
+
+type AffiliateCommissionSumsRow struct {
+	Status string
+	Total  int64
+	Jumlah int64
+}
+
+func (q *Queries) AffiliateCommissionSums(ctx context.Context, affiliateID int64) ([]AffiliateCommissionSumsRow, error) {
+	rows, err := q.db.QueryContext(ctx, affiliateCommissionSums, affiliateID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AffiliateCommissionSumsRow
+	for rows.Next() {
+		var i AffiliateCommissionSumsRow
+		if err := rows.Scan(&i.Status, &i.Total, &i.Jumlah); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const affiliateCommissionTotals = `-- name: AffiliateCommissionTotals :many
+SELECT affiliate_id,
+       CAST(COALESCE(SUM(CASE WHEN status = 'siap' THEN jumlah END), 0) AS INTEGER) AS siap,
+       CAST(COALESCE(SUM(CASE WHEN status = 'pending' THEN jumlah END), 0) AS INTEGER) AS pending,
+       CAST(COALESCE(SUM(CASE WHEN status = 'dibayar' THEN jumlah END), 0) AS INTEGER) AS dibayar
+FROM affiliate_commissions GROUP BY affiliate_id
+`
+
+type AffiliateCommissionTotalsRow struct {
+	AffiliateID int64
+	Siap        int64
+	Pending     int64
+	Dibayar     int64
+}
+
+func (q *Queries) AffiliateCommissionTotals(ctx context.Context) ([]AffiliateCommissionTotalsRow, error) {
+	rows, err := q.db.QueryContext(ctx, affiliateCommissionTotals)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AffiliateCommissionTotalsRow
+	for rows.Next() {
+		var i AffiliateCommissionTotalsRow
+		if err := rows.Scan(
+			&i.AffiliateID,
+			&i.Siap,
+			&i.Pending,
+			&i.Dibayar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const affiliateReferralCounts = `-- name: AffiliateReferralCounts :many
+SELECT la.affiliate_id, COUNT(*) AS daftar,
+       CAST(SUM(CASE WHEN l.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS INTEGER) AS santri,
+       CAST(SUM(CASE WHEN la.dikunci_at >= ?1 THEN 1 ELSE 0 END) AS INTEGER) AS daftar_baru
+FROM lead_affiliates la JOIN leads l ON l.id = la.lead_id
+GROUP BY la.affiliate_id
+`
+
+type AffiliateReferralCountsRow struct {
+	AffiliateID int64
+	Daftar      int64
+	Santri      int64
+	DaftarBaru  int64
+}
+
+// Per affiliate: total rujukan, terverifikasi, dan rujukan sejak tanggal.
+func (q *Queries) AffiliateReferralCounts(ctx context.Context, since time.Time) ([]AffiliateReferralCountsRow, error) {
+	rows, err := q.db.QueryContext(ctx, affiliateReferralCounts, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AffiliateReferralCountsRow
+	for rows.Next() {
+		var i AffiliateReferralCountsRow
+		if err := rows.Scan(
+			&i.AffiliateID,
+			&i.Daftar,
+			&i.Santri,
+			&i.DaftarBaru,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const bumpAffiliateClick = `-- name: BumpAffiliateClick :exec
 INSERT INTO affiliate_clicks (affiliate_id, tanggal, klik) VALUES (?, ?, 1)
 ON CONFLICT (affiliate_id, tanggal) DO UPDATE SET klik = klik + 1
@@ -533,6 +654,66 @@ func (q *Queries) InsertLeadAffiliate(ctx context.Context, arg InsertLeadAffilia
 	return result.RowsAffected()
 }
 
+const listAffiliateReferrals = `-- name: ListAffiliateReferrals :many
+SELECT l.id AS lead_id, l.nama, l.wa_name, l.stage, l.status, l.verified_at, l.santri_id, la.dikunci_at, la.sumber,
+       COALESCE(p.nama, '') AS program_nama,
+       CAST(COALESCE((SELECT SUM(c.jumlah) FROM affiliate_commissions c WHERE c.lead_id = l.id AND c.status != 'batal'), 0) AS INTEGER) AS komisi
+FROM lead_affiliates la
+JOIN leads l ON l.id = la.lead_id
+LEFT JOIN lead_programs p ON p.id = l.program_id
+WHERE la.affiliate_id = ?
+ORDER BY la.dikunci_at DESC LIMIT 200
+`
+
+type ListAffiliateReferralsRow struct {
+	LeadID      int64
+	Nama        string
+	WaName      string
+	Stage       string
+	Status      string
+	VerifiedAt  sql.NullTime
+	SantriID    sql.NullInt64
+	DikunciAt   time.Time
+	Sumber      string
+	ProgramNama string
+	Komisi      int64
+}
+
+func (q *Queries) ListAffiliateReferrals(ctx context.Context, affiliateID int64) ([]ListAffiliateReferralsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAffiliateReferrals, affiliateID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAffiliateReferralsRow
+	for rows.Next() {
+		var i ListAffiliateReferralsRow
+		if err := rows.Scan(
+			&i.LeadID,
+			&i.Nama,
+			&i.WaName,
+			&i.Stage,
+			&i.Status,
+			&i.VerifiedAt,
+			&i.SantriID,
+			&i.DikunciAt,
+			&i.Sumber,
+			&i.ProgramNama,
+			&i.Komisi,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAffiliateRules = `-- name: ListAffiliateRules :many
 SELECT id, scope, target_id, jenis, nilai, pola, maks_bulan, is_aktif, updated_by, updated_at FROM affiliate_rules ORDER BY CASE scope WHEN 'global' THEN 0 WHEN 'program' THEN 1 ELSE 2 END, target_id
 `
@@ -711,6 +892,105 @@ func (q *Queries) ListCommissionCandidatesSPP(ctx context.Context) ([]ListCommis
 			&i.Jenis,
 			&i.Nilai,
 			&i.MaksBulan,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCommissionLedger = `-- name: ListCommissionLedger :many
+SELECT c.id, c.affiliate_id, c.lead_id, c.santri_id, c.sumber, c.sumber_id, c.bulan_ke, c.basis, c.jenis, c.nilai, c.pola, c.maks_bulan, c.jumlah, c.status, c.siap_at, c.dibayar_at, c.dibayar_oleh, c.metode_bayar, c.ujroh_bulan, c.catatan, c.alasan_batal, c.created_at, c.updated_at, a.nama AS affiliate_nama, a.kode AS affiliate_kode, a.tipe AS affiliate_tipe,
+       a.bank_nama, a.bank_rekening, a.bank_atas_nama, l.nama AS lead_nama, l.wa_name AS lead_wa_name
+FROM affiliate_commissions c
+JOIN affiliates a ON a.id = c.affiliate_id
+JOIN leads l ON l.id = c.lead_id
+WHERE (?1 = '' OR c.status = ?1)
+ORDER BY c.created_at DESC, c.id DESC LIMIT 300
+`
+
+type ListCommissionLedgerRow struct {
+	ID            int64
+	AffiliateID   int64
+	LeadID        int64
+	SantriID      sql.NullInt64
+	Sumber        string
+	SumberID      int64
+	BulanKe       int64
+	Basis         int64
+	Jenis         string
+	Nilai         int64
+	Pola          string
+	MaksBulan     sql.NullInt64
+	Jumlah        int64
+	Status        string
+	SiapAt        sql.NullTime
+	DibayarAt     sql.NullTime
+	DibayarOleh   sql.NullInt64
+	MetodeBayar   string
+	UjrohBulan    string
+	Catatan       string
+	AlasanBatal   string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	AffiliateNama string
+	AffiliateKode string
+	AffiliateTipe string
+	BankNama      string
+	BankRekening  string
+	BankAtasNama  string
+	LeadNama      string
+	LeadWaName    string
+}
+
+func (q *Queries) ListCommissionLedger(ctx context.Context, status interface{}) ([]ListCommissionLedgerRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCommissionLedger, status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCommissionLedgerRow
+	for rows.Next() {
+		var i ListCommissionLedgerRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AffiliateID,
+			&i.LeadID,
+			&i.SantriID,
+			&i.Sumber,
+			&i.SumberID,
+			&i.BulanKe,
+			&i.Basis,
+			&i.Jenis,
+			&i.Nilai,
+			&i.Pola,
+			&i.MaksBulan,
+			&i.Jumlah,
+			&i.Status,
+			&i.SiapAt,
+			&i.DibayarAt,
+			&i.DibayarOleh,
+			&i.MetodeBayar,
+			&i.UjrohBulan,
+			&i.Catatan,
+			&i.AlasanBatal,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AffiliateNama,
+			&i.AffiliateKode,
+			&i.AffiliateTipe,
+			&i.BankNama,
+			&i.BankRekening,
+			&i.BankAtasNama,
+			&i.LeadNama,
+			&i.LeadWaName,
 		); err != nil {
 			return nil, err
 		}

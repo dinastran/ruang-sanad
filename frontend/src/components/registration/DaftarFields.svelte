@@ -160,6 +160,17 @@
 	</fieldset>
 {/if}
 
+{#if link.kode_referal}
+	<fieldset class="mt-7" disabled={preview}>
+		<legend class="sr-only">Kode referal</legend>
+		<label class="block">
+			<span class={labelCls}>Kode referal (opsional)</span>
+			<input bind:value={form.kode_referal} name="kode_referal" maxlength="20" autocapitalize="characters" placeholder="Dari ustadz/teman yang mengajak" class="{inputCls} uppercase" />
+			{@render galat("kode_referal")}
+		</label>
+	</fieldset>
+{/if}
+
 <!-- Honeypot: tersembunyi dari manusia, diisi bot. -->
 <div class="absolute -left-[9999px] h-px w-px overflow-hidden" aria-hidden="true">
 	<label>Website <input bind:value={form.website} name="website" tabindex="-1" autocomplete="off" /></label>

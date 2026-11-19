@@ -57,7 +57,8 @@ func registrationError(c *fiber.Ctx, err error) error {
 	case errors.Is(err, services.ErrLinkTidakAktif), errors.Is(err, services.ErrRefTidakAda):
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})
 	case errors.Is(err, services.ErrFormTerlaluCepat), errors.Is(err, services.ErrFormKedaluwarsa),
-		errors.Is(err, services.ErrFormTidakValid), errors.Is(err, services.ErrSudahDiproses):
+		errors.Is(err, services.ErrFormTidakValid), errors.Is(err, services.ErrSudahDiproses),
+		errors.Is(err, services.ErrUndanganTidakValid):
 		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "Maaf, pendaftaran belum berhasil. Silakan coba lagi atau hubungi CS lewat WhatsApp."})

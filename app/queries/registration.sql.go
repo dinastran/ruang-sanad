@@ -79,27 +79,28 @@ func (q *Queries) CreateLeadRegistration(ctx context.Context, arg CreateLeadRegi
 
 const createRegistrationLink = `-- name: CreateRegistrationLink :one
 INSERT INTO registration_links (slug, judul, deskripsi, program_id, lead_source_id, mode, after_submit,
-    nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, slug, judul, deskripsi, program_id, lead_source_id, mode, after_submit, nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal
 `
 
 type CreateRegistrationLinkParams struct {
-	Slug            string
-	Judul           string
-	Deskripsi       string
-	ProgramID       int64
-	LeadSourceID    int64
-	Mode            string
-	AfterSubmit     string
-	NominalOverride sql.NullInt64
-	FieldConfig     string
-	WaTemplate      string
-	IzinkanManual   int64
-	IsAktif         int64
-	CreatedBy       sql.NullInt64
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	Slug              string
+	Judul             string
+	Deskripsi         string
+	ProgramID         int64
+	LeadSourceID      int64
+	Mode              string
+	AfterSubmit       string
+	NominalOverride   sql.NullInt64
+	FieldConfig       string
+	WaTemplate        string
+	IzinkanManual     int64
+	IsAktif           int64
+	CreatedBy         sql.NullInt64
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	TampilKodeReferal int64
 }
 
 func (q *Queries) CreateRegistrationLink(ctx context.Context, arg CreateRegistrationLinkParams) (RegistrationLink, error) {
@@ -119,6 +120,7 @@ func (q *Queries) CreateRegistrationLink(ctx context.Context, arg CreateRegistra
 		arg.CreatedBy,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.TampilKodeReferal,
 	)
 	var i RegistrationLink
 	err := row.Scan(
@@ -430,25 +432,27 @@ func (q *Queries) ListRegistrationStatsSince(ctx context.Context, tanggal string
 
 const updateRegistrationLink = `-- name: UpdateRegistrationLink :exec
 UPDATE registration_links SET slug = ?, judul = ?, deskripsi = ?, program_id = ?, lead_source_id = ?, mode = ?,
-    after_submit = ?, nominal_override = ?, field_config = ?, wa_template = ?, izinkan_manual = ?, is_aktif = ?, updated_at = ?
+    after_submit = ?, nominal_override = ?, field_config = ?, wa_template = ?, izinkan_manual = ?, is_aktif = ?, updated_at = ?,
+    tampil_kode_referal = ?
 WHERE id = ?
 `
 
 type UpdateRegistrationLinkParams struct {
-	Slug            string
-	Judul           string
-	Deskripsi       string
-	ProgramID       int64
-	LeadSourceID    int64
-	Mode            string
-	AfterSubmit     string
-	NominalOverride sql.NullInt64
-	FieldConfig     string
-	WaTemplate      string
-	IzinkanManual   int64
-	IsAktif         int64
-	UpdatedAt       time.Time
-	ID              int64
+	Slug              string
+	Judul             string
+	Deskripsi         string
+	ProgramID         int64
+	LeadSourceID      int64
+	Mode              string
+	AfterSubmit       string
+	NominalOverride   sql.NullInt64
+	FieldConfig       string
+	WaTemplate        string
+	IzinkanManual     int64
+	IsAktif           int64
+	UpdatedAt         time.Time
+	TampilKodeReferal int64
+	ID                int64
 }
 
 func (q *Queries) UpdateRegistrationLink(ctx context.Context, arg UpdateRegistrationLinkParams) error {
@@ -466,6 +470,7 @@ func (q *Queries) UpdateRegistrationLink(ctx context.Context, arg UpdateRegistra
 		arg.IzinkanManual,
 		arg.IsAktif,
 		arg.UpdatedAt,
+		arg.TampilKodeReferal,
 		arg.ID,
 	)
 	return err

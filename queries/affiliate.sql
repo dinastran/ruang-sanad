@@ -167,3 +167,41 @@ WHERE affiliate_commissions.id = ? AND status = 'siap'
 
 -- name: CancelCommission :execrows
 UPDATE affiliate_commissions SET status = 'batal', alasan_batal = ?, updated_at = ? WHERE id = ? AND status IN ('pending', 'siap');
+
+-- name: ListAffiliateReferrals :many
+SELECT l.id AS lead_id, l.nama, l.wa_name, l.stage, l.status, l.verified_at, l.santri_id, la.dikunci_at, la.sumber,
+       COALESCE(p.nama, '') AS program_nama,
+       CAST(COALESCE((SELECT SUM(c.jumlah) FROM affiliate_commissions c WHERE c.lead_id = l.id AND c.status != 'batal'), 0) AS INTEGER) AS komisi
+FROM lead_affiliates la
+JOIN leads l ON l.id = la.lead_id
+LEFT JOIN lead_programs p ON p.id = l.program_id
+WHERE la.affiliate_id = ?
+ORDER BY la.dikunci_at DESC LIMIT 200;
+
+-- name: AffiliateCommissionSums :many
+SELECT status, CAST(COALESCE(SUM(jumlah), 0) AS INTEGER) AS total, COUNT(*) AS jumlah
+FROM affiliate_commissions WHERE affiliate_id = ? GROUP BY status;
+
+-- name: AffiliateReferralCounts :many
+-- Per affiliate: total rujukan, terverifikasi, dan rujukan sejak tanggal.
+SELECT la.affiliate_id, COUNT(*) AS daftar,
+       CAST(SUM(CASE WHEN l.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS INTEGER) AS santri,
+       CAST(SUM(CASE WHEN la.dikunci_at >= sqlc.arg(since) THEN 1 ELSE 0 END) AS INTEGER) AS daftar_baru
+FROM lead_affiliates la JOIN leads l ON l.id = la.lead_id
+GROUP BY la.affiliate_id;
+
+-- name: AffiliateCommissionTotals :many
+SELECT affiliate_id,
+       CAST(COALESCE(SUM(CASE WHEN status = 'siap' THEN jumlah END), 0) AS INTEGER) AS siap,
+       CAST(COALESCE(SUM(CASE WHEN status = 'pending' THEN jumlah END), 0) AS INTEGER) AS pending,
+       CAST(COALESCE(SUM(CASE WHEN status = 'dibayar' THEN jumlah END), 0) AS INTEGER) AS dibayar
+FROM affiliate_commissions GROUP BY affiliate_id;
+
+-- name: ListCommissionLedger :many
+SELECT c.*, a.nama AS affiliate_nama, a.kode AS affiliate_kode, a.tipe AS affiliate_tipe,
+       a.bank_nama, a.bank_rekening, a.bank_atas_nama, l.nama AS lead_nama, l.wa_name AS lead_wa_name
+FROM affiliate_commissions c
+JOIN affiliates a ON a.id = c.affiliate_id
+JOIN leads l ON l.id = c.lead_id
+WHERE (sqlc.arg(status) = '' OR c.status = sqlc.arg(status))
+ORDER BY c.created_at DESC, c.id DESC LIMIT 300;

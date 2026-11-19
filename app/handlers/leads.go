@@ -20,6 +20,7 @@ type LeadHandler struct {
 	capi           *services.MetaCAPIService
 	programs       *services.LeadProgramService // nil = no program filter/info
 	registration   *services.RegistrationService // nil = no registration panel
+	affiliates     *services.AffiliateService    // nil = no affiliate panel
 	store          *session.Store
 	inertiaService *services.InertiaService
 }
@@ -29,6 +30,12 @@ func NewLeadHandler(leads *services.LeadService, store *session.Store, inertiaSe
 }
 
 // WithPrograms enables CRM programs (filter, lead program, participant closing).
+// WithAffiliates enables the affiliate panel on a lead.
+func (h *LeadHandler) WithAffiliates(a *services.AffiliateService) *LeadHandler {
+	h.affiliates = a
+	return h
+}
+
 // WithRegistration enables the "Pendaftaran & Pembayaran" panel on a lead.
 func (h *LeadHandler) WithRegistration(reg *services.RegistrationService) *LeadHandler {
 	h.registration = reg
@@ -217,6 +224,13 @@ func (h *LeadHandler) Show(c *fiber.Ctx) error {
 			return err
 		}
 		props["registrasi"] = panel
+	}
+	if h.affiliates != nil {
+		panel, err := h.affiliates.LeadPanel(c.UserContext(), id)
+		if err != nil {
+			return err
+		}
+		props["affiliate"] = panel
 	}
 	return h.inertiaService.Render(c, "app/LeadDetail", props)
 }

@@ -202,3 +202,20 @@ func TestCountClickDedup(t *testing.T) {
 	require.NoError(t, f.db.QueryRow(`SELECT SUM(klik) FROM registration_link_stats WHERE link_id = ?`, id).Scan(&klik))
 	require.Equal(t, 3, klik, "hari baru dihitung lagi")
 }
+
+func TestKodeReferalFieldDefaultOn(t *testing.T) {
+	f := setupRegistrationFixture(t)
+	f.reg.WithAffiliates(NewAffiliateService(f.querier, f.service, []byte("s")))
+	id, err := f.reg.CreateLink(t.Context(), f.linkReq("tahsin-reguler"), f.adminID)
+	require.NoError(t, err)
+	pub, err := f.reg.PublicLink(t.Context(), "tahsin-reguler")
+	require.NoError(t, err)
+	require.True(t, pub.KodeReferal, "default tampil")
+	off := false
+	req := f.linkReq("tahsin-reguler")
+	req.TampilKodeReferal = &off
+	require.NoError(t, f.reg.UpdateLink(t.Context(), id, req))
+	pub, err = f.reg.PublicLink(t.Context(), "tahsin-reguler")
+	require.NoError(t, err)
+	require.False(t, pub.KodeReferal)
+}
