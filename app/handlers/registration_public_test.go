@@ -135,7 +135,7 @@ func TestDaftarSubmitFieldError422(t *testing.T) {
 		"nama": "Fulanah", "no_wa": "081234567890", "jenis_kelamin": "P", "jadwal_kode": "tst1", "form_token": f.oldToken("tahsin"),
 	})
 	require.Equal(t, fiber.StatusUnprocessableEntity, code)
-	var out map[string]string
+	var out map[string]any
 	require.NoError(t, json.Unmarshal(raw, &out))
 	require.Equal(t, "jadwal_kode", out["field"])
 	require.NotEmpty(t, out["error"])
@@ -178,4 +178,52 @@ func TestDaftarSubmitOKAndUploadBukti(t *testing.T) {
 
 	code, _, _ = f.do(t, "GET", "/daftar/bayar/tidak-ada", "", nil)
 	require.Equal(t, fiber.StatusNotFound, code)
+}
+
+func TestFixClientIPBehindProxy(t *testing.T) {
+	f := setupDaftarFixture(t, "wa", "wa")
+	for _, ip := range []string{"1.1.1.1", "2.2.2.2"} {
+		req := httptest.NewRequest("GET", "/daftar/tahsin", nil)
+		req.Header.Set("X-Forwarded-For", ip)
+		resp, err := f.app.Test(req, -1)
+		require.NoError(t, err)
+		require.Equal(t, fiber.StatusFound, resp.StatusCode)
+	}
+	var klik int
+	require.NoError(t, f.db.QueryRow(`SELECT COALESCE(SUM(klik), 0) FROM registration_link_stats`).Scan(&klik))
+	require.Equal(t, 2, klik, "pengunjung berbeda di balik proxy dihitung terpisah")
+}
+
+func TestFixSubmitInactiveLinkGivesWaURL(t *testing.T) {
+	f := setupDaftarFixture(t, "short", "wa")
+	tok := f.oldToken("tahsin")
+	_, err := f.db.Exec(`UPDATE registration_links SET is_aktif = 0`)
+	require.NoError(t, err)
+	code, raw := f.postJSON(t, "/daftar/tahsin", map[string]any{"nama": "Fulanah", "no_wa": "081234567890", "jenis_kelamin": "P", "jadwal_kode": "tst1", "form_token": tok})
+	require.Equal(t, fiber.StatusNotFound, code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(raw, &out))
+	require.Contains(t, out["wa_cs_url"], "https://wa.me/6281100000000")
+}
+
+func TestFixFullScheduleReturnsFreshJadwal(t *testing.T) {
+	f := setupDaftarFixture(t, "short", "wa")
+	_, err := f.db.Exec(`INSERT INTO leads (wa_chat_id, phone, jenis_kelamin, jadwal_kode, verified_at, created_at, updated_at)
+		VALUES ('6289999999999@s.whatsapp.net', '6289999999999', 'P', 'tst1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`)
+	require.NoError(t, err)
+	code, raw := f.postJSON(t, "/daftar/tahsin", map[string]any{"nama": "Fulanah", "no_wa": "081234567890", "jenis_kelamin": "P", "jadwal_kode": "tst1", "form_token": f.oldToken("tahsin")})
+	require.Equal(t, fiber.StatusUnprocessableEntity, code)
+	var out struct {
+		Jadwal []struct {
+			Kode       string `json:"kode"`
+			SisaAkhwat int64  `json:"sisa_akhwat"`
+		} `json:"jadwal"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &out))
+	require.NotEmpty(t, out.Jadwal)
+	for _, j := range out.Jadwal {
+		if j.Kode == "tst1" {
+			require.Zero(t, j.SisaAkhwat)
+		}
+	}
 }

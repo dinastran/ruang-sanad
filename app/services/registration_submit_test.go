@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -268,3 +269,25 @@ func TestSubmitWaURL(t *testing.T) {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+func TestFixSubmitBayarRefreshesStaleAmount(t *testing.T) {
+	f, _ := setupSubmitFixture(t, "bayar")
+	_, err := f.db.Exec(`INSERT INTO leads (wa_chat_id, phone, stage, payment_amount, created_at, updated_at)
+		VALUES (?, '6281234567890', 'info_bayar_dikirim', 300000, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`, testChatID)
+	require.NoError(t, err)
+	_, err = f.submit(t, validSubmit("081234567890"))
+	require.NoError(t, err)
+	l, err := f.querier.GetLeadByChatID(t.Context(), testChatID)
+	require.NoError(t, err)
+	require.EqualValues(t, 150000, l.PaymentAmount, "nominal mengikuti link yang baru diisi")
+}
+
+func TestFixPhonePlus62Zero(t *testing.T) {
+	require.Equal(t, "6281234567890", NormalizeLeadPhone("+62 0812-3456-7890"))
+	require.Equal(t, "6281234567890", NormalizeLeadPhone("6281234567890"))
+}
+
+func TestDefaultProofDirNotPublic(t *testing.T) {
+	s := NewRegistrationService(nil, nil, nil, nil)
+	require.False(t, strings.HasPrefix(filepath.Clean(s.ProofDir()), "storage"), "storage/ disajikan publik oleh app.Static")
+}

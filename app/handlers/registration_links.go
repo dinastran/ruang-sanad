@@ -122,7 +122,7 @@ func (h *RegistrationLinkHandler) Tolak(c *fiber.Ctx) error {
 		h.store.Flash(c, "error", "Data tidak valid")
 		return h.inertiaService.Redirect(c, back)
 	}
-	if err := h.reg.RejectManualPayment(c.UserContext(), paymentID, actorID(c), req.Alasan); err != nil {
+	if err := h.reg.RejectManualPayment(c.UserContext(), leadID, paymentID, actorID(c), req.Alasan); err != nil {
 		h.store.Flash(c, "error", err.Error())
 	} else {
 		h.store.Flash(c, "success", "Bukti transfer ditolak; pendaftar bisa mengunggah ulang")

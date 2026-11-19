@@ -25,6 +25,10 @@ var (
 	registrationShortFields = map[string]bool{"usia": true, "domisili": true}
 )
 
+// DefaultProofDir keeps payment proofs outside ./storage, which is served
+// publicly by app.Static; staff open them through an authenticated route.
+const DefaultProofDir = "data/payment_proofs"
+
 // RegistrationService owns public registration links, form submissions and
 // manual payment proofs. Lead changes go through LeadService.mutateLeadAs.
 type RegistrationService struct {
@@ -44,7 +48,7 @@ type RegistrationService struct {
 func NewRegistrationService(q *queries.Querier, leads *LeadService, jadwal *JadwalPenawaranService, secret []byte) *RegistrationService {
 	return &RegistrationService{
 		querier: q, leads: leads, jadwal: jadwal, secret: secret,
-		now: time.Now, proofDir: "storage/payment_proofs",
+		now: time.Now, proofDir: DefaultProofDir,
 		phoneHits: map[string][]time.Time{}, clickSeen: map[string]struct{}{},
 	}
 }

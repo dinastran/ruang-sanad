@@ -78,7 +78,7 @@ func (s *RegistrationService) BayarInfo(ctx context.Context, ref string) (*model
 	if prog, err := s.querier.GetLeadProgram(ctx, link.ProgramID); err == nil && prog != nil {
 		out.ProgramNama = prog.Nama
 	}
-	out.WaURL = waURL(settings.CsWaNumber, "Assalamu'alaikum, saya "+l.Nama+" ("+out.LeadRef+") ingin konfirmasi pembayaran.")
+	out.WaURL = waURL(settings.CsWaNumber, "Assalamu'alaikum, saya "+out.NamaDepan+" ("+out.LeadRef+") ingin konfirmasi pembayaran.")
 	if l.Stage == LeadStageTerverifikasi || l.Status == LeadStatusWon {
 		out.Status = "lunas"
 		return out, nil
@@ -193,13 +193,13 @@ func (s *RegistrationService) SubmitManualProof(ctx context.Context, ref string,
 
 // RejectManualPayment marks a waiting manual proof as rejected and moves the
 // lead back to info_bayar_dikirim so the registrant can upload again.
-func (s *RegistrationService) RejectManualPayment(ctx context.Context, paymentID, actorID int64, alasan string) error {
+func (s *RegistrationService) RejectManualPayment(ctx context.Context, leadID, paymentID, actorID int64, alasan string) error {
 	alasan = truncateRunes(strings.TrimSpace(alasan), 300)
 	if alasan == "" {
 		return errors.New("alasan penolakan wajib diisi")
 	}
 	p, err := s.querier.GetPayment(ctx, paymentID)
-	if err != nil {
+	if err != nil || p.LeadID != leadID {
 		return errors.New("pembayaran tidak ditemukan")
 	}
 	if p.Metode != "manual" || p.Status != "menunggu_verifikasi" {
@@ -215,7 +215,8 @@ func (s *RegistrationService) RejectManualPayment(ctx context.Context, paymentID
 		if l.Status == LeadStatusOpen && l.Stage == LeadStageBuktiMasuk {
 			l.Stage = LeadStageInfoBayarDikirim
 			l.ProofReceivedAt = sql.NullTime{}
-			payload["stage_from"], payload["stage_to"] = LeadStageBuktiMasuk, LeadStageInfoBayarDikirim
+			// Not stage_from/stage_to: Meta CAPI reconcile treats those as milestones.
+			payload["tahap_dari"], payload["tahap_ke"] = LeadStageBuktiMasuk, LeadStageInfoBayarDikirim
 		}
 		return "payment.rejected", payload, nil
 	})

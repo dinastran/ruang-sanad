@@ -215,6 +215,9 @@ func NormalizeLeadPhone(raw string) string {
 		return ""
 	case strings.HasPrefix(digits, "0"):
 		digits = "62" + strings.TrimLeft(digits, "0")
+	case strings.HasPrefix(digits, "620"):
+		// "+62 0812…": a trunk 0 kept after the country code.
+		digits = "62" + strings.TrimLeft(digits[2:], "0")
 	case strings.HasPrefix(digits, "8"):
 		digits = "62" + digits
 	}

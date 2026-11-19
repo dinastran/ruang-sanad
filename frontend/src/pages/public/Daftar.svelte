@@ -11,7 +11,12 @@
 		galat?: string;
 		wa_cs_url?: string;
 	}
-	let { link, jadwal = [], form_token = "", galat = "", wa_cs_url = "" }: Props = $props();
+	let { link, jadwal: jadwalAwal = [], form_token = "", galat = "", wa_cs_url = "" }: Props = $props();
+
+	// Seat counts can be refreshed by a 422 "jadwal penuh" response.
+	let jadwal = $state(jadwalAwal);
+	// Set when the link was closed while the visitor was filling the form.
+	let ditutup = $state<{ pesan: string; wa: string } | null>(null);
 
 	let form = $state(formKosong());
 	let errors = $state<Record<string, string>>({});
@@ -41,6 +46,14 @@
 			});
 			const data = await res.json().catch(() => ({}));
 			if (!res.ok) {
+				if (Array.isArray(data.jadwal)) {
+					jadwal = data.jadwal;
+					form.jadwal_kode = "";
+				}
+				if (res.status === 404 && data.wa_cs_url) {
+					ditutup = { pesan: data.error, wa: data.wa_cs_url };
+					return;
+				}
 				if (data.field) {
 					errors = { [data.field]: data.error };
 					document.querySelector<HTMLElement>(`[name="${data.field}"]`)?.focus();
@@ -72,7 +85,17 @@
 			<span class="font-semibold text-neutral-900 dark:text-white">Ruang Sanad</span>
 		</div>
 
-		{#if galat || !link}
+		{#if ditutup}
+			<section class="rounded-2xl border border-neutral-200/80 bg-white p-6 dark:border-white/[0.06] dark:bg-neutral-925/50" role="alert">
+				<div class="flex gap-3">
+					<CircleAlert class="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+					<p class="font-medium text-neutral-900 dark:text-white">{ditutup.pesan}</p>
+				</div>
+				<a href={ditutup.wa} class="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 text-base font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] dark:bg-brand-500">
+					<MessageCircle size="18" /> Chat CS
+				</a>
+			</section>
+		{:else if galat || !link}
 			<section class="rounded-2xl border border-neutral-200/80 bg-white p-6 dark:border-white/[0.06] dark:bg-neutral-925/50" role="alert">
 				<div class="flex gap-3">
 					<CircleAlert class="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />

@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/models"
 	"github.com/maulanashalihin/laju-go/app/services"
+	"github.com/maulanashalihin/laju-go/app/session"
 )
 
 // RegistrationPublicHandler serves the public registration form
@@ -33,7 +34,7 @@ func (h *RegistrationPublicHandler) Page(c *fiber.Ctx) error {
 			"wa_cs_url": h.reg.CSWaURL(ctx, "Assalamu'alaikum, saya ingin mendaftar."),
 		})
 	}
-	_ = h.reg.CountClick(ctx, link.ID, c.IP(), c.Get(fiber.HeaderUserAgent))
+	_ = h.reg.CountClick(ctx, link.ID, session.ClientIP(c), c.Get(fiber.HeaderUserAgent))
 	if link.Mode == "wa" {
 		return c.Redirect(h.reg.LinkWaURL(ctx, slug), fiber.StatusFound)
 	}
@@ -68,8 +69,24 @@ func (h *RegistrationPublicHandler) Submit(c *fiber.Ctx) error {
 	if c.BodyParser(&in) != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Data tidak valid"})
 	}
-	res, err := h.reg.Submit(c.UserContext(), c.Params("slug"), in, models.RequestMeta{IP: c.IP(), UserAgent: c.Get(fiber.HeaderUserAgent)})
-	if err != nil {
+	ctx := c.UserContext()
+	res, err := h.reg.Submit(ctx, c.Params("slug"), in, models.RequestMeta{IP: session.ClientIP(c), UserAgent: c.Get(fiber.HeaderUserAgent)})
+	var fe *services.FieldError
+	switch {
+	case errors.Is(err, services.ErrLinkTidakAktif):
+		// Link closed while the visitor was filling the form: give them CS.
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error":     "Link pendaftaran ini sudah tidak aktif. Silakan lanjutkan lewat WhatsApp CS.",
+			"wa_cs_url": h.reg.CSWaURL(ctx, "Assalamu'alaikum, saya ingin mendaftar."),
+		})
+	case errors.As(err, &fe) && fe.Field == "jadwal_kode":
+		// Send fresh seat counts so the form can update without a reload.
+		jadwal, jerr := h.reg.PublicJadwal(ctx)
+		if jerr != nil {
+			return registrationError(c, err)
+		}
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"field": fe.Field, "error": fe.Pesan, "jadwal": jadwal})
+	case err != nil:
 		return registrationError(c, err)
 	}
 	out := fiber.Map{"next": res.Next, "wa_url": res.WaURL, "lead_ref": res.LeadRef}

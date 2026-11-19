@@ -138,8 +138,8 @@ func TestRejectManualPayment(t *testing.T) {
 	require.NoError(t, f.reg.SubmitManualProof(t.Context(), ref, proofFile(pngHead, 1000)))
 	pays, err := f.querier.ListPaymentsByLead(t.Context(), leadID)
 	require.NoError(t, err)
-	require.Error(t, f.reg.RejectManualPayment(t.Context(), pays[0].ID, f.keuanganID, " "), "alasan wajib")
-	require.NoError(t, f.reg.RejectManualPayment(t.Context(), pays[0].ID, f.keuanganID, "Nominal kurang"))
+	require.Error(t, f.reg.RejectManualPayment(t.Context(), leadID, pays[0].ID, f.keuanganID, " "), "alasan wajib")
+	require.NoError(t, f.reg.RejectManualPayment(t.Context(), leadID, pays[0].ID, f.keuanganID, "Nominal kurang"))
 
 	pays, err = f.querier.ListPaymentsByLead(t.Context(), leadID)
 	require.NoError(t, err)
@@ -172,4 +172,24 @@ func TestLeadRegistrationPanelAndProofPath(t *testing.T) {
 	require.Equal(t, f.reg.proofDir, filepath.Dir(path))
 	_, err = f.reg.ProofPath(t.Context(), leadID+1, panel.Payments[0].ID)
 	require.Error(t, err, "pembayaran milik lead lain")
+}
+
+func TestFixRejectEventHasNoStageTo(t *testing.T) {
+	f, ref, leadID := bayarLead(t)
+	require.NoError(t, f.reg.SubmitManualProof(t.Context(), ref, proofFile(pngHead, 1000)))
+	pays, err := f.querier.ListPaymentsByLead(t.Context(), leadID)
+	require.NoError(t, err)
+	require.Error(t, f.reg.RejectManualPayment(t.Context(), leadID+1, pays[0].ID, f.keuanganID, "x"), "lead di URL harus cocok")
+	require.NoError(t, f.reg.RejectManualPayment(t.Context(), leadID, pays[0].ID, f.keuanganID, "Nominal kurang"))
+	require.Zero(t, f.count(t, `SELECT COUNT(*) FROM lead_events WHERE lead_id = ? AND type = 'payment.rejected' AND json_extract(payload, '$.stage_to') IS NOT NULL`, leadID),
+		"CAPI reconcile membaca payload.stage_to")
+}
+
+func TestFixBayarInfoNoFullName(t *testing.T) {
+	f, ref, leadID := bayarLead(t)
+	_, err := f.db.Exec(`UPDATE leads SET nama = 'Fulanah Binti Fulan' WHERE id = ?`, leadID)
+	require.NoError(t, err)
+	info, err := f.reg.BayarInfo(t.Context(), ref)
+	require.NoError(t, err)
+	require.NotContains(t, info.WaURL, "Binti")
 }

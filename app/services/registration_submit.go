@@ -247,7 +247,9 @@ func (s *RegistrationService) Submit(ctx context.Context, slug string, raw model
 			target := LeadStageDataTerisi
 			if link.AfterSubmit == "bayar" {
 				target = LeadStageInfoBayarDikirim
-				if l.PaymentAmount == 0 || leadStageIndex(l.Stage) < leadStageIndex(LeadStageInfoBayarDikirim) {
+				// The amount follows the link just submitted unless a proof is
+				// already waiting or paid (then staff decide).
+				if leadStageIndex(l.Stage) <= leadStageIndex(LeadStageInfoBayarDikirim) {
 					l.PaymentAmount = amount
 				}
 			}

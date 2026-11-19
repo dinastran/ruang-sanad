@@ -155,7 +155,6 @@ func main() {
 	leadService.WithMetaCAPI(metaCAPIService)
 	startMetaCAPIWorker(metaCAPIService)
 	registrationService := services.NewRegistrationService(querier, leadService, jadwalService, []byte(cfg.SessionSecret))
-	registrationService.SetProofDir("storage/payment_proofs")
 	metaAdsService := services.NewMetaAdsService(querier, services.MetaAdsConfig{
 		Token: cfg.MetaAdsToken, AccountIDs: cfg.MetaAdAccountIDs, APIVersion: cfg.MetaAPIVersion, AppSecret: cfg.MetaAppSecret,
 	})
@@ -166,7 +165,7 @@ func main() {
 		slog.Error("failed to create uploads directory", "error", err)
 		os.Exit(1)
 	}
-	if err := os.MkdirAll("storage/payment_proofs", 0750); err != nil {
+	if err := os.MkdirAll(services.DefaultProofDir, 0750); err != nil {
 		slog.Error("failed to create payment proofs directory", "error", err)
 		os.Exit(1)
 	}

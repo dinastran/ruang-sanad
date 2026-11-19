@@ -3,6 +3,7 @@ package middlewares
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"github.com/maulanashalihin/laju-go/app/session"
 	"strconv"
 	"sync"
 	"time"
@@ -192,17 +193,22 @@ var (
 		Message:     "Terlalu banyak percobaan absensi, coba lagi beberapa menit lagi",
 	})
 
-	// DaftarRateLimit: public registration form submits, 5 per 10 minutes per IP.
+	// DaftarRateLimit: public registration form submits, 20 per 10 minutes
+	// per client IP (behind the proxy). Generous because mobile carriers put
+	// many people behind one IP (CGNAT); the per-number limit (3/hour) and
+	// the signed form token do the fine-grained work.
 	DaftarRateLimit = NewRateLimiter(RateLimiterConfig{
-		MaxRequests: 5,
+		MaxRequests: 20,
 		Window:      10 * time.Minute,
+		CustomKeyFn: func(c *fiber.Ctx) string { return "daftar:" + session.ClientIP(c) },
 		Message:     "Terlalu banyak pengiriman form, coba lagi beberapa menit lagi",
 	})
 
-	// DaftarUploadRateLimit: public payment proof uploads, 5 per 10 minutes per IP.
+	// DaftarUploadRateLimit: public payment proof uploads, 10 per 10 minutes per client IP.
 	DaftarUploadRateLimit = NewRateLimiter(RateLimiterConfig{
-		MaxRequests: 5,
+		MaxRequests: 10,
 		Window:      10 * time.Minute,
+		CustomKeyFn: func(c *fiber.Ctx) string { return "daftar-bukti:" + session.ClientIP(c) },
 		Message:     "Terlalu banyak unggahan, coba lagi beberapa menit lagi",
 	})
 

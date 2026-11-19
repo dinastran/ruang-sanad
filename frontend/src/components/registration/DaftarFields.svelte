@@ -59,13 +59,13 @@
 			{#if tampil("usia")}
 				<label class="block">
 					<span class={labelCls}>Usia{wajib("usia") ? "" : " (opsional)"}</span>
-					<input bind:value={form.usia} name="usia" type="number" inputmode="numeric" min="5" max="90" required={wajib("usia")} aria-invalid={!!errors.usia} class={inputCls} />
+					<input bind:value={form.usia} name="usia" type="number" inputmode="numeric" min="5" max="90" required={wajib("usia")} aria-invalid={!!errors.usia} aria-describedby={errors.usia ? "err-usia" : undefined} class={inputCls} />
 				</label>
 			{/if}
 			{#if tampil("domisili")}
 				<label class="block {tampil('usia') ? '' : 'col-span-2'}">
 					<span class={labelCls}>Kota domisili{wajib("domisili") ? "" : " (opsional)"}</span>
-					<input bind:value={form.domisili} name="domisili" autocomplete="address-level2" required={wajib("domisili")} maxlength="80" aria-invalid={!!errors.domisili} class={inputCls} />
+					<input bind:value={form.domisili} name="domisili" autocomplete="address-level2" required={wajib("domisili")} maxlength="80" aria-invalid={!!errors.domisili} aria-describedby={errors.domisili ? "err-domisili" : undefined} class={inputCls} />
 				</label>
 			{/if}
 		</div>
