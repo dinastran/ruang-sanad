@@ -23,6 +23,7 @@ func setupRegistrationFixture(t *testing.T) *registrationFixture {
 	f := &registrationFixture{leadFixture: lf}
 	f.reg = NewRegistrationService(lf.querier, lf.service, NewJadwalPenawaranService(lf.querier), []byte("test-secret"))
 	f.reg.now = func() time.Time { return lf.clock }
+	f.reg.jadwal.now = func() time.Time { return lf.clock }
 	f.reg.proofDir = t.TempDir()
 
 	res, err := lf.db.Exec(`INSERT INTO produk (nama, kategori, harga) VALUES ('Tahsin Reguler', 'program', 150000)`)

@@ -11,6 +11,67 @@ import (
 	"time"
 )
 
+const createGatewayPayment = `-- name: CreateGatewayPayment :one
+INSERT INTO payments (lead_id, link_id, metode, provider, external_id, amount, status, expires_at,
+    jadwal_kode, jenis_kelamin, created_at, updated_at)
+VALUES (?, ?, 'gateway', ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+RETURNING id, lead_id, link_id, produk_varian_id, metode, provider, external_id, provider_ref, checkout_url, amount, status, paid_at, expires_at, channel, bukti_path, raw_webhook, jadwal_kode, jenis_kelamin, perlu_tinjau, catatan_sistem, created_at, updated_at
+`
+
+type CreateGatewayPaymentParams struct {
+	LeadID       int64
+	LinkID       sql.NullInt64
+	Provider     string
+	ExternalID   sql.NullString
+	Amount       int64
+	ExpiresAt    sql.NullTime
+	JadwalKode   string
+	JenisKelamin string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+func (q *Queries) CreateGatewayPayment(ctx context.Context, arg CreateGatewayPaymentParams) (Payment, error) {
+	row := q.db.QueryRowContext(ctx, createGatewayPayment,
+		arg.LeadID,
+		arg.LinkID,
+		arg.Provider,
+		arg.ExternalID,
+		arg.Amount,
+		arg.ExpiresAt,
+		arg.JadwalKode,
+		arg.JenisKelamin,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var i Payment
+	err := row.Scan(
+		&i.ID,
+		&i.LeadID,
+		&i.LinkID,
+		&i.ProdukVarianID,
+		&i.Metode,
+		&i.Provider,
+		&i.ExternalID,
+		&i.ProviderRef,
+		&i.CheckoutUrl,
+		&i.Amount,
+		&i.Status,
+		&i.PaidAt,
+		&i.ExpiresAt,
+		&i.Channel,
+		&i.BuktiPath,
+		&i.RawWebhook,
+		&i.JadwalKode,
+		&i.JenisKelamin,
+		&i.PerluTinjau,
+		&i.CatatanSistem,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createPayment = `-- name: CreatePayment :one
 INSERT INTO payments (lead_id, link_id, produk_varian_id, metode, amount, status, bukti_path, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -41,6 +102,47 @@ func (q *Queries) CreatePayment(ctx context.Context, arg CreatePaymentParams) (P
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
+	var i Payment
+	err := row.Scan(
+		&i.ID,
+		&i.LeadID,
+		&i.LinkID,
+		&i.ProdukVarianID,
+		&i.Metode,
+		&i.Provider,
+		&i.ExternalID,
+		&i.ProviderRef,
+		&i.CheckoutUrl,
+		&i.Amount,
+		&i.Status,
+		&i.PaidAt,
+		&i.ExpiresAt,
+		&i.Channel,
+		&i.BuktiPath,
+		&i.RawWebhook,
+		&i.JadwalKode,
+		&i.JenisKelamin,
+		&i.PerluTinjau,
+		&i.CatatanSistem,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getActiveGatewayPaymentByLead = `-- name: GetActiveGatewayPaymentByLead :one
+SELECT id, lead_id, link_id, produk_varian_id, metode, provider, external_id, provider_ref, checkout_url, amount, status, paid_at, expires_at, channel, bukti_path, raw_webhook, jadwal_kode, jenis_kelamin, perlu_tinjau, catatan_sistem, created_at, updated_at FROM payments
+WHERE lead_id = ? AND metode = 'gateway' AND status = 'pending' AND checkout_url != '' AND expires_at > ?2
+ORDER BY id DESC LIMIT 1
+`
+
+type GetActiveGatewayPaymentByLeadParams struct {
+	LeadID int64
+	Now    sql.NullTime
+}
+
+func (q *Queries) GetActiveGatewayPaymentByLead(ctx context.Context, arg GetActiveGatewayPaymentByLeadParams) (Payment, error) {
+	row := q.db.QueryRowContext(ctx, getActiveGatewayPaymentByLead, arg.LeadID, arg.Now)
 	var i Payment
 	err := row.Scan(
 		&i.ID,
@@ -101,6 +203,76 @@ func (q *Queries) GetPayment(ctx context.Context, id int64) (Payment, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getPaymentByExternalID = `-- name: GetPaymentByExternalID :one
+SELECT id, lead_id, link_id, produk_varian_id, metode, provider, external_id, provider_ref, checkout_url, amount, status, paid_at, expires_at, channel, bukti_path, raw_webhook, jadwal_kode, jenis_kelamin, perlu_tinjau, catatan_sistem, created_at, updated_at FROM payments WHERE external_id = ?
+`
+
+func (q *Queries) GetPaymentByExternalID(ctx context.Context, externalID sql.NullString) (Payment, error) {
+	row := q.db.QueryRowContext(ctx, getPaymentByExternalID, externalID)
+	var i Payment
+	err := row.Scan(
+		&i.ID,
+		&i.LeadID,
+		&i.LinkID,
+		&i.ProdukVarianID,
+		&i.Metode,
+		&i.Provider,
+		&i.ExternalID,
+		&i.ProviderRef,
+		&i.CheckoutUrl,
+		&i.Amount,
+		&i.Status,
+		&i.PaidAt,
+		&i.ExpiresAt,
+		&i.Channel,
+		&i.BuktiPath,
+		&i.RawWebhook,
+		&i.JadwalKode,
+		&i.JenisKelamin,
+		&i.PerluTinjau,
+		&i.CatatanSistem,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listActiveSeatHolds = `-- name: ListActiveSeatHolds :many
+SELECT p.lead_id, p.jadwal_kode, p.jenis_kelamin FROM payments p JOIN leads l ON l.id = p.lead_id
+WHERE p.metode = 'gateway' AND p.status = 'pending' AND p.expires_at > ?1
+  AND p.jadwal_kode != '' AND l.verified_at IS NULL
+`
+
+type ListActiveSeatHoldsRow struct {
+	LeadID       int64
+	JadwalKode   string
+	JenisKelamin string
+}
+
+// Kursi yang ditahan sesi bayar online aktif (lead belum terverifikasi).
+func (q *Queries) ListActiveSeatHolds(ctx context.Context, now sql.NullTime) ([]ListActiveSeatHoldsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveSeatHolds, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveSeatHoldsRow
+	for rows.Next() {
+		var i ListActiveSeatHoldsRow
+		if err := rows.Scan(&i.LeadID, &i.JadwalKode, &i.JenisKelamin); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listPaymentsByLead = `-- name: ListPaymentsByLead :many
@@ -202,6 +374,84 @@ func (q *Queries) ListPendingManualPaymentsByLead(ctx context.Context, leadID in
 		return nil, err
 	}
 	return items, nil
+}
+
+const markPaymentPaid = `-- name: MarkPaymentPaid :execrows
+UPDATE payments SET status = 'paid', paid_at = ?, channel = ?, perlu_tinjau = ?, catatan_sistem = ?, raw_webhook = ?, updated_at = ?
+WHERE id = ? AND status != 'paid'
+`
+
+type MarkPaymentPaidParams struct {
+	PaidAt        sql.NullTime
+	Channel       string
+	PerluTinjau   int64
+	CatatanSistem string
+	RawWebhook    string
+	UpdatedAt     time.Time
+	ID            int64
+}
+
+func (q *Queries) MarkPaymentPaid(ctx context.Context, arg MarkPaymentPaidParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markPaymentPaid,
+		arg.PaidAt,
+		arg.Channel,
+		arg.PerluTinjau,
+		arg.CatatanSistem,
+		arg.RawWebhook,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setPaymentStatusIfPending = `-- name: SetPaymentStatusIfPending :execrows
+UPDATE payments SET status = ?, catatan_sistem = ?, updated_at = ? WHERE id = ? AND status = 'pending'
+`
+
+type SetPaymentStatusIfPendingParams struct {
+	Status        string
+	CatatanSistem string
+	UpdatedAt     time.Time
+	ID            int64
+}
+
+func (q *Queries) SetPaymentStatusIfPending(ctx context.Context, arg SetPaymentStatusIfPendingParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setPaymentStatusIfPending,
+		arg.Status,
+		arg.CatatanSistem,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const updatePaymentGatewaySession = `-- name: UpdatePaymentGatewaySession :exec
+UPDATE payments SET provider_ref = ?, checkout_url = ?, expires_at = ?, updated_at = ? WHERE id = ?
+`
+
+type UpdatePaymentGatewaySessionParams struct {
+	ProviderRef string
+	CheckoutUrl string
+	ExpiresAt   sql.NullTime
+	UpdatedAt   time.Time
+	ID          int64
+}
+
+func (q *Queries) UpdatePaymentGatewaySession(ctx context.Context, arg UpdatePaymentGatewaySessionParams) error {
+	_, err := q.db.ExecContext(ctx, updatePaymentGatewaySession,
+		arg.ProviderRef,
+		arg.CheckoutUrl,
+		arg.ExpiresAt,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	return err
 }
 
 const updatePaymentProof = `-- name: UpdatePaymentProof :exec

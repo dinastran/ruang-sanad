@@ -39,6 +39,9 @@ type RegistrationService struct {
 	now      func() time.Time
 	proofDir string
 
+	gateway PaymentGateway // nil = online payment off
+	appURL  string
+
 	mu        sync.Mutex
 	phoneHits map[string][]time.Time
 	clickSeen map[string]struct{}
