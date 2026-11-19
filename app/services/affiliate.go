@@ -113,8 +113,8 @@ func (s *AffiliateService) Register(ctx context.Context, in models.AffiliateSign
 		return 0, &FieldError{Field: "no_wa", Pesan: "Nomor WhatsApp tidak valid"}
 	}
 	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
-	if in.Email != "" && (!strings.Contains(in.Email, "@") || len(in.Email) > 120) {
-		return 0, &FieldError{Field: "email", Pesan: "Email tidak valid"}
+	if !strings.Contains(in.Email, "@") || len(in.Email) > 120 {
+		return 0, &FieldError{Field: "email", Pesan: "Email wajib diisi untuk login ke halaman affiliate"}
 	}
 	var id int64
 	err := s.leads.withTx(ctx, func(q *queries.Querier) error {

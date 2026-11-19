@@ -210,7 +210,7 @@ func setupAuthRoutes(app *fiber.App, authHandler *handlers.AuthHandler, password
 }
 
 func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, csrfMiddleware *middlewares.CSRFMiddleware) {
-	protected := app.Group("/app", middlewares.AuthRequired(store))
+	protected := app.Group("/app", middlewares.AuthRequired(store), middlewares.AffiliateRoleGuard(middlewares.SessionRole(store, userService)))
 	protected.Use(csrfMiddleware.Protect())
 
 	// Dashboard (all roles)
