@@ -185,3 +185,19 @@ func TestListLinksStats(t *testing.T) {
 	require.EqualValues(t, 6, rows[0].Submit)
 	require.EqualValues(t, 3, rows[0].Bayar)
 }
+
+func TestCountClickDedup(t *testing.T) {
+	f := setupRegistrationFixture(t)
+	id, err := f.reg.CreateLink(t.Context(), f.linkReq("tahsin-reguler"), f.adminID)
+	require.NoError(t, err)
+	require.NoError(t, f.reg.CountClick(t.Context(), id, "1.1.1.1", "ua-a"))
+	require.NoError(t, f.reg.CountClick(t.Context(), id, "1.1.1.1", "ua-a"))
+	require.NoError(t, f.reg.CountClick(t.Context(), id, "1.1.1.1", "ua-b"))
+	var klik int
+	require.NoError(t, f.db.QueryRow(`SELECT SUM(klik) FROM registration_link_stats WHERE link_id = ?`, id).Scan(&klik))
+	require.Equal(t, 2, klik)
+	f.clock = f.clock.Add(24 * time.Hour)
+	require.NoError(t, f.reg.CountClick(t.Context(), id, "1.1.1.1", "ua-a"))
+	require.NoError(t, f.db.QueryRow(`SELECT SUM(klik) FROM registration_link_stats WHERE link_id = ?`, id).Scan(&klik))
+	require.Equal(t, 3, klik, "hari baru dihitung lagi")
+}

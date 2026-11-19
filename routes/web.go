@@ -60,6 +60,7 @@ type Handlers struct {
 	LeadLaporan                 *handlers.LeadLaporanHandler
 	LeadSources                 *handlers.LeadSourceHandler
 	LeadPrograms                *handlers.LeadProgramHandler
+	RegistrationPublic          *handlers.RegistrationPublicHandler
 	MetaCAPI                    *handlers.MetaCAPIHandler
 	MetaAds                     *handlers.MetaAdsHandler
 	LeadFollowups               *handlers.LeadFollowupHandler
@@ -82,6 +83,20 @@ func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *
 	setupOAuthRoutes(app, h.OAuth, store, csrfMiddleware)
 	setupIntegrationRoutes(app, h.CsAiIngest)
 	setupProgramPublicRoutes(app, h.LeadPrograms)
+	setupRegistrationPublicRoutes(app, h.RegistrationPublic)
+}
+
+// setupRegistrationPublicRoutes exposes the public registration form and the
+// manual payment page. No login or CSRF: the form carries a signed render
+// token, and submits/uploads are rate limited per IP.
+func setupRegistrationPublicRoutes(app *fiber.App, h *handlers.RegistrationPublicHandler) {
+	if h == nil {
+		return
+	}
+	app.Get("/daftar/bayar/:ref", h.BayarPage)
+	app.Post("/daftar/bayar/:ref/bukti", middlewares.DaftarUploadRateLimit.Limit(), h.UploadBukti)
+	app.Get("/daftar/:slug", h.Page)
+	app.Post("/daftar/:slug", middlewares.DaftarRateLimit.Limit(), h.Submit)
 }
 
 // setupProgramPublicRoutes exposes the public attendance link that hosts

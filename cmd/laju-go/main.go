@@ -154,6 +154,8 @@ func main() {
 	})
 	leadService.WithMetaCAPI(metaCAPIService)
 	startMetaCAPIWorker(metaCAPIService)
+	registrationService := services.NewRegistrationService(querier, leadService, jadwalService, []byte(cfg.SessionSecret))
+	registrationService.SetProofDir("storage/payment_proofs")
 	metaAdsService := services.NewMetaAdsService(querier, services.MetaAdsConfig{
 		Token: cfg.MetaAdsToken, AccountIDs: cfg.MetaAdAccountIDs, APIVersion: cfg.MetaAPIVersion, AppSecret: cfg.MetaAppSecret,
 	})
@@ -162,6 +164,10 @@ func main() {
 	// Create storage directories
 	if err := os.MkdirAll("storage/uploads", 0755); err != nil {
 		slog.Error("failed to create uploads directory", "error", err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll("storage/payment_proofs", 0750); err != nil {
+		slog.Error("failed to create payment proofs directory", "error", err)
 		os.Exit(1)
 	}
 	if err := os.MkdirAll("storage/avatars", 0755); err != nil {
@@ -257,6 +263,7 @@ func main() {
 		CsAiIngest:                  handlers.NewCsAiIngestHandler(leadService, cfg.CSBridgeIngestToken, cfg.CSBridgeAllowedCIDRs).WithJadwal(jadwalService),
 		JadwalPenawaran:             handlers.NewJadwalPenawaranHandler(jadwalService, sessionStore, inertiaService),
 		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService).WithPrograms(leadProgramService),
+		RegistrationPublic:          handlers.NewRegistrationPublicHandler(registrationService, inertiaService),
 		LeadPrograms:                handlers.NewLeadProgramHandler(leadService, leadProgramService, productCRMService, sessionStore, inertiaService, routes.LeadSourceEditorRoles),
 		LeadClosing:                 handlers.NewLeadClosingHandler(leadService, sessionStore, inertiaService),
 		LeadLaporan:                 handlers.NewLeadLaporanHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService),
