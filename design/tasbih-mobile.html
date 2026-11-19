@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasbih Mobile Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Token: diturunkan dari skala brand-* di frontend/src/app.css.
+   Tasbih memakai sisi gelap skala brand (950–800) sebagai permukaan,
+   brand-300 sebagai aksen, dan satu warna hangat (sand) khusus pencapaian. */
+:root{
+  --canvas:#eef1f2; --canvas-ink:#1f2a30; --canvas-mute:#5d6b72; --canvas-line:#d5dcdf;
+  --bg:#06191f;          /* di bawah brand-950 */
+  --surface:#0b2630;     /* brand-950 diredam */
+  --surface-2:#10313c;
+  --line:rgba(165,243,252,.10);
+  --ink:#e8f3f5; --ink-2:#a9c3c9; --ink-3:#6f8d95;
+  --accent:#67e8f9;      /* brand-300 */
+  --accent-dim:rgba(103,232,249,.16);
+  --accent-ink:#083344;  /* brand-950 */
+  --sand:#e7c98f; --sand-dim:rgba(231,201,143,.14);
+  --ok:#7dd3a8;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --canvas:#0f1416; --canvas-ink:#e3eaec; --canvas-mute:#8a9aa1; --canvas-line:#24302f; }
+}
+:root[data-theme="dark"]{ --canvas:#0f1416; --canvas-ink:#e3eaec; --canvas-mute:#8a9aa1; --canvas-line:#24302f; }
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--canvas);color:var(--canvas-ink);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1680px;margin:0 auto;padding:40px 16px 80px}
+header.top{max-width:880px;margin-bottom:36px}
+header.top .eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--canvas-mute);font-weight:600}
+header.top h1{font-size:30px;letter-spacing:-.02em;margin:6px 0 10px;font-weight:700}
+header.top p{color:var(--canvas-mute);line-height:1.55;font-size:15px}
+.board{display:flex;flex-wrap:wrap;gap:48px 36px;align-items:flex-start}
+.art{width:390px;max-width:100%}
+.art-label{display:flex;gap:10px;align-items:baseline;margin-bottom:12px}
+.art-label b{font-size:13px;font-weight:700}
+.art-label span{font-size:12px;color:var(--canvas-mute)}
+.art-note{margin-top:14px;font-size:13px;line-height:1.55;color:var(--canvas-mute)}
+.art-note strong{color:var(--canvas-ink);font-weight:600}
+
+/* Ponsel */
+.phone{width:390px;max-width:100%;height:844px;border-radius:44px;background:var(--bg);color:var(--ink);overflow:hidden;position:relative;
+  box-shadow:0 0 0 10px #0a0d0e,0 30px 60px -20px rgba(0,0,0,.45);display:flex;flex-direction:column}
+.status{height:47px;flex:none;display:flex;justify-content:space-between;align-items:center;padding:0 28px 0 32px;font-size:15px;font-weight:600}
+.status .dots{display:flex;gap:5px;align-items:center}
+.status .dots i{display:block;width:16px;height:10px;border-radius:2px;background:var(--ink);opacity:.9}
+.status .dots i:first-child{width:18px;height:10px;clip-path:polygon(0 100%,25% 70%,50% 45%,75% 20%,100% 0,100% 100%)}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:120px;height:34px;border-radius:20px;background:#000}
+.home-ind{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--ink);opacity:.5}
+.scroll{flex:1;overflow:hidden;padding:0 20px}
+.ic{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.s{width:16px;height:16px}
+.btn-ic{width:44px;height:44px;display:grid;place-items:center;border-radius:14px;color:var(--ink-2)}
+.num{font-variant-numeric:tabular-nums}
+.arab{font-family:Amiri,"Noto Naskh Arabic",serif;direction:rtl}
+.kicker{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:18px}
+
+/* 1 · Penghitung */
+.cnt-top{display:flex;justify-content:space-between;align-items:center;padding:4px 0 0}
+.chip{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px 0 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-size:14px;font-weight:600;color:var(--ink)}
+.chip .ic{color:var(--ink-3)}
+.dzikir-head{text-align:center;margin-top:26px}
+.dzikir-head .arab{font-size:38px;line-height:1.5;color:var(--ink)}
+.dzikir-head .latin{font-size:15px;color:var(--ink-2);margin-top:2px;font-weight:500}
+.dzikir-head .arti{font-size:13px;color:var(--ink-3);margin-top:4px}
+.paket-steps{display:flex;gap:6px;justify-content:center;margin-top:18px}
+.paket-steps i{display:block;height:4px;width:28px;border-radius:2px;background:var(--surface-2)}
+.paket-steps i.done{background:var(--accent);opacity:.5}
+.paket-steps i.now{background:var(--accent)}
+.ringwrap{position:relative;width:290px;height:290px;margin:26px auto 0}
+.ringwrap svg{position:absolute;inset:0}
+.ring-center{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+.ring-center .big{font-size:84px;font-weight:300;letter-spacing:-.04em;line-height:1}
+.ring-center .of{font-size:14px;color:var(--ink-3);margin-top:6px}
+.tap-hint{text-align:center;font-size:12px;color:var(--ink-3);margin-top:18px}
+.today-strip{position:absolute;left:20px;right:20px;bottom:30px;display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:20px;background:var(--surface);border:1px solid var(--line)}
+.bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.streak{display:flex;align-items:center;gap:5px;font-size:14px;font-weight:600;color:var(--sand)}
+.tapzone{position:absolute;left:0;right:0;top:300px;bottom:110px;border:1.5px dashed rgba(103,232,249,.28);border-radius:28px;margin:0 10px;pointer-events:none}
+.tapzone span{position:absolute;bottom:8px;right:12px;font-size:10px;color:var(--accent);letter-spacing:.06em;text-transform:uppercase;font-weight:600}
+
+/* 2 · Selesai */
+.done-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 28px}
+.done-mark{width:92px;height:92px;border-radius:50%;display:grid;place-items:center;background:var(--accent-dim);color:var(--accent)}
+.done-mark .ic{width:40px;height:40px;stroke-width:1.6}
+.done-wrap h2{font-size:26px;font-weight:600;letter-spacing:-.02em;margin-top:26px}
+.done-wrap .sub{color:var(--ink-2);font-size:15px;line-height:1.5;margin-top:8px}
+.done-stats{display:grid;grid-template-columns:repeat(3,1fr);width:100%;margin-top:30px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.done-stats div{padding:16px 0}
+.done-stats div+div{border-left:1px solid var(--line)}
+.done-stats b{display:block;font-size:20px;font-weight:600}
+.done-stats span{font-size:11px;color:var(--ink-3);letter-spacing:.04em}
+.badge-new{display:flex;gap:14px;align-items:center;text-align:left;width:100%;margin-top:22px;padding:14px 16px;border-radius:18px;background:var(--sand-dim);border:1px solid rgba(231,201,143,.22)}
+.badge-new .medal{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:rgba(231,201,143,.18);color:var(--sand)}
+.badge-new b{font-size:14px;color:var(--sand)}
+.badge-new p{font-size:12.5px;color:var(--ink-2);margin-top:2px}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;padding:0 20px 34px}
+.b{height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:15px}
+.b.primary{background:var(--accent);color:var(--accent-ink)}
+.b.ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+
+/* 3 · Sheet picker */
+.dim{position:absolute;inset:0;background:rgba(2,10,13,.6)}
+.sheet{position:absolute;left:0;right:0;bottom:0;height:640px;background:var(--surface);border-radius:28px 28px 0 0;border-top:1px solid var(--line);padding:10px 20px 0;display:flex;flex-direction:column}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--ink-3);opacity:.5;margin:0 auto 14px}
+.seg{display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:14px;background:var(--bg);margin-bottom:16px}
+.seg span{height:38px;display:grid;place-items:center;border-radius:11px;font-size:14px;font-weight:600;color:var(--ink-3)}
+.seg span.on{background:var(--surface-2);color:var(--ink)}
+.row{display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid var(--line)}
+.row .t{flex:1;min-width:0}
+.row .t b{display:block;font-size:15px;font-weight:600}
+.row .t span{font-size:12.5px;color:var(--ink-3)}
+.row .arab{font-size:20px;color:var(--ink-2)}
+.row .tgt{font-size:13px;color:var(--ink-2);padding:6px 10px;border-radius:10px;background:var(--bg);font-weight:600}
+.row.sel b{color:var(--accent)}
+.sec-h{display:flex;justify-content:space-between;align-items:center;margin:18px 0 4px}
+.paket{padding:14px 16px;border-radius:18px;border:1px solid var(--line);background:var(--bg);margin-top:10px}
+.paket.sel{border-color:rgba(103,232,249,.45)}
+.paket b{font-size:15px}
+.paket p{font-size:12.5px;color:var(--ink-3);margin-top:3px;line-height:1.45}
+.paket .meta{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.paket .meta span{font-size:11.5px;color:var(--ink-2);padding:4px 8px;border-radius:8px;background:var(--surface)}
+
+/* 4–5 · Dashboard */
+.appbar{display:flex;align-items:center;justify-content:space-between;padding:6px 0 14px}
+.appbar h1{font-size:22px;font-weight:600;letter-spacing:-.02em}
+.range{display:grid;grid-template-columns:repeat(4,1fr);padding:4px;border-radius:14px;background:var(--surface);border:1px solid var(--line);margin-bottom:16px}
+.range span{height:34px;display:grid;place-items:center;border-radius:10px;font-size:13px;font-weight:600;color:var(--ink-3)}
+.range span.on{background:var(--surface-2);color:var(--ink)}
+.hero{display:grid;grid-template-columns:116px 1fr;gap:18px;align-items:center}
+.hero .k{font-size:30px;font-weight:600;letter-spacing:-.03em}
+.hero .k small{font-size:15px;color:var(--ink-3);font-weight:500}
+.mini-list{margin-top:14px;display:grid;gap:9px}
+.mini-list div{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:13px;color:var(--ink-2)}
+.mini-list div .bar{grid-column:1/-1;height:4px}
+.mini-list .ok{color:var(--ok)}
+.trio{display:grid;grid-template-columns:repeat(3,1fr);margin-top:14px}
+.trio div{padding:2px 0 0}
+.trio div+div{padding-left:14px;border-left:1px solid var(--line)}
+.trio b{display:block;font-size:19px;font-weight:600}
+.trio span{font-size:11.5px;color:var(--ink-3)}
+.insight{margin-top:14px;display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:18px;background:var(--accent-dim);color:var(--ink);font-size:13.5px;line-height:1.5}
+.insight .ic{color:var(--accent);margin-top:1px}
+.card-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.card-h b{font-size:15px;font-weight:600}
+.card-h span{font-size:12px;color:var(--ink-3)}
+.lvl{display:flex;align-items:center;gap:14px}
+.lvl .n{width:48px;height:48px;border-radius:16px;display:grid;place-items:center;background:var(--sand-dim);color:var(--sand);font-weight:700;font-size:18px}
+.heat{display:grid;grid-template-columns:repeat(17,1fr);gap:3px}
+.heat i{display:block;height:11px;border-radius:3px;background:var(--surface-2)}
+.legend{display:flex;gap:4px;align-items:center;font-size:11px;color:var(--ink-3);margin-top:10px;justify-content:flex-end}
+.legend i{width:10px;height:10px;border-radius:2px;display:block}
+.hours{display:flex;align-items:flex-end;gap:2px;height:48px}
+.hours i{flex:1;border-radius:2px 2px 0 0;background:var(--accent);opacity:.25}
+.hours i.hi{opacity:.9}
+.hours-ax{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-3);margin-top:6px}
+.comp{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px}
+.comp-l{display:grid;gap:6px;margin-top:10px}
+.comp-l div{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink-2)}
+.comp-l div i{width:8px;height:8px;border-radius:2px;display:block}
+.comp-l div b{margin-left:auto;font-weight:600;color:var(--ink)}
+.badges{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.badges div{aspect-ratio:1;border-radius:16px;display:grid;place-items:center;background:var(--bg);border:1px solid var(--line);color:var(--ink-3)}
+.badges div.got{background:var(--sand-dim);border-color:rgba(231,201,143,.25);color:var(--sand)}
+.badges div.lock{opacity:.45}
+.tabbar{flex:none;height:84px;display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);background:rgba(6,25,31,.92);padding-bottom:22px}
+.tabbar a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:11px;color:var(--ink-3);font-weight:500;text-decoration:none}
+.tabbar a.on{color:var(--accent)}
+.fade-b{position:absolute;left:0;right:0;bottom:84px;height:40px;background:linear-gradient(transparent,var(--bg));pointer-events:none}
+
+/* 6 · Riwayat */
+.day-h{font-size:12px;color:var(--ink-3);font-weight:600;letter-spacing:.04em;margin:18px 0 6px;display:flex;justify-content:space-between}
+.sess{display:grid;grid-template-columns:46px 1fr auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.sess time{font-size:13px;color:var(--ink-3)}
+.sess b{font-size:14.5px;font-weight:600;display:block}
+.sess .pk{font-size:12px;color:var(--ink-3)}
+.sess .r{text-align:right}
+.sess .r b{font-size:15px}
+.sess .r span{font-size:11.5px;color:var(--ink-3)}
+.sess .r .ok{color:var(--ok)}
+.filters{display:flex;gap:8px;overflow:hidden;margin-bottom:4px}
+.filters span{flex:none;height:34px;padding:0 14px;border-radius:999px;display:grid;place-items:center;font-size:13px;font-weight:600;background:var(--surface);border:1px solid var(--line);color:var(--ink-2)}
+.filters span.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+/* Catatan rekomendasi */
+.notes{margin-top:64px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;max-width:1300px}
+.note{border:1px solid var(--canvas-line);border-radius:18px;padding:20px}
+.note h3{font-size:14px;font-weight:700;margin-bottom:10px}
+.note ul{padding-left:18px;display:grid;gap:7px}
+.note li{font-size:13.5px;line-height:1.5;color:var(--canvas-mute)}
+.note li b{color:var(--canvas-ink);font-weight:600}
+@media (max-width:440px){.phone{border-radius:28px;box-shadow:0 0 0 6px #0a0d0e}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-focus" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></symbol>
+  <symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-sunrise" viewBox="0 0 24 24"><path d="M12 2v8M4.93 10.93l1.41 1.41M2 18h2M20 18h2M19.07 10.93l-1.41 1.41M22 22H2M8 6l4-4 4 4M16 18a4 4 0 0 0-8 0"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2z"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="i-foot" viewBox="0 0 24 24"><path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0zM20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0z"/></symbol>
+  <symbol id="i-gem" viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6M2 9h20"/></symbol>
+  <symbol id="i-crown" viewBox="0 0 24 24"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zM5 20h14"/></symbol>
+  <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+</svg>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Ruang Sanad · /app/tasbih · Redesign mobile</div>
+    <h1>Tasbih: tenang saat berdzikir, jujur saat melihat progres</h1>
+    <p>Enam layar untuk santri. Prinsipnya, layar hitung hanya menampilkan dzikir dan angkanya, sementara progres dan pencapaian dipindah ke Dashboard. Gamifikasi (streak, level, badge) tetap ada tetapi tampil kecil, tidak dijadikan tujuan. Semua data di bawah memakai field yang sudah ada di <code>models.TasbihDashboard</code>. Tidak ada endpoint baru.</p>
+  </header>
+
+  <div class="board">
+
+    <!-- 1. PENGHITUNG -->
+    <section class="art">
+      <div class="art-label"><b>01 · Tasbih</b><span>/app/tasbih, sedang paket Ba'da Shalat</span></div>
+      <div class="phone">
+        <div class="island"></div>
+        <div class="status"><span>04.52</span><span class="dots"><i></i><i></i></span></div>
+        <div class="scroll" style="position:relative">
+          <div class="cnt-top">
+            <span class="chip"><svg class="ic s"><use href="#i-list"/></svg>Ba'da Shalat · 2/4<svg class="ic s"><use href="#i-chev"/></svg></span>
+            <span style="display:flex">
+              <span class="btn-ic" aria-label="Mode fokus"><svg class="ic"><use href="#i-focus"/></svg></span>
+              <span class="btn-ic" aria-label="Lainnya"><svg class="ic"><use href="#i-more"/></svg></span>
+            </span>
+          </div>
+          <div class="dzikir-head">
+            <div class="arab">الْحَمْدُ لِلَّهِ</div>
+            <div class="latin">Alhamdulillah</div>
+            <div class="arti">Segala puji bagi Allah</div>
+          </div>
+          <div class="paket-steps" aria-label="Urutan paket"><i class="done"></i><i class="now"></i><i></i><i></i></div>
+          <div class="ringwrap" id="ring"></div>
+          <p class="tap-hint">Ketuk di mana saja di area bawah · tahan untuk batal 1</p>
+          <div class="tapzone"><span>Area ketuk</span></div>
+        </div>
+        <div class="today-strip">
+          <div style="flex:1">
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-2);margin-bottom:7px"><span>Hari ini</span><span class="num"><b style="color:var(--ink)">218</b> / 500</span></div>
+            <div class="bar"><i style="width:43.6%"></i></div>
+          </div>
+          <span class="streak"><svg class="ic s"><use href="#i-flame"/></svg><span class="num">12</span></span>
+        </div>
+        <div class="home-ind"></div>
+      </div>
+      <p class="art-note"><strong>Angka besar dan zona ketuk selebar layar.</strong> Header hanya berisi pemilih dzikir dan dua ikon. Komposisi hari ini dihapus dari layar ini (sudah ada di Dashboard). Ring 33 butir mengikuti target dzikir, dan butir yang aktif sedikit membesar. Strip "Hari ini" menempel di bawah supaya progres harian tetap terlihat tanpa mengganggu.</p>
+    </section>
+
+    <!-- 2. SELESAI -->
+    <section class="art">
+      <div class="art-label"><b>02 · Paket tuntas</b><span>muncul setelah dzikir terakhir mencapai target</span></div>
+      <div class="phone">
+        <div class="island"></div>
+        <div class="status"><span>04.58</span><span class="dots"><i></i><i></i></span></div>
+        <div class="done-wrap">
+          <div class="done-mark"><svg class="ic"><use href="#i-check"/></svg></div>
+          <h2>Dzikir Ba'da Shalat tuntas</h2>
+          <p class="sub">Putaran ke-3 hari ini. Target harian juga tercapai.</p>
+          <div class="done-stats">
+            <div><b class="num">100</b><span>HITUNGAN</span></div>
+            <div><b class="num">3m 40d</b><span>DURASI</span></div>
+            <div><b class="num">500/500</b><span>HARI INI</span></div>
+          </div>
+          <div class="badge-new">
+            <span class="medal"><svg class="ic"><use href="#i-sunrise"/></svg></span>
+            <div><b>Pencapaian baru · Pagi Hari</b><p>Berdzikir pukul 03.00–05.59 pada 7 hari berbeda.</p></div>
+          </div>
+        </div>
+        <div class="actions">
+          <span class="b ghost"><svg class="ic s"><use href="#i-repeat"/></svg>Ulangi</span>
+          <span class="b primary">Lihat progres</span>
+        </div>
+        <div class="home-ind"></div>
+      </div>
+      <p class="art-note"><strong>Ringkasan yang tenang, tanpa confetti.</strong> Ada satu ikon centang dan tiga angka. Badge baru tampil sebagai baris warna pasir, bukan modal yang meloncat. Bila ada lebih dari satu badge (field <code>badge_baru</code>), baris ditumpuk, maksimal 2 lalu "+N lainnya". Level naik ditampilkan dengan pola baris yang sama.</p>
+    </section>
+
+    <!-- 3. PICKER -->
+    <section class="art">
+      <div class="art-label"><b>03 · Pilih dzikir</b><span>sheet dari chip di atas</span></div>
+      <div class="phone">
+        <div class="island"></div>
+        <div class="status"><span>04.50</span><span class="dots"><i></i><i></i></span></div>
+        <div class="scroll" style="opacity:.35">
+          <div class="dzikir-head" style="margin-top:40px"><div class="arab">سُبْحَانَ اللَّهِ</div></div>
+        </div>
+        <div class="dim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="seg"><span class="on">Paket wirid</span><span>Dzikir satuan</span></div>
+          <div class="paket sel">
+            <div style="display:flex;justify-content:space-between;align-items:center"><b>Dzikir Ba'da Shalat</b><svg class="ic s" style="color:var(--accent)"><use href="#i-check"/></svg></div>
+            <p>Tasbih, tahmid, takbir 33× lalu tahlil 1×.</p>
+            <div class="meta"><span>4 dzikir</span><span>100 hitungan</span><span>HR. Muslim</span><span style="color:var(--accent)">2 putaran hari ini</span></div>
+          </div>
+          <div class="paket">
+            <b>Dzikir Pagi</b>
+            <p>Rangkaian dzikir pagi setelah Subuh hingga terbit matahari.</p>
+            <div class="meta"><span>9 dzikir</span><span>~180 hitungan</span></div>
+          </div>
+          <div class="sec-h"><span class="kicker">Dzikir satuan · terakhir dipakai</span><span style="font-size:13px;color:var(--accent);font-weight:600;display:flex;gap:4px;align-items:center"><svg class="ic s"><use href="#i-plus"/></svg>Tambah</span></div>
+          <div class="row"><div class="t"><b>Astaghfirullah</b><span>Aku memohon ampun kepada Allah</span></div><span class="tgt num">100×</span></div>
+          <div class="row"><div class="t"><b>Shalawat Nabi</b><span>Custom · Allahumma shalli ‘ala Muhammad</span></div><span class="tgt num">33×</span></div>
+          <div class="row" style="border:0"><div class="t"><b>La ilaha illallah</b><span>Tiada tuhan selain Allah</span></div><span class="tgt num">100×</span></div>
+        </div>
+        <div class="home-ind" style="z-index:2"></div>
+      </div>
+      <p class="art-note"><strong>Paket lebih dulu, karena itu alur yang paling sering dipakai santri setelah shalat.</strong> Target bisa diubah dengan mengetuk angka × (pakai <code>PUT /tasbih/dzikir/:id/target</code>). Dzikir custom diberi label "Custom". Arsipkan atau ubah lewat geser ke kiri pada baris.</p>
+    </section>
+
+    <!-- 4. DASHBOARD ATAS -->
+    <section class="art">
+      <div class="art-label"><b>04 · Progres</b><span>/app/tasbih/dashboard, layar pertama</span></div>
+      <div class="phone">
+        <div class="island"></div>
+        <div class="status"><span>21.10</span><span class="dots"><i></i><i></i></span></div>
+        <div class="scroll">
+          <div class="appbar"><h1>Progres</h1><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3)"><svg class="ic s"><use href="#i-cloud"/></svg>Tersinkron</span></div>
+          <div class="card">
+            <div class="hero">
+              <div id="todayRing" style="width:116px;height:116px"></div>
+              <div>
+                <div class="kicker">Hari ini · Kamis</div>
+                <div class="k num">412<small> / 500</small></div>
+                <div class="streak" style="margin-top:6px;font-size:13px"><svg class="ic s"><use href="#i-flame"/></svg>12 hari beruntun · terpanjang 19</div>
+              </div>
+            </div>
+            <div class="mini-list">
+              <div><span>Ba'da Shalat · 3 putaran</span><span class="num ok">300 ✓</span><span class="bar"><i style="width:100%;background:var(--ok)"></i></span></div>
+              <div><span>Astaghfirullah</span><span class="num">80 / 100</span><span class="bar"><i style="width:80%"></i></span></div>
+              <div><span>Shalawat Nabi</span><span class="num">32 / 33</span><span class="bar"><i style="width:97%"></i></span></div>
+            </div>
+          </div>
+          <div class="range" style="margin:18px 0 12px"><span>7H</span><span class="on">30H</span><span>90H</span><span>1T</span></div>
+          <div class="card">
+            <div class="card-h"><b>30 hari terakhir</b><span class="num">+14% dari 30 hari sebelumnya</span></div>
+            <div id="trend"></div>
+            <div class="trio">
+              <div><b class="num">9.840</b><span>Total</span></div>
+              <div><b class="num">24/30</b><span>Hari aktif</span></div>
+              <div><b class="num">18/30</b><span>Target tercapai</span></div>
+            </div>
+          </div>
+          <div class="insight"><svg class="ic s"><use href="#i-info"/></svg><span>Sebagian besar dzikir Anda terjadi setelah Subuh dan Maghrib. Hari Sabtu paling sering terlewat.</span></div>
+        </div>
+        <div class="fade-b"></div>
+        <nav class="tabbar">
+          <a><svg class="ic"><use href="#i-circle"/></svg>Tasbih</a>
+          <a class="on"><svg class="ic"><use href="#i-chart"/></svg>Progres</a>
+          <a><svg class="ic"><use href="#i-list"/></svg>Riwayat</a>
+        </nav>
+        <div class="home-ind"></div>
+      </div>
+      <p class="art-note"><strong>Pertanyaan pertama santri adalah "sudah sampai mana hari ini?"</strong> Karena itu ring dan rincian per dzikir ditaruh di atas. Pemilih rentang baru muncul setelahnya, karena hanya memengaruhi bagian di bawah. Enam KPI yang sekarang diringkas jadi tiga. Kalimat insight dirakit dari aturan sederhana atas <code>per_jam</code> dan heatmap. Ini bukan AI, dan jika data kurang dari 14 hari, kalimatnya disembunyikan.</p>
+    </section>
+
+    <!-- 5. DASHBOARD BAWAH -->
+    <section class="art">
+      <div class="art-label"><b>05 · Progres (lanjutan)</b><span>setelah scroll</span></div>
+      <div class="phone">
+        <div class="island"></div>
+        <div class="status"><span>21.10</span><span class="dots"><i></i><i></i></span></div>
+        <div class="scroll" style="display:grid;gap:12px;align-content:start;padding-top:6px">
+          <div class="card">
+            <div class="card-h"><b>Kalender istiqamah</b><span>17 pekan</span></div>
+            <div class="heat" id="heat"></div>
+            <div class="legend">Sedikit <i style="background:var(--surface-2)"></i><i style="background:rgba(103,232,249,.3)"></i><i style="background:rgba(103,232,249,.6)"></i><i style="background:var(--accent)"></i> Target</div>
+          </div>
+          <div class="card">
+            <div class="card-h"><b>Waktu berdzikir</b><span>puncak 05.00</span></div>
+            <div class="hours" id="hours"></div>
+            <div class="hours-ax"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><b>Komposisi</b><span>30 hari</span></div>
+            <div class="comp" id="comp"></div>
+            <div class="comp-l" id="compL"></div>
+          </div>
+          <div class="card">
+            <div class="lvl">
+              <span class="n">7</span>
+              <div style="flex:1">
+                <div style="display:flex;justify-content:space-between;font-size:13px"><b style="font-weight:600">Level 7</b><span class="num" style="color:var(--ink-3)">48.210 / 60.000</span></div>
+                <div class="bar" style="margin-top:8px"><i style="width:68%;background:var(--sand)"></i></div>
+              </div>
+            </div>
+            <div class="badges" style="margin-top:16px">
+              <div class="got"><svg class="ic"><use href="#i-foot"/></svg></div>
+              <div class="got"><svg class="ic"><use href="#i-target"/></svg></div>
+              <div class="got"><svg class="ic"><use href="#i-spark"/></svg></div>
+              <div class="got"><svg class="ic"><use href="#i-star"/></svg></div>
+              <div class="got"><svg class="ic"><use href="#i-sunrise"/></svg></div>
+              <div class="got"><svg class="ic"><use href="#i-flame"/></svg></div>
+              <div class="got"><svg class="ic"><use href="#i-drop"/></svg></div>
+              <div class="lock"><svg class="ic"><use href="#i-flame"/></svg></div>
+              <div class="lock"><svg class="ic"><use href="#i-gem"/></svg></div>
+              <div class="lock"><svg class="ic"><use href="#i-crown"/></svg></div>
+            </div>
+            <p style="font-size:12px;color:var(--ink-3);margin-top:12px">Berikutnya: <span style="color:var(--ink-2)">30 Hari Beruntun</span>, 18 hari lagi</p>
+          </div>
+        </div>
+        <div class="fade-b"></div>
+        <nav class="tabbar">
+          <a><svg class="ic"><use href="#i-circle"/></svg>Tasbih</a>
+          <a class="on"><svg class="ic"><use href="#i-chart"/></svg>Progres</a>
+          <a><svg class="ic"><use href="#i-list"/></svg>Riwayat</a>
+        </nav>
+        <div class="home-ind"></div>
+      </div>
+      <p class="art-note"><strong>Tujuh blok di bawah fold yang sekarang dipangkas jadi empat.</strong> "Pola pekanan" dihapus karena polanya sudah terbaca di kalender. "Paket wirid tuntas" digabung ke ringkasan hari ini dan Riwayat. "Tempo/per menit" dihapus dari UI karena mendorong mengejar kecepatan. Level dan badge disatukan di satu kartu paling bawah.</p>
+    </section>
+
+    <!-- 6. RIWAYAT -->
+    <section class="art">
+      <div class="art-label"><b>06 · Riwayat</b><span>/app/tasbih/riwayat</span></div>
+      <div class="phone">
+        <div class="island"></div>
+        <div class="status"><span>21.12</span><span class="dots"><i></i><i></i></span></div>
+        <div class="scroll">
+          <div class="appbar"><h1>Riwayat</h1></div>
+          <div class="filters"><span class="on">Semua</span><span>Ba'da Shalat</span><span>Istighfar</span><span>Shalawat</span></div>
+          <div class="day-h"><span>HARI INI · KAMIS 19 NOV</span><span class="num">412</span></div>
+          <div class="sess"><time class="num">18.31</time><div><b>Ba'da Shalat</b><span class="pk">Paket · 4 dzikir · 3m 52d</span></div><div class="r"><b class="num ok">100</b><span>tuntas</span></div></div>
+          <div class="sess"><time class="num">12.15</time><div><b>Astaghfirullah</b><span class="pk">2m 10d</span></div><div class="r"><b class="num">80</b><span class="num">/ 100</span></div></div>
+          <div class="sess"><time class="num">12.05</time><div><b>Ba'da Shalat</b><span class="pk">Paket · 4 dzikir · 3m 40d</span></div><div class="r"><b class="num ok">100</b><span>tuntas</span></div></div>
+          <div class="sess"><time class="num">04.58</time><div><b>Ba'da Shalat</b><span class="pk">Paket · 4 dzikir · 4m 02d</span></div><div class="r"><b class="num ok">100</b><span>tuntas</span></div></div>
+          <div class="sess"><time class="num">04.40</time><div><b>Shalawat Nabi</b><span class="pk">Custom · 1m 05d</span></div><div class="r"><b class="num">32</b><span class="num">/ 33</span></div></div>
+          <div class="day-h"><span>RABU · 18 NOV</span><span class="num">520 ✓</span></div>
+          <div class="sess"><time class="num">20.02</time><div><b>Ba'da Shalat</b><span class="pk">Paket · 4 dzikir · 3m 30d</span></div><div class="r"><b class="num ok">100</b><span>tuntas</span></div></div>
+          <div class="sess"><time class="num">18.29</time><div><b>Astaghfirullah</b><span class="pk">3m 12d</span></div><div class="r"><b class="num ok">100</b><span>tuntas</span></div></div>
+        </div>
+        <div class="fade-b"></div>
+        <nav class="tabbar">
+          <a><svg class="ic"><use href="#i-circle"/></svg>Tasbih</a>
+          <a><svg class="ic"><use href="#i-chart"/></svg>Progres</a>
+          <a class="on"><svg class="ic"><use href="#i-list"/></svg>Riwayat</a>
+        </nav>
+        <div class="home-ind"></div>
+      </div>
+      <p class="art-note"><strong>Dikelompokkan per hari, dengan total di kanan header hari.</strong> Tanda ✓ berarti target harian hari itu tercapai. Filter chip memakai <code>dzikir_id</code> yang sudah didukung <code>Riwayat()</code>. Pagination 20 per halaman memakai infinite scroll.</p>
+    </section>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h3>Keputusan utama (rekomendasi)</h3>
+      <ul>
+        <li><b>Tab bar tiga item</b> (Tasbih · Progres · Riwayat) menggantikan navigasi yang sekarang. Saat mode fokus, tab bar disembunyikan.</li>
+        <li><b>Dark sebagai default untuk Tasbih</b>, karena dipakai saat Subuh/malam dan di masjid. Mode terang tetap perlu dibuat dari token yang sama.</li>
+        <li><b>Ungu (secondary) tidak dipakai</b> di modul ini. Cyan dipakai untuk progres, dan warna pasir hanya untuk pencapaian, supaya kedua makna tidak tercampur.</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h3>Trade-off &amp; risiko</h3>
+      <ul>
+        <li><b>Menghapus Tempo dan Pola pekanan</b> mengurangi informasi bagi pengguna yang suka data. Dugaan saya, jumlah mereka kecil di kalangan santri, tetapi belum ada data yang mendukung. Sebaiknya dicek dulu lewat analitik scroll-depth sebelum benar-benar dihapus.</li>
+        <li><b>Gamifikasi tetap berpotensi mengubah niat</b> (riya'/kejar angka). Desain ini meredamnya tetapi tidak menghilangkannya. Pertimbangkan opsi "sembunyikan streak &amp; badge" di pengaturan.</li>
+        <li><b>Insight berbasis aturan</b> bisa terasa menggurui atau salah bila datanya tipis. Karena itu ada ambang minimal 14 hari.</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h3>Belum tercakup</h3>
+      <ul>
+        <li>Mode terang, empty state, dan offline/sync tertunda tidak diminta di putaran ini. Ikon awan di Progres hanya placeholder.</li>
+        <li>Form tambah/ubah dzikir custom dan pengaturan target harian.</li>
+        <li>Layar tablet/desktop. Dashboard yang sekarang memakai container query <code>@xl/@4xl</code>.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+// Data ilustrasi deterministik (bukan data asli)
+let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646};
+
+// Ring 33 butir
+(function(){
+  const n=33, done=21, R=128, c=145;
+  let s='<svg viewBox="0 0 290 290" width="290" height="290" aria-hidden="true">';
+  s+=`<circle cx="${c}" cy="${c}" r="${R}" fill="none" stroke="rgba(165,243,252,.06)" stroke-width="1"/>`;
+  for(let i=0;i<n;i++){
+    const a=-Math.PI/2+i*2*Math.PI/n, x=c+R*Math.cos(a), y=c+R*Math.sin(a);
+    const cur=i===done, d=i<done;
+    s+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${cur?8:5.5}" fill="${d?'#67e8f9':cur?'#e8f3f5':'#10313c'}" ${d?'opacity=".85"':''}/>`;
+  }
+  s+='</svg><div class="ring-center"><div><div class="big num">21</div><div class="of num">dari 33</div></div></div>';
+  document.getElementById('ring').innerHTML=s;
+})();
+
+// Ring hari ini
+(function(){
+  const p=412/500, r=50, C=2*Math.PI*r;
+  document.getElementById('todayRing').innerHTML=`<svg viewBox="0 0 116 116" width="116" height="116"><circle cx="58" cy="58" r="${r}" fill="none" stroke="#10313c" stroke-width="9"/><circle cx="58" cy="58" r="${r}" fill="none" stroke="#67e8f9" stroke-width="9" stroke-linecap="round" stroke-dasharray="${C*p} ${C}" transform="rotate(-90 58 58)"/><text x="58" y="63" text-anchor="middle" fill="#e8f3f5" font-size="17" font-weight="600" font-family="Inter">${Math.round(p*100)}%</text></svg>`;
+})();
+
+// Tren 30 hari
+(function(){
+  const W=318,H=92,n=30,t=500,gap=3,bw=(W-gap*(n-1))/n;let s=`<svg viewBox="0 0 ${W} ${H+4}" width="100%" aria-label="Tren harian 30 hari">`;
+  const ty=H-(t/800)*H;
+  for(let i=0;i<n;i++){
+    let v=i%7===5? (rnd()<.6?0:120*rnd()) : 250+rnd()*450; if(i===n-1)v=412;
+    const h=Math.max(v/800*H,v?3:2), x=i*(bw+gap), hit=v>=t;
+    s+=`<rect x="${x.toFixed(1)}" y="${(H-h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${v===0?'#10313c':'#67e8f9'}" opacity="${hit?1:.35}"/>`;
+  }
+  s+=`<line x1="0" x2="${W}" y1="${ty}" y2="${ty}" stroke="#e7c98f" stroke-dasharray="3 4" stroke-width="1" opacity=".7"/><text x="${W}" y="${ty-5}" text-anchor="end" fill="#e7c98f" font-size="10" font-family="Inter" opacity=".9">target 500</text></svg>`;
+  document.getElementById('trend').innerHTML=s;
+})();
+
+// Heatmap 17 pekan (kolom = pekan, baris = hari), diisi per kolom
+(function(){
+  const el=document.getElementById('heat');const cols=17,rows=7;const cells=[];
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    let v=rnd(); if(r===5&&v<.5)v=0; if(c<3)v*=.6;
+    const lv=v<.12?0:v<.35?1:v<.6?2:3;
+    cells.push(`<i style="background:${['#10313c','rgba(103,232,249,.3)','rgba(103,232,249,.6)','#67e8f9'][lv]}"></i>`);
+  }
+  el.innerHTML=cells.join('');
+})();
+
+// Jam
+(function(){
+  const v=[2,1,1,3,22,30,10,4,3,3,4,6,18,8,5,14,6,9,24,12,10,7,4,2];
+  const m=Math.max(...v);
+  document.getElementById('hours').innerHTML=v.map(x=>`<i class="${x>=18?'hi':''}" style="height:${Math.max(x/m*100,4)}%"></i>`).join('');
+})();
+
+// Komposisi
+(function(){
+  const d=[["Ba'da Shalat (paket)",5400,'#67e8f9'],['Astaghfirullah',2310,'rgba(103,232,249,.6)'],['Shalawat Nabi',1240,'rgba(103,232,249,.38)'],['Lainnya',890,'#2a4d58']];
+  const t=d.reduce((a,b)=>a+b[1],0);
+  document.getElementById('comp').innerHTML=d.map(x=>`<span style="flex:${x[1]};background:${x[2]}"></span>`).join('');
+  document.getElementById('compL').innerHTML=d.map(x=>`<div><i style="background:${x[2]}"></i>${x[0]}<b class="num">${Math.round(x[1]/t*100)}%</b></div>`).join('');
+})();
+</script>
+</body>
+</html>
