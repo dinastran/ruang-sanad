@@ -111,23 +111,18 @@ func (h *TasbihHandler) Dashboard(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	items, adaLagi, err := h.tasbih.Riwayat(ctx, uid, 1, nil)
-	if err != nil {
-		return err
-	}
 	dzikir, _, err := h.tasbih.Katalog(ctx, uid)
 	if err != nil {
 		return err
 	}
 	return h.inertiaService.Render(c, "app/tasbih/Dashboard", fiber.Map{
 		"user": sessionUser(sess), "dashboard": dash, "badges": badges,
-		"riwayat": fiber.Map{"items": items, "ada_lagi": adaLagi},
-		"dzikir":  dzikir, "target_harian": dash.HariIni.Target, "badge_baru": h.badgeBaru(c),
+		"dzikir": dzikir, "target_harian": dash.HariIni.Target, "badge_baru": h.badgeBaru(c),
 	})
 }
 
 func (h *TasbihHandler) Riwayat(c *fiber.Ctx) error {
-	uid, _ := h.userID(c)
+	uid, sess := h.userID(c)
 	if uid == 0 {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
@@ -136,11 +131,30 @@ func (h *TasbihHandler) Riwayat(c *fiber.Ctx) error {
 	if v, err := strconv.ParseInt(c.Query("dzikir_id"), 10, 64); err == nil && v > 0 {
 		dzikirID = &v
 	}
-	items, adaLagi, err := h.tasbih.Riwayat(c.UserContext(), uid, halaman, dzikirID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "gagal memuat riwayat"})
+	ctx := c.UserContext()
+	items, adaLagi, err := h.tasbih.Riwayat(ctx, uid, halaman, dzikirID)
+	if wantsJSON(c) {
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "gagal memuat riwayat"})
+		}
+		return c.JSON(fiber.Map{"items": items, "ada_lagi": adaLagi})
 	}
-	return c.JSON(fiber.Map{"items": items, "ada_lagi": adaLagi})
+	// Navigasi biasa/Inertia: render halaman Riwayat (halaman 1, tanpa filter).
+	if err != nil {
+		return err
+	}
+	dzikir, _, err := h.tasbih.Katalog(ctx, uid)
+	if err != nil {
+		return err
+	}
+	return h.inertiaService.Render(c, "app/tasbih/Riwayat", fiber.Map{
+		"user": sessionUser(sess), "riwayat": fiber.Map{"items": items, "ada_lagi": adaLagi}, "dzikir": dzikir,
+	})
+}
+
+// wantsJSON: fetch() pagination riwayat (Accept: application/json, tanpa header X-Inertia).
+func wantsJSON(c *fiber.Ctx) bool {
+	return c.Get("X-Inertia") == "" && strings.Contains(c.Get(fiber.HeaderAccept), fiber.MIMEApplicationJSON)
 }
 
 type tasbihSyncReq struct {

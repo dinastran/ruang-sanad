@@ -53,6 +53,19 @@
     --color-secondary-900: #581c87;
     --color-secondary-950: #3b0764;
 
+    /* Sand: khusus pencapaian (streak, level, badge) di modul Tasbih */
+    --color-sand-50:  #fbf7ee;
+    --color-sand-100: #f5ecd6;
+    --color-sand-200: #ecdcb3;
+    --color-sand-300: #e7c98f;
+    --color-sand-400: #d9b26a;
+    --color-sand-500: #c4954a;
+    --color-sand-600: #a5773a;
+    --color-sand-700: #845c30;
+    --color-sand-800: #5f432a;
+    --color-sand-900: #3d2c1d;
+    --color-sand-950: #241a11;
+
     /* Neutral: cool navy-tinted grays — never pure black/white */
     --color-neutral-50:  #f8fafc;
     --color-neutral-100: #f1f5f9;

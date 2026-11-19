@@ -68,6 +68,7 @@ func tasbihReq(t *testing.T, app *fiber.App, method, path, body string, uid int6
 	t.Helper()
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Test-User", fmt.Sprint(uid))
 	req.Header.Set("X-Test-Role", role)
 	resp, err := app.Test(req, -1)
@@ -126,6 +127,35 @@ func TestTasbihRiwayatScopedUser(t *testing.T) {
 	require.Equal(t, 200, status)
 	require.Len(t, out["items"], 1)
 	require.Equal(t, false, out["ada_lagi"])
+}
+
+// Navigasi Inertia ke /app/tasbih/riwayat merender halaman, bukan JSON pagination.
+func TestTasbihRiwayatHalamanInertia(t *testing.T) {
+	app, db := setupTasbihApp(t)
+	a := tasbihUser(t, db, "a@test.local", "user")
+	status, _ := tasbihReq(t, app, "POST", "/app/tasbih/sync", `{"sesi":[`+sesiJSON("00000000-0000-4000-8000-000000000010", 1)+`]}`, a, "user")
+	require.Equal(t, 200, status)
+
+	req := httptest.NewRequest("GET", "/app/tasbih/riwayat", nil)
+	req.Header.Set("X-Inertia", "true")
+	req.Header.Set("Accept", "text/html, application/xhtml+xml")
+	req.Header.Set("X-Test-User", fmt.Sprint(a))
+	req.Header.Set("X-Test-Role", "user")
+	resp, err := app.Test(req, -1)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, 200, resp.StatusCode)
+	raw, _ := io.ReadAll(resp.Body)
+	var page struct {
+		Component string         `json:"component"`
+		Props     map[string]any `json:"props"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &page), string(raw))
+	require.Equal(t, "app/tasbih/Riwayat", page.Component)
+	riwayat, ok := page.Props["riwayat"].(map[string]any)
+	require.True(t, ok)
+	require.Len(t, riwayat["items"], 1)
+	require.NotNil(t, page.Props["dzikir"])
 }
 
 func TestRoleHomeUser(t *testing.T) {
