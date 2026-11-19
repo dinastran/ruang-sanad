@@ -64,10 +64,28 @@ Kenapa sekarang:
 - Tahap `data_terisi`, `info_bayar_dikirim`, `bukti_masuk` memicu event Meta
   CAPI. `terverifikasi` hanya bisa dicapai lewat `VerifyPayment`
   (`lead_closing.go:31`), bukan `ChangeStage`.
-- Lead sudah punya `program_id` (→ `lead_programs` → `produk.harga`),
+- Tahap lain digeser oleh worker `MetaCAPIService.reconcile` (meta_capi.go),
+  yang membaca `lead_events` perubahan tahap dan menjadwalkan event
+  CompleteRegistration / InitiateCheckout / AddPaymentInfo. `mutateLeadAs`
+  sendiri tidak menulis ke `meta_capi_events`.
+- **Purchase** saat ini hanya di-enqueue saat konversi (`Convert`
+  lead_closing.go, `DaftarkanPeserta` lead_program.go) lewat `enqueuePurchase`,
+  bukan saat `VerifyPayment`.
+- `VerifyPayment` hanya menerima lead `open` di tahap `bukti_masuk`
+  (atau `info_bayar_dikirim` + `NoProof`), dan mengisi `VerifiedBy` dengan
+  user id + tanggal yang diketik staf. Belum bisa dipanggil oleh sistem.
+- Lead sudah punya `program_id` (→ `lead_programs.produk_id`, **boleh NULL**;
+  program bawaan Tahsin Reguler id 1 belum punya produk), `paket_kode`
+  (`1x`/`2x` → `kelas_kode` via `crm_settings.paket_ke_kelas_kode`),
   `jadwal_kode` (→ `jadwal_penawaran`, kuota per gender), `payment_amount`,
-  `proof_received_at`, `verified_at`.
+  `proof_received_at`, `verified_at`. Nominal Reguler hari ini diketik CS di
+  chat (`ParseRupiah` di lead_ingest.go).
+- `produk` (0036, 0056): `nama`, `kategori` CHECK IN (`buku`, `program`),
+  satu `harga`, punya `produk_batch`. CRUD sudah ada di `/app/produk-crm`.
 - `jadwal_penawaran`: `is_buka`, `kuota_per_gender`, `level`, `hari`, jam.
+  Kursi terpakai = lead dengan `verified_at` terisi dan status open/won
+  (`ListVerifiedLeadSeats`). Tidak ada penahanan kursi.
+- Chat WA format `@lid` tidak membawa nomor HP (`phoneFromChatID` → "").
 - Upload yang ada (`upload.go`) adalah TUS untuk user login. Upload bukti di
   form publik butuh endpoint sendiri yang dibatasi.
 - Frontend Svelte 5 + Inertia. Token warna di `frontend/src/app.css` `@theme`.
@@ -102,14 +120,38 @@ vendor = satu implementasi baru.
 
 ## 5. Design
 
+### 5.0 Produk & varian harga (dinamis)
+
+Harga pendaftaran berasal dari **produk**, bukan diketik. Admin bisa membuat
+produk apa saja (Tahsin Reguler, Tahfidz, program pendek, kelas anak, dll.)
+lewat menu Produk CRM yang sudah ada, ditambah **varian harga**:
+
+- Produk tanpa varian aktif → harga = `produk.harga`.
+- Produk dengan ≥ 1 varian aktif → pendaftar memilih varian di form, harga =
+  `produk_varian.harga`.
+- Varian boleh membawa `paket_kode` (mis. `1x`/`2x`) yang disalin ke
+  `leads.paket_kode`, sehingga mapping ke `kelas_kode` lama tetap jalan.
+- Program (`lead_programs`) yang dipakai link pendaftaran **wajib** punya
+  `produk_id`. Admin menautkan Tahsin Reguler ke produk "Tahsin Reguler"
+  lewat UI program yang ada. Tidak ada seed harga (harga diisi admin).
+- Kategori produk tetap `buku`/`program`. Produk pendaftaran memakai
+  `program`, jadi tidak perlu rebuild tabel untuk CHECK.
+
 ### 5.1 Data model (migrasi baru, satu tabel per file)
+
+**`produk_varian`**
+- `id`, `produk_id` → `produk` (CASCADE), `nama` (mis. "1x / pekan"),
+  `harga` INTEGER ≥ 0, `paket_kode` TEXT default '', `urutan`, `is_aktif`,
+  `created_at`, `updated_at`
 
 **`registration_links`**
 - `id`, `slug` TEXT UNIQUE (huruf kecil, angka, `-`), `judul`, `deskripsi`
-- `program_id` → `lead_programs` (wajib)
+- `program_id` → `lead_programs` (wajib; program harus punya `produk_id`)
+- `lead_source_id` → `lead_sources` (wajib; dipakai laporan iklan & atribusi)
 - `mode` TEXT CHECK IN (`wa`, `short`, `full`)
 - `after_submit` TEXT CHECK IN (`wa`, `bayar`) — diabaikan bila mode = `wa`
-- `nominal_override` INTEGER NULL. NULL = pakai `produk.harga` program.
+- `nominal_override` INTEGER NULL. NULL = harga varian/produk (§5.0).
+  Override berlaku untuk semua varian (mis. harga promo flat).
 - `field_config` TEXT JSON: per field opsional `{"tampil":bool,"wajib":bool}`.
   Field inti (nama, no WA) selalu tampil & wajib.
 - `wa_template` TEXT: template pesan pembuka ke CS, dengan placeholder
@@ -127,19 +169,24 @@ vendor = satu implementasi baru.
   `created_at`
 
 **`payments`**
-- `id`, `lead_id`, `link_id` NULL, `metode` TEXT (`gateway` | `manual`)
+- `id`, `lead_id`, `link_id` NULL, `produk_varian_id` NULL,
+  `metode` TEXT (`gateway` | `manual`)
 - `provider` (`xendit`), `external_id` UNIQUE (dibuat kita), `provider_ref`
   (invoice id), `checkout_url`
 - `amount`, `status` CHECK IN (`pending`, `paid`, `expired`, `failed`,
   `menunggu_verifikasi`, `ditolak`)
 - `paid_at`, `expires_at`, `channel` (QRIS/OVO/BCA_VA…, dari webhook)
+- `jadwal_kode`, `jenis_kelamin` (snapshot untuk penahanan kursi, §5.3)
+- `perlu_tinjau` INTEGER + `catatan_sistem` (lunas tapi lead tidak bisa
+  diverifikasi otomatis, atau kursi kelebihan)
 - `bukti_path` (manual), `raw_webhook` JSON terakhir
 - `created_at`, `updated_at`
 - Dirancang generik (bukan khusus lead), supaya proyek 2 bisa menambahkan
   kolom `tagihan_id` lewat migrasi baru.
 
 **`crm_settings`** (migrasi tambah kolom)
-- `cs_wa_number` (nomor tujuan wa.me), `payment_expiry_hours` (default 24),
+- `cs_wa_number` (nomor tujuan wa.me), `payment_expiry_hours` (default **2**,
+  pendek karena kursi ditahan selama tagihan aktif),
   `bank_manual_info` (teks rekening untuk transfer manual).
 - Kredensial Xendit (secret key, webhook token) di **env/config**, bukan DB.
 
@@ -158,15 +205,17 @@ Route publik (tanpa login, di luar `/app`):
 **Mode `wa`:** `GET /daftar/:slug` mencatat klik lalu redirect 302 ke
 `https://wa.me/<cs_wa_number>?text=<wa_template>`. Tidak ada form.
 
-**Short form:** nama, no WA, gender, usia, domisili, pilihan paket (bila program
-punya >1), jadwal.
+**Short form:** nama, no WA, gender, usia, domisili, pilihan varian (bila
+produk punya >1 varian aktif), jadwal (**hanya untuk program jenis `reguler`**;
+program jenis `program` memakai sesi/batch, sehingga tidak ada pilihan jadwal).
 **Full form:** short + riwayat belajar, belajar di mana, untuk siapa, waktu
 belajar. Field opsional mengikuti `field_config`.
 
 **Pilihan jadwal:** hanya `jadwal_penawaran` dengan `is_buka = 1` yang sisa
-kuotanya untuk gender terpilih > 0. Sisa kuota dihitung dengan definisi
-okupansi yang sudah dipakai fitur jadwal penawaran (builder memakai ulang
-fungsinya, bukan menulis rumus baru). Daftar jadwal dimuat ulang setelah gender
+kuotanya untuk gender terpilih > 0. Sisa kuota = kuota − (kursi terverifikasi
+menurut definisi yang sudah ada) − (kursi **ditahan**: `payments` status
+`pending` yang belum kedaluwarsa dengan `jadwal_kode` + `jenis_kelamin` sama).
+Builder memperluas fungsi okupansi yang ada, bukan menulis rumus kedua. Daftar jadwal dimuat ulang setelah gender
 dipilih. Kuota dicek ulang di server saat submit; bila penuh → error ramah +
 minta pilih jadwal lain.
 
@@ -184,16 +233,29 @@ tagihan baru) supaya pendaftar bisa kembali lewat link yang sama.
 ### 5.3 Alur lead (service)
 
 `RegistrationService.Submit(slug, input, meta)`:
-1. Validasi input + honeypot + rate limit. Normalisasi nomor
-   (`08…`/`+62…`/`62…` → `62…`), lalu `wa_chat_id = <nomor>@s.whatsapp.net`.
-2. Dalam satu transaksi: cari lead by `wa_chat_id`.
-   - Tidak ada → buat lead baru (`source = form`).
+1. Validasi input + honeypot + rate limit. Normalisasi nomor dengan
+   `NormalizeLeadPhone` (`08…`/`+62…`/`62…` → `62…`).
+2. Dalam satu transaksi: cari lead by `wa_chat_id = <nomor>@s.whatsapp.net`,
+   lalu fallback by `leads.phone` (perlu index baru pada `phone`).
+   - Tidak ada → buat lead baru dengan `wa_chat_id = <nomor>@s.whatsapp.net`,
+     `source = form`, `lead_source_id` dari link.
    - Ada, status `open` → update field yang **kosong** saja (data dari CS/AI
-     tidak ditimpa), lalu set `program_id`/`jadwal_kode` bila kosong.
-   - Ada, status `won`/`lost`/`do_not_contact` → lihat §8 (keputusan builder).
+     tidak ditimpa), lalu set `program_id`/`paket_kode`/`jadwal_kode` bila kosong.
+   - Ada, status `lost` → buka kembali (`open`) + event `lead.reopened` dengan
+     actor form, lalu lanjut seperti `open`.
+   - Ada, status `won` (sudah santri) atau `do_not_contact` → tidak membuat
+     lead baru, tidak mengubah tahap. Submit dicatat di `lead_registrations`,
+     lead diberi `needs_review = 1`, dan pendaftar diarahkan ke WA CS
+     (bukan halaman bayar).
+   - Batas yang diterima: bila orang yang sama chat dari akun WA `@lid`
+     (tanpa nomor), bridge bisa membuat lead kedua. Tidak diselesaikan di
+     proyek ini. Pesan pembuka WA dari form membawa `L-<id>`, sehingga CS/AI
+     bisa menautkannya. Kasus ini dicatat sebagai risiko.
 3. Geser tahap ke `data_terisi` bila tahap saat ini lebih awal (jangan pernah
-   mundur), lewat `mutateLeadAs` dengan actor `form:<link_id>`, sehingga
-   `lead_events` + Meta CAPI ikut seperti biasa.
+   mundur), lewat `mutateLeadAs` dengan actor `form:<link_id>`. `lead_events`
+   tertulis, dan worker CAPI `reconcile` mengirim CompleteRegistration seperti
+   tahap manual. Submit yang ditolak anti-spam tidak pernah menyentuh lead,
+   sehingga tidak ada event CAPI palsu.
 4. Tulis `lead_registrations`, increment `submit` di stats.
 5. Bila `after_submit = bayar`: set tahap `info_bayar_dikirim` dan
    `payment_amount`.
@@ -201,8 +263,14 @@ tagihan baru) supaya pendaftar bisa kembali lewat link yang sama.
 `PaymentService`:
 - `CreateGatewayInvoice(leadID)`: bila ada payment `pending` yang belum
   kedaluwarsa → kembalikan `checkout_url`-nya (jangan buat ganda). Kalau tidak,
-  buat `payments` row + panggil `PaymentGateway.CreateInvoice(external_id,
-  amount, deskripsi, expiry, success/failure redirect URL)`.
+  dalam satu transaksi: cek ulang sisa kursi (jadwal + gender). Penuh → tolak
+  dan minta pilih jadwal lain. Ada → buat `payments` row (snapshot
+  `jadwal_kode`, `jenis_kelamin`; ini yang **menahan kursi**). Lalu panggil
+  `PaymentGateway.CreateInvoice(external_id, amount, deskripsi, expiry,
+  success/failure redirect URL)`. Bila panggilan gateway gagal → payment
+  `failed`, kursi lepas.
+- Kursi dilepas otomatis saat `expires_at` lewat (query okupansi mengabaikan
+  pending yang kedaluwarsa, sehingga tidak bergantung pada webhook EXPIRED).
 - `HandleWebhook(headers, body)`:
   1. Verifikasi `x-callback-token` == token config (constant-time compare).
      Gagal → 401, tidak ada efek.
@@ -210,11 +278,26 @@ tagihan baru) supaya pendaftar bisa kembali lewat link yang sama.
   3. Idempoten: status sudah `paid` → 200 tanpa efek.
   4. Cocokkan `amount` dengan record. Beda → tandai `failed` + notifikasi admin,
      **jangan** verifikasi.
-  5. Status `PAID`/`SETTLED` → `payments.status = paid`, lalu panggil jalur
-     verifikasi lead yang sama dengan `VerifyPayment` (refactor inti
-     verifikasinya menjadi fungsi bersama yang bisa dipanggil dengan actor
-     sistem `gateway:xendit`). Lead → `terverifikasi`, CAPI Purchase ikut.
-     Increment `bayar` di stats.
+  5. Status `PAID`/`SETTLED` → `payments.status = paid`, increment `bayar`.
+     Lalu verifikasi lead lewat **inti verifikasi bersama** (refactor dari
+     `VerifyPayment`): fungsi yang menerima actor string (`user:<id>` atau
+     `gateway:xendit`), nominal, dan tanggal, dipakai oleh tombol staf maupun
+     webhook. Untuk actor sistem, `verified_by` NULL dan actor tercatat di
+     `lead_events`.
+     - Lead `open` di tahap mana pun sebelum `terverifikasi` → `terverifikasi`.
+       Pembayaran gateway adalah bukti, sehingga syarat tahap `bukti_masuk`
+       hanya berlaku untuk jalur staf.
+     - Lead tidak `open`, atau sudah terverifikasi → **jangan** ubah lead;
+       payment tetap `paid` + `perlu_tinjau = 1` + notifikasi keuangan.
+     - **Purchase dikirim saat uang masuk** (keputusan user):
+       `enqueuePurchase` dipanggil di sini dengan nominal dari payment.
+       Event id Purchase sudah deterministik per lead
+       (`metaEventID(id, MetaEventPurchase)`, lead_closing.go) dan insert-nya
+       INSERT OR IGNORE, sehingga `Convert` / `DaftarkanPeserta` yang memanggil
+       `enqueuePurchase` lagi tidak membuat event ganda.
+     - Re-cek kursi: bila jadwal ternyata penuh (mis. kuota diturunkan admin),
+       pembayaran tetap diterima, lead tetap terverifikasi, payment
+       `perlu_tinjau = 1` + notifikasi koordinator ("kursi kelebihan").
   6. `EXPIRED` → `payments.status = expired`.
   Semua langkah dalam satu transaksi DB.
 - `SubmitManualProof(ref, file)`: simpan file, `payments(metode=manual,
@@ -227,6 +310,8 @@ tagihan baru) supaya pendaftar bisa kembali lewat link yang sama.
 Handler terpisah `app/handlers/registration_links.go`. Menu di bawah **Leads**:
 "Link Pendaftaran". Role: `super_admin` + role yang sudah boleh mengelola
 sumber/program lead (ikuti `programRole`).
+- Produk CRM: tambah kelola **varian harga** per produk (nama, harga,
+  paket_kode, urutan, aktif).
 - Daftar link: judul, mode, program, nominal, status, klik/submit/bayar 30 hari
   + rasio konversi, tombol salin link & buka.
 - Form buat/ubah link + **pratinjau langsung** di sisi kanan (desktop) /
@@ -264,11 +349,15 @@ Pendaftaran akun & KYC Xendit dikerjakan paralel oleh lembaga selama fase 1a.
 
 ### 5.7 Testing
 
-- Service test (SQLite in-memory): dedup per nomor (berbagai format),
-  tidak menimpa data CS, tahap tidak mundur, kuota penuh ditolak,
-  nominal override vs harga produk.
+- Service test (SQLite in-memory): dedup per nomor (berbagai format, match
+  via `phone`), tidak menimpa data CS, tahap tidak mundur, lead won/DNC tidak
+  disentuh, lead lost dibuka kembali, kuota penuh ditolak, kursi ditahan oleh
+  pending dan lepas setelah kedaluwarsa, harga: override > varian > produk.
 - Webhook: token salah → 401; replay → tanpa efek ganda; amount beda → tidak
-  verifikasi; PAID → lead terverifikasi + satu event CAPI Purchase.
+  verifikasi; PAID → lead terverifikasi + tepat satu event CAPI Purchase,
+  dan Convert sesudahnya tidak menambah Purchase kedua; PAID untuk lead lost →
+  payment perlu_tinjau, lead tidak berubah.
+- Regresi: tombol Verifikasi staf tetap berperilaku sama setelah refactor.
 - Gateway di-stub lewat interface `PaymentGateway` (tidak ada panggilan
   jaringan di test).
 - E2E agent_browser: isi short form → lanjut WA; isi → bayar manual → upload.
@@ -282,11 +371,23 @@ Pendaftaran akun & KYC Xendit dikerjakan paralel oleh lembaga selama fase 1a.
 - Pakai payment gateway. Xendit dipilih, hosted checkout, QRIS default.
 - Gateway untuk pendaftaran dulu; SPP menyusul (proyek 2).
 - Urutan proyek: form + pembayaran → SPP gateway → affiliate.
+- Harga dinamis lewat **produk** yang bisa dibuat admin (bukan hanya Tahsin),
+  dengan varian harga.
+- Lunas via gateway → lead `terverifikasi` otomatis, konversi ke santri tetap
+  manual, **CAPI Purchase dikirim saat uang masuk**.
+- Kursi **ditahan** selama tagihan aktif, masa tagihan 2 jam. Kelebihan tetap
+  diterima + tanda untuk koordinator.
 
 ## 7. Keputusan Claude (bisa dikoreksi)
 
-- Nominal = `produk.harga` program, dengan `nominal_override` per link.
-- Masa berlaku invoice 24 jam (diatur di `crm_settings`).
+- Harga: `nominal_override` link > `produk_varian.harga` > `produk.harga`.
+- Varian harga sebagai tabel baru `produk_varian`, bukan banyak produk.
+- Lead won/DNC yang submit ulang: tidak diubah, ditandai tinjau, diarahkan ke WA.
+  Lead lost: dibuka kembali.
+- Dedup juga via `leads.phone`. Kasus chat `@lid` diterima sebagai risiko.
+- Pembayaran gateway untuk lead yang tidak open → dicatat lunas + perlu tinjau.
+- Program pendek tidak menampilkan jadwal.
+- Setiap link wajib punya `lead_source_id`.
 - Transfer manual + upload bukti tetap tersedia sebagai cadangan (per link).
 - Form tidak menimpa field lead yang sudah terisi.
 - Kredensial gateway di env, bukan DB.
@@ -294,13 +395,13 @@ Pendaftaran akun & KYC Xendit dikerjakan paralel oleh lembaga selama fase 1a.
 
 ## 8. Diserahkan ke builder
 
-- Perilaku bila nomor sudah jadi lead `won`/`lost`/`do_not_contact` (lihat
-  pertanyaan terbuka di bawah).
 - Struktur komponen Svelte, nama route admin, detail UI mengikuti
   design principles + token `app.css`.
 - Mekanisme cache dedup klik.
 - Detail mapping status Xendit → `payments.status`.
 
-## 9. Pertanyaan terbuka
+## 9. Risiko yang diterima
 
-(diisi setelah builder check)
+- Lead ganda bila orang yang sama chat dari akun WA `@lid` setelah mengisi form.
+- Angka klik indikatif (dedup in-memory hilang saat restart).
+- Settlement gateway tidak instan; dana mengendap di saldo Xendit.
