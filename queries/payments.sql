@@ -48,3 +48,10 @@ WHERE id = ? AND status != 'paid';
 SELECT p.lead_id, p.jadwal_kode, p.jenis_kelamin FROM payments p JOIN leads l ON l.id = p.lead_id
 WHERE p.metode = 'gateway' AND p.status = 'pending' AND p.expires_at > sqlc.arg(now)
   AND p.jadwal_kode != '' AND l.verified_at IS NULL;
+
+-- name: FailPaymentForReview :execrows
+UPDATE payments SET status = 'failed', perlu_tinjau = 1, catatan_sistem = ?, raw_webhook = ?, updated_at = ?
+WHERE id = ? AND status = 'pending';
+
+-- name: FlagPaymentReview :exec
+UPDATE payments SET perlu_tinjau = 1, catatan_sistem = ?, updated_at = ? WHERE id = ?;

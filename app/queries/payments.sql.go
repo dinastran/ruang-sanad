@@ -130,6 +130,46 @@ func (q *Queries) CreatePayment(ctx context.Context, arg CreatePaymentParams) (P
 	return i, err
 }
 
+const failPaymentForReview = `-- name: FailPaymentForReview :execrows
+UPDATE payments SET status = 'failed', perlu_tinjau = 1, catatan_sistem = ?, raw_webhook = ?, updated_at = ?
+WHERE id = ? AND status = 'pending'
+`
+
+type FailPaymentForReviewParams struct {
+	CatatanSistem string
+	RawWebhook    string
+	UpdatedAt     time.Time
+	ID            int64
+}
+
+func (q *Queries) FailPaymentForReview(ctx context.Context, arg FailPaymentForReviewParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, failPaymentForReview,
+		arg.CatatanSistem,
+		arg.RawWebhook,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const flagPaymentReview = `-- name: FlagPaymentReview :exec
+UPDATE payments SET perlu_tinjau = 1, catatan_sistem = ?, updated_at = ? WHERE id = ?
+`
+
+type FlagPaymentReviewParams struct {
+	CatatanSistem string
+	UpdatedAt     time.Time
+	ID            int64
+}
+
+func (q *Queries) FlagPaymentReview(ctx context.Context, arg FlagPaymentReviewParams) error {
+	_, err := q.db.ExecContext(ctx, flagPaymentReview, arg.CatatanSistem, arg.UpdatedAt, arg.ID)
+	return err
+}
+
 const getActiveGatewayPaymentByLead = `-- name: GetActiveGatewayPaymentByLead :one
 SELECT id, lead_id, link_id, produk_varian_id, metode, provider, external_id, provider_ref, checkout_url, amount, status, paid_at, expires_at, channel, bukti_path, raw_webhook, jadwal_kode, jenis_kelamin, perlu_tinjau, catatan_sistem, created_at, updated_at FROM payments
 WHERE lead_id = ? AND metode = 'gateway' AND status = 'pending' AND checkout_url != '' AND expires_at > ?2
