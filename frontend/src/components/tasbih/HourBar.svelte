@@ -4,11 +4,13 @@
 
 	interface Props {
 		data: number[]; // 24 jam WIB
+		tinggi?: number;
 	}
-	let { data }: Props = $props();
+	let { data, tinggi = 130 }: Props = $props();
 	let lebarBox = $state(480);
 	const W = $derived(Math.max(lebarBox, 240));
-	const H = 130, PB = 20, PT = 8;
+	const H = $derived(tinggi);
+	const PB = 20, PT = 8;
 	const max = $derived(Math.max(...data, 1));
 	const lebar = $derived((W - 8) / 24);
 	const puncak = $derived(data.indexOf(Math.max(...data)));

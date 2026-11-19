@@ -3,22 +3,20 @@
 	import { fade, scale } from "svelte/transition";
 	import { inertia, router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
-	import { BarChart3, ChevronDown, Flame, Maximize2, Minimize2, RotateCcw, Settings2, Undo2, CheckCheck, Pencil } from "lucide-svelte";
-	import ProgressRing from "@components/tasbih/ProgressRing.svelte";
-	import BeadStrip from "@components/tasbih/BeadStrip.svelte";
+	import { Check, ChevronDown, Flame, ListOrdered, Maximize2, Minimize2, RotateCcw, Settings2, Undo2, CheckCheck, Pencil } from "lucide-svelte";
+	import BeadCircle from "@components/tasbih/BeadCircle.svelte";
 	import SyncIndicator from "@components/tasbih/SyncIndicator.svelte";
 	import BadgeToast from "@components/tasbih/BadgeToast.svelte";
 	import DzikirPicker from "@components/tasbih/DzikirPicker.svelte";
 	import DzikirFormSheet from "@components/tasbih/DzikirFormSheet.svelte";
 	import Sheet from "@components/tasbih/Sheet.svelte";
 	import InstallBanner from "@components/pwa/InstallBanner.svelte";
-	import KomposisiBar from "@components/tasbih/KomposisiBar.svelte";
 	import { TasbihCounter } from "@lib/tasbih/counter.svelte";
 	import { antreanSemua, setPemilik } from "@lib/tasbih/db";
 	import { mulaiAutoSync, syncSekarang } from "@lib/tasbih/sync.svelte";
 	import { bacaPref, getar, klik, kunciLayar, simpanPref } from "@lib/tasbih/feedback";
 	import { tanggalWIB } from "@lib/tasbih/types";
-	import type { Badge, Dzikir, HariIni, Level, Paket, Streak, SyncHasil } from "@lib/tasbih/types";
+	import type { Badge, Dzikir, HariIni, Paket, Streak, SyncHasil } from "@lib/tasbih/types";
 	import type { User } from "@lib/types";
 
 	interface Props {
@@ -28,12 +26,10 @@
 		hari_ini: HariIni;
 		target_harian: number;
 		streak: Streak;
-		level: Level;
 		badge_baru: Badge[];
-		komposisi_hari_ini?: Komposisi[];
 	}
-	type Komposisi = { dzikir_id: number; latin: string; total: number };
-	let { user, dzikir, paket, hari_ini, target_harian, streak, level, badge_baru, komposisi_hari_ini }: Props = $props();
+	// level & komposisi_hari_ini tetap dikirim server; di layar hitung sengaja tidak ditampilkan (ada di Progres).
+	let { user, dzikir, paket, hari_ini, target_harian, streak, badge_baru }: Props = $props();
 
 	// Antrean offline dipisah per user (perangkat bersama).
 	if (user?.id) setPemilik(user.id);
@@ -93,43 +89,14 @@
 	const totalHariIni = $derived(serverHariIni.total + antreanHariIni + jumlahSesi);
 	const progressHarian = $derived(target_harian > 0 ? Math.min(totalHariIni / target_harian, 1) : 0);
 	const streakTampil = $derived(streak.saat + (!streak.hari_ini_tercapai && totalHariIni >= target_harian ? 1 : 0));
-	const levelProgress = $derived(
-		level.ambang_berikut > 0 ? Math.min((level.total - level.ambang_ini) / (level.ambang_berikut - level.ambang_ini), 1) : 1,
-	);
 	const adaSheetTerbuka = $derived(pickerOpen || formOpen || pengaturanOpen || targetOpen || ringkasanOpen);
 
-	// Komposisi hari ini = data server + antrean lokal belum tersinkron + sesi berjalan.
-	let komposisiServer = $state<Komposisi[]>(komposisi_hari_ini ?? []);
-	let lokalPerDzikir = $state<Record<number, number>>({});
-	const komposisi = $derived.by(() => {
-		const m = new Map<number, Komposisi>();
-		for (const k of komposisiServer) m.set(k.dzikir_id, { ...k });
-		const tambahKe = (id: number, n: number) => {
-			if (!n) return;
-			const cur = m.get(id) ?? { dzikir_id: id, latin: dzikir.find((x) => x.id === id)?.latin ?? "Dzikir", total: 0 };
-			cur.total += n;
-			m.set(id, cur);
-		};
-		for (const [id, n] of Object.entries(lokalPerDzikir)) tambahKe(Number(id), n);
-		if (s?.sesi_id) tambahKe(s.dzikir_id, s.jumlah);
-		return [...m.values()].sort((a, b) => b.total - a.total);
-	});
-
-	/** perbaruiKomposisi=false dipakai tepat setelah sync, sampai komposisi server
-	 *  terbaru dimuat — supaya hitungan yang baru tersinkron tidak "hilang" sesaat. */
-	async function hitungAntreanHariIni(perbaruiKomposisi = true) {
+	async function hitungAntreanHariIni() {
 		const hari = tanggalWIB(new Date());
-		let antrean: { dzikir_id: number; jumlah: number; mulai_at: string }[] = [];
 		try {
-			antrean = (await antreanSemua()).filter((x) => tanggalWIB(x.mulai_at) === hari);
+			antreanHariIni = (await antreanSemua()).filter((x) => tanggalWIB(x.mulai_at) === hari).reduce((a, x) => a + x.jumlah, 0);
 		} catch {
-			antrean = []; // IndexedDB tidak tersedia; status sync menampilkan "gagal"
-		}
-		antreanHariIni = antrean.reduce((a, x) => a + x.jumlah, 0);
-		if (perbaruiKomposisi) {
-			const per: Record<number, number> = {};
-			for (const x of antrean) per[x.dzikir_id] = (per[x.dzikir_id] ?? 0) + x.jumlah;
-			lokalPerDzikir = per;
+			antreanHariIni = 0; // IndexedDB tidak tersedia; status sync menampilkan "gagal"
 		}
 	}
 
@@ -137,10 +104,9 @@
 		router.reload({
 			only: props,
 			onSuccess: (page) => {
-				const p = page.props as unknown as { hari_ini?: HariIni; komposisi_hari_ini?: Komposisi[] };
+				const p = page.props as unknown as { hari_ini?: HariIni };
 				// page.props berisi SEMUA prop (yang tidak diminta = nilai lama): ambil yang diminta saja
 				if (props.includes("hari_ini") && p.hari_ini) serverHariIni = { tanggal: p.hari_ini.tanggal, total: p.hari_ini.total };
-				if (props.includes("komposisi_hari_ini") && p.komposisi_hari_ini) komposisiServer = p.komposisi_hari_ini;
 				hitungAntreanHariIni();
 			},
 		});
@@ -150,16 +116,16 @@
 		serverHariIni = { tanggal: h.hari_ini.tanggal, total: h.hari_ini.total };
 		const ada = new Set(badges.map((b) => b.kode));
 		badges = [...badges, ...h.badge_baru.filter((b) => !ada.has(b.kode))];
-		hitungAntreanHariIni(false);
-		if (h.diterima.length > 0) muatUlangDataServer(["streak", "level", "komposisi_hari_ini"]);
+		hitungAntreanHariIni();
+		if (h.diterima.length > 0) muatUlangDataServer(["streak"]);
 	}
 
 	/** Ambil ulang angka dari server (mis. setelah berdzikir di perangkat lain). */
 	async function segarkan() {
 		const h = await syncSekarang(true);
 		if (h) onSync(h);
-		await hitungAntreanHariIni(false);
-		muatUlangDataServer(["hari_ini", "streak", "level", "target_harian", "komposisi_hari_ini"]);
+		await hitungAntreanHariIni();
+		muatUlangDataServer(["hari_ini", "streak", "target_harian"]);
 	}
 
 	function tambah() {
@@ -253,9 +219,9 @@
 		return dzikir.find((x) => x.id === id)?.latin ?? "";
 	}
 
-	function formatDurasi(detik: number) {
+	function formatDurasiPendek(detik: number) {
 		const m = Math.floor(detik / 60);
-		return m > 0 ? `${m} menit ${detik % 60} detik` : `${detik} detik`;
+		return m > 0 ? `${m}m ${detik % 60}d` : `${detik}d`;
 	}
 
 	$effect(() => {
@@ -308,74 +274,72 @@
 	});
 </script>
 
+
 <svelte:window onkeydown={onWindowKey} />
 
 <AppLayout {user}>
-	<div class="mx-auto w-full max-w-xl pb-6">
+	<div class="mx-auto flex w-full max-w-xl flex-col pb-4">
 		<InstallBanner />
-		<!-- Baris atas: pilih dzikir, status sync, aksi -->
-		<div class="mb-4 flex items-center gap-2">
+		<!-- Baris atas: pilih dzikir/paket + dua aksi. Sengaja ringkas agar fokus ke hitungan. -->
+		<div class="flex items-center gap-1">
 			<button
 				type="button"
 				onclick={() => (pickerOpen = true)}
-				class="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3.5 text-left text-sm font-semibold text-neutral-900 transition hover:border-brand-300 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white"
+				class="mr-auto flex h-11 min-w-0 max-w-[75%] items-center gap-2 rounded-full border border-neutral-200 bg-white pl-3.5 pr-3 text-left text-sm font-semibold text-neutral-900 transition hover:border-brand-300 dark:border-brand-200/10 dark:bg-brand-950/40 dark:text-white"
 				data-testid="pilih-dzikir"
 			>
+				{#if pk}<ListOrdered size={15} class="shrink-0 text-neutral-400 dark:text-brand-200/50" aria-hidden="true" />{/if}
 				<span class="truncate">{pk ? pk.nama : (d?.latin ?? "Pilih dzikir")}</span>
-				<ChevronDown size={16} class="ml-auto shrink-0 text-neutral-400" aria-hidden="true" />
+				{#if pk}<span class="shrink-0 tabular-nums text-neutral-400 dark:text-brand-200/50">· {(s?.item_index ?? 0) + 1}/{pk.items.length}</span>{/if}
+				<ChevronDown size={15} class="shrink-0 text-neutral-400" aria-hidden="true" />
 			</button>
-			<button type="button" onclick={masukFokus} class="grid h-11 w-11 place-items-center rounded-xl text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800" aria-label="Mode fokus">
+			<button type="button" onclick={masukFokus} class="grid h-11 w-11 place-items-center rounded-xl text-neutral-500 hover:bg-neutral-100 dark:text-brand-100/60 dark:hover:bg-brand-950/60" aria-label="Mode fokus">
 				<Maximize2 size={18} />
 			</button>
-			<button type="button" onclick={() => { targetHarianInput = target_harian; pengaturanOpen = true; }} class="grid h-11 w-11 place-items-center rounded-xl text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800" aria-label="Pengaturan tasbih">
+			<button type="button" onclick={() => { targetHarianInput = target_harian; pengaturanOpen = true; }} class="grid h-11 w-11 place-items-center rounded-xl text-neutral-500 hover:bg-neutral-100 dark:text-brand-100/60 dark:hover:bg-brand-950/60" aria-label="Pengaturan tasbih">
 				<Settings2 size={18} />
 			</button>
 		</div>
 
-		<!-- Panel counter -->
+		<!-- Counter -->
 		<section
-			class="relative flex flex-col items-center overflow-hidden rounded-[2rem] border border-neutral-200 bg-white px-4 pb-5 pt-6 dark:border-neutral-800 dark:bg-neutral-900
-				{fokus ? 'fixed inset-0 z-40 justify-center rounded-none border-0' : ''}"
+			class="relative flex flex-col items-center {fokus ? 'fixed inset-0 z-40 justify-center bg-neutral-50 px-4 dark:bg-neutral-950' : 'mt-2'}"
 			aria-label="Tasbih"
 		>
 			{#if fokus}
-				<button type="button" onclick={keluarFokus} class="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800" aria-label="Keluar mode fokus">
+				<button type="button" onclick={keluarFokus} class="absolute right-4 top-[calc(1rem+env(safe-area-inset-top))] grid h-11 w-11 place-items-center rounded-full text-neutral-500 hover:bg-neutral-100 dark:hover:bg-brand-950/60" aria-label="Keluar mode fokus">
 					<Minimize2 size={18} />
 				</button>
 			{/if}
 
-			{#if pk}
-				<ol class="mb-4 flex flex-wrap items-center justify-center gap-1.5" aria-label="Urutan paket">
-					{#each pk.items as it, i}
-						<li
-							class="rounded-full px-2.5 py-1 text-[11px] font-medium tabular-nums transition
-								{i < (s?.item_index ?? 0) ? 'bg-brand-100 text-brand-800 dark:bg-brand-950 dark:text-brand-300' : ''}
-								{i === (s?.item_index ?? 0) ? 'bg-brand-600 text-white dark:bg-brand-500 dark:text-neutral-950' : ''}
-								{i > (s?.item_index ?? 0) ? 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400' : ''}"
-							aria-current={i === (s?.item_index ?? 0) ? "step" : undefined}
-						>
-							{namaDzikirId(it.dzikir_id)} {it.target}
-						</li>
-					{/each}
-				</ol>
-			{/if}
-
 			<!-- Teks dzikir -->
-			<div class="min-h-[6.5rem] w-full text-center">
+			<div class="flex min-h-[7rem] w-full flex-col justify-center text-center">
 				{#if d}
 					{#key d.id}
 						<div in:fade={{ duration: 200 }}>
 							{#if d.arab}
-								<p class="font-arab text-3xl leading-[1.9] text-neutral-900 sm:text-4xl dark:text-white" dir="rtl" lang="ar">{d.arab}</p>
+								<p class="font-arab text-[2.15rem] leading-[1.75] text-neutral-900 sm:text-4xl dark:text-white" dir="rtl" lang="ar">{d.arab}</p>
 							{/if}
-							<p class="mt-1 text-sm font-semibold text-brand-700 dark:text-brand-300">{d.latin}</p>
-							{#if d.arti}<p class="mx-auto mt-0.5 max-w-sm text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">{d.arti}</p>{/if}
+							<p class="text-[15px] font-medium text-neutral-700 dark:text-brand-100/80">{d.latin}</p>
+							{#if d.arti}<p class="mx-auto mt-0.5 max-w-sm text-[13px] leading-relaxed text-neutral-500 dark:text-brand-100/45">{d.arti}</p>{/if}
 						</div>
 					{/key}
 				{/if}
 			</div>
 
-			<!-- Area tap -->
+			{#if pk}
+				<ol class="mt-3 flex items-center justify-center gap-1.5" aria-label="Urutan paket">
+					{#each pk.items as it, i}
+						{@const idx = s?.item_index ?? 0}
+						<li aria-current={i === idx ? "step" : undefined}>
+							<span class="block h-1 w-7 rounded-full transition-colors {i < idx ? 'bg-brand-500/50 dark:bg-brand-300/50' : i === idx ? 'bg-brand-500 dark:bg-brand-300' : 'bg-neutral-200 dark:bg-brand-950'}"></span>
+							<span class="sr-only">{namaDzikirId(it.dzikir_id)} {it.target}{i < idx ? ", selesai" : ""}</span>
+						</li>
+					{/each}
+				</ol>
+			{/if}
+
+			<!-- Area tap: seluruh blok ring, cukup lebar untuk ibu jari -->
 			<div
 				role="button"
 				tabindex="0"
@@ -384,92 +348,67 @@
 				aria-label="Tambah hitungan. {jumlah} dari {target}"
 				onpointerdown={onPointerDown}
 				onkeydown={onTapKey}
-				class="tap-area relative mt-4 grid w-full select-none place-items-center rounded-[1.75rem] py-6 outline-none focus-visible:ring-2 focus-visible:ring-brand-400 {fokus ? 'flex-1' : ''}"
+				class="tap-area relative mt-4 grid w-full select-none place-items-center rounded-[2rem] py-4 outline-none focus-visible:ring-2 focus-visible:ring-brand-400 {fokus ? 'flex-1' : ''}"
 			>
 				{#key rayakanKey}
 					{#if rayakanKey > 0}
 						<span class="ripple pointer-events-none absolute h-64 w-64 rounded-full border-2 border-success" aria-hidden="true"></span>
-						<span class="ripple ripple-2 pointer-events-none absolute h-64 w-64 rounded-full border border-success" aria-hidden="true"></span>
 					{/if}
 				{/key}
 				<div class="press">
-					<ProgressRing {progress} tercapai={s?.mode === "dzikir" && jumlah >= target} size={256}>
+					<BeadCircle count={jumlah} {target} tercapai={s?.mode === "dzikir" && jumlah >= target} size={272}>
 						<div class="text-center">
 							{#key jumlah}
-								<span class="pop block text-7xl font-bold tabular-nums tracking-tight text-neutral-900 dark:text-white" data-testid="hitungan">{siap ? jumlah : "–"}</span>
+								<span class="pop block text-[5.5rem] font-light leading-none tracking-tighter tabular-nums text-neutral-900 dark:text-white" data-testid="hitungan">{siap ? jumlah : "–"}</span>
 							{/key}
-							<span class="mt-1 block text-sm tabular-nums text-neutral-500 dark:text-neutral-400">
+							<span class="mt-2 block text-sm tabular-nums text-neutral-500 dark:text-brand-100/45">
 								dari {target}{#if lebih > 0}<span class="ml-1 font-semibold text-success">+{lebih}</span>{/if}
 							</span>
 						</div>
-					</ProgressRing>
+					</BeadCircle>
 				</div>
-				<div class="mt-5 flex w-full justify-center">
-					<BeadStrip count={jumlah} />
-				</div>
-				<p class="mt-3 text-xs text-neutral-400 dark:text-neutral-500">Ketuk di mana saja pada area ini</p>
+				<p class="mt-3 text-xs text-neutral-400 dark:text-brand-100/35">Ketuk di mana saja pada area ini</p>
 			</div>
 
-			{#if s?.mode === "dzikir"}
-				<button type="button" onclick={bukaTarget} class="mt-1 inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800">
-					<Pencil size={12} aria-hidden="true" /> Ubah target ({target})
+			<!-- Kontrol sekunder: kecil dan tenang -->
+			<div class="mt-1 flex items-center justify-center gap-1">
+				<button type="button" onclick={() => counter.undo()} disabled={jumlahSesi === 0} class="ctl" aria-label="Batal 1">
+					<Undo2 size={16} aria-hidden="true" /><span>Batal 1</span>
 				</button>
-			{/if}
-
-			<!-- Kontrol -->
-			<div class="mt-3 grid w-full max-w-sm grid-cols-3 gap-2">
-				<button type="button" onclick={() => counter.undo()} disabled={jumlahSesi === 0} class="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl bg-neutral-100 text-xs font-medium text-neutral-700 transition active:scale-[0.97] disabled:opacity-40 dark:bg-neutral-800 dark:text-neutral-200">
-					<Undo2 size={16} aria-hidden="true" /> Batal 1
+				<button type="button" onclick={() => counter.reset()} disabled={jumlah === 0 && !(s?.mode === "paket" && (s?.item_index ?? 0) > 0)} class="ctl" aria-label="Ulang">
+					<RotateCcw size={16} aria-hidden="true" /><span>Ulang</span>
 				</button>
-				<button type="button" onclick={() => counter.reset()} disabled={jumlah === 0 && !(s?.mode === "paket" && (s?.item_index ?? 0) > 0)} class="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl bg-neutral-100 text-xs font-medium text-neutral-700 transition active:scale-[0.97] disabled:opacity-40 dark:bg-neutral-800 dark:text-neutral-200">
-					<RotateCcw size={16} aria-hidden="true" /> Ulang
-				</button>
-				<button type="button" onclick={() => counter.selesai()} disabled={jumlah === 0 && !(s?.mode === "paket" && (s?.item_index ?? 0) > 0)} class="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl bg-brand-600 text-xs font-semibold text-white transition active:scale-[0.97] disabled:opacity-40 dark:bg-brand-500 dark:text-neutral-950" data-testid="selesai">
-					<CheckCheck size={16} aria-hidden="true" /> Simpan sesi
+				{#if s?.mode === "dzikir"}
+					<button type="button" onclick={bukaTarget} class="ctl" aria-label="Ubah target, sekarang {target}">
+						<Pencil size={15} aria-hidden="true" /><span>Target</span>
+					</button>
+				{/if}
+				<button type="button" onclick={() => counter.selesai()} disabled={jumlah === 0 && !(s?.mode === "paket" && (s?.item_index ?? 0) > 0)} class="ctl ctl-utama" data-testid="selesai">
+					<CheckCheck size={16} aria-hidden="true" /><span>Simpan</span>
 				</button>
 			</div>
-			<div class="mt-4"><SyncIndicator /></div>
+			<div class="mt-3"><SyncIndicator /></div>
 		</section>
 
-		<!-- Ringkasan hari ini -->
-		<section class="mt-4 grid grid-cols-[1fr_auto] gap-3 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900" aria-label="Ringkasan hari ini">
-			<div class="min-w-0">
-				<div class="flex items-baseline justify-between gap-2">
-					<span class="text-xs font-medium text-neutral-500 dark:text-neutral-400">Hari ini</span>
-					<span class="text-sm tabular-nums text-neutral-900 dark:text-white" data-testid="total-hari-ini"><b>{totalHariIni.toLocaleString("id-ID")}</b><span class="text-neutral-400"> / {target_harian.toLocaleString("id-ID")}</span></span>
+		<!-- Hari ini: progres harian + streak (level & komposisi ada di Progres) -->
+		<a
+			href="/app/tasbih/dashboard"
+			use:inertia
+			class="mt-5 flex items-center gap-4 rounded-2xl border border-neutral-200 bg-white px-4 py-3.5 transition hover:border-brand-300 dark:border-brand-200/10 dark:bg-brand-950/40"
+			aria-label="Hari ini {totalHariIni} dari {target_harian}, streak {streakTampil} hari. Buka progres"
+		>
+			<div class="min-w-0 flex-1">
+				<div class="flex items-baseline justify-between gap-2 text-[13px]">
+					<span class="text-neutral-500 dark:text-brand-100/60">Hari ini</span>
+					<span class="tabular-nums text-neutral-500 dark:text-brand-100/60" data-testid="total-hari-ini"><b class="font-semibold text-neutral-900 dark:text-white">{totalHariIni.toLocaleString("id-ID")}</b> / {target_harian.toLocaleString("id-ID")}</span>
 				</div>
-				<div class="mt-2 h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800" role="progressbar" aria-valuemin="0" aria-valuemax={target_harian} aria-valuenow={totalHariIni} aria-label="Progres target harian">
-					<div class="bar h-full rounded-full {progressHarian >= 1 ? 'bg-success' : 'bg-brand-500'}" style="width:{progressHarian * 100}%"></div>
-				</div>
-				<div class="mt-3 flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
-					<span class="font-semibold text-neutral-800 dark:text-neutral-200">Level {level.level}</span>
-					<div class="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800" aria-hidden="true">
-						<div class="h-full rounded-full bg-secondary-500" style="width:{levelProgress * 100}%"></div>
-					</div>
-					{#if level.ambang_berikut > 0}<span class="tabular-nums">{level.total.toLocaleString("id-ID")}/{level.ambang_berikut.toLocaleString("id-ID")}</span>{/if}
+				<div class="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-100 dark:bg-brand-950" aria-hidden="true">
+					<div class="bar h-full rounded-full {progressHarian >= 1 ? 'bg-success' : 'bg-brand-500 dark:bg-brand-300'}" style="width:{progressHarian * 100}%"></div>
 				</div>
 			</div>
-			<div class="flex flex-col items-center justify-center rounded-xl bg-warning/10 px-3 text-warning" aria-label="Streak {streakTampil} hari">
-				<Flame size={20} aria-hidden="true" />
-				<span class="text-lg font-bold tabular-nums leading-none">{streakTampil}</span>
-				<span class="text-[10px] font-medium">hari</span>
-			</div>
-		</section>
-
-		<section class="mt-4 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900" aria-label="Komposisi dzikir hari ini" data-testid="komposisi-hari-ini">
-			<div class="mb-3 flex items-baseline justify-between gap-2">
-				<h2 class="text-sm font-semibold text-neutral-900 dark:text-white">Komposisi hari ini</h2>
-				{#if komposisi.length}<span class="text-xs text-neutral-500 dark:text-neutral-400">{komposisi.length} dzikir</span>{/if}
-			</div>
-			{#if komposisi.length}
-				<KomposisiBar data={komposisi} />
-			{:else}
-				<p class="text-sm text-neutral-500 dark:text-neutral-400">Belum ada dzikir hari ini.</p>
-			{/if}
-		</section>
-
-		<a href="/app/tasbih/dashboard" use:inertia class="mt-3 flex min-h-12 items-center justify-center gap-2 rounded-xl text-sm font-medium text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-950/40">
-			<BarChart3 size={16} aria-hidden="true" /> Lihat progres & riwayat
+			<span class="flex items-center gap-1 text-sm font-semibold tabular-nums text-sand-600 dark:text-sand-300">
+				<Flame size={16} aria-hidden="true" />{streakTampil}
+			</span>
 		</a>
 	</div>
 
@@ -495,14 +434,14 @@
 		<form class="space-y-4" onsubmit={simpanTarget}>
 			<div class="flex flex-wrap gap-2">
 				{#each [33, 99, 100, 300, 1000] as t}
-					<button type="button" onclick={() => (targetInput = t)} class="h-11 rounded-full px-4 text-sm font-medium tabular-nums {targetInput === t ? 'bg-brand-600 text-white dark:bg-brand-500 dark:text-neutral-950' : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200'}">{t}</button>
+					<button type="button" onclick={() => (targetInput = t)} class="h-11 rounded-full px-4 text-sm font-medium tabular-nums {targetInput === t ? 'bg-brand-600 text-white dark:bg-brand-300 dark:text-brand-950' : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200'}">{t}</button>
 				{/each}
 			</div>
 			<label class="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
 				Target lain
 				<input type="number" inputmode="numeric" min="1" max="100000" bind:value={targetInput} class="mt-1.5 w-full rounded-xl border border-neutral-300 bg-white px-3.5 py-2.5 text-base dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" />
 			</label>
-			<button type="submit" class="h-12 w-full rounded-xl bg-brand-600 font-semibold text-white dark:bg-brand-500 dark:text-neutral-950">Simpan target</button>
+			<button type="submit" class="h-12 w-full rounded-xl bg-brand-600 font-semibold text-white dark:bg-brand-300 dark:text-brand-950">Simpan target</button>
 		</form>
 	</Sheet>
 
@@ -515,7 +454,7 @@
 						<span class="block text-sm font-medium text-neutral-900 dark:text-white">{label}</span>
 						{#if hint}<span class="block text-xs text-neutral-500">{hint}</span>{/if}
 					</span>
-					<span class="relative h-7 w-12 shrink-0 rounded-full transition {pref[k] ? 'bg-brand-600 dark:bg-brand-500' : 'bg-neutral-300 dark:bg-neutral-700'}">
+					<span class="relative h-7 w-12 shrink-0 rounded-full transition {pref[k] ? 'bg-brand-600 dark:bg-brand-400' : 'bg-neutral-300 dark:bg-neutral-700'}">
 						<span class="absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all {pref[k] ? 'left-6' : 'left-1'}"></span>
 					</span>
 				</button>
@@ -527,29 +466,39 @@
 				<input type="number" inputmode="numeric" min="1" max="100000" bind:value={targetHarianInput} class="mt-1.5 w-full rounded-xl border border-neutral-300 bg-white px-3.5 py-2.5 text-base dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" />
 			</label>
 			<p class="mt-1.5 text-xs text-neutral-500">Hari dihitung untuk streak bila total hari itu mencapai target ini.</p>
-			<button type="submit" class="mt-4 h-12 w-full rounded-xl bg-brand-600 font-semibold text-white dark:bg-brand-500 dark:text-neutral-950">Simpan target harian</button>
+			<button type="submit" class="mt-4 h-12 w-full rounded-xl bg-brand-600 font-semibold text-white dark:bg-brand-300 dark:text-brand-950">Simpan target harian</button>
 		</form>
 	</Sheet>
 
+	<!-- Paket tuntas: ringkasan tenang, tanpa confetti -->
 	<Sheet open={ringkasanOpen} title="Paket selesai" onclose={() => (ringkasanOpen = false)}>
 		{#if counter.ringkasanPaket}
 			{@const r = counter.ringkasanPaket}
-			<div class="text-center" in:scale={{ start: 0.95, duration: 200 }}>
-				<p class="text-lg font-semibold text-neutral-900 dark:text-white">{r.paket.nama}</p>
-				{#if r.durasiDetik > 0}<p class="text-sm text-neutral-500">Selesai dalam {formatDurasi(r.durasiDetik)}</p>{/if}
+			{@const totalPaket = r.items.reduce((a, it) => a + it.jumlah, 0)}
+			<div class="text-center" in:scale={{ start: 0.96, duration: 200 }}>
+				<span class="mx-auto grid h-16 w-16 place-items-center rounded-full bg-brand-50 text-brand-600 dark:bg-brand-300/15 dark:text-brand-300"><Check size={30} strokeWidth={1.75} aria-hidden="true" /></span>
+				<p class="mt-4 text-xl font-semibold tracking-tight text-neutral-900 dark:text-white">{r.paket.nama} tuntas</p>
+				<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+					{totalHariIni >= target_harian ? "Target harian juga sudah tercapai." : `${(target_harian - totalHariIni).toLocaleString("id-ID")} lagi menuju target harian.`}
+				</p>
 			</div>
-			<ul class="mt-4 divide-y divide-neutral-100 dark:divide-neutral-800">
+			<dl class="mt-5 grid grid-cols-3 divide-x divide-neutral-100 border-y border-neutral-100 text-center dark:divide-neutral-800 dark:border-neutral-800">
+				<div class="py-3.5"><dd class="text-lg font-semibold tabular-nums text-neutral-900 dark:text-white">{totalPaket}</dd><dt class="text-[11px] tracking-wide text-neutral-500 uppercase">Hitungan</dt></div>
+				<div class="py-3.5"><dd class="text-lg font-semibold tabular-nums text-neutral-900 dark:text-white">{r.durasiDetik > 0 ? formatDurasiPendek(r.durasiDetik) : "—"}</dd><dt class="text-[11px] tracking-wide text-neutral-500 uppercase">Durasi</dt></div>
+				<div class="py-3.5"><dd class="text-lg font-semibold tabular-nums text-neutral-900 dark:text-white">{totalHariIni.toLocaleString("id-ID")}</dd><dt class="text-[11px] tracking-wide text-neutral-500 uppercase">Hari ini</dt></div>
+			</dl>
+			<ul class="mt-3 divide-y divide-neutral-100 dark:divide-neutral-800">
 				{#each r.items as it}
-					<li class="flex items-center justify-between py-2.5 text-sm">
-						<span class="text-neutral-700 dark:text-neutral-300">{namaDzikirId(it.dzikir_id)}</span>
-						<span class="font-semibold tabular-nums text-neutral-900 dark:text-white">{it.jumlah}</span>
+					<li class="flex items-center justify-between py-2 text-sm">
+						<span class="text-neutral-600 dark:text-neutral-300">{namaDzikirId(it.dzikir_id)}</span>
+						<span class="font-medium tabular-nums text-neutral-900 dark:text-white">{it.jumlah}</span>
 					</li>
 				{/each}
 			</ul>
-			<p class="mt-3 text-xs text-neutral-500">Rujukan: {r.paket.rujukan}</p>
+			{#if r.paket.rujukan}<p class="mt-2 text-xs text-neutral-500">Rujukan: {r.paket.rujukan}</p>{/if}
 			<div class="mt-5 grid grid-cols-2 gap-2">
-				<button type="button" onclick={() => (ringkasanOpen = false)} class="h-12 rounded-xl bg-neutral-100 text-sm font-semibold text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100">Ulangi paket</button>
-				<a href="/app/tasbih/dashboard" use:inertia class="grid h-12 place-items-center rounded-xl bg-brand-600 text-sm font-semibold text-white dark:bg-brand-500 dark:text-neutral-950">Lihat progres</a>
+				<button type="button" onclick={() => (ringkasanOpen = false)} class="inline-flex h-12 items-center justify-center gap-1.5 rounded-xl bg-neutral-100 text-sm font-semibold text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100"><RotateCcw size={15} aria-hidden="true" /> Ulangi</button>
+				<a href="/app/tasbih/dashboard" use:inertia class="grid h-12 place-items-center rounded-xl bg-brand-600 text-sm font-semibold text-white dark:bg-brand-300 dark:text-brand-950">Lihat progres</a>
 			</div>
 		{/if}
 	</Sheet>
@@ -582,8 +531,40 @@
 		animation: ripple 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 		opacity: 0;
 	}
-	.ripple-2 {
-		animation-delay: 150ms;
+	.ctl {
+		display: inline-flex;
+		min-height: 2.75rem;
+		align-items: center;
+		gap: 0.375rem;
+		border-radius: 9999px;
+		padding: 0 0.875rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		white-space: nowrap;
+		color: var(--color-neutral-500);
+		transition: background-color 150ms ease, transform 120ms ease;
+	}
+	.ctl:hover:not(:disabled) {
+		background-color: var(--color-neutral-100);
+	}
+	.ctl:active:not(:disabled) {
+		transform: scale(0.97);
+	}
+	.ctl:disabled {
+		opacity: 0.35;
+	}
+	.ctl-utama {
+		color: var(--color-brand-700);
+		font-weight: 600;
+	}
+	:global(.dark) .ctl {
+		color: color-mix(in oklab, var(--color-brand-100) 60%, transparent);
+	}
+	:global(.dark) .ctl:hover:not(:disabled) {
+		background-color: color-mix(in oklab, var(--color-brand-950) 60%, transparent);
+	}
+	:global(.dark) .ctl-utama {
+		color: var(--color-brand-300);
 	}
 	@keyframes ripple {
 		from {

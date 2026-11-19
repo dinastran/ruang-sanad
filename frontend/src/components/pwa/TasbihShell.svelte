@@ -4,7 +4,7 @@
 	import type { Snippet } from "svelte";
 	import { fly } from "svelte/transition";
 	import { inertia } from "@inertiajs/svelte";
-	import { BarChart3, CircleDot, LogOut, RefreshCw, UserRound } from "lucide-svelte";
+	import { BarChart3, CircleDot, History, LogOut, RefreshCw, UserRound } from "lucide-svelte";
 	import DarkModeToggle from "@components/DarkModeToggle.svelte";
 	import { muatVersiBaru, pwa } from "@lib/pwa.svelte";
 
@@ -19,9 +19,10 @@
 	const NAV = [
 		{ href: "/app/tasbih", label: "Tasbih", icon: CircleDot, aktif: path === "/app/tasbih" || path === "/app/tasbih/" },
 		{ href: "/app/tasbih/dashboard", label: "Progres", icon: BarChart3, aktif: path.startsWith("/app/tasbih/dashboard") },
-		{ href: "/app/profile", label: "Profil", icon: UserRound, aktif: path.startsWith("/app/profile") },
+		{ href: "/app/tasbih/riwayat", label: "Riwayat", icon: History, aktif: path.startsWith("/app/tasbih/riwayat") },
 	];
-	const judul = NAV.find((n) => n.aktif)?.label ?? "Tasbih";
+	// Profil dipindah ke menu akun; tab bawah khusus alur tasbih.
+	const judul = path.startsWith("/app/profile") ? "Profil" : (NAV.find((n) => n.aktif)?.label ?? "Tasbih");
 	let menuAkun = $state(false);
 
 	// Mode aplikasi: matikan efek tarik-untuk-refresh/bounce (side effect DOM).
@@ -58,6 +59,9 @@
 							<p class="truncate text-sm font-semibold text-neutral-900 dark:text-white">{user?.name}</p>
 							<p class="truncate text-xs text-neutral-500">{user?.email}</p>
 						</div>
+						<a href="/app/profile" use:inertia onclick={() => (menuAkun = false)} class="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800">
+							<UserRound size={16} aria-hidden="true" /> Profil
+						</a>
 						<button type="button" onclick={() => { menuAkun = false; onlogout(); }} class="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40">
 							<LogOut size={16} aria-hidden="true" /> Keluar
 						</button>
@@ -90,9 +94,9 @@
 						href={n.href}
 						use:inertia
 						aria-current={n.aktif ? "page" : undefined}
-						class="flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors {n.aktif ? 'text-brand-700 dark:text-brand-300' : 'text-neutral-500 dark:text-neutral-400'}"
+						class="flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors {n.aktif ? 'text-brand-700 dark:text-brand-300' : 'text-neutral-500 dark:text-brand-100/45'}"
 					>
-						<span class="grid h-7 w-14 place-items-center rounded-full transition-colors {n.aktif ? 'bg-brand-100 dark:bg-brand-950' : ''}">
+						<span class="grid h-7 w-14 place-items-center rounded-full transition-colors {n.aktif ? 'bg-brand-100 dark:bg-brand-300/10' : ''}">
 							<n.icon size={20} aria-hidden="true" />
 						</span>
 						{n.label}
