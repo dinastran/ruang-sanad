@@ -18,3 +18,64 @@ type ProdukVarianRequest struct {
 	Urutan    int64  `json:"urutan"`
 	IsAktif   bool   `json:"is_aktif"`
 }
+
+// FieldRule controls one optional form field of a registration link.
+type FieldRule struct {
+	Tampil bool `json:"tampil"`
+	Wajib  bool `json:"wajib"`
+}
+
+type RegistrationLinkRequest struct {
+	Slug            string               `json:"slug"`
+	Judul           string               `json:"judul"`
+	Deskripsi       string               `json:"deskripsi"`
+	ProgramID       int64                `json:"program_id"`
+	LeadSourceID    int64                `json:"lead_source_id"`
+	Mode            string               `json:"mode"`
+	AfterSubmit     string               `json:"after_submit"`
+	NominalOverride *int64               `json:"nominal_override"`
+	FieldConfig     map[string]FieldRule `json:"field_config"`
+	WaTemplate      string               `json:"wa_template"`
+	IzinkanManual   bool                 `json:"izinkan_manual"`
+	IsAktif         bool                 `json:"is_aktif"`
+}
+
+// RegistrationLinkRow is one link on the admin page, with 30-day stats.
+type RegistrationLinkRow struct {
+	RegistrationLinkRequest
+	ID          int64  `json:"id"`
+	ProgramNama string `json:"program_nama"`
+	SumberNama  string `json:"sumber_nama"`
+	HargaLabel  string `json:"harga_label"`
+	Klik        int64  `json:"klik"`
+	Submit      int64  `json:"submit"`
+	Bayar       int64  `json:"bayar"`
+}
+
+type PublicVarian struct {
+	ID    int64  `json:"id"`
+	Nama  string `json:"nama"`
+	Harga int64  `json:"harga"`
+}
+
+// PublicRegistrationLink is what the public /daftar/:slug page renders.
+type PublicRegistrationLink struct {
+	ID            int64                `json:"id"`
+	Slug          string               `json:"slug"`
+	Judul         string               `json:"judul"`
+	Deskripsi     string               `json:"deskripsi"`
+	Mode          string               `json:"mode"`
+	AfterSubmit   string               `json:"after_submit"`
+	ProgramNama   string               `json:"program_nama"`
+	ButuhJadwal   bool                 `json:"butuh_jadwal"`
+	Harga         int64                `json:"harga"`
+	Varian        []PublicVarian       `json:"varian"`
+	FieldConfig   map[string]FieldRule `json:"field_config"`
+	IzinkanManual bool                 `json:"izinkan_manual"`
+}
+
+type RegistrationSettings struct {
+	CsWaNumber         string `json:"cs_wa_number"`
+	PaymentExpiryHours int64  `json:"payment_expiry_hours"`
+	BankManualInfo     string `json:"bank_manual_info"`
+}
