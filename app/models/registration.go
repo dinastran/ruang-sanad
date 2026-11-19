@@ -107,3 +107,17 @@ type RegistrationResult struct {
 	WaURL    string `json:"wa_url"`
 	BayarRef string `json:"bayar_ref,omitempty"`
 }
+
+// BayarInfo is what the public payment page shows for one registration ref.
+type BayarInfo struct {
+	LeadRef        string `json:"lead_ref"`
+	NamaDepan      string `json:"nama_depan"`
+	ProgramNama    string `json:"program_nama"`
+	Nominal        int64  `json:"nominal"`
+	BankManualInfo string `json:"bank_manual_info"`
+	IzinkanManual  bool   `json:"izinkan_manual"`
+	// Status: belum | menunggu_verifikasi | ditolak | lunas
+	Status       string `json:"status"`
+	CatatanTolak string `json:"catatan_tolak,omitempty"`
+	WaURL        string `json:"wa_url"`
+}

@@ -56,6 +56,9 @@ func (s *LeadService) VerifyPayment(ctx context.Context, id, actorID int64, req 
 		if date.After(now.In(wib)) {
 			return "", nil, errors.New("tanggal terima tidak boleh di masa depan")
 		}
+		if err := markManualPaymentsPaid(ctx, q, l.ID, now); err != nil {
+			return "", nil, err
+		}
 		from := l.Stage
 		l.Stage = LeadStageTerverifikasi
 		l.VerifiedAt = nullTime(now)
