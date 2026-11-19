@@ -192,6 +192,20 @@ var (
 		Message:     "Terlalu banyak percobaan absensi, coba lagi beberapa menit lagi",
 	})
 
+	// DaftarRateLimit: public registration form submits, 5 per 10 minutes per IP.
+	DaftarRateLimit = NewRateLimiter(RateLimiterConfig{
+		MaxRequests: 5,
+		Window:      10 * time.Minute,
+		Message:     "Terlalu banyak pengiriman form, coba lagi beberapa menit lagi",
+	})
+
+	// DaftarUploadRateLimit: public payment proof uploads, 5 per 10 minutes per IP.
+	DaftarUploadRateLimit = NewRateLimiter(RateLimiterConfig{
+		MaxRequests: 5,
+		Window:      10 * time.Minute,
+		Message:     "Terlalu banyak unggahan, coba lagi beberapa menit lagi",
+	})
+
 	// CSAIIngestRateLimit: 600 event batches per minute from the CS AI bridge.
 	CSAIIngestRateLimit = NewRateLimiter(RateLimiterConfig{
 		MaxRequests: 600,
