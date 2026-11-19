@@ -25,6 +25,8 @@ import (
 const (
 	LeadSourceByAuto   = "auto"
 	LeadSourceByManual = "manual"
+	// LeadSourceByForm: set from the registration link the lead submitted.
+	LeadSourceByForm = "form"
 	// minPatternRunes keeps triggers specific: "halo" would match every lead.
 	minPatternRunes = 12
 )

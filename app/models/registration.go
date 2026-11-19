@@ -79,3 +79,31 @@ type RegistrationSettings struct {
 	PaymentExpiryHours int64  `json:"payment_expiry_hours"`
 	BankManualInfo     string `json:"bank_manual_info"`
 }
+
+type RegistrationSubmit struct {
+	Nama           string `json:"nama"`
+	NoWA           string `json:"no_wa"`
+	JenisKelamin   string `json:"jenis_kelamin"`
+	Usia           int64  `json:"usia"`
+	Domisili       string `json:"domisili"`
+	VarianID       int64  `json:"varian_id"`
+	JadwalKode     string `json:"jadwal_kode"`
+	RiwayatBelajar string `json:"riwayat_belajar"`
+	BelajarDimana  string `json:"belajar_dimana"`
+	UntukSiapa     string `json:"untuk_siapa"`
+	WaktuBelajar   string `json:"waktu_belajar"`
+	Honeypot       string `json:"website"`
+	FormToken      string `json:"form_token"`
+}
+
+type RequestMeta struct {
+	IP        string
+	UserAgent string
+}
+
+type RegistrationResult struct {
+	LeadRef  string `json:"lead_ref"`
+	Next     string `json:"next"`
+	WaURL    string `json:"wa_url"`
+	BayarRef string `json:"bayar_ref,omitempty"`
+}
