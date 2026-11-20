@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -52,6 +53,10 @@ func (h *ProductCRMHandler) Index(c *fiber.Ctx) error {
 	products, err := h.service.Products()
 	if err != nil {
 		return h.inertiaService.Render(c, "app/ProductCRM", fiber.Map{"user": user, "error": "Gagal memuat produk"})
+	}
+	varian, err := h.service.VarianByProduk(c.UserContext())
+	if err != nil {
+		return h.inertiaService.Render(c, "app/ProductCRM", fiber.Map{"user": user, "error": "Gagal memuat varian produk"})
 	}
 
 	dashboardFilters := models.ProductCRMDashboardFilters{
@@ -108,6 +113,7 @@ func (h *ProductCRMHandler) Index(c *fiber.Ctx) error {
 			"batch_id":           filters.BatchID,
 		},
 		"dashboard": dashboard,
+		"varian":    varian,
 		"dashboard_filters": normalizedDashboardFilters,
 		"drilldown": drilldown,
 		"drilldown_mode": drilldownMode,
@@ -251,4 +257,31 @@ func (h *ProductCRMHandler) CancelAssignment(c *fiber.Ctx) error {
 		return h.inertiaService.Redirect(c, returnTo)
 	}
 	return h.inertiaService.Redirect(c, "/app/produk-crm?tab=crm")
+}
+
+func (h *ProductCRMHandler) varianDone(c *fiber.Ctx, err error, ok string) error {
+	if err != nil {
+		h.store.Flash(c, "error", "Gagal menyimpan varian: "+err.Error())
+	} else {
+		h.store.Flash(c, "success", ok)
+	}
+	return h.inertiaService.Redirect(c, "/app/produk-crm?tab=produk")
+}
+
+func (h *ProductCRMHandler) CreateVarian(c *fiber.Ctx) error {
+	produkID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	var req models.ProdukVarianRequest
+	if err != nil || c.BodyParser(&req) != nil {
+		return h.varianDone(c, errors.New("data varian tidak valid"), "")
+	}
+	return h.varianDone(c, h.service.CreateVarian(c.UserContext(), produkID, req), "Varian harga ditambahkan")
+}
+
+func (h *ProductCRMHandler) UpdateVarian(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	var req models.ProdukVarianRequest
+	if err != nil || c.BodyParser(&req) != nil {
+		return h.varianDone(c, errors.New("data varian tidak valid"), "")
+	}
+	return h.varianDone(c, h.service.UpdateVarian(c.UserContext(), id, req), "Varian harga diperbarui")
 }

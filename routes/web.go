@@ -60,6 +60,11 @@ type Handlers struct {
 	LeadLaporan                 *handlers.LeadLaporanHandler
 	LeadSources                 *handlers.LeadSourceHandler
 	LeadPrograms                *handlers.LeadProgramHandler
+	RegistrationPublic          *handlers.RegistrationPublicHandler
+	AffiliatePublic             *handlers.AffiliatePublicHandler
+	Affiliate                   *handlers.AffiliateHandler
+	RegistrationLinks           *handlers.RegistrationLinkHandler
+	XenditWebhook               *handlers.XenditWebhookHandler
 	MetaCAPI                    *handlers.MetaCAPIHandler
 	MetaAds                     *handlers.MetaAdsHandler
 	LeadFollowups               *handlers.LeadFollowupHandler
@@ -82,6 +87,35 @@ func SetupRoutes(app *fiber.App, h Handlers, store *session.Store, userService *
 	setupOAuthRoutes(app, h.OAuth, store, csrfMiddleware)
 	setupIntegrationRoutes(app, h.CsAiIngest)
 	setupProgramPublicRoutes(app, h.LeadPrograms)
+	setupRegistrationPublicRoutes(app, h.RegistrationPublic)
+	if h.AffiliatePublic != nil {
+		app.Get("/r/:kode", middlewares.AffiliateClickRateLimit.Limit(), h.AffiliatePublic.Redirect)
+	}
+	if h.Affiliate != nil {
+		app.Get("/affiliate/daftar", h.Affiliate.SignupPage)
+		app.Post("/affiliate/daftar", middlewares.DaftarRateLimit.Limit(), h.Affiliate.SignupSubmit)
+		app.Get("/affiliate/aktivasi/:token", h.Affiliate.ActivatePage)
+		app.Post("/affiliate/aktivasi/:token", middlewares.DaftarRateLimit.Limit(), h.Affiliate.ActivateSubmit)
+	}
+	if h.XenditWebhook != nil {
+		// Machine endpoint: authenticated by x-callback-token, no session/CSRF.
+		app.Post("/webhooks/xendit", h.XenditWebhook.Handle)
+	}
+}
+
+// setupRegistrationPublicRoutes exposes the public registration form and the
+// manual payment page. No login or CSRF: the form carries a signed render
+// token, and submits/uploads are rate limited per IP.
+func setupRegistrationPublicRoutes(app *fiber.App, h *handlers.RegistrationPublicHandler) {
+	if h == nil {
+		return
+	}
+	app.Get("/daftar/bayar/:ref", h.BayarPage)
+	app.Post("/daftar/bayar/:ref/bukti", middlewares.DaftarUploadRateLimit.Limit(), h.UploadBukti)
+	app.Post("/daftar/bayar/:ref/gateway", middlewares.DaftarUploadRateLimit.Limit(), h.StartGateway)
+	app.Get("/daftar/bayar/:ref/status", h.BayarStatus)
+	app.Get("/daftar/:slug", h.Page)
+	app.Post("/daftar/:slug", middlewares.DaftarRateLimit.Limit(), h.Submit)
 }
 
 // setupProgramPublicRoutes exposes the public attendance link that hosts
@@ -183,7 +217,7 @@ func setupAuthRoutes(app *fiber.App, authHandler *handlers.AuthHandler, password
 }
 
 func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userService *services.UserService, csrfMiddleware *middlewares.CSRFMiddleware) {
-	protected := app.Group("/app", middlewares.AuthRequired(store))
+	protected := app.Group("/app", middlewares.AuthRequired(store), middlewares.AffiliateRoleGuard(middlewares.SessionRole(store, userService)))
 	protected.Use(csrfMiddleware.Protect())
 
 	// Dashboard (all roles)
@@ -191,6 +225,11 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 
 	// Profile
 	protected.Get("/profile", h.App.Profile)
+	if h.Affiliate != nil {
+		// Affiliate Saya: any login with an active affiliate row (guru or external).
+		protected.Get("/affiliate", h.Affiliate.Me)
+		protected.Put("/affiliate/rekening", h.Affiliate.UpdateRekening)
+	}
 	protected.Put("/profile", h.App.UpdateProfile)
 	protected.Put("/profile/password", h.App.UpdatePassword)
 	protected.Put("/notifications/:id/read", h.Notifications.MarkRead)
@@ -314,6 +353,8 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Put("/produk-crm/produk/:id", akRole, h.ProductCRM.UpdateProduct)
 	protected.Post("/produk-crm/produk/:id/batch", akRole, h.ProductCRM.CreateBatch)
 	protected.Put("/produk-crm/batch/:id", akRole, h.ProductCRM.UpdateBatch)
+	protected.Post("/produk-crm/produk/:id/varian", akRole, h.ProductCRM.CreateVarian)
+	protected.Put("/produk-crm/varian/:id", akRole, h.ProductCRM.UpdateVarian)
 	protected.Post("/produk-crm/stok", akRole, h.ProductCRM.AddStock)
 	protected.Post("/produk-crm/opname", akRole, h.ProductCRM.Opname)
 	protected.Post("/produk-crm/mahasantri/:santriID/produk", akRole, h.ProductCRM.AssignProduct)
@@ -573,6 +614,31 @@ func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, u
 		protected.Put("/leads/:id/program", leadRole, h.LeadPrograms.SetLeadProgram)
 		protected.Post("/leads/:id/peserta", leadRole, h.LeadPrograms.DaftarkanPeserta)
 		protected.Post("/leads/:id/tawarkan-reguler", leadRole, h.LeadPrograms.TawarkanReguler)
+	}
+	if h.Affiliate != nil {
+		affAdmin := middlewares.RoleRequired(store, userService, "super_admin")
+		affView := middlewares.RoleRequired(store, userService, "super_admin", "keuangan")
+		protected.Get("/leads/affiliate", affView, h.Affiliate.Admin)
+		protected.Post("/leads/affiliate/hitung-ulang", affView, h.Affiliate.Reconcile)
+		protected.Post("/leads/affiliate/komisi/transfer", affView, h.Affiliate.Transfer)
+		protected.Post("/leads/affiliate/komisi/:cid/batal", affAdmin, h.Affiliate.CancelCommission)
+		protected.Post("/leads/affiliate/aturan", affAdmin, h.Affiliate.SaveRule)
+		protected.Delete("/leads/affiliate/aturan/:rid", affAdmin, h.Affiliate.DeleteRule)
+		protected.Put("/leads/affiliate/pengaturan", affAdmin, h.Affiliate.SaveSettings)
+		protected.Post("/leads/affiliate/:aid/setujui", affAdmin, h.Affiliate.Approve)
+		protected.Post("/leads/affiliate/:aid/undangan", affAdmin, h.Affiliate.Invite)
+		protected.Put("/leads/affiliate/:aid/status", affAdmin, h.Affiliate.SetStatus)
+		protected.Put("/leads/affiliate/:aid/kode", affAdmin, h.Affiliate.UpdateKode)
+		protected.Put("/leads/:id/affiliate", middlewares.RoleRequired(store, userService, LeadSourceEditorRoles...), h.Affiliate.SetLeadAffiliate)
+	}
+	if h.RegistrationLinks != nil {
+		linkRole := middlewares.RoleRequired(store, userService, LeadSourceEditorRoles...)
+		protected.Get("/leads/link-pendaftaran", leadRole, h.RegistrationLinks.Index)
+		protected.Post("/leads/link-pendaftaran", linkRole, h.RegistrationLinks.Create)
+		protected.Put("/leads/link-pendaftaran/pengaturan", linkRole, h.RegistrationLinks.SaveSettings)
+		protected.Put("/leads/link-pendaftaran/:lid", linkRole, h.RegistrationLinks.Update)
+		protected.Get("/leads/:id/payments/:pid/bukti", leadRole, h.RegistrationLinks.Bukti)
+		protected.Post("/leads/:id/payments/:pid/tolak", leadRole, h.RegistrationLinks.Tolak)
 	}
 	if h.MetaAds != nil {
 		adsRole := middlewares.RoleRequired(store, userService, MetaAdsRoles...)

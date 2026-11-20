@@ -130,6 +130,11 @@ func (s *JadwalPenawaranService) seats(ctx context.Context, rows []queries.Jadwa
 	if err != nil {
 		return nil, err
 	}
+	// Seats held by an active online payment session (spec §5.3).
+	holds, err := s.querier.ListActiveSeatHolds(ctx, sql.NullTime{Time: s.now().UTC(), Valid: true})
+	if err != nil {
+		return nil, err
+	}
 	out := jadwalSeats{}
 	for _, l := range leads {
 		from, ok := start[l.JadwalKode]
@@ -140,6 +145,15 @@ func (s *JadwalPenawaranService) seats(ctx context.Context, rows []queries.Jadwa
 			out[l.JadwalKode] = map[string]int64{}
 		}
 		out[l.JadwalKode][l.JenisKelamin]++
+	}
+	for _, h := range holds {
+		if _, ok := start[h.JadwalKode]; !ok {
+			continue
+		}
+		if out[h.JadwalKode] == nil {
+			out[h.JadwalKode] = map[string]int64{}
+		}
+		out[h.JadwalKode][h.JenisKelamin]++
 	}
 	return out, nil
 }

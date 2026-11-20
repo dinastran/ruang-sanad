@@ -21,6 +21,91 @@ type Absensi struct {
 	BatasMateri string
 }
 
+type Affiliate struct {
+	ID            int64
+	Kode          string
+	Tipe          string
+	GuruID        sql.NullInt64
+	UserID        sql.NullInt64
+	Nama          string
+	NoWa          string
+	Email         string
+	Status        string
+	BankNama      string
+	BankRekening  string
+	BankAtasNama  string
+	CatatanAdmin  string
+	DisetujuiOleh sql.NullInt64
+	DisetujuiAt   sql.NullTime
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+type AffiliateClick struct {
+	AffiliateID int64
+	Tanggal     string
+	Klik        int64
+}
+
+type AffiliateCommission struct {
+	ID          int64
+	AffiliateID int64
+	LeadID      int64
+	SantriID    sql.NullInt64
+	Sumber      string
+	SumberID    int64
+	BulanKe     int64
+	Basis       int64
+	Jenis       string
+	Nilai       int64
+	Pola        string
+	MaksBulan   sql.NullInt64
+	Jumlah      int64
+	Status      string
+	SiapAt      sql.NullTime
+	DibayarAt   sql.NullTime
+	DibayarOleh sql.NullInt64
+	MetodeBayar string
+	UjrohBulan  string
+	Catatan     string
+	AlasanBatal string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type AffiliateInvite struct {
+	ID          int64
+	AffiliateID int64
+	TokenHash   string
+	ExpiresAt   time.Time
+	UsedAt      sql.NullTime
+	CreatedAt   time.Time
+}
+
+type AffiliateRule struct {
+	ID        int64
+	Scope     string
+	TargetID  int64
+	Jenis     string
+	Nilai     int64
+	Pola      string
+	MaksBulan sql.NullInt64
+	IsAktif   int64
+	UpdatedBy sql.NullInt64
+	UpdatedAt time.Time
+}
+
+type AffiliateSetting struct {
+	ID                  int64
+	MasaBerlakuHari     int64
+	MasaTahanHari       int64
+	LinkTujuanDefaultID sql.NullInt64
+	KomponenUjrohID     sql.NullInt64
+	TemplateBagikan     string
+	UpdatedBy           sql.NullInt64
+	UpdatedAt           time.Time
+}
+
 type AiAuditLog struct {
 	ID        int64
 	UserID    sql.NullInt64
@@ -161,6 +246,9 @@ type CrmSetting struct {
 	UpdatedAt                   time.Time
 	PersonaBlockedKeywords      string
 	FollowupOnlyLabel           string
+	CsWaNumber                  string
+	PaymentExpiryHours          int64
+	BankManualInfo              string
 }
 
 type Guru struct {
@@ -456,6 +544,15 @@ type Lead struct {
 	ProgramID             sql.NullInt64
 }
 
+type LeadAffiliate struct {
+	LeadID      int64
+	AffiliateID int64
+	Sumber      string
+	DiklikAt    sql.NullTime
+	DikunciAt   time.Time
+	DiubahOleh  sql.NullInt64
+}
+
 type LeadAnalysis struct {
 	ID                     int64
 	LeadID                 int64
@@ -536,6 +633,17 @@ type LeadProgram struct {
 	IsAktif       int64
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+type LeadRegistration struct {
+	ID        int64
+	LeadID    int64
+	LinkID    int64
+	Ref       string
+	Payload   string
+	Ip        string
+	UserAgent string
+	CreatedAt time.Time
 }
 
 type LeadSource struct {
@@ -734,6 +842,31 @@ type PasswordReset struct {
 	CreatedAt time.Time
 }
 
+type Payment struct {
+	ID             int64
+	LeadID         int64
+	LinkID         sql.NullInt64
+	ProdukVarianID sql.NullInt64
+	Metode         string
+	Provider       string
+	ExternalID     sql.NullString
+	ProviderRef    string
+	CheckoutUrl    string
+	Amount         int64
+	Status         string
+	PaidAt         sql.NullTime
+	ExpiresAt      sql.NullTime
+	Channel        string
+	BuktiPath      string
+	RawWebhook     string
+	JadwalKode     string
+	JenisKelamin   string
+	PerluTinjau    int64
+	CatatanSistem  string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
 type Pembinaan struct {
 	ID         int64
 	Tanggal    time.Time
@@ -833,6 +966,18 @@ type ProdukBatch struct {
 	UpdatedAt      time.Time
 }
 
+type ProdukVarian struct {
+	ID        int64
+	ProdukID  int64
+	Nama      string
+	Harga     int64
+	PaketKode string
+	Urutan    int64
+	IsAktif   int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type ProgramKehadiran struct {
 	ID        int64
 	SesiID    int64
@@ -873,6 +1018,34 @@ type RapatGuru struct {
 	Status    string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type RegistrationLink struct {
+	ID                int64
+	Slug              string
+	Judul             string
+	Deskripsi         string
+	ProgramID         int64
+	LeadSourceID      int64
+	Mode              string
+	AfterSubmit       string
+	NominalOverride   sql.NullInt64
+	FieldConfig       string
+	WaTemplate        string
+	IzinkanManual     int64
+	IsAktif           int64
+	CreatedBy         sql.NullInt64
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	TampilKodeReferal int64
+}
+
+type RegistrationLinkStat struct {
+	LinkID  int64
+	Tanggal string
+	Klik    int64
+	Submit  int64
+	Bayar   int64
 }
 
 type RiayahKontak struct {

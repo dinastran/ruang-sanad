@@ -147,7 +147,7 @@
 					{#if !program.is_aktif}<span class="rounded-full bg-neutral-200 px-2 py-0.5 text-[11px] font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">Nonaktif</span>{/if}
 				</div>
 				<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-					{#if isPendek}Program pendek · closing jadi peserta ({program.produk_nama || "produk belum dipilih"}{program.batch_nama ? ` · ${program.batch_nama}` : ""}{program.produk_harga ? ` · Rp${fmt(program.produk_harga)}` : ""}){:else}Program bawaan · closing jadi santri kelas reguler{/if}
+					{#if isPendek}Program pendek · closing jadi peserta ({program.produk_nama || "produk belum dipilih"}{program.batch_nama ? ` · ${program.batch_nama}` : ""}{program.produk_harga ? ` · Rp${fmt(program.produk_harga)}` : ""}){:else}Program bawaan · closing jadi santri kelas reguler{program.produk_nama ? ` · harga dari produk ${program.produk_nama}` : ""}{/if}
 				</p>
 			</div>
 			<div class="flex shrink-0 flex-wrap gap-2">
@@ -162,6 +162,14 @@
 		{#if editing}
 			<form class={panel + " grid gap-3 p-4 sm:grid-cols-2 sm:p-5"} onsubmit={saveProgram}>
 				<label class={lbl + " sm:col-span-2"}>Nama program<input class={field + " mt-1"} bind:value={form.nama} maxlength="80" required /></label>
+				{#if !isPendek}
+					<label class={lbl + " sm:col-span-2"}>Produk harga (untuk Link Pendaftaran)
+						<select class={field + " mt-1"} bind:value={form.produk_id}>
+							<option value={0}>Belum ditautkan</option>
+							{#each props.produk ?? [] as p (p.id)}<option value={p.id}>{p.nama}{p.harga ? ` · Rp${fmt(p.harga)}` : ""}</option>{/each}
+						</select>
+					</label>
+				{/if}
 				{#if isPendek}
 					<label class={lbl}>Produk program
 						<select class={field + " mt-1"} bind:value={form.produk_id} onchange={() => (form.produk_batch_id = 0)}>

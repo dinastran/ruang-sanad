@@ -27,6 +27,65 @@ func (e *ErrLeadDuplicateSantri) Error() string {
 	return fmt.Sprintf("nomor ini sudah terdaftar sebagai santri %s", e.Matches[0].Nama)
 }
 
+// leadVerification is one payment confirmation: by staff (ActorUserID > 0,
+// strict stage rules) or by the payment gateway (system, AnyOpenStage).
+type leadVerification struct {
+	Amount       int64
+	Date         time.Time
+	Note         string
+	NoProof      bool
+	ActorUserID  int64
+	AnyOpenStage bool
+}
+
+// verifyLeadTx moves an open lead to terverifikasi inside the caller's
+// transaction and returns the payment.verified event payload. The caller
+// saves the lead and writes the event.
+func verifyLeadTx(ctx context.Context, q *queries.Querier, l *queries.Lead, v leadVerification, now time.Time) (map[string]any, error) {
+	if l.Status != LeadStatusOpen {
+		return nil, errors.New("hanya lead yang masih berjalan yang bisa diverifikasi")
+	}
+	if l.Stage == LeadStageTerverifikasi {
+		return nil, errors.New("lead sudah terverifikasi")
+	}
+	if !v.AnyOpenStage {
+		switch l.Stage {
+		case LeadStageBuktiMasuk:
+		case LeadStageInfoBayarDikirim:
+			if !v.NoProof {
+				return nil, errors.New("bukti transfer belum tercatat dari WA; centang konfirmasi untuk tetap memverifikasi")
+			}
+		default:
+			return nil, errors.New("verifikasi hanya untuk lead di tahap Info bayar dikirim atau Bukti transfer masuk")
+		}
+	}
+	if v.Amount <= 0 {
+		return nil, errors.New("nominal diterima wajib diisi")
+	}
+	if v.ActorUserID > 0 && l.PaymentAmount > 0 && v.Amount != l.PaymentAmount && v.Note == "" {
+		return nil, fmt.Errorf("nominal berbeda dari tagihan (Rp%d); catatan wajib diisi", l.PaymentAmount)
+	}
+	if v.Date.After(now.In(wib)) {
+		return nil, errors.New("tanggal terima tidak boleh di masa depan")
+	}
+	if v.ActorUserID > 0 {
+		// Staff verified the transfer: waiting manual proofs are the payment.
+		if err := markManualPaymentsPaid(ctx, q, l.ID, now); err != nil {
+			return nil, err
+		}
+	} else if err := flagPendingManualPayments(ctx, q, l.ID, now); err != nil {
+		return nil, err
+	}
+	from := l.Stage
+	l.Stage = LeadStageTerverifikasi
+	l.VerifiedAt = nullTime(now)
+	l.VerifiedBy = sql.NullInt64{Int64: v.ActorUserID, Valid: v.ActorUserID > 0}
+	return map[string]any{
+		"stage_from": from, "stage_to": l.Stage, "amount": v.Amount, "expected_amount": l.PaymentAmount,
+		"date": v.Date.In(wib).Format(time.DateOnly), "note": v.Note, "without_proof": from == LeadStageInfoBayarDikirim,
+	}, nil
+}
+
 // VerifyPayment records that the transfer was received (PRD 6.3).
 func (s *LeadService) VerifyPayment(ctx context.Context, id, actorID int64, req models.LeadVerifyRequest) error {
 	note := truncateRunes(req.Note, 500)
@@ -35,34 +94,11 @@ func (s *LeadService) VerifyPayment(ctx context.Context, id, actorID int64, req 
 		return errors.New("tanggal terima harus berformat YYYY-MM-DD")
 	}
 	return s.mutateLead(ctx, id, actorID, func(q *queries.Querier, l *queries.Lead, now time.Time) (string, map[string]any, error) {
-		if l.Status != LeadStatusOpen {
-			return "", nil, errors.New("hanya lead yang masih berjalan yang bisa diverifikasi")
-		}
-		switch l.Stage {
-		case LeadStageBuktiMasuk:
-		case LeadStageInfoBayarDikirim:
-			if !req.NoProof {
-				return "", nil, errors.New("bukti transfer belum tercatat dari WA; centang konfirmasi untuk tetap memverifikasi")
-			}
-		default:
-			return "", nil, errors.New("verifikasi hanya untuk lead di tahap Info bayar dikirim atau Bukti transfer masuk")
-		}
-		if req.Amount <= 0 {
-			return "", nil, errors.New("nominal diterima wajib diisi")
-		}
-		if l.PaymentAmount > 0 && req.Amount != l.PaymentAmount && note == "" {
-			return "", nil, fmt.Errorf("nominal berbeda dari tagihan (Rp%d); catatan wajib diisi", l.PaymentAmount)
-		}
-		if date.After(now.In(wib)) {
-			return "", nil, errors.New("tanggal terima tidak boleh di masa depan")
-		}
-		from := l.Stage
-		l.Stage = LeadStageTerverifikasi
-		l.VerifiedAt = nullTime(now)
-		l.VerifiedBy = sql.NullInt64{Int64: actorID, Valid: true}
-		payload := map[string]any{
-			"stage_from": from, "stage_to": l.Stage, "amount": req.Amount, "expected_amount": l.PaymentAmount,
-			"date": date.Format(time.DateOnly), "note": note, "without_proof": from == LeadStageInfoBayarDikirim,
+		payload, err := verifyLeadTx(ctx, q, l, leadVerification{
+			Amount: req.Amount, Date: date, Note: note, NoProof: req.NoProof, ActorUserID: actorID,
+		}, now)
+		if err != nil {
+			return "", nil, err
 		}
 		if req.SendConfirmation {
 			settings, err := q.GetCRMSettings(ctx)

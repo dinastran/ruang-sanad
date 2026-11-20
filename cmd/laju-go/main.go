@@ -154,6 +154,20 @@ func main() {
 	})
 	leadService.WithMetaCAPI(metaCAPIService)
 	startMetaCAPIWorker(metaCAPIService)
+	registrationService := services.NewRegistrationService(querier, leadService, jadwalService, []byte(cfg.SessionSecret))
+	affiliateService := services.NewAffiliateService(querier, leadService, []byte(cfg.SessionSecret))
+	leadService.WithAffiliates(affiliateService)
+	registrationService.WithAffiliates(affiliateService)
+	// Komisi affiliate: sinkron guru + rekonsiliasi buku komisi tiap 10 menit.
+	affiliateService.StartReconcileWorker(context.Background(), 10*time.Minute)
+	switch {
+	case cfg.XenditSecretKey == "" || cfg.XenditCallbackToken == "":
+		slog.Info("xendit off: XENDIT_SECRET_KEY / XENDIT_CALLBACK_TOKEN not set; pendaftaran pakai transfer manual")
+	case !strings.HasPrefix(cfg.AppURL, "https://"):
+		slog.Warn("xendit off: APP_URL must be https for checkout return links")
+	default:
+		registrationService.WithGateway(services.NewXenditGateway(cfg.XenditAPIURL, cfg.XenditSecretKey), cfg.AppURL)
+	}
 	metaAdsService := services.NewMetaAdsService(querier, services.MetaAdsConfig{
 		Token: cfg.MetaAdsToken, AccountIDs: cfg.MetaAdAccountIDs, APIVersion: cfg.MetaAPIVersion, AppSecret: cfg.MetaAppSecret,
 	})
@@ -162,6 +176,10 @@ func main() {
 	// Create storage directories
 	if err := os.MkdirAll("storage/uploads", 0755); err != nil {
 		slog.Error("failed to create uploads directory", "error", err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll(services.DefaultProofDir, 0750); err != nil {
+		slog.Error("failed to create payment proofs directory", "error", err)
 		os.Exit(1)
 	}
 	if err := os.MkdirAll("storage/avatars", 0755); err != nil {
@@ -256,7 +274,12 @@ func main() {
 		AIAkses:                     handlers.NewAIAksesHandler(aiTokenService, aiAgentService, userService, sessionStore, inertiaService, cfg.AppURL),
 		CsAiIngest:                  handlers.NewCsAiIngestHandler(leadService, cfg.CSBridgeIngestToken, cfg.CSBridgeAllowedCIDRs).WithJadwal(jadwalService),
 		JadwalPenawaran:             handlers.NewJadwalPenawaranHandler(jadwalService, sessionStore, inertiaService),
-		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService).WithPrograms(leadProgramService),
+		Leads:                       handlers.NewLeadHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService).WithPrograms(leadProgramService).WithRegistration(registrationService).WithAffiliates(affiliateService),
+		RegistrationPublic:          handlers.NewRegistrationPublicHandler(registrationService, inertiaService),
+		AffiliatePublic:             handlers.NewAffiliatePublicHandler(affiliateService),
+		Affiliate:                   handlers.NewAffiliateHandler(affiliateService, sessionStore, inertiaService),
+		RegistrationLinks:           handlers.NewRegistrationLinkHandler(registrationService, sessionStore, inertiaService),
+		XenditWebhook:               handlers.NewXenditWebhookHandler(registrationService, cfg.XenditCallbackToken),
 		LeadPrograms:                handlers.NewLeadProgramHandler(leadService, leadProgramService, productCRMService, sessionStore, inertiaService, routes.LeadSourceEditorRoles),
 		LeadClosing:                 handlers.NewLeadClosingHandler(leadService, sessionStore, inertiaService),
 		LeadLaporan:                 handlers.NewLeadLaporanHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService),
@@ -289,6 +312,9 @@ func main() {
 		cfg.FromName,
 		appURL,
 	)
+	if cfg.SMTPUser != "" && cfg.SMTPPass != "" && routeHandlers.Affiliate != nil {
+		routeHandlers.Affiliate.WithMailer(mailerService.SendEmail)
+	}
 
 	// Setup password reset handler
 	passwordResetHandler := routes.SetupPasswordResetHandler(

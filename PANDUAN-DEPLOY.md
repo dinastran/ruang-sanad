@@ -418,3 +418,16 @@ ssh addins@103.126.117.185 'sudo journalctl -u rs-nurdin -n 20 --no-pager' lihat
 
 ---
 Ringkasnya: edit → ./scripts/deploy.sh → selesai. 🚀
+## Pembayaran online (Xendit) untuk Link Pendaftaran
+
+1. Di dashboard Xendit (akun yayasan, sudah lolos verifikasi), buat **Secret API key** dengan izin *Money-in* write.
+2. Settings → Webhooks: isi URL **Payment Session** (`completed` dan `expired`) dengan `<APP_URL>/webhooks/xendit` (mis. `https://dashboard.ruangsanad.com/webhooks/xendit`), lalu salin **Verification token**.
+3. Isi `.env` lalu restart:
+   ```
+   XENDIT_SECRET_KEY=xnd_production_...
+   XENDIT_CALLBACK_TOKEN=<verification token>
+   APP_URL=https://dashboard.ruangsanad.com
+   ```
+   Gateway hanya aktif bila dua variabel Xendit terisi dan `APP_URL` memakai https. Tanpa itu halaman bayar memakai transfer manual saja.
+4. Uji dulu dengan key **test mode** (`xnd_development_...`): bayar memakai simulator di halaman checkout Xendit, pastikan lead berubah ke *Terverifikasi* dan muncul notifikasi keuangan.
+5. Bukti transfer manual disimpan di `data/payment_proofs/` — sertakan folder ini dalam backup.

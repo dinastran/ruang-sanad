@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,6 +73,10 @@ func (s *UjrohService) lengkapiLive(ctx context.Context, q *queries.Querier, bul
 		}
 		out[i].Komponen = append(out[i].Komponen, line)
 		out[i].TotalKomponen += line.Total
+	}
+
+	if err := tambahKomisiAffiliate(ctx, q, bulan, &out, index); err != nil {
+		return nil, err
 	}
 
 	kasbon, err := q.ListKasbonUntukBulan(ctx, bulan)
@@ -302,6 +307,9 @@ func (s *UjrohService) SetKomponenPenerima(komponenID int64, penerima []models.U
 // insidental entry, or a tetap amount adjusted for this month (jumlah 0 means
 // not given this month).
 func (s *UjrohService) SetKomponenBulan(bulan string, guruID, komponenID int64, req models.SetUjrohKomponenBulanRequest, userID int64) error {
+	if isKomponenAffiliate(context.Background(), s.querier, komponenID) {
+		return ErrKomponenSistem
+	}
 	bulan, err := s.NormalizeBulan(bulan)
 	if err != nil {
 		return err
@@ -332,6 +340,9 @@ func (s *UjrohService) SetKomponenBulan(bulan string, guruID, komponenID int64, 
 // HapusKomponenBulan removes a month's entry: an insidental line disappears and
 // a tetap component returns to its recurring amount.
 func (s *UjrohService) HapusKomponenBulan(bulan string, guruID, komponenID int64) error {
+	if isKomponenAffiliate(context.Background(), s.querier, komponenID) {
+		return ErrKomponenSistem
+	}
 	bulan, err := s.NormalizeBulan(bulan)
 	if err != nil {
 		return err
@@ -445,4 +456,51 @@ func (s *UjrohService) BatalkanKasbon(id, userID int64) error {
 		return ErrKasbonSudahDipotong
 	}
 	return s.querier.BatalkanKasbon(ctx, id, userID)
+}
+
+// ErrKomponenSistem: the "Komisi Affiliate" line is computed from the
+// affiliate commission ledger and cannot be edited by hand.
+var ErrKomponenSistem = errors.New("komponen Komisi Affiliate dihitung otomatis dari buku komisi dan tidak bisa diubah manual")
+
+func isKomponenAffiliate(ctx context.Context, q *queries.Querier, komponenID int64) bool {
+	st, err := q.GetAffiliateSettings(ctx)
+	return err == nil && st.KomponenUjrohID.Valid && st.KomponenUjrohID.Int64 == komponenID
+}
+
+// tambahKomisiAffiliate adds each guru's ready affiliate commissions (matured
+// before the end of the month) as a system "Komisi Affiliate" line.
+func tambahKomisiAffiliate(ctx context.Context, q *queries.Querier, bulan string, out *[]models.UjrohGuru, index map[int64]int) error {
+	st, err := q.GetAffiliateSettings(ctx)
+	if err != nil || !st.KomponenUjrohID.Valid {
+		return nil
+	}
+	cutoff, err := ujrohKomisiCutoff(bulan)
+	if err != nil {
+		return err
+	}
+	rows, err := q.ListSiapGuruCommissionTotals(ctx, sql.NullTime{Time: cutoff, Valid: true})
+	if err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if !r.GuruID.Valid || r.Total <= 0 {
+			continue
+		}
+		i, ok := index[r.GuruID.Int64]
+		if !ok {
+			*out = append(*out, models.UjrohGuru{
+				GuruID: r.GuruID.Int64, GuruNama: r.GuruNama, GuruStatus: r.GuruStatus,
+				Pertemuan: []models.UjrohPertemuan{}, Komponen: []models.UjrohKomponenLine{}, Kasbon: []models.UjrohKasbonLine{},
+			})
+			i = len(*out) - 1
+			index[r.GuruID.Int64] = i
+		}
+		line := models.UjrohKomponenLine{
+			KomponenID: st.KomponenUjrohID.Int64, KomponenNama: "Komisi Affiliate", Jenis: "insidental",
+			Jumlah: 1, Tarif: r.Total, Total: r.Total, Catatan: strconv.FormatInt(r.JumlahKomisi, 10) + " komisi affiliate",
+		}
+		(*out)[i].Komponen = append((*out)[i].Komponen, line)
+		(*out)[i].TotalKomponen += line.Total
+	}
+	return nil
 }

@@ -2,6 +2,7 @@
 	import { router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import ProductCRMDashboard from "@components/product-crm/ProductCRMDashboard.svelte";
+	import VarianHarga, { type Varian } from "@components/product-crm/VarianHarga.svelte";
 	import type { User } from "@lib/types";
 	import {
 		Archive,
@@ -116,6 +117,7 @@
 	interface Props {
 		user?: User;
 		products?: Product[];
+		varian?: Record<number, Varian[]>;
 		crm?: CRMRow[];
 		total?: number;
 		page?: number;
@@ -139,6 +141,7 @@
 	let props: Props = $props();
 	let user = $derived(props.user);
 	let products = $derived(props.products ?? []);
+	let varianMap = $derived<Record<number, Varian[]>>(props.varian ?? {});
 	let crm = $derived(props.crm ?? []);
 	let total = $derived(props.total ?? 0);
 	let page = $derived(props.page ?? 1);
@@ -455,6 +458,7 @@
 							{:else}
 								<p class="mt-4 text-xs text-neutral-500">Belum ada batch/edisi.</p>
 							{/if}
+							{#if p.kategori === "program"}<VarianHarga produkID={p.id} varian={varianMap[p.id] ?? []} />{/if}
 						</section>
 					{:else}
 						<div class="rounded-2xl border border-dashed border-neutral-300 p-10 text-center text-sm text-neutral-500 dark:border-neutral-700">Belum ada produk.</div>

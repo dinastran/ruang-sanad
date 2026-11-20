@@ -16,6 +16,8 @@ const (
 	RoleSuperAdmin UserRole = "super_admin"
 	RoleGuru       UserRole = "guru"
 	RoleKoordinator UserRole = "koordinator_guru"
+	// RoleAffiliate: external affiliate, only "Affiliate Saya" pages.
+	RoleAffiliate UserRole = "affiliate"
 )
 
 type User struct {

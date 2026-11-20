@@ -201,6 +201,8 @@ func roleHome(role models.UserRole) string {
 		return "/app/koordinator-guru"
 	case models.RoleUser:
 		return "/app/tasbih"
+	case models.RoleAffiliate:
+		return "/app/affiliate"
 	default:
 		return "/app"
 	}

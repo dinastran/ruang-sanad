@@ -205,3 +205,28 @@ func TestProgramManualDanValidasi(t *testing.T) {
 	_, err = f.programs.Create(models.LeadProgramRequest{Nama: "sepekan bersama  al-fatihah", ProdukID: f.produkID})
 	require.Error(t, err)
 }
+
+func TestProgramRegulerBolehPunyaProdukHarga(t *testing.T) {
+	f := setupLeadFixture(t)
+	programs := NewLeadProgramService(f.querier)
+	res, err := f.db.Exec(`INSERT INTO produk (nama, kategori, harga) VALUES ('Tahsin Reguler', 'program', 150000)`)
+	require.NoError(t, err)
+	produkID, _ := res.LastInsertId()
+	res, err = f.db.Exec(`INSERT INTO produk (nama, kategori, harga) VALUES ('Buku Tajwid', 'buku', 50000)`)
+	require.NoError(t, err)
+	bukuID, _ := res.LastInsertId()
+
+	require.Error(t, programs.Update(1, models.LeadProgramRequest{Nama: "Tahsin Reguler", ProdukID: bukuID}), "produk buku ditolak")
+	require.NoError(t, programs.Update(1, models.LeadProgramRequest{Nama: "Tahsin Reguler", Jenis: "program", ProdukID: produkID, ProdukBatchID: 99, IsAktif: false}))
+	p, err := f.querier.GetLeadProgram(t.Context(), 1)
+	require.NoError(t, err)
+	require.Equal(t, LeadProgramJenisReguler, p.Jenis, "jenis tetap reguler")
+	require.True(t, p.IsAktif, "tetap aktif")
+	require.Equal(t, produkID, p.ProdukID)
+	require.Zero(t, p.ProdukBatchID, "reguler tanpa batch")
+
+	require.NoError(t, programs.Update(1, models.LeadProgramRequest{Nama: "Tahsin Reguler"}))
+	p, err = f.querier.GetLeadProgram(t.Context(), 1)
+	require.NoError(t, err)
+	require.Zero(t, p.ProdukID, "produk boleh dilepas")
+}
