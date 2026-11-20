@@ -40,6 +40,13 @@
 		PhoneCall,
 		Kanban,
 		CircleDot,
+		List,
+		ChartPie,
+		Megaphone,
+		CalendarRange,
+		Link2,
+		BadgeDollarSign,
+		Activity,
 	} from "lucide-svelte";
 	import DarkModeToggle from "@components/DarkModeToggle.svelte";
 	import Logo from "@components/Logo.svelte";
@@ -109,12 +116,19 @@
 		{ href: "/app/kelas", label: "Kelas", group: "kelas", category: "Akademik", show: isAdminKelas, icon: BookOpen },
 		{ href: "/app/kelas/tindak-lanjut-alpa", label: "Tindak Lanjut Alpa", group: "tindak-lanjut-alpa", category: "Akademik", show: isAdminKelas, icon: PhoneCall, badge: jumlahAlpa },
 		{ href: "/app/jadwal-penawaran", label: "Jadwal Penawaran", group: "jadwal-penawaran", category: "Akademik", show: isCS || isAdminKelas, icon: CalendarClock },
-		{ href: "/app/leads/dashboard", label: "Analisis CRM", group: "leads-dashboard", category: "CRM", show: canLeads, icon: LayoutDashboard },
-		{ href: "/app/leads/prioritas", label: "Prioritas Lead", group: "leads-prioritas", category: "CRM", show: canLeads, icon: ClipboardList },
-		{ href: "/app/leads", label: "Pusat CRM", group: "leads", category: "CRM", show: canLeads, icon: MessageCircle },
-		{ href: "/app/leads/followups", label: "Follow-up", group: "leads-followups", category: "CRM", show: canApproveFollowup, icon: Send },
-		{ href: "/app/leads/laporan", label: "Laporan Leads", group: "leads-laporan", category: "CRM", show: canLeads, icon: ChartColumn },
-		{ href: "/app/leads/affiliate", label: "Affiliate", group: "leads-affiliate", category: "CRM", show: isSuperAdmin || role === "keuangan", icon: Share2 },
+		// CRM: satu dropdown, dikelompokkan per section (judul kecil di menu).
+		{ href: "/app/leads", label: "Ringkasan CRM", group: "leads", category: "CRM", section: "Lead", show: canLeads, icon: LayoutDashboard },
+		{ href: "/app/leads?view=list", label: "Daftar Lead", group: "leads-daftar", category: "CRM", section: "Lead", show: canLeads, icon: List },
+		{ href: "/app/leads/prioritas", label: "Prioritas Lead", group: "leads-prioritas", category: "CRM", section: "Lead", show: canLeads, icon: ClipboardList },
+		{ href: "/app/leads/followups", label: "Follow-up", group: "leads-followups", category: "CRM", section: "Lead", show: canApproveFollowup, icon: Send },
+		{ href: "/app/leads/dashboard", label: "Analisis CRM", group: "leads-dashboard", category: "CRM", section: "Analisis", show: canLeads, icon: ChartPie },
+		{ href: "/app/leads/laporan", label: "Laporan Leads", group: "leads-laporan", category: "CRM", section: "Analisis", show: canLeads, icon: ChartColumn },
+		{ href: "/app/leads/sumber", label: "Sumber Lead", group: "leads-sumber", category: "CRM", section: "Akuisisi", show: canLeads, icon: Megaphone },
+		{ href: "/app/leads/program", label: "Program", group: "leads-program", category: "CRM", section: "Akuisisi", show: canLeads, icon: CalendarRange },
+		{ href: "/app/leads/link-pendaftaran", label: "Link Pendaftaran", group: "leads-link", category: "CRM", section: "Akuisisi", show: canLeads, icon: Link2 },
+		{ href: "/app/leads/affiliate", label: "Affiliate", group: "leads-affiliate", category: "CRM", section: "Akuisisi", show: isSuperAdmin || role === "keuangan", icon: Share2 },
+		{ href: "/app/leads/iklan", label: "Performa Iklan", group: "leads-iklan", category: "CRM", section: "Iklan", show: role === "cs" || isSuperAdmin, icon: BadgeDollarSign },
+		{ href: "/app/leads/meta-capi", label: "Meta CAPI", group: "leads-capi", category: "CRM", section: "Iklan", show: isSuperAdmin, icon: Activity },
 		{ href: "/app/affiliate", label: "Affiliate Saya", group: "affiliate-saya", category: role === "affiliate" ? "Utama" : "Guru", show: role === "affiliate" || role === "guru" || role === "koordinator_guru", icon: Share2 },
 		{ href: "/app/keuangan", label: "Tagihan", group: "keuangan", category: "Keuangan", show: canViewKeuangan, icon: Wallet },
 		{ href: "/app/keuangan/tagihan", label: "Daftar Tagihan", group: "tagihan", category: "Keuangan", show: canViewKeuangan, icon: Receipt },
@@ -154,6 +168,18 @@
 			.filter((category) => category.items.length > 0),
 	);
 
+	// Cermin handlers.leadOverviewRequested: /app/leads tanpa filter = Ringkasan, selain itu Daftar Lead.
+	function leadOverview(q: URLSearchParams): boolean {
+		const view = q.get("view");
+		if (view === "list") return false;
+		for (const key of q.keys()) {
+			if (key === "summary_days" || key === "view") continue;
+			if (view === "overview" && (key === "from" || key === "to")) continue;
+			return false;
+		}
+		return true;
+	}
+
 	let activeGroup = $derived(activeGroupFromPath());
 	function activeGroupFromPath(): string {
 		if (typeof window === "undefined") return "";
@@ -167,8 +193,14 @@
 		if (path.startsWith("/app/leads/laporan")) return "leads-laporan";
 		if (path.startsWith("/app/leads/followups")) return "leads-followups";
 		if (path.startsWith("/app/leads/affiliate")) return "leads-affiliate";
+		if (path.startsWith("/app/leads/sumber")) return "leads-sumber";
+		if (path.startsWith("/app/leads/program")) return "leads-program";
+		if (path.startsWith("/app/leads/link-pendaftaran")) return "leads-link";
+		if (path.startsWith("/app/leads/iklan")) return "leads-iklan";
+		if (path.startsWith("/app/leads/meta-capi")) return "leads-capi";
 		if (path.startsWith("/app/affiliate")) return "affiliate-saya";
-		if (path.startsWith("/app/leads")) return "leads";
+		if (path === "/app/leads" || path === "/app/leads/") return leadOverview(new URLSearchParams(window.location.search)) ? "leads" : "leads-daftar";
+		if (path.startsWith("/app/leads")) return "leads-daftar"; // detail lead
 		if (path.startsWith("/app/integrasi-whatsapp")) return "integrasi-whatsapp";
 		if (path.startsWith("/app/santri")) return "santri";
 		if (path.startsWith("/app/perlu-dilengkapi")) return "perlu-dilengkapi";
@@ -298,9 +330,12 @@
 						<ChevronDown size="15" class="transition-transform {openNavCategory === category.label ? 'rotate-180' : ''}" />
 					</button>
 					{#if openNavCategory === category.label}
-						<div class="absolute left-0 mt-2 w-56 rounded-xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925 shadow-xl p-2">
-							{#each category.items as item}
+						<div class="absolute left-0 mt-2 w-60 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-xl border border-neutral-200/80 dark:border-white/[0.06] bg-white dark:bg-neutral-925 shadow-xl p-2">
+							{#each category.items as item, i}
 								{@const Icon = item.icon}
+								{#if item.section && item.section !== category.items[i - 1]?.section}
+									<p class="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 {i > 0 ? 'mt-2 border-t border-neutral-100 pt-3 dark:border-white/[0.06]' : 'pt-1'}">{item.section}</p>
+								{/if}
 								<a href={item.href} use:inertia onclick={() => (openNavCategory = null)} class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors {item.group === activeGroup ? 'bg-brand-400/10 text-brand-600 dark:text-brand-400' : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'}">
 									<Icon size="16" />
 									{item.label}
@@ -385,8 +420,11 @@
 		{#each menuCategories as category}
 			<div class="space-y-1">
 				{#if showLabel}<p class="px-3 text-[11px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">{category.label}</p>{/if}
-				{#each category.items as item}
+				{#each category.items as item, i}
 					{@const Icon = item.icon}
+					{#if showLabel && item.section && item.section !== category.items[i - 1]?.section}
+						<p class="px-3 pt-2 text-[11px] font-medium text-neutral-400 dark:text-neutral-500">{item.section}</p>
+					{/if}
 					<a
 						href={item.href}
 						use:inertia
@@ -497,8 +535,11 @@
 					</button>
 					{#if openMobileCategory === category.label || category.items.some((item) => item.group === activeGroup)}
 						<div class="space-y-1 pb-2">
-							{#each category.items as item}
+							{#each category.items as item, i}
 								{@const Icon = item.icon}
+								{#if item.section && item.section !== category.items[i - 1]?.section}
+									<p class="ml-2 px-4 pt-2 text-[11px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">{item.section}</p>
+								{/if}
 								<a href={item.href} use:inertia class="flex items-center gap-3 ml-2 px-4 py-3 rounded-xl text-sm font-medium transition-all {item.group === activeGroup ? 'bg-brand-400/10 text-brand-600 dark:text-brand-400' : 'text-neutral-700 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'}" onclick={() => (isMenuOpen = false)}>
 									<Icon size="20" />
 									{item.label}

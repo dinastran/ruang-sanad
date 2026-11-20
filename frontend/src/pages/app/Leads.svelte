@@ -4,7 +4,7 @@
 	import type { Flash, User } from "@lib/types";
 	import { Toast } from "@lib/notifications/toast";
 	import type { LeadLabel } from "@lib/leads";
-	import { Activity, BadgeDollarSign, CalendarRange, Link2, Share2, ChartColumn, Inbox, Kanban, LayoutDashboard, List, Megaphone } from "lucide-svelte";
+	import { Inbox, Kanban, List } from "lucide-svelte";
 	import { fmt } from "@components/lead-dashboard/types";
 	import PipelineStrip from "@components/leads/PipelineStrip.svelte";
 	import LeadFilters from "@components/leads/LeadFilters.svelte";
@@ -116,7 +116,6 @@
 	const seg = "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
 	const segOn = " bg-white text-neutral-900 shadow-[0_0_0_1px_rgba(15,23,42,.08),0_1px_2px_rgba(15,23,42,.08)] dark:bg-neutral-800 dark:text-white dark:shadow-[0_0_0_1px_rgba(255,255,255,.08)]";
 	const segIdle = " text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white";
-	const ghost = "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-neutral-300 dark:hover:bg-white/[0.05]";
 </script>
 
 <AppLayout {user}>
@@ -128,16 +127,7 @@
 				<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Calon santri dari chat CS, dari pertanyaan pertama sampai jadi santri.</p>
 			</div>
 			<div class="flex flex-wrap items-center gap-1">
-				<a href="/app/leads" use:inertia class={ghost}><LayoutDashboard size={15} /> Ringkasan</a>
-				<a href="/app/leads/prioritas" use:inertia class={ghost}><Inbox size={15} /> Prioritas</a>
-				<a href="/app/leads/laporan" use:inertia class={ghost}><ChartColumn size={15} /> Laporan</a>
-				<a href="/app/leads/sumber" use:inertia class={ghost}><Megaphone size={15} /> Sumber</a>
-				<a href="/app/leads/program" use:inertia class={ghost}><CalendarRange size={15} /> Program</a>
-				<a href="/app/leads/link-pendaftaran" use:inertia class={ghost}><Link2 size={15} /> Link Pendaftaran</a>
-				{#if props.user?.role === "super_admin" || props.user?.role === "keuangan"}<a href="/app/leads/affiliate" use:inertia class={ghost}><Share2 size={15} /> Affiliate</a>{/if}
-				{#if user?.role === "super_admin" || user?.role === "cs"}<a href="/app/leads/iklan" use:inertia class={ghost}><BadgeDollarSign size={15} /> Iklan</a>{/if}
-				{#if user?.role === "super_admin"}<a href="/app/leads/meta-capi" use:inertia class={ghost}><Activity size={15} /> Meta CAPI</a>{/if}
-				<div class="ml-1 hidden gap-0.5 rounded-lg bg-neutral-100 p-1 lg:inline-flex dark:bg-neutral-900" role="group" aria-label="Tampilan">
+				<div class="hidden gap-0.5 rounded-lg bg-neutral-100 p-1 lg:inline-flex dark:bg-neutral-900" role="group" aria-label="Tampilan">
 					<button type="button" onclick={() => setView("list")} aria-pressed={view === "list"} class={seg + (view === "list" ? segOn : segIdle)}><List size={15} /> Daftar</button>
 					<button type="button" onclick={() => setView("kanban")} aria-pressed={view === "kanban"} class={seg + (view === "kanban" ? segOn : segIdle)}><Kanban size={15} /> Kanban</button>
 				</div>
