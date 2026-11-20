@@ -134,7 +134,7 @@
 				<a href="/app/leads/sumber" use:inertia class={ghost}><Megaphone size={15} /> Sumber</a>
 				<a href="/app/leads/program" use:inertia class={ghost}><CalendarRange size={15} /> Program</a>
 				<a href="/app/leads/link-pendaftaran" use:inertia class={ghost}><Link2 size={15} /> Link Pendaftaran</a>
-				{#if props.user?.role === "super_admin" || props.user?.role === "keuangan"}<a href="/app/leads/affiliate" use:inertia class={ghost}><Share2 size={15} /> Affiliate</a>{/if}
+				{#if props.user?.role === "super_admin"}<a href="/app/leads/affiliate" use:inertia class={ghost}><Share2 size={15} /> Affiliate</a>{/if}
 				{#if user?.role === "super_admin" || user?.role === "cs"}<a href="/app/leads/iklan" use:inertia class={ghost}><BadgeDollarSign size={15} /> Iklan</a>{/if}
 				{#if user?.role === "super_admin"}<a href="/app/leads/meta-capi" use:inertia class={ghost}><Activity size={15} /> Meta CAPI</a>{/if}
 				<div class="ml-1 hidden gap-0.5 rounded-lg bg-neutral-100 p-1 lg:inline-flex dark:bg-neutral-900" role="group" aria-label="Tampilan">

@@ -114,8 +114,9 @@
 		{ href: "/app/leads", label: "Pusat CRM", group: "leads", category: "CRM", show: canLeads, icon: MessageCircle },
 		{ href: "/app/leads/followups", label: "Follow-up", group: "leads-followups", category: "CRM", show: canApproveFollowup, icon: Send },
 		{ href: "/app/leads/laporan", label: "Laporan Leads", group: "leads-laporan", category: "CRM", show: canLeads, icon: ChartColumn },
-		{ href: "/app/leads/affiliate", label: "Affiliate", group: "leads-affiliate", category: "CRM", show: isSuperAdmin || role === "keuangan", icon: Share2 },
-		{ href: "/app/affiliate", label: "Affiliate Saya", group: "affiliate-saya", category: role === "affiliate" ? "Utama" : "Guru", show: role === "affiliate" || role === "guru" || role === "koordinator_guru", icon: Share2 },
+		// Affiliate sementara hanya untuk super admin (belum dibuka ke guru/keuangan).
+		{ href: "/app/leads/affiliate", label: "Affiliate", group: "leads-affiliate", category: "CRM", show: isSuperAdmin, icon: Share2 },
+		{ href: "/app/affiliate", label: "Affiliate Saya", group: "affiliate-saya", category: "Utama", show: role === "affiliate", icon: Share2 },
 		{ href: "/app/keuangan", label: "Tagihan", group: "keuangan", category: "Keuangan", show: canViewKeuangan, icon: Wallet },
 		{ href: "/app/keuangan/tagihan", label: "Daftar Tagihan", group: "tagihan", category: "Keuangan", show: canViewKeuangan, icon: Receipt },
 		{ href: "/app/keuangan/ujroh", label: "Ujroh Guru", group: "ujroh", category: "Keuangan", show: canViewKeuangan, icon: HandCoins },
