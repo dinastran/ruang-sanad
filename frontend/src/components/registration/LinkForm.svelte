@@ -57,7 +57,7 @@
 	let programDipilih = $derived(programs.find((p) => p.id === Number(form.program_id)));
 	let preview = $derived<PublicLink>({
 		id: 0, slug: form.slug, judul: form.judul || "Judul halaman", deskripsi: form.deskripsi, mode: form.mode, after_submit: form.after_submit,
-		program_nama: programDipilih?.nama ?? "Program", butuh_jadwal: Number(form.program_id) === 1, harga: Number(form.nominal_text) || 0,
+		program_nama: programDipilih?.nama ?? "Program", butuh_jadwal: Number(form.program_id) === 1, harga: nominalOverride(form.nominal_text) ?? 0,
 		varian: [], field_config: form.field_config, izinkan_manual: form.izinkan_manual, kode_referal: form.tampil_kode_referal,
 	});
 
@@ -66,15 +66,45 @@
 		form.slug = form.judul.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 	}
 
+	let galat = $state("");
+
+	// bind:value on <input type="number"> yields a number, or null when
+	// cleared — never call string methods on it.
+	function nominalOverride(v: unknown): number | null {
+		if (v === null || v === undefined || String(v).trim() === "") return null;
+		const n = Number(v);
+		return Number.isFinite(n) ? n : null;
+	}
+
 	function simpan(e: Event) {
 		e.preventDefault();
-		menyimpan = true;
+		galat = "";
+		if (!Number(form.program_id)) {
+			galat = "Pilih program yang sudah terhubung ke produk (atur di menu Program).";
+			return;
+		}
+		if (!Number(form.lead_source_id)) {
+			galat = "Pilih sumber lead.";
+			return;
+		}
 		const { nominal_text, ...rest } = form;
 		const body = {
 			...rest, program_id: Number(form.program_id), lead_source_id: Number(form.lead_source_id),
-			nominal_override: nominal_text.trim() === "" ? null : Number(nominal_text),
+			nominal_override: nominalOverride(nominal_text),
 		};
-		const opts = { preserveScroll: true, onSuccess: onclose, onFinish: () => (menyimpan = false) };
+		menyimpan = true;
+		const opts = {
+			preserveScroll: true,
+			// The server answers validation errors with a redirect + flash, so
+			// keep the form open and show the message here.
+			onSuccess: (page: { props: Record<string, any> }) => {
+				const err = page.props?.flash?.error;
+				if (err) galat = err;
+				else onclose();
+			},
+			onError: () => (galat = "Gagal menyimpan. Periksa isian lalu coba lagi."),
+			onFinish: () => (menyimpan = false),
+		};
 		if (initial) router.put(`/app/leads/link-pendaftaran/${initial.id}`, body, opts);
 		else router.post("/app/leads/link-pendaftaran", body, opts);
 	}
@@ -155,6 +185,7 @@
 			<label class="flex items-center gap-2"><input type="checkbox" bind:checked={form.is_aktif} /> Link aktif</label>
 		</div>
 
+		{#if galat}<p class="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300" role="alert">{galat}</p>{/if}
 		<div class="flex justify-end gap-2 border-t border-neutral-100 pt-4 dark:border-white/[0.06]">
 			<button type="button" class={btn + " border border-neutral-200 text-neutral-700 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300"} onclick={onclose}>Batal</button>
 			<button type="submit" class={btn + " bg-brand-600 text-white hover:bg-brand-700 dark:bg-brand-500"} disabled={menyimpan}>{initial ? "Simpan" : "Buat link"}</button>
