@@ -21,6 +21,12 @@
 	let tab = $state<"dzikir" | "paket">("dzikir");
 
 	const namaDzikir = (id: number) => dzikir.find((d) => d.id === id)?.latin ?? "";
+	// Dzikir yang hanya bagian paket (mis. Al-Ma'tsurat) tidak ditampilkan sebagai dzikir satuan.
+	const dzikirSatuan = $derived(dzikir.filter((d) => !d.hanya_paket));
+	function ringkasPaket(p: Paket): string {
+		if (p.items.length <= 6) return p.items.map((it) => `${namaDzikir(it.dzikir_id)} ${it.target}`).join(" → ");
+		return `${p.items.length} bacaan · ${p.items.reduce((a, it) => a + it.target, 0)} hitungan${p.deskripsi ? ` · ${p.deskripsi}` : ""}`;
+	}
 
 	function arsipkan(d: Dzikir) {
 		if (!confirm(`Arsipkan dzikir "${d.latin}"? Riwayatnya tetap tersimpan.`)) return;
@@ -43,7 +49,7 @@
 
 	{#if tab === "dzikir"}
 		<ul class="space-y-1.5">
-			{#each dzikir as d (d.id)}
+			{#each dzikirSatuan as d (d.id)}
 				<li class="flex items-center gap-1">
 					<button
 						type="button"
@@ -77,7 +83,7 @@
 						class="w-full rounded-2xl border px-4 py-3 text-left transition hover:border-brand-300 {aktifPaket === p.id ? 'border-brand-400 bg-brand-50 dark:bg-brand-950/40' : 'border-neutral-200 dark:border-neutral-800'}"
 					>
 						<span class="flex items-center gap-2 text-sm font-semibold text-neutral-900 dark:text-white"><ListOrdered size={16} class="text-brand-600 dark:text-brand-400" />{p.nama}</span>
-						<span class="mt-1 block text-xs text-neutral-500 dark:text-neutral-400">{p.items.map((it) => `${namaDzikir(it.dzikir_id)} ${it.target}`).join(" → ")}</span>
+						<span class="mt-1 block text-xs text-neutral-500 dark:text-neutral-400">{ringkasPaket(p)}</span>
 						<span class="mt-1 block text-[11px] text-neutral-400">{p.rujukan}</span>
 					</button>
 				</li>

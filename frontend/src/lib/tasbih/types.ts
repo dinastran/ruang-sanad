@@ -9,6 +9,8 @@ export interface Dzikir {
 	rujukan: string;
 	target: number;
 	target_default: number;
+	/** Dzikir bawaan yang hanya dibaca lewat paket (mis. Al-Ma'tsurat). */
+	hanya_paket?: boolean;
 }
 
 export interface PaketItem {

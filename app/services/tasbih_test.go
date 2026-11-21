@@ -51,9 +51,10 @@ func countRows(t *testing.T, db *sql.DB, query string, args ...any) int64 {
 
 func TestTasbihSeed(t *testing.T) {
 	db, _ := newTasbihTestDB(t)
-	require.EqualValues(t, 12, countRows(t, db, "SELECT COUNT(*) FROM tasbih_dzikir WHERE user_id IS NULL"))
+	require.EqualValues(t, 12, countRows(t, db, "SELECT COUNT(*) FROM tasbih_dzikir WHERE user_id IS NULL AND hanya_paket = 0"))
+	require.EqualValues(t, 34, countRows(t, db, "SELECT COUNT(*) FROM tasbih_dzikir WHERE user_id IS NULL AND hanya_paket = 1"))
 	require.EqualValues(t, 0, countRows(t, db, "SELECT COUNT(*) FROM tasbih_dzikir WHERE user_id IS NULL AND (teks_arab = '' OR arti = '' OR rujukan = '')"))
-	require.EqualValues(t, 3, countRows(t, db, "SELECT COUNT(*) FROM tasbih_paket"))
+	require.EqualValues(t, 5, countRows(t, db, "SELECT COUNT(*) FROM tasbih_paket"))
 	require.EqualValues(t, 4, countRows(t, db, "SELECT COUNT(*) FROM tasbih_paket_item i JOIN tasbih_paket p ON p.id = i.paket_id WHERE p.slug = 'badah-shalat'"))
 	require.EqualValues(t, 1, countRows(t, db, "SELECT i.target FROM tasbih_paket_item i JOIN tasbih_paket p ON p.id = i.paket_id WHERE p.slug = 'badah-shalat' AND i.urutan = 4"))
 	require.EqualValues(t, 34, countRows(t, db, "SELECT i.target FROM tasbih_paket_item i JOIN tasbih_paket p ON p.id = i.paket_id WHERE p.slug = 'tasbih-fatimah' AND i.urutan = 3"))
@@ -74,14 +75,60 @@ func TestKatalogGabungBawaanDanCustom(t *testing.T) {
 
 	dz, paket, err := svc.Katalog(ctx, a)
 	require.NoError(t, err)
-	require.Len(t, dz, 13)
-	require.Len(t, paket, 3)
+	// 12 dzikir umum + 34 dzikir Al-Ma'tsurat (hanya_paket) + 1 custom.
+	require.Len(t, dz, 47)
+	require.Len(t, paket, 5)
 	require.Len(t, paket[0].Items, 4)
-	require.True(t, dz[12].Custom)
+	require.True(t, dz[46].Custom)
+	require.False(t, dz[46].HanyaPaket)
 
 	dzB, _, err := svc.Katalog(ctx, b)
 	require.NoError(t, err)
-	require.Len(t, dzB, 12)
+	require.Len(t, dzB, 46)
+}
+
+// Al-Ma'tsurat Sughra: urutan, target, dan varian pagi/petang sesuai bacaan bertanda ٭.
+func TestSeedMatsuratSughra(t *testing.T) {
+	db, svc := newTasbihTestDB(t)
+	ctx := context.Background()
+	u := seedUser(t, db, "user")
+	dz, paket, err := svc.Katalog(ctx, u)
+	require.NoError(t, err)
+	byID := map[int64]models.TasbihDzikir{}
+	for _, d := range dz {
+		byID[d.ID] = d
+	}
+	bySlug := map[string]models.TasbihPaket{}
+	for _, p := range paket {
+		bySlug[p.Slug] = p
+	}
+	pagi, petang := bySlug["matsurat-pagi"], bySlug["matsurat-petang"]
+	require.Len(t, pagi.Items, 30)
+	require.Len(t, petang.Items, 31)
+
+	total := int64(0)
+	for _, it := range pagi.Items {
+		total += it.Target
+		require.NotEmpty(t, byID[it.DzikirID].Arab, "teks Arab wajib ada")
+	}
+	require.EqualValues(t, 185, total)
+
+	nama := func(p models.TasbihPaket, i int) string { return byID[p.Items[i].DzikirID].Latin }
+	require.Equal(t, "Ta'awudz & Al-Fatihah", nama(pagi, 0))
+	require.Equal(t, "Al-Baqarah 284–286", nama(pagi, 3))
+	require.Equal(t, "Al-Ikhlas", nama(pagi, 4))
+	require.EqualValues(t, 3, pagi.Items[4].Target)
+	require.Equal(t, "Ashbahna wa ashbahal mulku lillah", nama(pagi, 7))
+	require.Equal(t, "Amsaina wa amsal mulku lillah", nama(petang, 7))
+	require.EqualValues(t, 100, pagi.Items[23].Target)
+	require.Equal(t, dzikirIDBySlug(t, db, "tahlil-lengkap"), pagi.Items[24].DzikirID)
+	require.EqualValues(t, 10, pagi.Items[24].Target)
+	require.Equal(t, "Allahumma inna hadza iqbalu lailik", nama(petang, 29))
+	require.Equal(t, "Doa Rabithah", nama(pagi, 29))
+	require.Equal(t, "Doa Rabithah", nama(petang, 30))
+
+	require.True(t, byID[pagi.Items[0].DzikirID].HanyaPaket)
+	require.False(t, byID[pagi.Items[24].DzikirID].HanyaPaket, "tahlil-lengkap tetap dzikir satuan")
 }
 
 func TestTargetEfektifOverride(t *testing.T) {
@@ -146,7 +193,7 @@ func TestArsipkanDzikir(t *testing.T) {
 	require.NoError(t, svc.ArsipkanDzikir(ctx, u, id))
 	dz, _, err := svc.Katalog(ctx, u)
 	require.NoError(t, err)
-	require.Len(t, dz, 12)
+	require.Len(t, dz, 46)
 	require.EqualValues(t, 1, countRows(t, db, "SELECT COUNT(*) FROM tasbih_dzikir WHERE id = ?", id))
 }
 

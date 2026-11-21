@@ -48,6 +48,7 @@
 	let fokus = $state(false);
 	let rayakanKey = $state(0);
 	let pengumuman = $state("");
+	let artiTerbuka = $state(false);
 	let badges = $state<Badge[]>([...(badge_baru ?? [])]);
 	let serverHariIni = $state({ tanggal: hari_ini.tanggal, total: hari_ini.total });
 	let antreanHariIni = $state(0);
@@ -84,6 +85,8 @@
 	const s = $derived(counter.state);
 	const d = $derived(counter.dzikir);
 	const pk = $derived(counter.paket);
+	// Bacaan panjang (ayat/doa): tampilan teks diringkas agar area ketuk tetap terjangkau.
+	const panjang = $derived((d?.arab?.length ?? 0) > 90);
 	const jumlah = $derived(s ? counter.tampil : 0);
 	const jumlahSesi = $derived(s?.sesi_id ? s.jumlah : 0);
 	const target = $derived(s?.target ?? 33);
@@ -342,31 +345,62 @@
 				</button>
 			{/if}
 
-			<!-- Teks dzikir -->
+			<!-- Teks dzikir. Bacaan panjang (ayat, doa) memakai huruf lebih kecil dalam
+			     kotak yang bisa digulir, dan terjemahan dibuka lewat tombol. -->
 			<div class="flex min-h-[7rem] w-full flex-col justify-center text-center">
 				{#if d}
 					{#key d.id}
 						<div in:fade={{ duration: 200 }}>
 							{#if d.arab}
-								<p class="font-arab text-[2.15rem] leading-[1.75] text-neutral-900 sm:text-4xl dark:text-white" dir="rtl" lang="ar">{d.arab}</p>
+								{#if panjang}
+									<div class="teks-panjang mx-auto max-h-[32vh] max-w-xl overflow-y-auto rounded-2xl border border-neutral-200 bg-white px-4 py-3 dark:border-brand-200/10 dark:bg-brand-950/40" tabindex="0" aria-label="Teks bacaan, dapat digulir">
+										<p class="font-arab text-[1.55rem] leading-[2.15] text-neutral-900 sm:text-[1.75rem] dark:text-white" dir="rtl" lang="ar">{d.arab}</p>
+									</div>
+								{:else}
+									<p class="font-arab text-[2.15rem] leading-[1.75] text-neutral-900 sm:text-4xl dark:text-white" dir="rtl" lang="ar">{d.arab}</p>
+								{/if}
 							{/if}
-							<p class="text-[15px] font-medium text-neutral-700 dark:text-brand-100/80">{d.latin}</p>
-							{#if d.arti}<p class="mx-auto mt-0.5 max-w-sm text-[13px] leading-relaxed text-neutral-500 dark:text-brand-100/45">{d.arti}</p>{/if}
+							<p class="text-[15px] font-medium text-neutral-700 dark:text-brand-100/80 {panjang ? 'mt-2' : ''}">{d.latin}</p>
+							{#if d.arti}
+								{#if panjang}
+									<button type="button" onclick={() => (artiTerbuka = !artiTerbuka)} aria-expanded={artiTerbuka} class="mt-1 inline-flex min-h-9 items-center gap-1 rounded-full px-3 text-[13px] font-medium text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-950/60">
+										{artiTerbuka ? "Sembunyikan terjemahan" : "Lihat terjemahan"}
+										<ChevronDown size={14} class="transition-transform {artiTerbuka ? 'rotate-180' : ''}" aria-hidden="true" />
+									</button>
+									{#if artiTerbuka}<p class="mx-auto mt-1 max-w-xl text-left text-[13px] leading-relaxed text-neutral-600 dark:text-brand-100/60">{d.arti}</p>{/if}
+								{:else}
+									<p class="mx-auto mt-0.5 max-w-sm text-[13px] leading-relaxed text-neutral-500 dark:text-brand-100/45">{d.arti}</p>
+								{/if}
+							{/if}
 						</div>
 					{/key}
 				{/if}
 			</div>
 
 			{#if pk}
-				<ol class="mt-3 flex items-center justify-center gap-1.5" aria-label="Urutan paket">
-					{#each pk.items as it, i}
-						{@const idx = s?.item_index ?? 0}
-						<li aria-current={i === idx ? "step" : undefined}>
-							<span class="block h-1 w-7 rounded-full transition-colors {i < idx ? 'bg-brand-500/50 dark:bg-brand-300/50' : i === idx ? 'bg-brand-500 dark:bg-brand-300' : 'bg-neutral-200 dark:bg-brand-950'}"></span>
-							<span class="sr-only">{namaDzikirId(it.dzikir_id)} {it.target}{i < idx ? ", selesai" : ""}</span>
-						</li>
-					{/each}
-				</ol>
+				{@const idx = s?.item_index ?? 0}
+				{#if pk.items.length <= 8}
+					<ol class="mt-3 flex items-center justify-center gap-1.5" aria-label="Urutan paket">
+						{#each pk.items as it, i}
+							<li aria-current={i === idx ? "step" : undefined}>
+								<span class="block h-1 w-7 rounded-full transition-colors {i < idx ? 'bg-brand-500/50 dark:bg-brand-300/50' : i === idx ? 'bg-brand-500 dark:bg-brand-300' : 'bg-neutral-200 dark:bg-brand-950'}"></span>
+								<span class="sr-only">{namaDzikirId(it.dzikir_id)} {it.target}{i < idx ? ", selesai" : ""}</span>
+							</li>
+						{/each}
+					</ol>
+				{:else}
+					<!-- Paket panjang (mis. Al-Ma'tsurat): progres urutan + bacaan berikutnya -->
+					{@const berikut = pk.items[idx + 1]}
+					<div class="mx-auto mt-3 w-full max-w-xs" aria-label="Urutan paket">
+						<div class="flex items-baseline justify-between text-xs text-neutral-500 dark:text-brand-100/50">
+							<span class="tabular-nums">Bacaan {idx + 1} dari {pk.items.length}</span>
+							{#if berikut}<span class="truncate pl-3">Berikutnya: {namaDzikirId(berikut.dzikir_id)}</span>{:else}<span>Bacaan terakhir</span>{/if}
+						</div>
+						<div class="mt-1.5 h-1 overflow-hidden rounded-full bg-neutral-200 dark:bg-brand-950" aria-hidden="true">
+							<div class="bar h-full rounded-full bg-brand-500 dark:bg-brand-300" style="width:{((idx + 1) / pk.items.length) * 100}%"></div>
+						</div>
+					</div>
+				{/if}
 			{/if}
 
 			<!-- Area tap: seluruh blok ring, cukup lebar untuk ibu jari -->
@@ -386,7 +420,7 @@
 					{/if}
 				{/key}
 				<div class="press">
-					<BeadCircle count={jumlah} {target} tercapai={s?.mode === "dzikir" && jumlah >= target} size={272}>
+					<BeadCircle count={jumlah} {target} tercapai={s?.mode === "dzikir" && jumlah >= target} size={panjang ? 216 : 272}>
 						<div class="text-center">
 							{#key jumlah}
 								<span class="pop block text-[5.5rem] font-light leading-none tracking-tighter tabular-nums text-neutral-900 dark:text-white" data-testid="hitungan">{siap ? jumlah : "–"}</span>

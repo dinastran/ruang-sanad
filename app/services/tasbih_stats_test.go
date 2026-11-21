@@ -139,7 +139,7 @@ func TestPutaranPaket(t *testing.T) {
 	require.NoError(t, err)
 	d, err := svc.Dashboard(ctx, u, 30, tasbihNow)
 	require.NoError(t, err)
-	require.Len(t, d.Paket, 3)
+	require.Len(t, d.Paket, 5)
 	require.Equal(t, pid, d.Paket[0].PaketID)
 	require.EqualValues(t, 1, d.Paket[0].Selesai)
 	n, err := svc.JumlahPutaranPaket(ctx, u, &pid, nil)

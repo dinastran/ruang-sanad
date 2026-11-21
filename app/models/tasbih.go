@@ -13,6 +13,8 @@ type TasbihDzikir struct {
 	Rujukan       string `json:"rujukan"`
 	Target        int64  `json:"target"`
 	TargetDefault int64  `json:"target_default"`
+	// HanyaPaket: dzikir bawaan yang hanya dibaca lewat paket (tidak tampil di daftar satuan).
+	HanyaPaket bool `json:"hanya_paket"`
 }
 
 type TasbihPaketItem struct {
