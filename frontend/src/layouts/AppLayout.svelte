@@ -126,10 +126,11 @@
 		{ href: "/app/leads/sumber", label: "Sumber Lead", group: "leads-sumber", category: "CRM", section: "Akuisisi", show: canLeads, icon: Megaphone },
 		{ href: "/app/leads/program", label: "Program", group: "leads-program", category: "CRM", section: "Akuisisi", show: canLeads, icon: CalendarRange },
 		{ href: "/app/leads/link-pendaftaran", label: "Link Pendaftaran", group: "leads-link", category: "CRM", section: "Akuisisi", show: canLeads, icon: Link2 },
-		{ href: "/app/leads/affiliate", label: "Affiliate", group: "leads-affiliate", category: "CRM", section: "Akuisisi", show: isSuperAdmin || role === "keuangan", icon: Share2 },
+		{ href: "/app/leads/affiliate", label: "Affiliate", group: "leads-affiliate", category: "CRM", section: "Akuisisi", show: isSuperAdmin, icon: Share2 }, // sementara hanya super admin
 		{ href: "/app/leads/iklan", label: "Performa Iklan", group: "leads-iklan", category: "CRM", section: "Iklan", show: role === "cs" || isSuperAdmin, icon: BadgeDollarSign },
 		{ href: "/app/leads/meta-capi", label: "Meta CAPI", group: "leads-capi", category: "CRM", section: "Iklan", show: isSuperAdmin, icon: Activity },
-		{ href: "/app/affiliate", label: "Affiliate Saya", group: "affiliate-saya", category: role === "affiliate" ? "Utama" : "Guru", show: role === "affiliate" || role === "guru" || role === "koordinator_guru", icon: Share2 },
+		// Affiliate Saya: sementara hanya affiliate eksternal (belum dibuka ke guru).
+		{ href: "/app/affiliate", label: "Affiliate Saya", group: "affiliate-saya", category: "Utama", show: role === "affiliate", icon: Share2 },
 		{ href: "/app/keuangan", label: "Tagihan", group: "keuangan", category: "Keuangan", show: canViewKeuangan, icon: Wallet },
 		{ href: "/app/keuangan/tagihan", label: "Daftar Tagihan", group: "tagihan", category: "Keuangan", show: canViewKeuangan, icon: Receipt },
 		{ href: "/app/keuangan/ujroh", label: "Ujroh Guru", group: "ujroh", category: "Keuangan", show: canViewKeuangan, icon: HandCoins },
