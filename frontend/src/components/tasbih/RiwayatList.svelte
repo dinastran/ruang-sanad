@@ -103,7 +103,7 @@
 <div class="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none]" role="group" aria-label="Filter dzikir">
 	<div class="flex gap-2">
 		<button type="button" class="{chip} {filter === null ? chipOn : chipOff}" aria-pressed={filter === null} onclick={() => pilihFilter(null)}>Semua</button>
-		{#each dzikir as d (d.id)}
+		{#each dzikir.filter((x) => !x.hanya_paket) as d (d.id)}
 			<button type="button" class="{chip} {filter === d.id ? chipOn : chipOff}" aria-pressed={filter === d.id} onclick={() => pilihFilter(d.id)}>{d.latin}</button>
 		{/each}
 	</div>

@@ -276,7 +276,7 @@ func (q *Queries) ListTasbihBadgeUser(ctx context.Context, userID int64) ([]List
 
 const listTasbihDzikirForUser = `-- name: ListTasbihDzikirForUser :many
 SELECT d.id, d.user_id, d.teks_arab, d.latin, d.arti, d.rujukan, d.target_default,
-       COALESCE(t.target, d.target_default) AS target_efektif
+       COALESCE(t.target, d.target_default) AS target_efektif, d.hanya_paket
 FROM tasbih_dzikir d
 LEFT JOIN tasbih_target_user t ON t.dzikir_id = d.id AND t.user_id = ?1
 WHERE (d.user_id IS NULL OR d.user_id = ?1) AND d.diarsipkan_at IS NULL
@@ -292,6 +292,7 @@ type ListTasbihDzikirForUserRow struct {
 	Rujukan       string
 	TargetDefault int64
 	TargetEfektif int64
+	HanyaPaket    int64
 }
 
 func (q *Queries) ListTasbihDzikirForUser(ctx context.Context, userID int64) ([]ListTasbihDzikirForUserRow, error) {
@@ -312,6 +313,7 @@ func (q *Queries) ListTasbihDzikirForUser(ctx context.Context, userID int64) ([]
 			&i.Rujukan,
 			&i.TargetDefault,
 			&i.TargetEfektif,
+			&i.HanyaPaket,
 		); err != nil {
 			return nil, err
 		}

@@ -1,6 +1,6 @@
 -- name: ListTasbihDzikirForUser :many
 SELECT d.id, d.user_id, d.teks_arab, d.latin, d.arti, d.rujukan, d.target_default,
-       COALESCE(t.target, d.target_default) AS target_efektif
+       COALESCE(t.target, d.target_default) AS target_efektif, d.hanya_paket
 FROM tasbih_dzikir d
 LEFT JOIN tasbih_target_user t ON t.dzikir_id = d.id AND t.user_id = sqlc.arg(user_id)
 WHERE (d.user_id IS NULL OR d.user_id = sqlc.arg(user_id)) AND d.diarsipkan_at IS NULL

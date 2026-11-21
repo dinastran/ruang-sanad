@@ -1290,6 +1290,7 @@ type TasbihDzikir struct {
 	DiarsipkanAt  sql.NullTime
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	HanyaPaket    int64
 }
 
 type TasbihPaket struct {

@@ -51,7 +51,7 @@ func (s *TasbihService) Katalog(ctx context.Context, userID int64) ([]models.Tas
 	for _, r := range rows {
 		dzikir = append(dzikir, models.TasbihDzikir{
 			ID: r.ID, Custom: r.UserID.Valid, Arab: r.TeksArab, Latin: r.Latin, Arti: r.Arti,
-			Rujukan: r.Rujukan, Target: r.TargetEfektif, TargetDefault: r.TargetDefault,
+			Rujukan: r.Rujukan, Target: r.TargetEfektif, TargetDefault: r.TargetDefault, HanyaPaket: r.HanyaPaket != 0,
 		})
 	}
 	paket, err := s.daftarPaket(ctx)
