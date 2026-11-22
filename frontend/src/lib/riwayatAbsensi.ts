@@ -18,7 +18,7 @@ export interface RiwayatAbsensi {
 export type StatusKehadiran = "hadir" | "izin" | "sakit" | "alfa";
 export type StatusKunjungan = "terlaksana" | "dijadwalkan" | "batal";
 export type StatusRiwayat = StatusKehadiran | StatusKunjungan;
-export type Periode = "30h" | "3b" | "6b" | "12b" | "semua";
+export type Periode = "30h" | "3b" | "6b" | "12b" | "semua" | "bulan" | "custom";
 export type Kegiatan = "pembinaan" | "rapat" | "kunjungan";
 
 export const STATUS_KEHADIRAN: StatusKehadiran[] = ["hadir", "izin", "sakit", "alfa"];
@@ -52,6 +52,8 @@ export const LABEL_PERIODE: Record<Periode, string> = {
 	"6b": "6 bulan",
 	"12b": "12 bulan",
 	semua: "Semua",
+	bulan: "Per bulan",
+	custom: "Custom",
 };
 
 /** Status satu baris. Kunjungan memakai status kunjungan, bukan kehadiran. */
@@ -104,6 +106,28 @@ export function rentangPeriode(periode: Periode, today: Date): Rentang {
 			return { mulai: null, sampai };
 	}
 	return { mulai: isoLokal(d), sampai };
+}
+
+/** Rentang satu bulan kalender (ym = YYYY-MM). */
+export function rentangBulan(ym: string): Rentang {
+	const [y, m] = ym.split("-").map(Number);
+	return { mulai: isoLokal(new Date(y, m - 1, 1)), sampai: isoLokal(new Date(y, m, 0)) };
+}
+
+/** Geser bulan (YYYY-MM) sebanyak n bulan. */
+export function geserBulan(ym: string, n: number): string {
+	const [y, m] = ym.split("-").map(Number);
+	const d = new Date(y, m - 1 + n, 1);
+	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function bulanIni(today: Date): string {
+	return isoLokal(today).slice(0, 7);
+}
+
+export function labelBulanPanjang(ym: string): string {
+	const d = new Date(`${ym}-01T00:00:00`);
+	return Number.isNaN(d.getTime()) ? ym : d.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
 }
 
 /** Rentang sebelumnya dengan panjang yang sama, untuk delta KPI. */

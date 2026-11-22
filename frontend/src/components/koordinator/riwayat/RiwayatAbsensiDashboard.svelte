@@ -7,6 +7,10 @@
 		LABEL_PERIODE,
 		LABEL_STATUS,
 		STATUS_KEHADIRAN,
+		bulanIni,
+		geserBulan,
+		labelBulanPanjang,
+		rentangBulan,
 		dalamRentang,
 		formatAngka,
 		formatPersen,
@@ -20,10 +24,11 @@
 		trenPerTanggal,
 		type Kegiatan,
 		type Periode,
+		type Rentang,
 		type RiwayatAbsensi,
 		type StatusKehadiran,
 	} from "@lib/riwayatAbsensi";
-	import { ArrowDownRight, ArrowUpRight, Search, X } from "lucide-svelte";
+	import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight, FileSpreadsheet, Search, X } from "lucide-svelte";
 
 	interface Props {
 		riwayat: RiwayatAbsensi[];
@@ -43,8 +48,21 @@
 	let search = $state("");
 	let statusTabel = $state<"" | StatusKehadiran>("");
 
-	const rentang = $derived(rentangPeriode(periode, today));
-	const rentangLalu = $derived(rentangSebelumnya(rentang));
+	// Per bulan: satu bulan kalender. Custom: tanggal mulai–sampai (default 30 hari terakhir).
+	const awalCustom = rentangPeriode("30h", today);
+	let bulan = $state(bulanIni(today));
+	let customMulai = $state(awalCustom.mulai ?? "");
+	let customSampai = $state(awalCustom.sampai);
+	const bulanMaks = bulanIni(today);
+	const customValid = $derived(!!customMulai && !!customSampai && customMulai <= customSampai);
+
+	const rentang = $derived.by<Rentang>(() => {
+		if (periode === "bulan") return rentangBulan(bulan);
+		if (periode === "custom") return customValid ? { mulai: customMulai, sampai: customSampai } : { mulai: customSampai || customMulai, sampai: customSampai || customMulai };
+		return rentangPeriode(periode, today);
+	});
+	// Pembanding: bulan sebelumnya untuk Per bulan, selain itu rentang dengan panjang sama.
+	const rentangLalu = $derived(periode === "bulan" ? rentangBulan(geserBulan(bulan, -1)) : rentangSebelumnya(rentang));
 
 	// Filter non-periode dipakai bersama periode sekarang dan periode sebelumnya.
 	function cocok(r: RiwayatAbsensi, q: string): boolean {
@@ -83,6 +101,10 @@
 		].filter(Boolean) as { key: string; label: string; hapus: () => void }[],
 	);
 
+	function formatTanggalRentang(iso: string): string {
+		return new Date(`${iso}T00:00:00`).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+	}
+
 	function reset() {
 		kegiatan = "";
 		guruID = "";
@@ -94,13 +116,29 @@
 		guruID = guruID === String(id) ? "" : String(id);
 	}
 
-	const PERIODE: Periode[] = ["30h", "3b", "6b", "12b", "semua"];
+	const PERIODE: Periode[] = ["30h", "3b", "6b", "12b", "semua", "bulan", "custom"];
 	const KEGIATAN: ("" | Kegiatan)[] = ["", "pembinaan", "rapat", "kunjungan"];
-	const labelLalu = $derived(periode === "30h" ? "30 hari sebelumnya" : `${LABEL_PERIODE[periode]} sebelumnya`);
+	const labelLalu = $derived(
+		periode === "30h" ? "30 hari sebelumnya" : periode === "bulan" ? labelBulanPanjang(geserBulan(bulan, -1)) : periode === "custom" ? "periode sebelumnya" : `${LABEL_PERIODE[periode]} sebelumnya`,
+	);
+
+	// Export Excel mengikuti filter yang sedang aktif (status hanya menyaring sheet Detail).
+	const exportUrl = $derived.by(() => {
+		const p = new URLSearchParams();
+		if (rentang.mulai) p.set("mulai", rentang.mulai);
+		p.set("sampai", rentang.sampai);
+		if (kegiatan) p.set("kegiatan", kegiatan);
+		if (guruID) p.set("guru", guruID);
+		if (search.trim()) p.set("q", search.trim());
+		if (statusTabel) p.set("status", statusTabel);
+		return `/app/koordinator-guru/riwayat-absensi/export?${p}`;
+	});
+	const bisaExport = $derived(periode !== "custom" || customValid);
+	const inputTanggal = "min-h-9 rounded-lg border border-neutral-200 bg-white px-2.5 text-sm outline-none focus:border-brand-400 dark:border-neutral-800 dark:bg-neutral-925 dark:text-white dark:[color-scheme:dark]";
 
 	const segmen = "inline-flex rounded-xl bg-neutral-100 p-1 text-xs font-semibold dark:bg-neutral-800/70";
 	const segmenItem = (aktif: boolean) =>
-		`min-h-8 rounded-lg px-3 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60 ${aktif ? "bg-white text-neutral-900 shadow-sm dark:bg-neutral-925 dark:text-white" : "text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"}`;
+		`min-h-8 shrink-0 whitespace-nowrap rounded-lg px-3 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60 ${aktif ? "bg-white text-neutral-900 shadow-sm dark:bg-neutral-925 dark:text-white" : "text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"}`;
 	const kartu = "rounded-2xl border border-neutral-200/80 bg-white p-4 sm:p-5 dark:border-white/[0.06] dark:bg-neutral-925/50";
 </script>
 
@@ -108,8 +146,8 @@
 	<!-- Filter -->
 	<div class="space-y-3">
 		<div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-			<div class="flex flex-wrap gap-2">
-				<div class={segmen} role="radiogroup" aria-label="Periode">
+			<div class="flex min-w-0 flex-wrap gap-2">
+				<div class="{segmen} max-w-full overflow-x-auto [scrollbar-width:none]" role="radiogroup" aria-label="Periode">
 					{#each PERIODE as p (p)}
 						<button type="button" role="radio" aria-checked={periode === p} onclick={() => (periode = p)} class={segmenItem(periode === p)}>{LABEL_PERIODE[p]}</button>
 					{/each}
@@ -130,6 +168,30 @@
 					{#each guruList as g (g.id)}<option value={String(g.id)}>{g.nama}</option>{/each}
 				</select>
 			</div>
+		</div>
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<div class="flex flex-wrap items-center gap-2">
+				{#if periode === "bulan"}
+					<div class="inline-flex items-center gap-1" role="group" aria-label="Pilih bulan">
+						<button type="button" onclick={() => (bulan = geserBulan(bulan, -1))} class="grid h-9 w-9 place-items-center rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-800" aria-label="Bulan sebelumnya"><ChevronLeft class="h-4 w-4" /></button>
+						<input type="month" bind:value={bulan} max={bulanMaks} aria-label="Bulan" class={inputTanggal} />
+						<button type="button" onclick={() => (bulan = geserBulan(bulan, 1))} disabled={bulan >= bulanMaks} class="grid h-9 w-9 place-items-center rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:border-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-800" aria-label="Bulan berikutnya"><ChevronRight class="h-4 w-4" /></button>
+					</div>
+				{:else if periode === "custom"}
+					<label class="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-500">Dari <input type="date" bind:value={customMulai} max={customSampai || undefined} class={inputTanggal} /></label>
+					<label class="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-500">sampai <input type="date" bind:value={customSampai} min={customMulai || undefined} class={inputTanggal} /></label>
+					{#if !customValid}<span class="text-xs font-medium text-red-600 dark:text-red-400" role="alert">Tanggal mulai harus sebelum tanggal sampai.</span>{/if}
+				{:else}
+					<span class="text-xs text-neutral-500 tabular-nums">{rentang.mulai ? `${formatTanggalRentang(rentang.mulai)} – ${formatTanggalRentang(rentang.sampai)}` : `Semua s.d. ${formatTanggalRentang(rentang.sampai)}`}</span>
+				{/if}
+			</div>
+			{#if bisaExport}
+				<a href={exportUrl} download class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-800 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-925 dark:text-neutral-100 dark:hover:bg-neutral-800">
+					<FileSpreadsheet class="h-4 w-4 text-emerald-600" /> Export Excel
+				</a>
+			{:else}
+				<span class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-neutral-200 px-3 text-sm font-semibold text-neutral-400 dark:border-neutral-800" aria-disabled="true"><FileSpreadsheet class="h-4 w-4" /> Export Excel</span>
+			{/if}
 		</div>
 		{#if chips.length > 0}
 			<div class="flex flex-wrap items-center gap-2">

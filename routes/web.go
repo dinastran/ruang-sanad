@@ -522,6 +522,7 @@ func setupAppRoutes(app *fiber.App, h Handlers, store *session.Store, userServic
 	protected.Post("/koordinator-guru/rapat/:id/absen", koordinatorRole, h.KoordinatorFeatures.RapatAbsenSave)
 	protected.Get("/koordinator-guru/rapat/:id/absen/export", koordinatorRole, h.KoordinatorAttendanceExport.RapatExcel)
 	protected.Get("/koordinator-guru/riwayat-absensi", koordinatorRole, h.KoordinatorFeatures.RiwayatAbsensi)
+	protected.Get("/koordinator-guru/riwayat-absensi/export", koordinatorRole, h.KoordinatorAttendanceExport.RiwayatExcel)
 
 	// Koordinator Guru — kunjungan kelas
 	protected.Get("/koordinator-guru/kunjungan", koordinatorRole, h.Kunjungan.Index)
