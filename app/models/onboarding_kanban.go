@@ -25,6 +25,12 @@ type OnboardingBoardCard struct {
 	ActualStartedAt string `json:"actual_started_at,omitempty"`
 	KelasID         int64  `json:"kelas_id"`
 	KelasNama       string `json:"kelas_nama"`
+	Angkatan        string `json:"angkatan"`
+	Level           string `json:"level"`
+	Tipe            string `json:"tipe"`
+	Frekuensi       string `json:"frekuensi"`
+	JenisKelamin    string `json:"jenis_kelamin"`
+	Domisili        string `json:"domisili"`
 }
 
 type OnboardingPICOption struct {
