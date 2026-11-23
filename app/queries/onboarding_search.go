@@ -15,7 +15,50 @@ type OnboardingBoardFilter struct {
 	SLA string
 	ClassID int64
 	Angkatan string
+	// Sort and Dir are validated by the handler; unknown values fall back
+	// to the default registration order.
+	Sort string
+	Dir string
 	Now time.Time
+}
+
+// OnboardingBoardListRow extends the sqlc board row with santri profile
+// columns used by the list view.
+type OnboardingBoardListRow struct {
+	ListOnboardingBoardRow
+	Angkatan     string
+	Level        string
+	Tipe         string
+	Frekuensi    string
+	JenisKelamin string
+	Domisili     string
+}
+
+var onboardingSortColumns = map[string]string{
+	"nama":       "LOWER(s.nama)",
+	"angkatan":   "COALESCE(s.angkatan,'')",
+	"registered": "oc.registered_at",
+	"deadline":   "julianday(substr(oc.deadline_at,1,19))",
+	"stage":      "CASE oc.stage WHEN 'onboarding_baru' THEN 0 WHEN 'matching_kelas' THEN 1 WHEN 'waiting_kuota' THEN 2 WHEN 'siap_mulai' THEN 3 WHEN 'masuk_kelas' THEN 4 ELSE 5 END",
+}
+
+// ValidOnboardingSort reports whether key is a supported list sort column.
+func ValidOnboardingSort(key string) bool {
+	_, ok := onboardingSortColumns[key]
+	return ok
+}
+
+func onboardingBoardOrder(f OnboardingBoardFilter) string {
+	column, ok := onboardingSortColumns[f.Sort]
+	if !ok {
+		return " ORDER BY CASE WHEN oc.stage='batal' THEN 1 ELSE 0 END, oc.registered_at DESC, oc.id DESC"
+	}
+	dir := "ASC"
+	if f.Dir == "desc" {
+		dir = "DESC"
+	}
+	// Cancelled cases stay at the end regardless of sort column.
+	return " ORDER BY CASE WHEN oc.stage='batal' THEN 1 ELSE 0 END, " + column + " " + dir + ", oc.registered_at DESC, oc.id DESC"
 }
 
 type OnboardingClassOption struct {
@@ -80,7 +123,7 @@ func onboardingBoardPredicate(f OnboardingBoardFilter) (string, []any) {
 	return " WHERE " + strings.Join(clauses, " AND "), args
 }
 
-func (q *Querier) ListOnboardingBoardFiltered(ctx context.Context, f OnboardingBoardFilter, limit, offset int64) ([]ListOnboardingBoardRow, int64, []CountOnboardingStagesRow, error) {
+func (q *Querier) ListOnboardingBoardFiltered(ctx context.Context, f OnboardingBoardFilter, limit, offset int64) ([]OnboardingBoardListRow, int64, []CountOnboardingStagesRow, error) {
 	const source = ` FROM onboarding_cases oc JOIN santri s ON s.id=oc.santri_id LEFT JOIN users u ON u.id=oc.pic_user_id LEFT JOIN kelas k ON k.id=s.kelas_id`
 	where, args := onboardingBoardPredicate(f)
 	countQuery := "SELECT oc.stage, COUNT(*)" + source + where + " GROUP BY oc.stage"
@@ -103,16 +146,18 @@ func (q *Querier) ListOnboardingBoardFiltered(ctx context.Context, f OnboardingB
 	}
 	countRows.Close()
 
-	listQuery := `SELECT oc.id,oc.santri_id,s.nama,s.id_mahasantri,oc.stage,oc.pic_user_id,COALESCE(u.name,''),oc.registered_at,oc.deadline_at,oc.actual_started_at,s.kelas_id,COALESCE(k.nama_kelas,'')` + source + where +
-		" ORDER BY CASE WHEN oc.stage='batal' THEN 1 ELSE 0 END, oc.registered_at DESC, oc.id DESC LIMIT ? OFFSET ?"
+	listQuery := `SELECT oc.id,oc.santri_id,s.nama,s.id_mahasantri,oc.stage,oc.pic_user_id,COALESCE(u.name,''),oc.registered_at,oc.deadline_at,oc.actual_started_at,s.kelas_id,COALESCE(k.nama_kelas,''),` +
+		`COALESCE(s.angkatan,''),COALESCE(s.level,''),COALESCE(s.tipe,''),COALESCE(s.frekuensi,''),COALESCE(s.jenis_kelamin,''),COALESCE(s.domisili,'')` + source + where +
+		onboardingBoardOrder(f) + " LIMIT ? OFFSET ?"
 	listArgs := append(append([]any{}, args...), limit, offset)
 	rows, err := q.Queries.db.QueryContext(ctx, listQuery, listArgs...)
 	if err != nil { return nil, 0, nil, err }
 	defer rows.Close()
-	items := []ListOnboardingBoardRow{}
+	items := []OnboardingBoardListRow{}
 	for rows.Next() {
-		var r ListOnboardingBoardRow
-		if err := rows.Scan(&r.ID,&r.SantriID,&r.Nama,&r.IDMahasantri,&r.Stage,&r.PicUserID,&r.PicName,&r.RegisteredAt,&r.DeadlineAt,&r.ActualStartedAt,&r.KelasID,&r.KelasNama); err != nil {
+		var r OnboardingBoardListRow
+		if err := rows.Scan(&r.ID,&r.SantriID,&r.Nama,&r.IDMahasantri,&r.Stage,&r.PicUserID,&r.PicName,&r.RegisteredAt,&r.DeadlineAt,&r.ActualStartedAt,&r.KelasID,&r.KelasNama,
+			&r.Angkatan,&r.Level,&r.Tipe,&r.Frekuensi,&r.JenisKelamin,&r.Domisili); err != nil {
 			return nil, 0, nil, err
 		}
 		items = append(items, r)

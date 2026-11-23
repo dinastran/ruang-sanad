@@ -91,6 +91,8 @@ func (s *OnboardingService) BoardFiltered(ctx context.Context, page int64, filte
 			RegisteredAt: r.RegisteredAt.In(onboardingWIB).Format(time.RFC3339),
 			DeadlineAt:   r.DeadlineAt.In(onboardingWIB).Format(time.RFC3339),
 			KelasID:      r.KelasID.Int64, KelasNama: r.KelasNama,
+			Angkatan: r.Angkatan, Level: r.Level, Tipe: r.Tipe, Frekuensi: r.Frekuensi,
+			JenisKelamin: r.JenisKelamin, Domisili: r.Domisili,
 		}
 		if r.ActualStartedAt.Valid {
 			card.ActualStartedAt = r.ActualStartedAt.Time.In(onboardingWIB).Format(time.RFC3339)

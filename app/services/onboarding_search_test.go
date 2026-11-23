@@ -153,3 +153,36 @@ func TestOnboardingQuotaSearchBeyondFormer200ClassLimit(t *testing.T) {
 	require.EqualValues(t,206,page.Total)
 	require.Len(t,page.Classes,14)
 }
+
+func TestOnboardingBoardListSortAndProfileColumns(t *testing.T) {
+	db, service, _, _, _ := onboardingFixture(t)
+	ctx := context.Background()
+	for i, angkatan := range []string{"AKA40", "AKA36", "AKA38"} {
+		result, err := db.Exec("INSERT INTO santri (nama,jenis_kelamin,angkatan,level,tipe,frekuensi,domisili,status) VALUES (?,'P',?,'Tahsin 1','Reguler','2x','Bandung','aktif')", fmt.Sprintf("Urut %d", i), angkatan)
+		require.NoError(t, err)
+		id, err := result.LastInsertId()
+		require.NoError(t, err)
+		_, err = db.Exec("INSERT INTO onboarding_cases (santri_id,stage,registered_at,deadline_at,created_at,updated_at) VALUES (?,'onboarding_baru',CURRENT_TIMESTAMP,datetime('now','+15 days'),CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)", id)
+		require.NoError(t, err)
+	}
+
+	asc, err := service.BoardFiltered(ctx, 1, queries.OnboardingBoardFilter{Query: "Urut", Sort: "angkatan", Dir: "asc"})
+	require.NoError(t, err)
+	require.Len(t, asc.Cases, 3)
+	require.Equal(t, []string{"AKA36", "AKA38", "AKA40"}, []string{asc.Cases[0].Angkatan, asc.Cases[1].Angkatan, asc.Cases[2].Angkatan})
+	require.Equal(t, "Tahsin 1", asc.Cases[0].Level)
+	require.Equal(t, "Reguler", asc.Cases[0].Tipe)
+	require.Equal(t, "2x", asc.Cases[0].Frekuensi)
+	require.Equal(t, "P", asc.Cases[0].JenisKelamin)
+	require.Equal(t, "Bandung", asc.Cases[0].Domisili)
+
+	desc, err := service.BoardFiltered(ctx, 1, queries.OnboardingBoardFilter{Query: "Urut", Sort: "angkatan", Dir: "desc"})
+	require.NoError(t, err)
+	require.Equal(t, "AKA40", desc.Cases[0].Angkatan)
+
+	for _, key := range []string{"nama", "registered", "deadline", "stage"} {
+		_, err := service.BoardFiltered(ctx, 1, queries.OnboardingBoardFilter{Sort: key, Dir: "desc"})
+		require.NoError(t, err, key)
+	}
+	require.False(t, queries.ValidOnboardingSort("s.nama; DROP TABLE santri"))
+}

@@ -73,6 +73,20 @@ func (h *OnboardingHandler) Index(c *fiber.Ctx) error {
 	if len(filter.Angkatan) > 60 {
 		return c.Status(fiber.StatusBadRequest).SendString("Filter angkatan tidak valid")
 	}
+	view := c.Query("view", "")
+	if view != "" && view != "list" {
+		return c.Status(fiber.StatusBadRequest).SendString("Tampilan tidak valid")
+	}
+	if sort := c.Query("sort", ""); sort != "" {
+		if !queries.ValidOnboardingSort(sort) {
+			return c.Status(fiber.StatusBadRequest).SendString("Urutan tidak valid")
+		}
+		filter.Sort = sort
+		filter.Dir = c.Query("dir", "asc")
+		if filter.Dir != "asc" && filter.Dir != "desc" {
+			return c.Status(fiber.StatusBadRequest).SendString("Arah urutan tidak valid")
+		}
+	}
 	pic := c.Query("pic", "")
 	if pic == "unassigned" {
 		filter.UnassignedPIC = true
@@ -103,7 +117,8 @@ func (h *OnboardingHandler) Index(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString("Gagal memuat notifikasi onboarding")
 	}
 	return h.inertia.Render(c, "app/OnboardingKanban", fiber.Map{"user": user, "board": board, "summary": summary, "notices": notices,
-		"filters": fiber.Map{"q": query, "pic": pic, "sla": filter.SLA, "class_id": c.Query("class_id", ""), "angkatan": filter.Angkatan}})
+		"filters": fiber.Map{"q": query, "pic": pic, "sla": filter.SLA, "class_id": c.Query("class_id", ""), "angkatan": filter.Angkatan,
+			"view": view, "sort": filter.Sort, "dir": filter.Dir}})
 }
 
 func onboardingCaseID(c *fiber.Ctx) (int64, error) {

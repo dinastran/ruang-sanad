@@ -2,20 +2,17 @@
     import { inertia, router } from "@inertiajs/svelte";
     import AppLayout from "@layouts/AppLayout.svelte";
     import OnboardingWorkspaceHeader from "@components/OnboardingWorkspaceHeader.svelte";
+    import OnboardingCaseTable, { type OnboardingListCase, type OnboardingSortKey } from "@components/OnboardingCaseTable.svelte";
     import type { User, Flash } from "@lib/types";
-    import { CalendarClock, History, ArrowLeft, ArrowRight, Ban, Search, X } from "lucide-svelte";
+    import { CalendarClock, History, ArrowLeft, ArrowRight, Ban, Search, X, Kanban, List } from "lucide-svelte";
 
     type Stage = "onboarding_baru" | "matching_kelas" | "waiting_kuota" | "siap_mulai" | "masuk_kelas";
     interface PIC { id: number; name: string; email: string }
-    interface Case {
-        id: number; santri_id: number; nama: string; id_mahasantri: string;
-        stage: string; pic_user_id: number; pic_name: string;
-        registered_at: string; deadline_at: string; actual_started_at?: string;
-        kelas_id: number; kelas_nama: string;
-    }
+    type Case = OnboardingListCase;
+    interface Filters { q:string; pic:string; sla:string; class_id:string; angkatan:string; view?:string; sort?:string; dir?:string }
     interface Activity { id: number; event_type: string; from_stage: string; to_stage: string; note: string; actor_name: string; created_at: string }
     interface Board { cases: Case[]; counts: Record<string, number>; pics: PIC[]; class_options: {id:number; name:string}[]; total: number; page: number; page_size: number }
-    interface Props { user?: User; board: Board; filters?: {q:string;pic:string;sla:string;class_id:string;angkatan:string}; flash?: Flash; summary: {total:number;at_risk:number;overdue:number;alert_pending:number}; notices: {id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}[] }
+    interface Props { user?: User; board: Board; filters?: Filters; flash?: Flash; summary: {total:number;at_risk:number;overdue:number;alert_pending:number}; notices: {id:number;type:string;title:string;message:string;action_url:string;read:boolean;created_at:string}[] }
 
     let props: Props = $props();
     let board = $derived(props.board);
@@ -37,23 +34,34 @@
     let filterClass = $state(props.filters?.class_id ?? "");
     let filterAngkatan = $state(props.filters?.angkatan ?? "");
     let filterActive = $derived(Boolean(props.filters?.q || props.filters?.pic || props.filters?.sla || props.filters?.class_id || props.filters?.angkatan));
-    function boardURL(page=1): string {
-        const query = new URLSearchParams();
-        const fields: Record<string,string> = { q:filterQ.trim(),pic:filterPIC,sla:filterSLA,class_id:filterClass,angkatan:filterAngkatan.trim() };
-        for (const [key,value] of Object.entries(fields)) if(value) query.set(key,value);
-        if(page>1) query.set("page",String(page));
-        return "/app/onboarding" + (query.size ? "?"+query.toString() : "");
-    }
-    function applyFilters() {
-        dragged=null;hovering=null;
-        router.get(boardURL(),{}, {preserveScroll:true});
-    }
-    function pageURL(page:number): string {
+    // View and sort live in the URL so filters, paging, and refresh keep them.
+    let view = $derived(props.filters?.view==="list" ? "list" : "kanban");
+    let sort = $derived(props.filters?.sort ?? "");
+    let dir = $derived(props.filters?.dir ?? "");
+    function buildURL(fields:Record<string,string|undefined>, page=1): string {
         const params = new URLSearchParams();
-        const filters = props.filters ?? {q:"",pic:"",sla:"",class_id:"",angkatan:""};
-        for (const [key,value] of Object.entries(filters)) if(value) params.set(key,value);
+        for (const [key,value] of Object.entries(fields)) if(value) params.set(key,value);
         if(page>1) params.set("page",String(page));
         return "/app/onboarding" + (params.size?"?"+params.toString():"");
+    }
+    const listParams = (v=view, s=sort, d=dir) => v==="list" ? {view:"list",sort:s,dir:s?d:""} : {};
+    function applyFilters() {
+        dragged=null;hovering=null;
+        router.get(buildURL({q:filterQ.trim(),pic:filterPIC,sla:filterSLA,class_id:filterClass,angkatan:filterAngkatan.trim(),...listParams()}),{}, {preserveScroll:true});
+    }
+    function pageURL(page:number): string {
+        const f = props.filters ?? {q:"",pic:"",sla:"",class_id:"",angkatan:""};
+        return buildURL({q:f.q,pic:f.pic,sla:f.sla,class_id:f.class_id,angkatan:f.angkatan,...listParams()}, page);
+    }
+    function viewURL(v:"kanban"|"list"): string {
+        const f = props.filters ?? {q:"",pic:"",sla:"",class_id:"",angkatan:""};
+        return buildURL({q:f.q,pic:f.pic,sla:f.sla,class_id:f.class_id,angkatan:f.angkatan,...listParams(v)});
+    }
+    const sortDefaultDir: Record<OnboardingSortKey,string> = {nama:"asc",angkatan:"asc",registered:"desc",stage:"asc",deadline:"asc"};
+    function changeSort(key:OnboardingSortKey) {
+        const nextDir = sort===key ? (dir==="desc"?"asc":"desc") : sortDefaultDir[key];
+        const f = props.filters ?? {q:"",pic:"",sla:"",class_id:"",angkatan:""};
+        router.get(buildURL({q:f.q,pic:f.pic,sla:f.sla,class_id:f.class_id,angkatan:f.angkatan,...listParams("list",key,nextDir)}),{}, {preserveScroll:true,preserveState:true});
     }
 
     const stages: {key:Stage; label:string; help:string}[] = [
@@ -120,7 +128,7 @@
     function saveMove() {
         if(!pending) return;
         if(needsPIC(pending.card,pending.target)) {
-            errorMessage="Tetapkan PIC Admin Kelas pada kartu sebelum melanjutkan.";
+            errorMessage="Tetapkan PIC Admin Kelas pada kartu atau baris sebelum melanjutkan.";
             return;
         }
         void updateCase(`/app/onboarding/cases/${pending.card.id}/stage`,{
@@ -149,7 +157,7 @@
 <AppLayout {user}>
   <div class="mx-auto max-w-[1700px] space-y-5 px-4 py-6 sm:px-6">
     <OnboardingWorkspaceHeader role={user?.role??""} active="kanban" summary={props.summary} notices={props.notices??[]}/>
-    <p class="text-sm text-neutral-500 dark:text-neutral-400">Papan Kanban: status dipindahkan manual. SLA 14 hari dihitung dari registrasi dan tidak berubah ketika kartu dipindah.</p>
+    <p class="text-sm text-neutral-500 dark:text-neutral-400">Status onboarding dipindahkan manual. SLA 14 hari dihitung dari registrasi dan tidak berubah ketika kartu dipindah.</p>
     <form class="rounded-xl border border-neutral-200 bg-white p-4 dark:border-white/10 dark:bg-neutral-900" onsubmit={(e)=>{e.preventDefault();applyFilters();}}>
       <div class="flex flex-wrap items-end gap-3">
         <label class="min-w-[220px] flex-1 text-xs font-medium text-neutral-600 dark:text-neutral-300">Cari mahasantri atau kelas
@@ -176,10 +184,22 @@
           <input type="text" maxlength="60" bind:value={filterAngkatan} placeholder="Semua angkatan" class="mt-1 block w-36 rounded-lg border border-neutral-200 p-2.5 text-sm dark:border-white/15 dark:bg-neutral-800"/>
         </label>
         <button type="submit" class="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white">Terapkan</button>
-        {#if filterActive}<a href="/app/onboarding" use:inertia class="flex items-center gap-1 rounded-lg border border-neutral-200 px-3 py-2.5 text-sm dark:border-white/15"><X size={14}/> Reset</a>{/if}
+        {#if filterActive}<a href={view==="list"?"/app/onboarding?view=list":"/app/onboarding"} use:inertia class="flex items-center gap-1 rounded-lg border border-neutral-200 px-3 py-2.5 text-sm dark:border-white/15"><X size={14}/> Reset</a>{/if}
       </div>
-      <p class="mt-3 text-xs text-neutral-500" aria-live="polite">{board.total} kasus cocok di seluruh halaman{filterActive?" · Filter aktif":""}. Jumlah tiap kolom mengikuti filter.</p>
+      <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p class="text-xs text-neutral-500" aria-live="polite">{board.total} kasus cocok di seluruh halaman{filterActive?" · Filter aktif":""}.{view==="kanban"?" Jumlah tiap kolom mengikuti filter.":""}</p>
+        <div role="group" aria-label="Tampilan" class="inline-flex rounded-lg border border-neutral-200 p-0.5 dark:border-white/15">
+          <a href={viewURL("kanban")} use:inertia aria-current={view==="kanban"?"page":undefined} class={"inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium "+(view==="kanban"?"bg-neutral-900 text-white dark:bg-white dark:text-neutral-900":"text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/10")}><Kanban size={14}/> Kanban</a>
+          <a href={viewURL("list")} use:inertia aria-current={view==="list"?"page":undefined} class={"inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium "+(view==="list"?"bg-neutral-900 text-white dark:bg-white dark:text-neutral-900":"text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/10")}><List size={14}/> Daftar</a>
+        </div>
+      </div>
     </form>
+    {#if view==="list" && board.total>0}
+      <div class="flex flex-wrap gap-2 text-xs" aria-label="Jumlah per tahapan">
+        {#each stages as st (st.key)}<span class="rounded-md border border-neutral-200 px-2 py-1 dark:border-white/10">{st.label} <b class="tabular-nums">{board.counts[st.key]??0}</b></span>{/each}
+        {#if (board.counts.batal??0)>0}<span class="rounded-md border border-neutral-200 px-2 py-1 text-neutral-500 dark:border-white/10">Batal <b class="tabular-nums">{board.counts.batal}</b></span>{/if}
+      </div>
+    {/if}
     {#if board.total===0}
       <div class="rounded-xl border border-dashed border-neutral-300 bg-white p-6 text-sm dark:border-white/15 dark:bg-neutral-900">
         <p class="font-semibold">{filterActive?"Tidak ada kasus yang cocok dengan filter":"Belum ada kasus onboarding"}</p>
@@ -193,6 +213,12 @@
     {#if props.flash?.success}<p role="status" class="text-sm text-emerald-700">{props.flash.success}</p>{/if}
     {#if errorMessage}<p role="alert" class="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 dark:text-red-300">{errorMessage}</p>{/if}
 
+    {#if view==="list"}
+      {#if board.total>0}
+        <OnboardingCaseTable cases={board.cases} pics={board.pics} {stages} {busy} {sort} {dir}
+          onSort={changeSort} onAssignPIC={assignPIC} onMove={beginMove} onHistory={showHistory}/>
+      {/if}
+    {:else}
     <div class="flex gap-3 overflow-x-auto pb-4">
       {#each stages as stage}
         {@const cards=board.cases.filter(card=>card.stage===stage.key)}
@@ -264,16 +290,17 @@
         </div>
       </section>
     {/if}
+    {/if}
 
     {#if board.total>board.page_size}
-      <nav class="flex items-center justify-center gap-3 text-sm" aria-label="Halaman Kanban">
+      <nav class="flex items-center justify-center gap-3 text-sm" aria-label="Halaman onboarding">
         <a href={pageURL(board.page-1)} use:inertia aria-disabled={board.page<=1} class={btnClass+(board.page<=1?" pointer-events-none opacity-40":"")}>Sebelumnya</a>
         <span>Halaman {board.page} dari {Math.ceil(board.total/board.page_size)} · 100 kasus per halaman</span>
         <a href={pageURL(board.page+1)} use:inertia aria-disabled={board.page>=Math.ceil(board.total/board.page_size)} class={btnClass+(board.page>=Math.ceil(board.total/board.page_size)?" pointer-events-none opacity-40":"")}>Berikutnya</a>
       </nav>
     {/if}
 
-    <p class="text-xs text-neutral-500">Seret kartu ke kolom bersebelahan atau gunakan tombol Lanjut/Mundur. Perpindahan ke Siap Mulai memerlukan target kuota dan kesiapan kelas; atur target melalui tab Kelas & Kuota.</p>
+    <p class="text-xs text-neutral-500">{view==="list"?"Gunakan tombol Lanjut/Mundur per baris; klik judul kolom untuk mengurutkan.":"Seret kartu ke kolom bersebelahan atau gunakan tombol Lanjut/Mundur."} Perpindahan ke Siap Mulai memerlukan target kuota dan kesiapan kelas; atur target melalui tab Kelas & Kuota.</p>
   </div>
 
   {#if pending}
@@ -283,7 +310,7 @@
         <p class="mt-1 text-sm text-neutral-500">{pending.card.nama} · {stageLabels[pending.card.stage]} → {stageLabels[pending.target]??"Batal"}</p>
         {#if needsPIC(pending.card,pending.target)}
           <p role="status" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-            PIC belum ditetapkan. Tutup dialog ini, lalu pilih PIC Admin Kelas pada kartu sebelum melanjutkan.
+            PIC belum ditetapkan. Tutup dialog ini, lalu pilih PIC Admin Kelas pada kartu atau baris sebelum melanjutkan.
           </p>
         {/if}
         {#if pending.target==="masuk_kelas"}
