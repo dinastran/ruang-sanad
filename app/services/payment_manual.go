@@ -80,6 +80,7 @@ func (s *RegistrationService) BayarInfo(ctx context.Context, ref string) (*model
 	}
 	out.WaURL = waURL(settings.CsWaNumber, "Assalamu'alaikum, saya "+out.NamaDepan+" ("+out.LeadRef+") ingin konfirmasi pembayaran.")
 	out.GatewayAktif = s.gateway != nil
+	out.Meta = s.bayarMeta(link, l)
 	if l.Stage == LeadStageTerverifikasi || l.Status == LeadStatusWon {
 		out.Status = "lunas"
 		return out, nil

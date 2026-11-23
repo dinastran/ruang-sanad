@@ -1,6 +1,7 @@
 <script lang="ts" module>
 	import type { FieldRule } from "./types";
 	export interface Option { id: number; nama: string; info?: string; aktif: boolean }
+	export interface MetaPixelInfo { pixel_id: string; capi_aktif: boolean }
 	export interface LinkRow {
 		id: number;
 		slug: string;
@@ -16,6 +17,8 @@
 		izinkan_manual: boolean;
 		is_aktif: boolean;
 		tampil_kode_referal?: boolean;
+		meta_tracking?: boolean;
+		meta_pixel_extra?: string;
 		program_nama?: string;
 		sumber_nama?: string;
 		harga_label?: string;
@@ -30,8 +33,8 @@
 	import DaftarFields from "./DaftarFields.svelte";
 	import { formKosong, type PublicLink } from "./types";
 
-	interface Props { programs: Option[]; sources: Option[]; initial?: LinkRow | null; onclose: () => void }
-	let { programs, sources, initial = null, onclose }: Props = $props();
+	interface Props { programs: Option[]; sources: Option[]; initial?: LinkRow | null; metaPixel?: MetaPixelInfo; onclose: () => void }
+	let { programs, sources, initial = null, metaPixel = { pixel_id: "", capi_aktif: false }, onclose }: Props = $props();
 
 	const OPSIONAL: [string, string][] = [
 		["usia", "Usia"], ["domisili", "Kota domisili"], ["untuk_siapa", "Mendaftar untuk"],
@@ -43,12 +46,13 @@
 		const base = initial ?? {
 			slug: "", judul: "", deskripsi: "", program_id: programs.find((p) => p.aktif && p.info !== "belum terhubung ke produk")?.id ?? 0,
 			lead_source_id: 0, mode: "short", after_submit: "wa", nominal_override: null, field_config: {}, wa_template: "", izinkan_manual: true, is_aktif: true, tampil_kode_referal: true,
+			meta_tracking: true, meta_pixel_extra: "",
 		};
 		const cfg: Record<string, FieldRule> = {};
 		for (const [k] of OPSIONAL) {
 			cfg[k] = base.field_config?.[k] ?? { tampil: base.mode === "full" || DEFAULT_SHORT.has(k), wajib: false };
 		}
-		return { ...base, tampil_kode_referal: base.tampil_kode_referal ?? true, field_config: cfg, nominal_text: base.nominal_override == null ? "" : String(base.nominal_override) };
+		return { ...base, tampil_kode_referal: base.tampil_kode_referal ?? true, meta_tracking: base.meta_tracking ?? true, meta_pixel_extra: base.meta_pixel_extra ?? "", field_config: cfg, nominal_text: base.nominal_override == null ? "" : String(base.nominal_override) };
 	}
 	let form = $state(awal());
 	let menyimpan = $state(false);
@@ -183,6 +187,26 @@
 			{#if form.after_submit === "bayar" && form.mode !== "wa"}<label class="flex items-center gap-2"><input type="checkbox" bind:checked={form.izinkan_manual} /> Izinkan transfer manual + unggah bukti</label>{/if}
 			{#if form.mode !== "wa"}<label class="flex items-center gap-2"><input type="checkbox" bind:checked={form.tampil_kode_referal} /> Kolom kode referal affiliate</label>{/if}
 			<label class="flex items-center gap-2"><input type="checkbox" bind:checked={form.is_aktif} /> Link aktif</label>
+		</div>
+
+		<div class="rounded-lg border border-neutral-200 p-3 dark:border-white/10">
+			<div class="flex items-start justify-between gap-3">
+				<div>
+					<p class="text-sm font-medium text-neutral-900 dark:text-white">Meta Pixel &amp; Conversions API</p>
+					<p class="mt-0.5 text-xs text-neutral-500">
+						Pixel utama: {#if metaPixel.pixel_id}<span class="font-mono text-neutral-700 dark:text-neutral-300">{metaPixel.pixel_id}</span>{:else}<span class="text-amber-700 dark:text-amber-400">belum diisi di .env</span>{/if}
+						· CAPI {metaPixel.capi_aktif ? "aktif" : "nonaktif"}
+					</p>
+				</div>
+				<label class="flex shrink-0 items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300"><input type="checkbox" bind:checked={form.meta_tracking} /> Aktif</label>
+			</div>
+			{#if form.meta_tracking}
+				<label class={lbl + " mt-3"}>Pixel ID tambahan (opsional)
+					<input class={field + " mt-1 font-mono"} bind:value={form.meta_pixel_extra} maxlength="80" inputmode="numeric" placeholder="mis. 123456789012345, 987654321098765" />
+					<span class="mt-1 block font-normal text-neutral-400">Maks. 3, pisahkan koma. Pixel tambahan hanya menerima event browser; CAPI dikirim ke dataset utama.</span>
+				</label>
+				<p class="mt-2 text-xs text-neutral-500">Event: PageView, ViewContent (buka halaman), Lead, CompleteRegistration, InitiateCheckout (submit), AddPaymentInfo (unggah bukti). Browser &amp; server memakai event_id yang sama sehingga tidak dobel.</p>
+			{/if}
 		</div>
 
 		{#if galat}<p class="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300" role="alert">{galat}</p>{/if}

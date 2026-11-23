@@ -62,3 +62,18 @@ WHERE test_mode = 1 AND status IN ('sent', 'failed') AND event_time >= ?;
 UPDATE meta_capi_events SET status = 'pending', test_mode = 0, attempts = 0, last_error = '',
     fbtrace_id = '', sent_at = NULL, next_attempt_at = sqlc.arg(now)
 WHERE test_mode = 1 AND status IN ('sent', 'failed') AND event_time >= sqlc.arg(since);
+
+-- name: UpsertLeadWebSignals :exec
+-- Nilai kosong tidak menimpa sinyal lama (mis. _fbc dari kunjungan iklan).
+INSERT INTO lead_web_signals (lead_id, fbp, fbc, client_ip, user_agent, source_url, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(lead_id) DO UPDATE SET
+    fbp = COALESCE(NULLIF(excluded.fbp, ''), fbp),
+    fbc = COALESCE(NULLIF(excluded.fbc, ''), fbc),
+    client_ip = COALESCE(NULLIF(excluded.client_ip, ''), client_ip),
+    user_agent = COALESCE(NULLIF(excluded.user_agent, ''), user_agent),
+    source_url = COALESCE(NULLIF(excluded.source_url, ''), source_url),
+    updated_at = excluded.updated_at;
+
+-- name: GetLeadWebSignals :one
+SELECT * FROM lead_web_signals WHERE lead_id = ?;

@@ -79,9 +79,9 @@ func (q *Queries) CreateLeadRegistration(ctx context.Context, arg CreateLeadRegi
 
 const createRegistrationLink = `-- name: CreateRegistrationLink :one
 INSERT INTO registration_links (slug, judul, deskripsi, program_id, lead_source_id, mode, after_submit,
-    nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, slug, judul, deskripsi, program_id, lead_source_id, mode, after_submit, nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal
+    nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal, meta_tracking, meta_pixel_extra)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, slug, judul, deskripsi, program_id, lead_source_id, mode, after_submit, nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal, meta_tracking, meta_pixel_extra
 `
 
 type CreateRegistrationLinkParams struct {
@@ -101,6 +101,8 @@ type CreateRegistrationLinkParams struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	TampilKodeReferal int64
+	MetaTracking      int64
+	MetaPixelExtra    string
 }
 
 func (q *Queries) CreateRegistrationLink(ctx context.Context, arg CreateRegistrationLinkParams) (RegistrationLink, error) {
@@ -121,6 +123,8 @@ func (q *Queries) CreateRegistrationLink(ctx context.Context, arg CreateRegistra
 		arg.CreatedAt,
 		arg.UpdatedAt,
 		arg.TampilKodeReferal,
+		arg.MetaTracking,
+		arg.MetaPixelExtra,
 	)
 	var i RegistrationLink
 	err := row.Scan(
@@ -141,6 +145,8 @@ func (q *Queries) CreateRegistrationLink(ctx context.Context, arg CreateRegistra
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TampilKodeReferal,
+		&i.MetaTracking,
+		&i.MetaPixelExtra,
 	)
 	return i, err
 }
@@ -216,7 +222,7 @@ func (q *Queries) GetLeadRegistrationByRef(ctx context.Context, ref string) (Lea
 }
 
 const getRegistrationLink = `-- name: GetRegistrationLink :one
-SELECT id, slug, judul, deskripsi, program_id, lead_source_id, mode, after_submit, nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal FROM registration_links WHERE id = ?
+SELECT id, slug, judul, deskripsi, program_id, lead_source_id, mode, after_submit, nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal, meta_tracking, meta_pixel_extra FROM registration_links WHERE id = ?
 `
 
 func (q *Queries) GetRegistrationLink(ctx context.Context, id int64) (RegistrationLink, error) {
@@ -240,12 +246,14 @@ func (q *Queries) GetRegistrationLink(ctx context.Context, id int64) (Registrati
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TampilKodeReferal,
+		&i.MetaTracking,
+		&i.MetaPixelExtra,
 	)
 	return i, err
 }
 
 const getRegistrationLinkBySlug = `-- name: GetRegistrationLinkBySlug :one
-SELECT id, slug, judul, deskripsi, program_id, lead_source_id, mode, after_submit, nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal FROM registration_links WHERE slug = ?
+SELECT id, slug, judul, deskripsi, program_id, lead_source_id, mode, after_submit, nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal, meta_tracking, meta_pixel_extra FROM registration_links WHERE slug = ?
 `
 
 func (q *Queries) GetRegistrationLinkBySlug(ctx context.Context, slug string) (RegistrationLink, error) {
@@ -269,6 +277,8 @@ func (q *Queries) GetRegistrationLinkBySlug(ctx context.Context, slug string) (R
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TampilKodeReferal,
+		&i.MetaTracking,
+		&i.MetaPixelExtra,
 	)
 	return i, err
 }
@@ -346,7 +356,7 @@ func (q *Queries) ListLeadRegistrationsByLead(ctx context.Context, leadID int64)
 }
 
 const listRegistrationLinks = `-- name: ListRegistrationLinks :many
-SELECT id, slug, judul, deskripsi, program_id, lead_source_id, mode, after_submit, nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal FROM registration_links ORDER BY is_aktif DESC, id DESC
+SELECT id, slug, judul, deskripsi, program_id, lead_source_id, mode, after_submit, nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal, meta_tracking, meta_pixel_extra FROM registration_links ORDER BY is_aktif DESC, id DESC
 `
 
 func (q *Queries) ListRegistrationLinks(ctx context.Context) ([]RegistrationLink, error) {
@@ -376,6 +386,8 @@ func (q *Queries) ListRegistrationLinks(ctx context.Context) ([]RegistrationLink
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TampilKodeReferal,
+			&i.MetaTracking,
+			&i.MetaPixelExtra,
 		); err != nil {
 			return nil, err
 		}
@@ -433,7 +445,7 @@ func (q *Queries) ListRegistrationStatsSince(ctx context.Context, tanggal string
 const updateRegistrationLink = `-- name: UpdateRegistrationLink :exec
 UPDATE registration_links SET slug = ?, judul = ?, deskripsi = ?, program_id = ?, lead_source_id = ?, mode = ?,
     after_submit = ?, nominal_override = ?, field_config = ?, wa_template = ?, izinkan_manual = ?, is_aktif = ?, updated_at = ?,
-    tampil_kode_referal = ?
+    tampil_kode_referal = ?, meta_tracking = ?, meta_pixel_extra = ?
 WHERE id = ?
 `
 
@@ -452,6 +464,8 @@ type UpdateRegistrationLinkParams struct {
 	IsAktif           int64
 	UpdatedAt         time.Time
 	TampilKodeReferal int64
+	MetaTracking      int64
+	MetaPixelExtra    string
 	ID                int64
 }
 
@@ -471,6 +485,8 @@ func (q *Queries) UpdateRegistrationLink(ctx context.Context, arg UpdateRegistra
 		arg.IsAktif,
 		arg.UpdatedAt,
 		arg.TampilKodeReferal,
+		arg.MetaTracking,
+		arg.MetaPixelExtra,
 		arg.ID,
 	)
 	return err

@@ -189,6 +189,10 @@ func (s *RegistrationService) Submit(ctx context.Context, slug string, raw model
 	}
 	res := &models.RegistrationResult{Next: link.AfterSubmit}
 	actor := formActor(link.ID)
+	pixels := s.linkPixelIDs(link)
+	// Funnel events this submit reached, fired by the Pixel after the tx.
+	var metaEvents []string
+	var metaLead queries.Lead
 	err = s.leads.withTx(ctx, func(q *queries.Querier) error {
 		now := s.nowUTC()
 		l, created, err := findOrCreateLead(ctx, q, in.phone, now)
@@ -196,6 +200,7 @@ func (s *RegistrationService) Submit(ctx context.Context, slug string, raw model
 			return err
 		}
 		if created {
+			metaEvents = append(metaEvents, MetaEventLead)
 			if err := writeLeadEvent(ctx, q, l.ID, newLeadEventID("frm"), "lead.created", actor, map[string]any{"link_id": link.ID}, now); err != nil {
 				return err
 			}
@@ -265,6 +270,12 @@ func (s *RegistrationService) Submit(ctx context.Context, slug string, raw model
 					}
 					from := l.Stage
 					l.Stage = st
+					switch st {
+					case LeadStageDataTerisi:
+						metaEvents = append(metaEvents, MetaEventCompleteRegistration)
+					case LeadStageInfoBayarDikirim:
+						metaEvents = append(metaEvents, MetaEventInitiateCheckout)
+					}
 					if st == LeadStageInfoBayarDikirim && !l.PaymentInfoSentAt.Valid {
 						l.PaymentInfoSentAt = sql.NullTime{Time: now, Valid: true}
 					}
@@ -282,6 +293,15 @@ func (s *RegistrationService) Submit(ctx context.Context, slug string, raw model
 		}
 		if err := saveLead(ctx, q, l, now); err != nil {
 			return err
+		}
+		metaLead = l
+		if len(pixels) > 0 && l.Status != LeadStatusDoNotContact {
+			if err := saveWebSignals(ctx, q, l.ID, MetaWebSignals{
+				Fbp: MetaFbp(meta.Fbp), Fbc: MetaFbc(meta.Fbc, meta.PageURL, now),
+				IP: meta.IP, UserAgent: meta.UserAgent, SourceURL: meta.PageURL,
+			}, now); err != nil {
+				return err
+			}
 		}
 
 		if s.affiliates != nil {
@@ -312,6 +332,9 @@ func (s *RegistrationService) Submit(ctx context.Context, slug string, raw model
 	})
 	if err != nil {
 		return nil, err
+	}
+	if len(pixels) > 0 && metaLead.Status != LeadStatusDoNotContact {
+		res.Meta = browserTracking(metaLead, metaEvents)
 	}
 	res.WaURL = waURL(settings.CsWaNumber, fillWaTemplate(link.WaTemplate, in.Nama, prog.Nama, in.jadwalLabel, res.LeadRef))
 	return res, nil

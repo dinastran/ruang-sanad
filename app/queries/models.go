@@ -671,6 +671,16 @@ type LeadSourcePattern struct {
 	CreatedAt  time.Time
 }
 
+type LeadWebSignal struct {
+	LeadID    int64
+	Fbp       string
+	Fbc       string
+	ClientIp  string
+	UserAgent string
+	SourceUrl string
+	UpdatedAt time.Time
+}
+
 type Level struct {
 	ID     int64
 	Kode   string
@@ -1038,6 +1048,8 @@ type RegistrationLink struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	TampilKodeReferal int64
+	MetaTracking      int64
+	MetaPixelExtra    string
 }
 
 type RegistrationLinkStat struct {

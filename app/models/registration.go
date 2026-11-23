@@ -40,6 +40,11 @@ type RegistrationLinkRequest struct {
 	IsAktif         bool                 `json:"is_aktif"`
 	// TampilKodeReferal shows the optional "Kode referal" field (default on).
 	TampilKodeReferal *bool `json:"tampil_kode_referal"`
+	// MetaTracking loads the Meta Pixel on the public page and sends the
+	// form events through CAPI too (default on).
+	MetaTracking *bool `json:"meta_tracking"`
+	// MetaPixelExtra: extra Pixel IDs (comma separated), browser only.
+	MetaPixelExtra string `json:"meta_pixel_extra"`
 }
 
 // RegistrationLinkRow is one link on the admin page, with 30-day stats.
@@ -75,6 +80,31 @@ type PublicRegistrationLink struct {
 	FieldConfig   map[string]FieldRule `json:"field_config"`
 	IzinkanManual bool                 `json:"izinkan_manual"`
 	KodeReferal   bool                 `json:"kode_referal"`
+	// Meta is nil when the link has no Pixel to load.
+	Meta *PublicMeta `json:"meta,omitempty"`
+}
+
+// PublicMeta tells the public page which Pixels to load. ViewEventID is
+// shared by the browser ViewContent and its CAPI copy so Meta dedupes them.
+type PublicMeta struct {
+	PixelIDs    []string `json:"pixel_ids"`
+	ViewEventID string   `json:"view_event_id"`
+}
+
+// MetaBrowserEvent is one Pixel event the browser fires after a submit,
+// with the same event_id the server sends through CAPI.
+type MetaBrowserEvent struct {
+	Name     string `json:"name"`
+	ID       string `json:"id"`
+	Value    int64  `json:"value"`
+	Currency string `json:"currency"`
+}
+
+// MetaBrowserTracking is returned after a submit: events to fire and the
+// hashed advanced-matching data (raw personal data never goes to the page).
+type MetaBrowserTracking struct {
+	Events []MetaBrowserEvent `json:"events"`
+	User   map[string]string  `json:"user"`
 }
 
 type RegistrationSettings struct {
@@ -98,12 +128,17 @@ type RegistrationSubmit struct {
 	KodeReferal    string `json:"kode_referal"`
 	Honeypot       string `json:"website"`
 	FormToken      string `json:"form_token"`
+	// PageURL is the full page URL (with UTM/fbclid) for event_source_url.
+	PageURL string `json:"page_url"`
 }
 
 type RequestMeta struct {
 	IP        string
 	UserAgent string
 	AffCookie string // raw rs_aff cookie value, if any
+	Fbp       string // _fbp cookie (Meta browser id)
+	Fbc       string // _fbc cookie (Meta click id)
+	PageURL   string // page the visitor is on (event_source_url)
 }
 
 type RegistrationResult struct {
@@ -111,6 +146,8 @@ type RegistrationResult struct {
 	Next     string `json:"next"`
 	WaURL    string `json:"wa_url"`
 	BayarRef string `json:"bayar_ref,omitempty"`
+	// Meta: Pixel events for the browser; nil when tracking is off.
+	Meta *MetaBrowserTracking `json:"meta,omitempty"`
 }
 
 // BayarInfo is what the public payment page shows for one registration ref.
@@ -128,6 +165,17 @@ type BayarInfo struct {
 	GatewayAktif bool   `json:"gateway_aktif"`
 	// SesiAktif: an online payment session is open (checkout started).
 	SesiAktif bool `json:"sesi_aktif"`
+	// Meta: Pixel for the payment page; nil when tracking is off.
+	Meta *BayarMeta `json:"meta,omitempty"`
+}
+
+// BayarMeta lets the payment page fire AddPaymentInfo after a proof upload,
+// with the event_id of the CRM CAPI event (deduplicated by Meta).
+type BayarMeta struct {
+	PixelIDs         []string          `json:"pixel_ids"`
+	AddPaymentInfoID string            `json:"add_payment_info_id"`
+	Value            int64             `json:"value"`
+	User             map[string]string `json:"user"`
 }
 
 type LeadRegistrationRow struct {
@@ -274,4 +322,10 @@ type AffiliateLedgerRow struct {
 	Catatan       string `json:"catatan"`
 	AlasanBatal   string `json:"alasan_batal"`
 	CreatedAt     string `json:"created_at"`
+}
+
+// MetaPixelInfo: the main Pixel (.env) and whether CAPI sending is on.
+type MetaPixelInfo struct {
+	PixelID   string `json:"pixel_id"`
+	CAPIAktif bool   `json:"capi_aktif"`
 }
