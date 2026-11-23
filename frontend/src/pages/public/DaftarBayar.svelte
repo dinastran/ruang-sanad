@@ -2,6 +2,7 @@
 	import Logo from "@components/Logo.svelte";
 	import { rupiah } from "@components/registration/types";
 	import { onMount } from "svelte";
+	import { initPixel, setPixelUser, trackPixel } from "@lib/metaPixel";
 	import { ChevronDown, CircleAlert, CircleCheck, Clock, Copy, FileText, MessageCircle, QrCode, Upload } from "lucide-svelte";
 
 	interface BayarInfo {
@@ -16,6 +17,7 @@
 		wa_url: string;
 		gateway_aktif: boolean;
 		sesi_aktif: boolean;
+		meta?: { pixel_ids: string[]; add_payment_info_id: string; value: number; user: Record<string, string> };
 	}
 	interface Props { info?: BayarInfo; ref?: string; galat?: string }
 	let { info, ref = "", galat = "" }: Props = $props();
@@ -32,6 +34,10 @@
 
 	// While an online session is open, poll so the page flips to "lunas" by
 	// itself after the registrant returns from the Xendit checkout.
+	onMount(() => {
+		if (initPixel(info?.meta?.pixel_ids)) setPixelUser(info?.meta?.user);
+	});
+
 	onMount(() => {
 		if (!sesiAktif || status === "lunas") return;
 		const mulai = Date.now();
@@ -108,6 +114,7 @@
 		try {
 			const body = new FormData();
 			body.append("bukti", file);
+			body.append("page_url", window.location.href);
 			const res = await fetch(`/daftar/bayar/${encodeURIComponent(ref)}/bukti`, { method: "POST", body, headers: { Accept: "application/json" } });
 			const data = await res.json().catch(() => ({}));
 			if (!res.ok) {
@@ -115,6 +122,7 @@
 				return;
 			}
 			status = "menunggu_verifikasi";
+			if (info?.meta) trackPixel("AddPaymentInfo", { value: info.meta.value, currency: "IDR", content_name: info.program_nama }, info.meta.add_payment_info_id);
 		} catch {
 			pesanError = "Koneksi terputus. Periksa internet lalu coba lagi.";
 		} finally {

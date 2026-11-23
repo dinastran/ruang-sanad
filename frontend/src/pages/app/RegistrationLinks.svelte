@@ -2,11 +2,11 @@
 	import { inertia, router } from "@inertiajs/svelte";
 	import AppLayout from "@layouts/AppLayout.svelte";
 	import type { Flash, User } from "@lib/types";
-	import LinkForm, { type LinkRow, type Option } from "@components/registration/LinkForm.svelte";
+	import LinkForm, { type LinkRow, type MetaPixelInfo, type Option } from "@components/registration/LinkForm.svelte";
 	import { ArrowLeft, Check, Copy, ExternalLink, Link2, Pencil, Plus, Settings } from "lucide-svelte";
 
 	interface Settings { cs_wa_number: string; payment_expiry_hours: number; bank_manual_info: string }
-	interface Props { user?: User; links: LinkRow[]; programs: Option[]; sources: Option[]; settings: Settings; base_url: string; flash?: Flash }
+	interface Props { user?: User; links: LinkRow[]; programs: Option[]; sources: Option[]; settings: Settings; base_url: string; meta_pixel?: MetaPixelInfo; flash?: Flash }
 	let props: Props = $props();
 	let links = $derived(props.links ?? []);
 
@@ -74,7 +74,7 @@
 		{/if}
 
 		{#if editing !== null}
-			<LinkForm programs={props.programs ?? []} sources={props.sources ?? []} initial={editing === "baru" ? null : editing} onclose={() => (editing = null)} />
+			<LinkForm programs={props.programs ?? []} sources={props.sources ?? []} initial={editing === "baru" ? null : editing} metaPixel={props.meta_pixel} onclose={() => (editing = null)} />
 		{/if}
 
 		{#if links.length === 0 && editing === null}

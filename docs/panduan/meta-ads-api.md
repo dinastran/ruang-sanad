@@ -401,6 +401,25 @@ Pixel di LP Ruang Sanad sudah terpasang (HTML sendiri). Agar tidak bentrok denga
 3. **Hapus** setiap `fbq('track', 'Lead')` di LP, dan **jangan** kirim `Purchase` atau event funnel lain dari LP. Event itu sudah dikirim Dashboard lewat CAPI. Kalau LP juga mengirimnya, Meta menghitung dua kali karena `event_id`-nya berbeda.
 4. Pastikan Pixel di LP dan CAPI Dashboard memakai **dataset (Pixel) yang sama**. ID-nya terlihat di kode LP: `fbq('init', 'XXXXXXXXXXXXXXX')`.
 
+### 13b. Pixel + CAPI di Link Pendaftaran (`/daftar/:slug`)
+
+Halaman form publik Dashboard memasang Pixel sendiri. Pengaturan:
+
+- **Pixel utama** = `META_PIXEL_ID`, atau `META_CAPI_DATASET_ID` bila kosong. Server (CAPI) selalu mengirim ke `META_CAPI_DATASET_ID`, jadi biarkan `META_PIXEL_ID` kosong kecuali benar-benar beda.
+- **Per link** (Leads → Link Pendaftaran → Ubah): toggle *Meta Pixel & Conversions API* (default aktif) dan *Pixel ID tambahan* (maks. 3, hanya event browser; tidak ada CAPI untuk Pixel tambahan).
+
+| Event | Kapan | Browser (Pixel) | Server (CAPI) | event_id |
+|---|---|---|---|---|
+| PageView | buka halaman | ✓ | – | – |
+| ViewContent | buka halaman | ✓ | ✓ langsung | `rs-vc-<acak>` (sama di dua sisi) |
+| DaftarLangkah2 (custom) | lolos langkah 1 | ✓ | – | – |
+| Lead | submit, lead baru | ✓ | ✓ antrean CRM | `rs-lead-<id>-lead` |
+| CompleteRegistration | submit (tahap data_terisi) | ✓ | ✓ antrean CRM | `rs-lead-<id>-completeregistration` |
+| InitiateCheckout | submit link mode bayar | ✓ | ✓ antrean CRM | `rs-lead-<id>-initiatecheckout` |
+| AddPaymentInfo | unggah bukti transfer | ✓ | ✓ antrean CRM | `rs-lead-<id>-addpaymentinfo` |
+
+Karena `event_id` dan nama event sama, Meta menghitung sekali (deduplikasi). Saat submit, server menyimpan `_fbp`, `_fbc` (atau `fbclid` dari URL), IP, user agent, dan URL halaman di tabel `lead_web_signals`. Event CRM yang terjadi ≤15 menit dari sinyal itu dikirim sebagai `action_source=website` lengkap dengan sinyal browser; event lain (mis. Purchase) tetap `system_generated` tetapi ikut membawa `fbp`/`fbc` agar pencocokan lebih tinggi. Data pribadi untuk Pixel (advanced matching) dikirim ke browser dalam bentuk hash SHA-256, bukan teks asli.
+
 ## Langkah 14: Ambil Dataset ID dan token CAPI
 
 ### a. Dataset ID (= Pixel ID)

@@ -21,6 +21,7 @@ export interface PublicLink {
 	field_config: Record<string, FieldRule>;
 	izinkan_manual: boolean;
 	kode_referal?: boolean;
+	meta?: { pixel_ids: string[]; view_event_id: string };
 }
 export interface JadwalOpsi {
 	kode: string;

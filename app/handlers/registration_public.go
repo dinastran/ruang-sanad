@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"io"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maulanashalihin/laju-go/app/models"
@@ -38,7 +39,11 @@ func (h *RegistrationPublicHandler) Page(c *fiber.Ctx) error {
 	if link.Mode == "wa" {
 		return c.Redirect(h.reg.LinkWaURL(ctx, slug), fiber.StatusFound)
 	}
-	props := fiber.Map{"link": link, "form_token": h.reg.FormToken(slug)}
+	h.reg.TrackPageView(link, metaSignals(c, c.BaseURL()+c.OriginalURL()))
+	props := fiber.Map{
+		"link": link, "form_token": h.reg.FormToken(slug),
+		"wa_cs_url": h.reg.CSWaURL(ctx, "Assalamu'alaikum, saya ingin bertanya dulu tentang "+link.ProgramNama+"."),
+	}
 	if link.ButuhJadwal {
 		jadwal, err := h.reg.PublicJadwal(ctx)
 		if err != nil {
@@ -71,7 +76,11 @@ func (h *RegistrationPublicHandler) Submit(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Data tidak valid"})
 	}
 	ctx := c.UserContext()
-	res, err := h.reg.Submit(ctx, c.Params("slug"), in, models.RequestMeta{IP: session.ClientIP(c), UserAgent: c.Get(fiber.HeaderUserAgent), AffCookie: c.Cookies(services.AffCookieName)})
+	sig := metaSignals(c, in.PageURL)
+	res, err := h.reg.Submit(ctx, c.Params("slug"), in, models.RequestMeta{
+		IP: sig.IP, UserAgent: sig.UserAgent, AffCookie: c.Cookies(services.AffCookieName),
+		Fbp: sig.Fbp, Fbc: sig.Fbc, PageURL: sig.SourceURL,
+	})
 	var fe *services.FieldError
 	switch {
 	case errors.Is(err, services.ErrLinkTidakAktif):
@@ -93,6 +102,9 @@ func (h *RegistrationPublicHandler) Submit(c *fiber.Ctx) error {
 	out := fiber.Map{"next": res.Next, "wa_url": res.WaURL, "lead_ref": res.LeadRef}
 	if res.BayarRef != "" {
 		out["bayar_url"] = "/daftar/bayar/" + res.BayarRef
+	}
+	if res.Meta != nil {
+		out["meta"] = res.Meta
 	}
 	return c.JSON(out)
 }
@@ -155,5 +167,22 @@ func (h *RegistrationPublicHandler) UploadBukti(c *fiber.Ctx) error {
 	if err != nil {
 		return registrationError(c, err)
 	}
+	// Best effort: tracking must never fail an accepted upload.
+	_ = h.reg.RecordProofSignals(c.UserContext(), c.Params("ref"), metaSignals(c, c.FormValue("page_url")))
 	return c.JSON(fiber.Map{"ok": true})
+}
+
+// metaSignals reads the visitor's Meta browser identifiers. pageURL is the
+// page the visitor is on; a foreign or invalid URL falls back to this
+// request's page (for event_source_url).
+func metaSignals(c *fiber.Ctx, pageURL string) services.MetaWebSignals {
+	ref := c.Get(fiber.HeaderReferer)
+	if ref == "" {
+		ref = c.BaseURL() + c.Path()
+	}
+	src := services.SafePageURL(pageURL, services.SafePageURL(ref, c.BaseURL()+c.Path()))
+	return services.MetaWebSignals{
+		Fbp: services.MetaFbp(c.Cookies("_fbp")), Fbc: services.MetaFbc(c.Cookies("_fbc"), src, time.Now()),
+		IP: session.ClientIP(c), UserAgent: c.Get(fiber.HeaderUserAgent), SourceURL: src,
+	}
 }

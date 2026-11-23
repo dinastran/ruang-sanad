@@ -150,11 +150,11 @@ func main() {
 	metaCAPIService := services.NewMetaCAPIService(querier, services.MetaCAPIConfig{
 		DatasetID: cfg.MetaCAPIDatasetID, Token: cfg.MetaCAPIToken, APIVersion: cfg.MetaAPIVersion,
 		AppSecret: cfg.MetaCAPIAppSecret, TestEventCode: cfg.MetaCAPITestEventCode,
-		EventSourceURL: cfg.MetaCAPIEventSourceURL,
+		EventSourceURL: cfg.MetaCAPIEventSourceURL, PixelID: cfg.MetaPixelID,
 	})
 	leadService.WithMetaCAPI(metaCAPIService)
 	startMetaCAPIWorker(metaCAPIService)
-	registrationService := services.NewRegistrationService(querier, leadService, jadwalService, []byte(cfg.SessionSecret))
+	registrationService := services.NewRegistrationService(querier, leadService, jadwalService, []byte(cfg.SessionSecret)).WithMeta(metaCAPIService)
 	affiliateService := services.NewAffiliateService(querier, leadService, []byte(cfg.SessionSecret))
 	leadService.WithAffiliates(affiliateService)
 	registrationService.WithAffiliates(affiliateService)

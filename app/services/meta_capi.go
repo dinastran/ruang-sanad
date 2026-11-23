@@ -51,6 +51,8 @@ type MetaCAPIConfig struct {
 	// lead's source has no URL of its own. Meta blocks events without one
 	// for businesses in restricted categories.
 	EventSourceURL string
+	// PixelID is the browser Pixel (META_PIXEL_ID); empty = DatasetID.
+	PixelID string
 }
 
 const (
@@ -330,7 +332,13 @@ func (s *MetaCAPIService) sendOne(ctx context.Context, ev queries.MetaCapiEvent)
 			return false, err
 		}
 	}
-	traceID, sendErr := s.post(ctx, s.eventPayload(ev, lead, sourceURL))
+	sig, err := s.webSignals(ctx, lead.ID)
+	if err != nil {
+		return false, err
+	}
+	payload := s.eventPayload(ev, lead, sourceURL)
+	applyWebSignals(payload, ev.EventName, ev.EventTime, sig)
+	traceID, sendErr := s.post(ctx, payload)
 	if sendErr == nil {
 		return true, s.querier.MarkMetaCAPIEventSent(ctx, queries.MarkMetaCAPIEventSentParams{
 			FbtraceID: traceID, SentAt: sql.NullTime{Time: now, Valid: true}, ID: ev.ID,

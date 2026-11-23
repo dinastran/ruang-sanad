@@ -46,8 +46,10 @@ type Config struct {
 
 	// Meta Conversions API (CAPI): sends the CRM funnel to Meta. Off until
 	// the dataset (Pixel) ID and token are set. See docs/panduan/meta-ads-api.md.
-	MetaCAPIDatasetID     string
-	MetaCAPIToken         string
+	MetaCAPIDatasetID string
+	MetaCAPIToken     string
+	// Browser Pixel for the public registration pages; empty = MetaCAPIDatasetID.
+	MetaPixelID           string
 	MetaCAPITestEventCode string
 	// Default landing page URL for event_source_url (sources may override).
 	MetaCAPIEventSourceURL string
@@ -112,6 +114,7 @@ func Load() *Config {
 
 		MetaCAPIDatasetID:      strings.TrimSpace(getEnv("META_CAPI_DATASET_ID", "")),
 		MetaCAPIToken:          strings.TrimSpace(getEnv("META_CAPI_TOKEN", "")),
+		MetaPixelID:            strings.TrimSpace(getEnv("META_PIXEL_ID", "")),
 		MetaCAPITestEventCode:  strings.TrimSpace(getEnv("META_CAPI_TEST_EVENT_CODE", "")),
 		MetaCAPIEventSourceURL: strings.TrimSpace(getEnv("META_CAPI_EVENT_SOURCE_URL", "")),
 		XenditSecretKey:        strings.TrimSpace(getEnv("XENDIT_SECRET_KEY", "")),

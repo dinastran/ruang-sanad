@@ -41,6 +41,7 @@ type RegistrationService struct {
 
 	gateway    PaymentGateway    // nil = online payment off
 	affiliates *AffiliateService // nil = no affiliate attribution
+	meta       *MetaCAPIService  // nil = no Meta Pixel / CAPI web events
 	appURL     string
 
 	mu        sync.Mutex
@@ -169,6 +170,14 @@ func (s *RegistrationService) validateLink(ctx context.Context, req *models.Regi
 		return errors.New("isi nomor WA CS di pengaturan Link Pendaftaran dulu")
 	}
 	req.FieldConfig = normalizeFieldConfig(req.FieldConfig)
+	extra := strings.TrimSpace(req.MetaPixelExtra)
+	req.MetaPixelExtra = strings.Join(ParseMetaPixelIDs(extra), ",")
+	if extra != "" && req.MetaPixelExtra == "" {
+		return errors.New("Pixel ID tambahan harus angka (6–20 digit), pisahkan dengan koma")
+	}
+	if len(ParseMetaPixelIDs(req.MetaPixelExtra)) > 3 {
+		return errors.New("maksimal 3 Pixel ID tambahan")
+	}
 	return nil
 }
 
@@ -191,6 +200,7 @@ func (s *RegistrationService) CreateLink(ctx context.Context, req models.Registr
 		FieldConfig: string(cfg), WaTemplate: req.WaTemplate, IzinkanManual: boolInt(req.IzinkanManual),
 		IsAktif: boolInt(req.IsAktif), CreatedBy: sql.NullInt64{Int64: actorID, Valid: actorID > 0}, CreatedAt: now, UpdatedAt: now,
 		TampilKodeReferal: boolInt(req.TampilKodeReferal == nil || *req.TampilKodeReferal),
+		MetaTracking:      boolInt(req.MetaTracking == nil || *req.MetaTracking), MetaPixelExtra: req.MetaPixelExtra,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
@@ -215,6 +225,7 @@ func (s *RegistrationService) UpdateLink(ctx context.Context, id int64, req mode
 		FieldConfig: string(cfg), WaTemplate: req.WaTemplate, IzinkanManual: boolInt(req.IzinkanManual),
 		IsAktif: boolInt(req.IsAktif), UpdatedAt: s.nowUTC(), ID: id,
 		TampilKodeReferal: boolInt(req.TampilKodeReferal == nil || *req.TampilKodeReferal),
+		MetaTracking:      boolInt(req.MetaTracking == nil || *req.MetaTracking), MetaPixelExtra: req.MetaPixelExtra,
 	})
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return errors.New("slug sudah dipakai link lain")
@@ -224,6 +235,7 @@ func (s *RegistrationService) UpdateLink(ctx context.Context, id int64, req mode
 
 func linkToRequest(l queries.RegistrationLink) models.RegistrationLinkRequest {
 	tampil := l.TampilKodeReferal == 1
+	tracking := l.MetaTracking == 1
 	var override *int64
 	if l.NominalOverride.Valid {
 		v := l.NominalOverride.Int64
@@ -233,7 +245,7 @@ func linkToRequest(l queries.RegistrationLink) models.RegistrationLinkRequest {
 		Slug: l.Slug, Judul: l.Judul, Deskripsi: l.Deskripsi, ProgramID: l.ProgramID, LeadSourceID: l.LeadSourceID,
 		Mode: l.Mode, AfterSubmit: l.AfterSubmit, NominalOverride: override, FieldConfig: parseFieldConfig(l.FieldConfig),
 		WaTemplate: l.WaTemplate, IzinkanManual: l.IzinkanManual == 1, IsAktif: l.IsAktif == 1,
-		TampilKodeReferal: &tampil,
+		TampilKodeReferal: &tampil, MetaTracking: &tracking, MetaPixelExtra: l.MetaPixelExtra,
 	}
 }
 
@@ -346,6 +358,7 @@ func (s *RegistrationService) PublicLink(ctx context.Context, slug string) (*mod
 		FieldConfig: effectiveFields(l.Mode, parseFieldConfig(l.FieldConfig)), IzinkanManual: l.IzinkanManual == 1,
 		KodeReferal: s.affiliates != nil && l.TampilKodeReferal == 1,
 		Varian:      []models.PublicVarian{},
+		Meta:        s.publicMeta(l),
 	}
 	if l.NominalOverride.Valid {
 		out.Harga = l.NominalOverride.Int64

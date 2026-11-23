@@ -41,7 +41,7 @@ func (h *RegistrationLinkHandler) Index(c *fiber.Ctx) error {
 	}
 	return h.inertiaService.Render(c, "app/RegistrationLinks", fiber.Map{
 		"user": sessionUser(sess), "links": links, "programs": programs, "sources": sources,
-		"settings": settings, "base_url": c.BaseURL(),
+		"settings": settings, "base_url": c.BaseURL(), "meta_pixel": h.reg.MetaPixelInfo(),
 	})
 }
 

@@ -56,6 +56,25 @@ func (q *Queries) CountResendableTestMetaCAPIEvents(ctx context.Context, eventTi
 	return count, err
 }
 
+const getLeadWebSignals = `-- name: GetLeadWebSignals :one
+SELECT lead_id, fbp, fbc, client_ip, user_agent, source_url, updated_at FROM lead_web_signals WHERE lead_id = ?
+`
+
+func (q *Queries) GetLeadWebSignals(ctx context.Context, leadID int64) (LeadWebSignal, error) {
+	row := q.db.QueryRowContext(ctx, getLeadWebSignals, leadID)
+	var i LeadWebSignal
+	err := row.Scan(
+		&i.LeadID,
+		&i.Fbp,
+		&i.Fbc,
+		&i.ClientIp,
+		&i.UserAgent,
+		&i.SourceUrl,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const insertMetaCAPIEvent = `-- name: InsertMetaCAPIEvent :execrows
 INSERT OR IGNORE INTO meta_capi_events (lead_id, event_name, event_id, event_time, value, test_mode, next_attempt_at, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -390,4 +409,40 @@ func (q *Queries) RetryFailedMetaCAPIEvents(ctx context.Context, arg RetryFailed
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const upsertLeadWebSignals = `-- name: UpsertLeadWebSignals :exec
+INSERT INTO lead_web_signals (lead_id, fbp, fbc, client_ip, user_agent, source_url, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(lead_id) DO UPDATE SET
+    fbp = COALESCE(NULLIF(excluded.fbp, ''), fbp),
+    fbc = COALESCE(NULLIF(excluded.fbc, ''), fbc),
+    client_ip = COALESCE(NULLIF(excluded.client_ip, ''), client_ip),
+    user_agent = COALESCE(NULLIF(excluded.user_agent, ''), user_agent),
+    source_url = COALESCE(NULLIF(excluded.source_url, ''), source_url),
+    updated_at = excluded.updated_at
+`
+
+type UpsertLeadWebSignalsParams struct {
+	LeadID    int64
+	Fbp       string
+	Fbc       string
+	ClientIp  string
+	UserAgent string
+	SourceUrl string
+	UpdatedAt time.Time
+}
+
+// Nilai kosong tidak menimpa sinyal lama (mis. _fbc dari kunjungan iklan).
+func (q *Queries) UpsertLeadWebSignals(ctx context.Context, arg UpsertLeadWebSignalsParams) error {
+	_, err := q.db.ExecContext(ctx, upsertLeadWebSignals,
+		arg.LeadID,
+		arg.Fbp,
+		arg.Fbc,
+		arg.ClientIp,
+		arg.UserAgent,
+		arg.SourceUrl,
+		arg.UpdatedAt,
+	)
+	return err
 }
