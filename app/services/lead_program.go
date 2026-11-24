@@ -225,6 +225,8 @@ type ProgramDetail struct {
 	Sesi    []models.ProgramSesi    `json:"sesi"`
 	Peserta []models.ProgramPeserta `json:"peserta"`
 	Kelas   []models.ProgramKelas   `json:"kelas"`
+	// MenungguVerifikasi: proofs uploaded, waiting for staff verification.
+	MenungguVerifikasi []models.ProgramMenungguVerifikasi `json:"menunggu_verifikasi"`
 }
 
 func (s *LeadProgramService) Detail(id int64) (*ProgramDetail, error) {
@@ -260,6 +262,22 @@ func (s *LeadProgramService) Detail(id int64) (*ProgramDetail, error) {
 		}
 		d.Kelas, d.Peserta = kelas, peserta
 		applyKelas(d.Peserta, rows)
+	}
+	if d.MenungguVerifikasi, err = s.querier.ListProgramMenungguVerifikasi(ctx, id); err != nil {
+		return nil, err
+	}
+	leadIDs := []int64{}
+	for _, x := range d.Peserta {
+		if x.LeadID > 0 {
+			leadIDs = append(leadIDs, x.LeadID)
+		}
+	}
+	bukti, err := s.querier.LatestProofByLead(ctx, leadIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range d.Peserta {
+		d.Peserta[i].BuktiPaymentID = bukti[d.Peserta[i].LeadID]
 	}
 	hadir, err := s.querier.ListProgramKehadiran(ctx, id)
 	if err != nil {

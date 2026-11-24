@@ -249,6 +249,7 @@ type CrmSetting struct {
 	CsWaNumber                  string
 	PaymentExpiryHours          int64
 	BankManualInfo              string
+	RekeningBank                string
 }
 
 type Guru struct {

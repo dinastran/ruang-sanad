@@ -78,6 +78,21 @@ type ProgramPeserta struct {
 	JenisKelamin string `json:"jenis_kelamin"`
 	KelasID      int64  `json:"kelas_id"`
 	KelasManual  bool   `json:"kelas_manual"`
+	// BuktiPaymentID: the lead's latest transfer proof (0 = none).
+	BuktiPaymentID int64 `json:"bukti_payment_id"`
+}
+
+// ProgramMenungguVerifikasi is a registrant whose transfer proof waits for
+// verification (not a participant yet).
+type ProgramMenungguVerifikasi struct {
+	LeadID       int64  `json:"lead_id"`
+	Nama         string `json:"nama"`
+	Phone        string `json:"phone"`
+	JenisKelamin string `json:"jenis_kelamin"`
+	PaymentID    int64  `json:"payment_id"`
+	Amount       int64  `json:"amount"`
+	Diunggah     string `json:"diunggah"` // UTC timestamp text
+	PerluTinjau  bool   `json:"perlu_tinjau"`
 }
 
 // ProgramKelas is one class of a short program, split ikhwan (L) / akhwat (P).

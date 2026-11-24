@@ -120,6 +120,15 @@ type RegistrationSettings struct {
 	CsWaNumber         string `json:"cs_wa_number"`
 	PaymentExpiryHours int64  `json:"payment_expiry_hours"`
 	BankManualInfo     string `json:"bank_manual_info"`
+	// Rekening: structured accounts for manual transfer (copy number only).
+	Rekening []RekeningBank `json:"rekening"`
+}
+
+// RekeningBank is one bank account for manual transfer.
+type RekeningBank struct {
+	Bank       string `json:"bank"`
+	NoRekening string `json:"no_rekening"`
+	AtasNama   string `json:"atas_nama"`
 }
 
 type RegistrationSubmit struct {
@@ -166,7 +175,10 @@ type BayarInfo struct {
 	ProgramNama    string `json:"program_nama"`
 	Nominal        int64  `json:"nominal"`
 	BankManualInfo string `json:"bank_manual_info"`
-	IzinkanManual  bool   `json:"izinkan_manual"`
+	// Rekening: accounts to transfer to (structured, or parsed from the
+	// free text as a fallback); BankManualInfo is shown only when empty.
+	Rekening      []RekeningBank `json:"rekening"`
+	IzinkanManual bool           `json:"izinkan_manual"`
 	// Status: belum | menunggu_verifikasi | ditolak | lunas
 	Status       string `json:"status"`
 	CatatanTolak string `json:"catatan_tolak,omitempty"`

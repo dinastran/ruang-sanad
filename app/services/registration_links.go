@@ -66,7 +66,13 @@ func (s *RegistrationService) Settings(ctx context.Context) (models.Registration
 	if err != nil {
 		return models.RegistrationSettings{}, err
 	}
-	return models.RegistrationSettings{CsWaNumber: r.CsWaNumber, PaymentExpiryHours: r.PaymentExpiryHours, BankManualInfo: r.BankManualInfo}, nil
+	out := models.RegistrationSettings{CsWaNumber: r.CsWaNumber, PaymentExpiryHours: r.PaymentExpiryHours, BankManualInfo: r.BankManualInfo}
+	// Before structured accounts are saved, prefill them from the old text.
+	out.Rekening = rekeningEfektif(r.RekeningBank, r.BankManualInfo)
+	if out.Rekening == nil {
+		out.Rekening = []models.RekeningBank{}
+	}
+	return out, nil
 }
 
 func (s *RegistrationService) SaveSettings(ctx context.Context, in models.RegistrationSettings, actorID int64) error {
@@ -80,8 +86,17 @@ func (s *RegistrationService) SaveSettings(ctx context.Context, in models.Regist
 	if in.PaymentExpiryHours < 1 || in.PaymentExpiryHours > 72 {
 		return errors.New("masa berlaku tagihan harus 1–72 jam")
 	}
+	rekening, err := normalizeRekening(in.Rekening)
+	if err != nil {
+		return err
+	}
+	rekeningJSON := ""
+	if len(rekening) > 0 {
+		b, _ := json.Marshal(rekening)
+		rekeningJSON = string(b)
+	}
 	return s.querier.UpdateRegistrationSettings(ctx, queries.UpdateRegistrationSettingsParams{
-		CsWaNumber: in.CsWaNumber, PaymentExpiryHours: in.PaymentExpiryHours,
+		CsWaNumber: in.CsWaNumber, PaymentExpiryHours: in.PaymentExpiryHours, RekeningBank: rekeningJSON,
 		BankManualInfo: truncateRunes(strings.TrimSpace(in.BankManualInfo), 1000),
 		UpdatedBy:      sql.NullInt64{Int64: actorID, Valid: actorID > 0}, UpdatedAt: s.nowUTC(),
 	})

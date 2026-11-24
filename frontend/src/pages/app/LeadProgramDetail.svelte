@@ -5,7 +5,7 @@
 	import { Toast } from "@lib/notifications/toast";
 	import { getCSRFToken } from "@lib/utils/csrf";
 	import { fmt } from "@components/lead-dashboard/types";
-	import { ArrowLeft, Check, Copy, ExternalLink, Pencil, Plus, Trash2, TriangleAlert, UserRoundPlus, Video } from "lucide-svelte";
+	import { ArrowLeft, Check, Copy, ExternalLink, FileImage, Pencil, Plus, Trash2, TriangleAlert, UserRoundPlus, Video } from "lucide-svelte";
 
 	interface Program {
 		id: number;
@@ -23,7 +23,8 @@
 	}
 	interface Kelas { id: number; jenis_kelamin: "L" | "P"; urutan: number; nama: string; pengajar: string; zoom_url: string; jumlah: number }
 	interface Sesi { id: number; ke: number; judul: string; tanggal: string; jam_mulai: string; token: string; hadir: number }
-	interface Peserta { order_id: number; order_no: string; nama: string; no_wa: string; tanggal: string; lead_id: number; lead_status: string; hadir: number[]; jenis_kelamin: "" | "L" | "P"; kelas_id: number; kelas_manual: boolean }
+	interface Peserta { order_id: number; order_no: string; nama: string; no_wa: string; tanggal: string; lead_id: number; lead_status: string; hadir: number[]; jenis_kelamin: "" | "L" | "P"; kelas_id: number; kelas_manual: boolean; bukti_payment_id: number }
+	interface Menunggu { lead_id: number; nama: string; phone: string; jenis_kelamin: string; payment_id: number; amount: number; diunggah: string; perlu_tinjau: boolean }
 	interface Produk { id: number; nama: string; harga: number; is_aktif: boolean; batches: { id: number; nama: string }[] }
 	interface Props {
 		user?: User;
@@ -31,6 +32,7 @@
 		sesi: Sesi[];
 		peserta: Peserta[];
 		kelas?: Kelas[];
+		menunggu_verifikasi?: Menunggu[];
 		sources: { id: number; nama: string; is_aktif: boolean }[];
 		produk: Produk[];
 		can_edit: boolean;
@@ -174,6 +176,14 @@
 		"inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-medium transition-colors " +
 		(aktif ? "border-brand-600 bg-brand-600 text-white dark:border-brand-500 dark:bg-brand-500" : "border-neutral-200 text-neutral-700 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/[0.04]");
 
+	// --- Transfer proofs waiting for verification ---
+	let menunggu = $derived(props.menunggu_verifikasi ?? []);
+	const buktiURL = (leadID: number, paymentID: number) => `/app/leads/${leadID}/payments/${paymentID}/bukti`;
+	const fmtWaktu = (t: string) => {
+		const d = new Date(t.replace(" ", "T").replace(/(\.\d+)?(Z|[+-]\d\d:\d\d)?$/, "Z"));
+		return Number.isNaN(d.getTime()) ? t : d.toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }) + " WIB";
+	};
+
 	const panel = "rounded-xl border border-neutral-200/80 bg-white dark:border-white/[0.07] dark:bg-neutral-925/60";
 	const field = "h-9 w-full rounded-md border border-neutral-200 bg-neutral-50 px-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 dark:border-white/10 dark:bg-neutral-950 dark:text-white";
 	const btn = "inline-flex h-9 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50";
@@ -205,6 +215,31 @@
 
 		{#if props.flash?.success}<div role="status" class="rounded-lg border border-success/20 bg-success/10 px-4 py-3 text-sm font-medium text-emerald-800 dark:text-emerald-300">{props.flash.success}</div>{/if}
 		{#if props.flash?.error}<div role="alert" class="rounded-lg border border-error/20 bg-error/10 px-4 py-3 text-sm font-medium text-red-700 dark:text-red-300">{props.flash.error}</div>{/if}
+
+		{#if menunggu.length}
+			<section class={panel + " overflow-hidden border-amber-500/40"} aria-labelledby="verifikasi-title">
+				<div class="flex flex-wrap items-start justify-between gap-2 p-4 sm:p-5">
+					<div>
+						<h2 id="verifikasi-title" class={h2}>Menunggu verifikasi <span class="ml-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold tabular-nums text-amber-800 dark:text-amber-300">{menunggu.length}</span></h2>
+						<p class="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">Sudah unggah bukti transfer, belum diverifikasi. Cek bukti dan mutasi rekening, lalu verifikasi di halaman lead{isPendek ? " dan Daftarkan peserta" : ""}.</p>
+					</div>
+				</div>
+				<ul class="divide-y divide-neutral-100 border-t border-neutral-100 dark:divide-white/[0.05] dark:border-white/[0.05]">
+					{#each menunggu as m (m.payment_id)}
+						<li class="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:px-5">
+							<div class="min-w-0 flex-1">
+								<p class="text-sm font-medium text-neutral-900 dark:text-white">{m.nama}{#if m.jenis_kelamin}<span class="ml-1.5 text-xs font-normal text-neutral-500">· {m.jenis_kelamin === "P" ? "Akhwat" : "Ikhwan"}</span>{/if}</p>
+								<p class="text-xs text-neutral-500">{m.phone} · Rp{fmt(m.amount)} · diunggah {fmtWaktu(m.diunggah)}{#if m.perlu_tinjau}<span class="ml-1 font-medium text-amber-700 dark:text-amber-400">· perlu ditinjau</span>{/if}</p>
+							</div>
+							<div class="flex gap-2">
+								<a href={buktiURL(m.lead_id, m.payment_id)} target="_blank" rel="noopener noreferrer" class={btnGhost + " h-8 text-xs"}><FileImage size={13} /> Lihat bukti</a>
+								<a href={`/app/leads/${m.lead_id}`} use:inertia class={btnPrimary + " h-8 text-xs"}>Verifikasi</a>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
 
 		{#if editing}
 			<form class={panel + " grid gap-3 p-4 sm:grid-cols-2 sm:p-5"} onsubmit={saveProgram}>
@@ -389,7 +424,7 @@
 									<tr>
 										<td class="px-4 py-2.5">
 											{#if p.lead_id}<a href={`/app/leads/${p.lead_id}`} use:inertia class="font-medium text-neutral-900 hover:text-brand-700 hover:underline dark:text-white">{p.nama}</a>{:else}<span class="font-medium text-neutral-900 dark:text-white">{p.nama}</span>{/if}
-											<span class="block text-xs text-neutral-500">{p.no_wa || "tanpa nomor"} · {p.order_no}</span>
+											<span class="block text-xs text-neutral-500">{p.no_wa || "tanpa nomor"} · {p.order_no}{#if p.bukti_payment_id && p.lead_id} · <a href={buktiURL(p.lead_id, p.bukti_payment_id)} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-0.5 font-medium text-brand-700 hover:underline dark:text-brand-400"><FileImage size={11} aria-hidden="true" />Bukti TF</a>{/if}</span>
 										</td>
 										<td class="px-3 py-2.5">
 											{#if props.can_edit}

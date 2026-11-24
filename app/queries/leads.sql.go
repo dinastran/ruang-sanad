@@ -487,7 +487,7 @@ func (q *Queries) FailStuckWaOutbox(ctx context.Context, arg FailStuckWaOutboxPa
 }
 
 const getCRMSettings = `-- name: GetCRMSettings :one
-SELECT id, paket_ke_kelas_kode, followup_enabled, followup_send_start, followup_send_end, followup_min_gap_seconds, followup_daily_cap, transcript_retention_days_lost, gowa_devices, payment_verified_template, updated_by, updated_at, persona_blocked_keywords, followup_only_label, cs_wa_number, payment_expiry_hours, bank_manual_info FROM crm_settings WHERE id = 1
+SELECT id, paket_ke_kelas_kode, followup_enabled, followup_send_start, followup_send_end, followup_min_gap_seconds, followup_daily_cap, transcript_retention_days_lost, gowa_devices, payment_verified_template, updated_by, updated_at, persona_blocked_keywords, followup_only_label, cs_wa_number, payment_expiry_hours, bank_manual_info, rekening_bank FROM crm_settings WHERE id = 1
 `
 
 func (q *Queries) GetCRMSettings(ctx context.Context) (CrmSetting, error) {
@@ -511,6 +511,7 @@ func (q *Queries) GetCRMSettings(ctx context.Context) (CrmSetting, error) {
 		&i.CsWaNumber,
 		&i.PaymentExpiryHours,
 		&i.BankManualInfo,
+		&i.RekeningBank,
 	)
 	return i, err
 }
