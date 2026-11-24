@@ -73,7 +73,7 @@ func (s *RegistrationService) BayarInfo(ctx context.Context, ref string) (*model
 	}
 	out := &models.BayarInfo{
 		LeadRef: leadRef(l.ID), NamaDepan: firstName(l.Nama), Nominal: l.PaymentAmount,
-		BankManualInfo: settings.BankManualInfo, IzinkanManual: link.IzinkanManual == 1, Status: "belum",
+		BankManualInfo: settings.BankManualInfo, Rekening: settings.Rekening, IzinkanManual: link.IzinkanManual == 1, Status: "belum",
 	}
 	if prog, err := s.querier.GetLeadProgram(ctx, link.ProgramID); err == nil && prog != nil {
 		out.ProgramNama = prog.Nama

@@ -289,19 +289,25 @@ func (q *Queries) GetRegistrationLinkBySlug(ctx context.Context, slug string) (R
 }
 
 const getRegistrationSettings = `-- name: GetRegistrationSettings :one
-SELECT cs_wa_number, payment_expiry_hours, bank_manual_info FROM crm_settings WHERE id = 1
+SELECT cs_wa_number, payment_expiry_hours, bank_manual_info, rekening_bank FROM crm_settings WHERE id = 1
 `
 
 type GetRegistrationSettingsRow struct {
 	CsWaNumber         string
 	PaymentExpiryHours int64
 	BankManualInfo     string
+	RekeningBank       string
 }
 
 func (q *Queries) GetRegistrationSettings(ctx context.Context) (GetRegistrationSettingsRow, error) {
 	row := q.db.QueryRowContext(ctx, getRegistrationSettings)
 	var i GetRegistrationSettingsRow
-	err := row.Scan(&i.CsWaNumber, &i.PaymentExpiryHours, &i.BankManualInfo)
+	err := row.Scan(
+		&i.CsWaNumber,
+		&i.PaymentExpiryHours,
+		&i.BankManualInfo,
+		&i.RekeningBank,
+	)
 	return i, err
 }
 
@@ -501,7 +507,7 @@ func (q *Queries) UpdateRegistrationLink(ctx context.Context, arg UpdateRegistra
 }
 
 const updateRegistrationSettings = `-- name: UpdateRegistrationSettings :exec
-UPDATE crm_settings SET cs_wa_number = ?, payment_expiry_hours = ?, bank_manual_info = ?, updated_by = ?, updated_at = ?
+UPDATE crm_settings SET cs_wa_number = ?, payment_expiry_hours = ?, bank_manual_info = ?, rekening_bank = ?, updated_by = ?, updated_at = ?
 WHERE id = 1
 `
 
@@ -509,6 +515,7 @@ type UpdateRegistrationSettingsParams struct {
 	CsWaNumber         string
 	PaymentExpiryHours int64
 	BankManualInfo     string
+	RekeningBank       string
 	UpdatedBy          sql.NullInt64
 	UpdatedAt          time.Time
 }
@@ -518,6 +525,7 @@ func (q *Queries) UpdateRegistrationSettings(ctx context.Context, arg UpdateRegi
 		arg.CsWaNumber,
 		arg.PaymentExpiryHours,
 		arg.BankManualInfo,
+		arg.RekeningBank,
 		arg.UpdatedBy,
 		arg.UpdatedAt,
 	)

@@ -46,8 +46,8 @@ WHERE r.lead_id = ? ORDER BY r.created_at DESC, r.id DESC;
 SELECT * FROM leads WHERE phone = ? ORDER BY updated_at DESC, id DESC LIMIT 1;
 
 -- name: GetRegistrationSettings :one
-SELECT cs_wa_number, payment_expiry_hours, bank_manual_info FROM crm_settings WHERE id = 1;
+SELECT cs_wa_number, payment_expiry_hours, bank_manual_info, rekening_bank FROM crm_settings WHERE id = 1;
 
 -- name: UpdateRegistrationSettings :exec
-UPDATE crm_settings SET cs_wa_number = ?, payment_expiry_hours = ?, bank_manual_info = ?, updated_by = ?, updated_at = ?
+UPDATE crm_settings SET cs_wa_number = ?, payment_expiry_hours = ?, bank_manual_info = ?, rekening_bank = ?, updated_by = ?, updated_at = ?
 WHERE id = 1;

@@ -5,14 +5,17 @@
 	import LinkForm, { type LinkRow, type MetaPixelInfo, type Option } from "@components/registration/LinkForm.svelte";
 	import { ArrowLeft, Check, Copy, ExternalLink, Link2, Pencil, Plus, Settings } from "lucide-svelte";
 
-	interface Settings { cs_wa_number: string; payment_expiry_hours: number; bank_manual_info: string }
+	interface Rekening { bank: string; no_rekening: string; atas_nama: string }
+	interface Settings { cs_wa_number: string; payment_expiry_hours: number; bank_manual_info: string; rekening?: Rekening[] }
 	interface Props { user?: User; links: LinkRow[]; programs: Option[]; sources: Option[]; settings: Settings; base_url: string; meta_pixel?: MetaPixelInfo; flash?: Flash }
 	let props: Props = $props();
 	let links = $derived(props.links ?? []);
 
 	let editing = $state<LinkRow | null | "baru">(null);
 	let showSettings = $state(!props.settings?.cs_wa_number);
-	let settings = $state({ ...props.settings });
+	// svelte-ignore state_referenced_locally
+	let settings = $state({ ...props.settings, rekening: (props.settings?.rekening ?? []).map((r) => ({ ...r })) });
+	if (settings.rekening.length === 0) settings.rekening.push({ bank: "", no_rekening: "", atas_nama: "" });
 	let menyimpan = $state(false);
 	let disalin = $state(0);
 
@@ -65,11 +68,30 @@
 		{#if props.flash?.error}<div role="alert" class="rounded-lg border border-error/20 bg-error/10 px-4 py-3 text-sm font-medium text-red-700 dark:text-red-300">{props.flash.error}</div>{/if}
 
 		{#if showSettings}
-			<form class={panel + " grid gap-3 p-4 sm:grid-cols-[1fr_1fr_160px] sm:p-5"} onsubmit={simpanSettings}>
+			<form class={panel + " grid gap-3 p-4 sm:grid-cols-2 sm:p-5"} onsubmit={simpanSettings}>
 				<label class={lbl}>Nomor WhatsApp CS *<input class={field + " mt-1"} type="tel" bind:value={settings.cs_wa_number} required placeholder="0812xxxxxxxx" /></label>
-				<label class={lbl}>Rekening transfer manual<textarea class={field + " mt-1 h-auto py-2"} rows="2" bind:value={settings.bank_manual_info} placeholder={"BSI 123456789\na.n. Yayasan Ruang Sanad"}></textarea></label>
 				<label class={lbl}>Masa berlaku tagihan (jam)<input class={field + " mt-1"} type="number" min="1" max="72" bind:value={settings.payment_expiry_hours} /></label>
-				<div class="flex justify-end sm:col-span-3"><button type="submit" class={btnPrimary} disabled={menyimpan}>Simpan pengaturan</button></div>
+				<fieldset class="sm:col-span-2">
+					<legend class={lbl}>Rekening transfer manual</legend>
+					<p class="mt-0.5 text-xs text-neutral-500">Tampil sebagai kartu di halaman bayar; tombol Salin hanya menyalin nomor rekening. Maks. 5 rekening.</p>
+					<div class="mt-2 space-y-2">
+						{#each settings.rekening as r, i (i)}
+							<div class="grid gap-2 rounded-lg border border-neutral-200 p-2.5 sm:grid-cols-[1fr_1fr_1.3fr_auto] dark:border-white/10">
+								<input class={field} bind:value={r.bank} maxlength="40" placeholder="Nama bank, mis. Bank Muamalat" aria-label={`Nama bank ${i + 1}`} />
+								<input class={field + " font-mono"} bind:value={r.no_rekening} maxlength="40" inputmode="numeric" placeholder="No. rekening" aria-label={`Nomor rekening ${i + 1}`} />
+								<input class={field} bind:value={r.atas_nama} maxlength="80" placeholder="Atas nama" aria-label={`Atas nama ${i + 1}`} />
+								<button type="button" class={btnGhost + " px-2.5"} aria-label={`Hapus rekening ${i + 1}`} onclick={() => (settings.rekening = settings.rekening.filter((_, j) => j !== i))}>Hapus</button>
+							</div>
+						{/each}
+					</div>
+					{#if settings.rekening.length < 5}
+						<button type="button" class={btnGhost + " mt-2"} onclick={() => settings.rekening.push({ bank: "", no_rekening: "", atas_nama: "" })}><Plus size={14} /> Tambah rekening</button>
+					{/if}
+				</fieldset>
+				<label class={lbl + " sm:col-span-2"}>Catatan transfer (opsional)<textarea class={field + " mt-1 h-auto py-2"} rows="2" bind:value={settings.bank_manual_info} placeholder="mis. Konfirmasi otomatis setelah bukti diunggah"></textarea>
+					<span class="mt-1 block font-normal text-neutral-400">Ditampilkan kecil di bawah kartu rekening. Bila tidak ada rekening terisi, teks ini yang ditampilkan.</span>
+				</label>
+				<div class="flex justify-end sm:col-span-2"><button type="submit" class={btnPrimary} disabled={menyimpan}>Simpan pengaturan</button></div>
 			</form>
 		{/if}
 

@@ -306,3 +306,56 @@ func (q *Queries) DeleteProgramKehadiran(ctx context.Context, sesiID, orderID in
 func leadProgramFilter(programID int64) (string, []any) {
 	return strings.TrimSpace(LeadProgramExpr) + ` = ?`, []any{programID}
 }
+
+// ListProgramMenungguVerifikasi lists open leads of a program whose manual
+// transfer proof waits for staff verification, oldest upload first.
+func (q *Queries) ListProgramMenungguVerifikasi(ctx context.Context, programID int64) ([]models.ProgramMenungguVerifikasi, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT l.id, COALESCE(NULLIF(l.nama, ''), NULLIF(l.wa_name, ''), 'Lead ' || l.id), l.phone, l.jenis_kelamin,
+	   p.id, p.amount, CAST(p.updated_at AS TEXT), p.perlu_tinjau
+	 FROM payments p JOIN leads l ON l.id = p.lead_id
+	 WHERE p.status = 'menunggu_verifikasi' AND p.bukti_path != '' AND l.status = 'open' AND `+LeadProgramExpr+` = ?
+	 ORDER BY p.updated_at, p.id`, programID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]models.ProgramMenungguVerifikasi, 0)
+	for rows.Next() {
+		var m models.ProgramMenungguVerifikasi
+		var tinjau int64
+		if err := rows.Scan(&m.LeadID, &m.Nama, &m.Phone, &m.JenisKelamin, &m.PaymentID, &m.Amount, &m.Diunggah, &tinjau); err != nil {
+			return nil, err
+		}
+		m.PerluTinjau = tinjau == 1
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// LatestProofByLead maps lead id → its latest payment with a transfer proof
+// that was not rejected, for the given leads.
+func (q *Queries) LatestProofByLead(ctx context.Context, leadIDs []int64) (map[int64]int64, error) {
+	out := map[int64]int64{}
+	if len(leadIDs) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(leadIDs))
+	for i, id := range leadIDs {
+		args[i] = id
+	}
+	rows, err := q.db.QueryContext(ctx, `SELECT lead_id, MAX(id) FROM payments
+	 WHERE bukti_path != '' AND status != 'ditolak' AND lead_id IN (?`+strings.Repeat(",?", len(leadIDs)-1)+`)
+	 GROUP BY lead_id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var lid, pid int64
+		if err := rows.Scan(&lid, &pid); err != nil {
+			return nil, err
+		}
+		out[lid] = pid
+	}
+	return out, rows.Err()
+}
