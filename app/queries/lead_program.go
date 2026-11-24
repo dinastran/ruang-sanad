@@ -22,14 +22,14 @@ const LeadProgramExpr = `COALESCE(l.program_id, (SELECT s.program_id FROM lead_s
 var ErrLeadProgramNotFound = errors.New("program tidak ditemukan")
 
 const leadProgramSelect = `SELECT p.id, p.nama, p.jenis, COALESCE(p.produk_id, 0), COALESCE(pr.nama, ''), COALESCE(pr.harga, 0),
-	COALESCE(p.produk_batch_id, 0), COALESCE(b.nama, ''), p.keterangan, p.is_aktif
+	COALESCE(p.produk_batch_id, 0), COALESCE(b.nama, ''), p.keterangan, p.is_aktif, p.kapasitas_kelas
 	FROM lead_programs p
 	LEFT JOIN produk pr ON pr.id = p.produk_id
 	LEFT JOIN produk_batch b ON b.id = p.produk_batch_id`
 
 func scanLeadProgram(row interface{ Scan(...any) error }) (models.LeadProgram, error) {
 	var p models.LeadProgram
-	err := row.Scan(&p.ID, &p.Nama, &p.Jenis, &p.ProdukID, &p.ProdukNama, &p.ProdukHarga, &p.ProdukBatchID, &p.BatchNama, &p.Keterangan, &p.IsAktif)
+	err := row.Scan(&p.ID, &p.Nama, &p.Jenis, &p.ProdukID, &p.ProdukNama, &p.ProdukHarga, &p.ProdukBatchID, &p.BatchNama, &p.Keterangan, &p.IsAktif, &p.KapasitasKelas)
 	return p, err
 }
 
@@ -70,14 +70,14 @@ func nullID(id int64) any {
 
 func (q *Queries) CreateLeadProgram(ctx context.Context, r models.LeadProgramRequest, now time.Time) (int64, error) {
 	var id int64
-	err := q.db.QueryRowContext(ctx, `INSERT INTO lead_programs (nama, jenis, produk_id, produk_batch_id, keterangan, is_aktif, created_at, updated_at)
-	 VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`, r.Nama, r.Jenis, nullID(r.ProdukID), nullID(r.ProdukBatchID), r.Keterangan, r.IsAktif, now.UTC(), now.UTC()).Scan(&id)
+	err := q.db.QueryRowContext(ctx, `INSERT INTO lead_programs (nama, jenis, produk_id, produk_batch_id, keterangan, is_aktif, kapasitas_kelas, created_at, updated_at)
+	 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`, r.Nama, r.Jenis, nullID(r.ProdukID), nullID(r.ProdukBatchID), r.Keterangan, r.IsAktif, r.KapasitasKelas, now.UTC(), now.UTC()).Scan(&id)
 	return id, err
 }
 
 func (q *Queries) UpdateLeadProgram(ctx context.Context, id int64, r models.LeadProgramRequest, now time.Time) error {
-	_, err := q.db.ExecContext(ctx, `UPDATE lead_programs SET nama = ?, jenis = ?, produk_id = ?, produk_batch_id = ?, keterangan = ?, is_aktif = ?, updated_at = ? WHERE id = ?`,
-		r.Nama, r.Jenis, nullID(r.ProdukID), nullID(r.ProdukBatchID), r.Keterangan, r.IsAktif, now.UTC(), id)
+	_, err := q.db.ExecContext(ctx, `UPDATE lead_programs SET nama = ?, jenis = ?, produk_id = ?, produk_batch_id = ?, keterangan = ?, is_aktif = ?, kapasitas_kelas = ?, updated_at = ? WHERE id = ?`,
+		r.Nama, r.Jenis, nullID(r.ProdukID), nullID(r.ProdukBatchID), r.Keterangan, r.IsAktif, r.KapasitasKelas, now.UTC(), id)
 	return err
 }
 
@@ -187,7 +187,7 @@ func (q *Queries) GetLeadProgramOrder(ctx context.Context, leadID int64) (*model
 // ListProgramPeserta returns active orders for the program's product (and
 // batch when set), oldest first.
 func (q *Queries) ListProgramPeserta(ctx context.Context, produkID, batchID int64) ([]models.ProgramPeserta, error) {
-	rows, err := q.db.QueryContext(ctx, `SELECT o.id, COALESCE(o.order_no, ''), o.nama_pembeli, o.no_wa, CAST(o.tanggal AS TEXT), COALESCE(o.lead_id, 0), COALESCE(l.status, '')
+	rows, err := q.db.QueryContext(ctx, `SELECT o.id, COALESCE(o.order_no, ''), o.nama_pembeli, o.no_wa, CAST(o.tanggal AS TEXT), COALESCE(o.lead_id, 0), COALESCE(l.status, ''), COALESCE(l.jenis_kelamin, '')
 	 FROM product_orders o LEFT JOIN leads l ON l.id = o.lead_id
 	 WHERE o.status = 'aktif' AND EXISTS (SELECT 1 FROM product_order_items i WHERE i.order_id = o.id AND i.produk_id = ? AND (? = 0 OR i.produk_batch_id = ?))
 	 ORDER BY o.id`, produkID, batchID, batchID)
@@ -198,7 +198,7 @@ func (q *Queries) ListProgramPeserta(ctx context.Context, produkID, batchID int6
 	out := make([]models.ProgramPeserta, 0)
 	for rows.Next() {
 		var p models.ProgramPeserta
-		if err := rows.Scan(&p.OrderID, &p.OrderNo, &p.Nama, &p.NoWA, &p.Tanggal, &p.LeadID, &p.LeadStatus); err != nil {
+		if err := rows.Scan(&p.OrderID, &p.OrderNo, &p.Nama, &p.NoWA, &p.Tanggal, &p.LeadID, &p.LeadStatus, &p.LeadJenisKelamin); err != nil {
 			return nil, err
 		}
 		if len(p.Tanggal) > 10 {

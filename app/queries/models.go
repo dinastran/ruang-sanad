@@ -624,15 +624,16 @@ type LeadMessage struct {
 }
 
 type LeadProgram struct {
-	ID            int64
-	Nama          string
-	Jenis         string
-	ProdukID      sql.NullInt64
-	ProdukBatchID sql.NullInt64
-	Keterangan    string
-	IsAktif       int64
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID             int64
+	Nama           string
+	Jenis          string
+	ProdukID       sql.NullInt64
+	ProdukBatchID  sql.NullInt64
+	Keterangan     string
+	IsAktif        int64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	KapasitasKelas int64
 }
 
 type LeadRegistration struct {
@@ -994,6 +995,25 @@ type ProgramKehadiran struct {
 	OrderID   int64
 	Cara      string
 	CreatedAt time.Time
+}
+
+type ProgramKela struct {
+	ID           int64
+	ProgramID    int64
+	JenisKelamin string
+	Urutan       int64
+	Pengajar     string
+	ZoomUrl      string
+	CreatedAt    time.Time
+}
+
+type ProgramPesertaKela struct {
+	ProgramID    int64
+	OrderID      int64
+	JenisKelamin string
+	KelasID      sql.NullInt64
+	Cara         string
+	UpdatedAt    time.Time
 }
 
 type ProgramSesi struct {

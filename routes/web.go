@@ -60,6 +60,7 @@ type Handlers struct {
 	LeadLaporan                 *handlers.LeadLaporanHandler
 	LeadSources                 *handlers.LeadSourceHandler
 	LeadPrograms                *handlers.LeadProgramHandler
+	ProgramKelas                *handlers.ProgramKelasHandler
 	RegistrationPublic          *handlers.RegistrationPublicHandler
 	AffiliatePublic             *handlers.AffiliatePublicHandler
 	Affiliate                   *handlers.AffiliateHandler
@@ -608,6 +609,11 @@ func setupLeadRoutes(protected fiber.Router, h Handlers, store *session.Store, u
 		protected.Put("/leads/program/sesi/:sid", programRole, h.LeadPrograms.UpdateSesi)
 		protected.Delete("/leads/program/sesi/:sid", programRole, h.LeadPrograms.DeleteSesi)
 		protected.Put("/leads/program/sesi/:sid/hadir/:oid", programRole, h.LeadPrograms.SetHadir)
+		if h.ProgramKelas != nil {
+			protected.Put("/leads/program/kelas/:kid", programRole, h.ProgramKelas.Update)
+			protected.Delete("/leads/program/kelas/:kid", programRole, h.ProgramKelas.Delete)
+			protected.Put("/leads/program/:pid/peserta/:oid/kelas", programRole, h.ProgramKelas.SetPeserta)
+		}
 		protected.Get("/leads/program/:pid", leadRole, h.LeadPrograms.Show)
 		protected.Put("/leads/program/:pid", programRole, h.LeadPrograms.Update)
 		protected.Put("/leads/program/:pid/sumber", programRole, h.LeadPrograms.SetSources)

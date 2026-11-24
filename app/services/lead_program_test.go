@@ -68,7 +68,7 @@ func TestProgramPendekClosingJadiPesertaBukanSantri(t *testing.T) {
 	_, err = f.service.Convert(ctx, f.leadID, f.csID, models.LeadConvertRequest{Nama: "Ahmad Budi", JenisKelamin: "L", Angkatan: "2026", TanggalDaftar: "2026-11-18", NoWA: "081234567890"})
 	require.ErrorIs(t, err, ErrLeadProgramPendek)
 
-	orderID, err := f.service.DaftarkanPeserta(ctx, f.leadID, f.csID, models.LeadPesertaRequest{})
+	orderID, err := f.service.DaftarkanPeserta(ctx, f.leadID, f.csID, models.LeadPesertaRequest{JenisKelamin: "L"})
 	require.NoError(t, err)
 	l := f.lead(t)
 	require.Equal(t, LeadStatusWon, l.Status)
@@ -85,7 +85,7 @@ func TestProgramPendekClosingJadiPesertaBukanSantri(t *testing.T) {
 	require.Equal(t, f.leadID, leadID)
 	require.EqualValues(t, 50000, harga)
 
-	_, err = f.service.DaftarkanPeserta(ctx, f.leadID, f.csID, models.LeadPesertaRequest{})
+	_, err = f.service.DaftarkanPeserta(ctx, f.leadID, f.csID, models.LeadPesertaRequest{JenisKelamin: "L"})
 	require.Error(t, err, "closing twice is refused")
 
 	d, err := f.programs.Detail(f.programID)
@@ -119,7 +119,7 @@ func TestProgramPendekClosingJadiPesertaBukanSantri(t *testing.T) {
 func TestProgramAbsensiLinkPublik(t *testing.T) {
 	f := setupSBAF(t)
 	ctx := t.Context()
-	_, err := f.service.DaftarkanPeserta(ctx, f.leadID, f.csID, models.LeadPesertaRequest{NoWA: "0812-3456-7890"})
+	_, err := f.service.DaftarkanPeserta(ctx, f.leadID, f.csID, models.LeadPesertaRequest{NoWA: "0812-3456-7890", JenisKelamin: "L"})
 	require.NoError(t, err)
 
 	_, err = f.programs.CreateSesi(queries.LeadProgramRegulerID, models.ProgramSesiRequest{Ke: 1, Tanggal: "2026-11-22"})
@@ -184,7 +184,7 @@ func TestProgramManualDanValidasi(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, info.Manual)
 	require.Equal(t, queries.LeadProgramRegulerID, info.Program.ID)
-	_, err = f.service.DaftarkanPeserta(ctx, f.leadID, f.csID, models.LeadPesertaRequest{})
+	_, err = f.service.DaftarkanPeserta(ctx, f.leadID, f.csID, models.LeadPesertaRequest{JenisKelamin: "L"})
 	require.ErrorIs(t, err, ErrLeadBukanProgramPendek)
 	// 0 = follow the source again.
 	require.NoError(t, f.service.SetProgram(ctx, f.leadID, 0, f.csID))

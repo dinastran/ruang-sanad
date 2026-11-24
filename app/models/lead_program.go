@@ -14,6 +14,8 @@ type LeadProgram struct {
 	BatchNama     string `json:"batch_nama"`
 	Keterangan    string `json:"keterangan"`
 	IsAktif       bool   `json:"is_aktif"`
+	// KapasitasKelas: max participants per class (short programs).
+	KapasitasKelas int64 `json:"kapasitas_kelas"`
 	// Filled by the service for list pages.
 	SumberIDs     []int64 `json:"sumber_ids"`
 	LeadOpen      int64   `json:"lead_open"`
@@ -29,6 +31,8 @@ type LeadProgramRequest struct {
 	ProdukBatchID int64  `json:"produk_batch_id"`
 	Keterangan    string `json:"keterangan"`
 	IsAktif       bool   `json:"is_aktif"`
+	// KapasitasKelas: 0 = default (30).
+	KapasitasKelas int64 `json:"kapasitas_kelas"`
 }
 
 // LeadProgramOption is a program shown in selects (lead list, lead detail).
@@ -68,6 +72,44 @@ type ProgramPeserta struct {
 	LeadID     int64   `json:"lead_id"`
 	LeadStatus string  `json:"lead_status"`
 	Hadir      []int64 `json:"hadir"` // sesi ids attended
+	// LeadJenisKelamin is the lead's L/P (source for auto class assignment).
+	LeadJenisKelamin string `json:"-"`
+	// JenisKelamin and KelasID: the participant's class ("" / 0 = none yet).
+	JenisKelamin string `json:"jenis_kelamin"`
+	KelasID      int64  `json:"kelas_id"`
+	KelasManual  bool   `json:"kelas_manual"`
+}
+
+// ProgramKelas is one class of a short program, split ikhwan (L) / akhwat (P).
+type ProgramKelas struct {
+	ID           int64  `json:"id"`
+	ProgramID    int64  `json:"program_id"`
+	JenisKelamin string `json:"jenis_kelamin"`
+	Urutan       int64  `json:"urutan"`
+	Nama         string `json:"nama"` // "Ikhwan 1", "Akhwat 2"
+	Pengajar     string `json:"pengajar"`
+	ZoomURL      string `json:"zoom_url"`
+	Jumlah       int64  `json:"jumlah"` // active participants
+}
+
+// ProgramPesertaKelas is a participant's stored class assignment.
+type ProgramPesertaKelas struct {
+	OrderID      int64
+	JenisKelamin string
+	KelasID      int64
+	Cara         string
+}
+
+type ProgramKelasRequest struct {
+	Pengajar string `json:"pengajar"`
+	ZoomURL  string `json:"zoom_url"`
+}
+
+// ProgramPesertaKelasRequest sets a participant's class: KelasID > 0 moves
+// them there; otherwise JenisKelamin is set and a class is picked automatically.
+type ProgramPesertaKelasRequest struct {
+	JenisKelamin string `json:"jenis_kelamin"`
+	KelasID      int64  `json:"kelas_id"`
 }
 
 type ProgramKehadiran struct {
@@ -89,4 +131,6 @@ type LeadPesertaRequest struct {
 	NoWA    string `json:"no_wa"`
 	Nominal int64  `json:"nominal"`
 	Tanggal string `json:"tanggal"`
+	// JenisKelamin L/P places the participant in an ikhwan/akhwat class.
+	JenisKelamin string `json:"jenis_kelamin"`
 }

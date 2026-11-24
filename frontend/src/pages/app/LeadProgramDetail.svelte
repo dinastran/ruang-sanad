@@ -5,7 +5,7 @@
 	import { Toast } from "@lib/notifications/toast";
 	import { getCSRFToken } from "@lib/utils/csrf";
 	import { fmt } from "@components/lead-dashboard/types";
-	import { ArrowLeft, Check, Copy, ExternalLink, Pencil, Plus, Trash2, UserRoundPlus } from "lucide-svelte";
+	import { ArrowLeft, Check, Copy, ExternalLink, Pencil, Plus, Trash2, TriangleAlert, UserRoundPlus, Video } from "lucide-svelte";
 
 	interface Program {
 		id: number;
@@ -18,16 +18,19 @@
 		batch_nama: string;
 		keterangan: string;
 		is_aktif: boolean;
+		kapasitas_kelas: number;
 		sumber_ids: number[];
 	}
+	interface Kelas { id: number; jenis_kelamin: "L" | "P"; urutan: number; nama: string; pengajar: string; zoom_url: string; jumlah: number }
 	interface Sesi { id: number; ke: number; judul: string; tanggal: string; jam_mulai: string; token: string; hadir: number }
-	interface Peserta { order_id: number; order_no: string; nama: string; no_wa: string; tanggal: string; lead_id: number; lead_status: string; hadir: number[] }
+	interface Peserta { order_id: number; order_no: string; nama: string; no_wa: string; tanggal: string; lead_id: number; lead_status: string; hadir: number[]; jenis_kelamin: "" | "L" | "P"; kelas_id: number; kelas_manual: boolean }
 	interface Produk { id: number; nama: string; harga: number; is_aktif: boolean; batches: { id: number; nama: string }[] }
 	interface Props {
 		user?: User;
 		program: Program;
 		sesi: Sesi[];
 		peserta: Peserta[];
+		kelas?: Kelas[];
 		sources: { id: number; nama: string; is_aktif: boolean }[];
 		produk: Produk[];
 		can_edit: boolean;
@@ -43,16 +46,16 @@
 
 	// --- Edit program ---
 	let editing = $state(false);
-	let form = $state({ nama: "", produk_id: 0, produk_batch_id: 0, keterangan: "", is_aktif: true });
+	let form = $state({ nama: "", produk_id: 0, produk_batch_id: 0, keterangan: "", is_aktif: true, kapasitas_kelas: 30 });
 	let produkDipilih = $derived((props.produk ?? []).find((p) => p.id === Number(form.produk_id)));
 	function startEdit() {
-		form = { nama: program.nama, produk_id: program.produk_id, produk_batch_id: program.produk_batch_id, keterangan: program.keterangan, is_aktif: program.is_aktif };
+		form = { nama: program.nama, produk_id: program.produk_id, produk_batch_id: program.produk_batch_id, keterangan: program.keterangan, is_aktif: program.is_aktif, kapasitas_kelas: program.kapasitas_kelas || 30 };
 		editing = true;
 	}
 	function saveProgram(e: Event) {
 		e.preventDefault();
 		busy = true;
-		router.put(`/app/leads/program/${program.id}`, { ...form, jenis: program.jenis, produk_id: Number(form.produk_id), produk_batch_id: Number(form.produk_batch_id) }, opts(() => (editing = false)));
+		router.put(`/app/leads/program/${program.id}`, { ...form, jenis: program.jenis, produk_id: Number(form.produk_id), produk_batch_id: Number(form.produk_batch_id), kapasitas_kelas: Number(form.kapasitas_kelas) || 0 }, opts(() => (editing = false)));
 	}
 
 	// --- Sources ---
@@ -127,6 +130,50 @@
 		router.post(`/app/leads/${p.lead_id}/tawarkan-reguler?program=${program.id}`, {}, opts());
 	}
 
+	// --- Classes (ikhwan/akhwat, auto-filled up to kapasitas_kelas) ---
+	let kelas = $derived(props.kelas ?? []);
+	let kapasitas = $derived(program.kapasitas_kelas || 30);
+	let tanpaKelas = $derived(peserta.filter((p) => !p.kelas_id));
+	let filterKelas = $state<number | "semua" | "tanpa">("semua");
+	let pesertaTampil = $derived(
+		filterKelas === "semua" ? peserta : filterKelas === "tanpa" ? tanpaKelas : peserta.filter((p) => p.kelas_id === filterKelas),
+	);
+	const kelasById = (id: number) => kelas.find((k) => k.id === id);
+	const hadirSesiTampil = (s: Sesi) => pesertaTampil.filter((p) => hadir[`${p.order_id}:${s.id}`]).length;
+	let kelasForm = $state<{ id: number; pengajar: string; zoom_url: string } | null>(null);
+	function saveKelas(e: Event) {
+		e.preventDefault();
+		if (!kelasForm) return;
+		busy = true;
+		router.put(`/app/leads/program/kelas/${kelasForm.id}?program=${program.id}`, { pengajar: kelasForm.pengajar, zoom_url: kelasForm.zoom_url }, opts(() => (kelasForm = null)));
+	}
+	function hapusKelas(k: Kelas) {
+		if (!confirm(`Hapus ${k.nama}? Kelas ini kosong.`)) return;
+		busy = true;
+		router.delete(`/app/leads/program/kelas/${k.id}?program=${program.id}`, opts(() => (filterKelas = "semua")));
+	}
+	const nilaiKelas = (p: Peserta) => (p.kelas_id ? `k:${p.kelas_id}` : p.jenis_kelamin ? `auto:${p.jenis_kelamin}` : "");
+	function pindahKelas(p: Peserta, nilai: string) {
+		if (!nilai || nilai === nilaiKelas(p)) return;
+		const [jenis, val] = nilai.split(":");
+		const body = jenis === "k" ? { kelas_id: Number(val) } : { jenis_kelamin: val, kelas_id: 0 };
+		busy = true;
+		router.put(`/app/leads/program/${program.id}/peserta/${p.order_id}/kelas`, body, opts());
+	}
+	let tersalinZoom = $state<number | null>(null);
+	async function salinZoom(k: Kelas) {
+		try {
+			await navigator.clipboard.writeText(k.zoom_url);
+			tersalinZoom = k.id;
+			setTimeout(() => (tersalinZoom === k.id ? (tersalinZoom = null) : null), 2000);
+		} catch {
+			Toast("Gagal menyalin link Zoom.", "error");
+		}
+	}
+	const chip = (aktif: boolean) =>
+		"inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-medium transition-colors " +
+		(aktif ? "border-brand-600 bg-brand-600 text-white dark:border-brand-500 dark:bg-brand-500" : "border-neutral-200 text-neutral-700 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/[0.04]");
+
 	const panel = "rounded-xl border border-neutral-200/80 bg-white dark:border-white/[0.07] dark:bg-neutral-925/60";
 	const field = "h-9 w-full rounded-md border border-neutral-200 bg-neutral-50 px-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 dark:border-white/10 dark:bg-neutral-950 dark:text-white";
 	const btn = "inline-flex h-9 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50";
@@ -183,7 +230,12 @@
 						</select>
 					</label>
 				{/if}
-				<label class={lbl + " sm:col-span-2"}>Keterangan<input class={field + " mt-1"} bind:value={form.keterangan} maxlength="300" /></label>
+				<label class={lbl + (isPendek ? "" : " sm:col-span-2")}>Keterangan<input class={field + " mt-1"} bind:value={form.keterangan} maxlength="300" /></label>
+				{#if isPendek}
+					<label class={lbl}>Maks. peserta per kelas<input type="number" min="1" max="500" class={field + " mt-1"} bind:value={form.kapasitas_kelas} />
+						<span class="mt-1 block font-normal text-neutral-400">Berlaku untuk peserta baru; peserta yang sudah punya kelas tidak dipindah.</span>
+					</label>
+				{/if}
 				{#if isPendek}<label class="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300"><input type="checkbox" bind:checked={form.is_aktif} /> Aktif (nonaktif = link absensi & pilihan program ditutup)</label>{/if}
 				<div class="flex justify-end gap-2 sm:col-span-2">
 					<button type="button" class={btnGhost} onclick={() => (editing = false)}>Batal</button>
@@ -250,10 +302,70 @@
 				{/if}
 			</section>
 
+			<section class={panel + " p-4 sm:p-5"} aria-labelledby="kelas-title">
+				<h2 id="kelas-title" class={h2}>Kelas</h2>
+				<p class="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">Peserta otomatis dipisah ikhwan/akhwat, maks. {kapasitas} per kelas. Kelas berikutnya dibuka saat kelas sebelumnya penuh; peserta yang sudah punya kelas tidak dipindah otomatis.</p>
+				{#if tanpaKelas.length}
+					<div class="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-200">
+						<TriangleAlert size={16} class="shrink-0" aria-hidden="true" />
+						<span class="flex-1"><strong>{tanpaKelas.length}</strong> peserta belum ada kelas karena data ikhwan/akhwat-nya kosong.</span>
+						<button type="button" class="text-xs font-semibold underline underline-offset-2" onclick={() => (filterKelas = "tanpa")}>Tetapkan sekarang</button>
+					</div>
+				{/if}
+				{#if kelas.length === 0}
+					<p class="mt-3 rounded-lg border border-dashed border-neutral-300 px-4 py-6 text-center text-sm text-neutral-500 dark:border-white/10">Kelas dibuat otomatis begitu ada peserta.</p>
+				{:else}
+					<div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+						{#each kelas as k (k.id)}
+							{@const persen = Math.min(100, Math.round((k.jumlah / kapasitas) * 100))}
+							<div class="rounded-lg border border-neutral-200 p-3 dark:border-white/10">
+								<div class="flex items-start justify-between gap-2">
+									<div>
+										<p class="text-sm font-semibold text-neutral-900 dark:text-white">{k.nama}</p>
+										<p class="text-xs text-neutral-500">{k.pengajar || "Pengajar belum diisi"}</p>
+									</div>
+									<span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums {k.jumlah >= kapasitas ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300' : 'bg-neutral-100 text-neutral-700 dark:bg-white/5 dark:text-neutral-300'}">{k.jumlah}/{kapasitas}</span>
+								</div>
+								<div class="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-100 dark:bg-white/5" aria-hidden="true">
+									<div class="h-full rounded-full {k.jenis_kelamin === 'P' ? 'bg-secondary-500' : 'bg-brand-600'}" style="width: {persen}%"></div>
+								</div>
+								{#if kelasForm?.id === k.id}
+									<form class="mt-3 space-y-2" onsubmit={saveKelas}>
+										<label class={lbl}>Pengajar<input class={field + " mt-1"} bind:value={kelasForm.pengajar} maxlength="80" placeholder="mis. Ustadzah Fulanah" /></label>
+										<label class={lbl}>Link Zoom<input type="url" class={field + " mt-1"} bind:value={kelasForm.zoom_url} maxlength="500" placeholder="https://zoom.us/j/…" /></label>
+										<div class="flex justify-end gap-2"><button type="button" class={btnGhost + " h-8 text-xs"} onclick={() => (kelasForm = null)}>Batal</button><button type="submit" class={btnPrimary + " h-8 text-xs"} disabled={busy}>Simpan</button></div>
+									</form>
+								{:else}
+									<div class="mt-3 flex flex-wrap items-center gap-1.5">
+										<button type="button" class={chip(filterKelas === k.id)} onclick={() => (filterKelas = filterKelas === k.id ? "semua" : k.id)}>Lihat peserta</button>
+										{#if k.zoom_url}
+											<button type="button" class={btnGhost + " h-8 text-xs"} onclick={() => salinZoom(k)}>{#if tersalinZoom === k.id}<Check size={13} /> Tersalin{:else}<Video size={13} /> Salin Zoom{/if}</button>
+										{/if}
+										{#if props.can_edit}
+											<button type="button" class={btnGhost + " h-8 px-2"} aria-label={`Ubah ${k.nama}`} onclick={() => (kelasForm = { id: k.id, pengajar: k.pengajar, zoom_url: k.zoom_url })}><Pencil size={13} /></button>
+											{#if k.jumlah === 0}<button type="button" class={btnGhost + " h-8 px-2 !text-red-600"} aria-label={`Hapus ${k.nama}`} disabled={busy} onclick={() => hapusKelas(k)}><Trash2 size={13} /></button>{/if}
+										{/if}
+									</div>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</section>
+
 			<section class={panel + " overflow-hidden"} aria-labelledby="peserta-title">
 				<div class="p-4 sm:p-5">
 					<h2 id="peserta-title" class={h2}>Peserta & kehadiran <span class="text-sm font-normal text-neutral-500">({peserta.length})</span></h2>
 					<p class="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">Peserta = pesanan aktif produk {program.produk_nama || "program"}{program.batch_nama ? ` (${program.batch_nama})` : ""}: dari tombol Daftarkan peserta di lead, atau dicatat manual di <a href="/app/produk-crm/orders" use:inertia class="underline">Pesanan Produk</a>. Centang untuk koreksi kehadiran.</p>
+					{#if peserta.length && (kelas.length || tanpaKelas.length)}
+						<div class="mt-3 flex gap-1.5 overflow-x-auto pb-1" role="group" aria-label="Filter kelas">
+							<button type="button" class={chip(filterKelas === "semua")} onclick={() => (filterKelas = "semua")}>Semua <span class="tabular-nums opacity-75">{peserta.length}</span></button>
+							{#each kelas as k (k.id)}
+								<button type="button" class={chip(filterKelas === k.id)} onclick={() => (filterKelas = k.id)}>{k.nama} <span class="tabular-nums opacity-75">{k.jumlah}</span></button>
+							{/each}
+							{#if tanpaKelas.length}<button type="button" class={chip(filterKelas === "tanpa")} onclick={() => (filterKelas = "tanpa")}>Belum ada kelas <span class="tabular-nums opacity-75">{tanpaKelas.length}</span></button>{/if}
+						</div>
+					{/if}
 				</div>
 				{#if peserta.length === 0}
 					<p class="border-t border-neutral-100 px-4 py-8 text-center text-sm text-neutral-500 dark:border-white/[0.05]">Belum ada peserta.</p>
@@ -263,17 +375,40 @@
 							<thead class="bg-neutral-50 text-left text-xs text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400">
 								<tr>
 									<th class="px-4 py-2.5 font-medium">Peserta</th>
-									{#each sesi as s (s.id)}<th class="px-2 py-2.5 text-center font-medium">S{s.ke}<span class="block font-normal">{fmtTanggal(s.tanggal)}</span></th>{/each}
+									<th class="px-3 py-2.5 font-medium">Kelas</th>
+									{#each sesi as s (s.id)}<th class="px-2 py-2.5 text-center font-medium">S{s.ke}<span class="block font-normal">{fmtTanggal(s.tanggal)}</span>{#if filterKelas !== "semua"}<span class="block font-normal tabular-nums">{hadirSesiTampil(s)}/{pesertaTampil.length}</span>{/if}</th>{/each}
 									<th class="px-3 py-2.5 text-center font-medium">Hadir</th>
 									<th class="px-4 py-2.5"><span class="sr-only">Aksi</span></th>
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-neutral-100 dark:divide-white/[0.05]">
-								{#each peserta as p (p.order_id)}
+								{#if pesertaTampil.length === 0}
+									<tr><td colspan={sesi.length + 4} class="px-4 py-6 text-center text-sm text-neutral-500">Tidak ada peserta di filter ini.</td></tr>
+								{/if}
+								{#each pesertaTampil as p (p.order_id)}
 									<tr>
 										<td class="px-4 py-2.5">
 											{#if p.lead_id}<a href={`/app/leads/${p.lead_id}`} use:inertia class="font-medium text-neutral-900 hover:text-brand-700 hover:underline dark:text-white">{p.nama}</a>{:else}<span class="font-medium text-neutral-900 dark:text-white">{p.nama}</span>{/if}
 											<span class="block text-xs text-neutral-500">{p.no_wa || "tanpa nomor"} · {p.order_no}</span>
+										</td>
+										<td class="px-3 py-2.5">
+											{#if props.can_edit}
+												<select class="h-8 w-36 rounded-md border px-2 text-xs {p.kelas_id ? 'border-neutral-200 bg-white text-neutral-800 dark:border-white/10 dark:bg-neutral-950 dark:text-neutral-200' : 'border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200'}"
+													aria-label={`Kelas ${p.nama}`} value={nilaiKelas(p)} disabled={busy} onchange={(e) => pindahKelas(p, e.currentTarget.value)}>
+													{#if !p.kelas_id}<option value={nilaiKelas(p)}>{p.jenis_kelamin ? "Menunggu kelas" : "Pilih…"}</option>{/if}
+													<optgroup label="Otomatis">
+														<option value="auto:L">Ikhwan (otomatis)</option>
+														<option value="auto:P">Akhwat (otomatis)</option>
+													</optgroup>
+													{#if kelas.length}
+														<optgroup label="Pindah ke">
+															{#each kelas as k (k.id)}<option value={`k:${k.id}`} disabled={k.id !== p.kelas_id && k.jumlah >= kapasitas}>{k.nama} ({k.jumlah}/{kapasitas})</option>{/each}
+														</optgroup>
+													{/if}
+												</select>
+											{:else}
+												<span class="text-xs {p.kelas_id ? 'text-neutral-700 dark:text-neutral-300' : 'text-amber-700 dark:text-amber-400'}">{kelasById(p.kelas_id)?.nama ?? "Belum ada kelas"}</span>
+											{/if}
 										</td>
 										{#each sesi as s (s.id)}
 											<td class="px-2 py-2.5 text-center">

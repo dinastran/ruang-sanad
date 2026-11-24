@@ -30,13 +30,13 @@
 
 	let showForm = $state(false);
 	let busy = $state(false);
-	let form = $state({ nama: "", produk_id: 0, produk_batch_id: 0, keterangan: "" });
+	let form = $state({ nama: "", produk_id: 0, produk_batch_id: 0, keterangan: "", kapasitas_kelas: 30 });
 	let produkDipilih = $derived((props.produk ?? []).find((p) => p.id === Number(form.produk_id)));
 
 	function submit(e: Event) {
 		e.preventDefault();
 		busy = true;
-		router.post("/app/leads/program", { ...form, jenis: "program", is_aktif: true, produk_id: Number(form.produk_id), produk_batch_id: Number(form.produk_batch_id) }, {
+		router.post("/app/leads/program", { ...form, jenis: "program", is_aktif: true, produk_id: Number(form.produk_id), produk_batch_id: Number(form.produk_batch_id), kapasitas_kelas: Number(form.kapasitas_kelas) || 30 }, {
 			preserveScroll: true,
 			onFinish: () => (busy = false),
 		});
@@ -96,7 +96,10 @@
 				{#if (props.produk ?? []).length === 0}
 					<p class="text-xs text-amber-700 sm:col-span-2 dark:text-amber-400">Belum ada produk berkategori program. Buat dulu di <a href="/app/produk-crm" use:inertia class="font-semibold underline">Produk CRM</a>.</p>
 				{/if}
-				<label class={lbl + " sm:col-span-2"}>Keterangan<input class={field + " mt-1"} bind:value={form.keterangan} maxlength="300" placeholder="mis. 3 sesi Zoom: 22, 25 & 28 Nov" /></label>
+				<label class={lbl}>Keterangan<input class={field + " mt-1"} bind:value={form.keterangan} maxlength="300" placeholder="mis. 3 sesi Zoom: 22, 25 & 28 Nov" /></label>
+				<label class={lbl}>Maks. peserta per kelas<input type="number" min="1" max="500" class={field + " mt-1"} bind:value={form.kapasitas_kelas} />
+					<span class="mt-1 block font-normal text-neutral-400">Kelas otomatis dipisah ikhwan/akhwat; kelas baru dibuka saat penuh.</span>
+				</label>
 				<div class="flex justify-end gap-2 sm:col-span-2">
 					<button type="button" class={btnGhost} onclick={() => (showForm = false)}>Batal</button>
 					<button type="submit" class={btnPrimary} disabled={busy || form.nama.trim().length < 2 || !Number(form.produk_id)}>Buat program</button>

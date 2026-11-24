@@ -330,13 +330,14 @@
 	function submitConvert() {
 		send("post", `/app/leads/${lead.id}/convert`, { ...convert, usia: Number(convert.usia) || 0, nominal: Number(convert.nominal) || 0 });
 	}
-	let peserta = $state({ nama: "", no_wa: "", nominal: 0, tanggal: "" });
+	let peserta = $state({ nama: "", no_wa: "", nominal: 0, tanggal: "", jenis_kelamin: "" });
 	function openPeserta() {
 		peserta = {
 			nama: lead.nama || lead.wa_name || "",
 			no_wa: lead.phone,
 			nominal: lead.verified_amount || lead.payment_amount || program?.program.produk_harga || 0,
 			tanggal: lead.verified_date || todayWIB(),
+			jenis_kelamin: lead.jenis_kelamin === "L" || lead.jenis_kelamin === "P" ? lead.jenis_kelamin : "",
 		};
 		dialog = "peserta";
 	}
@@ -858,9 +859,19 @@
 					<label class={labelCls}>No. WhatsApp<input class="{field} mt-1" bind:value={peserta.no_wa} /></label>
 					<label class={labelCls}>Nominal (Rp)<input type="number" min="0" class="{field} mt-1" bind:value={peserta.nominal} /></label>
 					<label class={labelCls}>Tanggal daftar<input type="date" class="{field} mt-1" bind:value={peserta.tanggal} /></label>
+					<div class="sm:col-span-2" role="radiogroup" aria-label="Ikhwan atau akhwat">
+						<span class={labelCls}>Ikhwan / akhwat *</span>
+						<div class="mt-1 grid grid-cols-2 gap-2">
+							{#each [["L", "Ikhwan"], ["P", "Akhwat"]] as [v, t]}
+								<label class="flex h-9 cursor-pointer items-center justify-center rounded-md border border-neutral-200 text-sm font-medium text-neutral-700 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-500/10 has-[:checked]:text-brand-800 dark:border-white/10 dark:text-neutral-300 dark:has-[:checked]:text-brand-200">
+									<input type="radio" class="sr-only" bind:group={peserta.jenis_kelamin} value={v} />{t}
+								</label>
+							{/each}
+						</div>
+					</div>
 				</div>
-				<p class="mt-3 text-xs text-neutral-500">Nomor WhatsApp ini dipakai peserta untuk absensi lewat link di Zoom.</p>
-				<div class="mt-5 flex gap-2"><button class="{btnGhost} flex-1" onclick={() => (dialog = null)}>Batal</button><button class="{btnPrimary} flex-1" disabled={busy || !peserta.nama.trim()} onclick={() => send("post", `/app/leads/${lead.id}/peserta`, { ...peserta, nominal: Number(peserta.nominal) || 0 }, () => (dialog = null))}>Daftarkan</button></div>
+				<p class="mt-3 text-xs text-neutral-500">Peserta otomatis masuk kelas ikhwan/akhwat yang masih ada kursi. Nomor WhatsApp ini dipakai untuk absensi lewat link di Zoom.</p>
+				<div class="mt-5 flex gap-2"><button class="{btnGhost} flex-1" onclick={() => (dialog = null)}>Batal</button><button class="{btnPrimary} flex-1" disabled={busy || !peserta.nama.trim() || !peserta.jenis_kelamin} onclick={() => send("post", `/app/leads/${lead.id}/peserta`, { ...peserta, nominal: Number(peserta.nominal) || 0 }, () => (dialog = null))}>Daftarkan</button></div>
 			{:else if dialog === "delete"}
 				<h3 class="text-lg font-bold text-neutral-900 dark:text-white">Hapus data lead?</h3>
 				<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Lead, transkrip, analisis, follow-up, dan riwayatnya dihapus permanen (hak hapus data). Santri yang sudah dibuat tidak ikut terhapus.</p>
