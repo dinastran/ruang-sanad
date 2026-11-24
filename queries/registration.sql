@@ -1,13 +1,13 @@
 -- name: CreateRegistrationLink :one
 INSERT INTO registration_links (slug, judul, deskripsi, program_id, lead_source_id, mode, after_submit,
-    nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal, meta_tracking, meta_pixel_extra)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    nominal_override, field_config, wa_template, izinkan_manual, is_aktif, created_by, created_at, updated_at, tampil_kode_referal, meta_tracking, meta_pixel_extra, meta_events)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateRegistrationLink :exec
 UPDATE registration_links SET slug = ?, judul = ?, deskripsi = ?, program_id = ?, lead_source_id = ?, mode = ?,
     after_submit = ?, nominal_override = ?, field_config = ?, wa_template = ?, izinkan_manual = ?, is_aktif = ?, updated_at = ?,
-    tampil_kode_referal = ?, meta_tracking = ?, meta_pixel_extra = ?
+    tampil_kode_referal = ?, meta_tracking = ?, meta_pixel_extra = ?, meta_events = ?
 WHERE id = ?;
 
 -- name: GetRegistrationLink :one

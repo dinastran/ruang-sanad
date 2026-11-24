@@ -37,7 +37,13 @@ func (h *RegistrationPublicHandler) Page(c *fiber.Ctx) error {
 	}
 	_ = h.reg.CountClick(ctx, link.ID, session.ClientIP(c), c.Get(fiber.HeaderUserAgent))
 	if link.Mode == "wa" {
-		return c.Redirect(h.reg.LinkWaURL(ctx, slug), fiber.StatusFound)
+		waURL := h.reg.LinkWaURL(ctx, slug)
+		// With events set for the WA trigger, show a short page that fires the
+		// Pixel and then opens WhatsApp; otherwise redirect right away.
+		if meta := h.reg.WaTracking(ctx, slug, metaSignals(c, c.BaseURL()+c.OriginalURL())); meta != nil {
+			return h.inertiaService.Render(c, "public/DaftarWa", fiber.Map{"wa_url": waURL, "meta": meta, "judul": link.Judul})
+		}
+		return c.Redirect(waURL, fiber.StatusFound)
 	}
 	h.reg.TrackPageView(link, metaSignals(c, c.BaseURL()+c.OriginalURL()))
 	props := fiber.Map{
@@ -167,9 +173,12 @@ func (h *RegistrationPublicHandler) UploadBukti(c *fiber.Ctx) error {
 	if err != nil {
 		return registrationError(c, err)
 	}
+	out := fiber.Map{"ok": true}
 	// Best effort: tracking must never fail an accepted upload.
-	_ = h.reg.RecordProofSignals(c.UserContext(), c.Params("ref"), metaSignals(c, c.FormValue("page_url")))
-	return c.JSON(fiber.Map{"ok": true})
+	if meta := h.reg.ProofTracking(c.UserContext(), c.Params("ref"), metaSignals(c, c.FormValue("page_url"))); meta != nil {
+		out["meta"] = meta
+	}
+	return c.JSON(out)
 }
 
 // metaSignals reads the visitor's Meta browser identifiers. pageURL is the

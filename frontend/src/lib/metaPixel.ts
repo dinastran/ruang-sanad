@@ -20,6 +20,18 @@ declare global {
 }
 
 const aktif = new Set<string>();
+// Event IDs already fired on this page. The same event_id is one event by
+// definition, so a repeat (e.g. a component effect re-running after Inertia
+// re-sends the page props) must never reach Meta twice.
+const terkirim = new Set<string>();
+
+export interface PixelEvent {
+	name: string;
+	id?: string;
+	value?: number;
+	currency?: string;
+	custom?: boolean;
+}
 
 function pasangSkrip() {
 	if (window.fbq) return;
@@ -68,21 +80,37 @@ export function setPixelUser(user: Record<string, string> | undefined | null) {
 	}
 }
 
-export function trackPixel(name: string, params: Record<string, unknown> = {}, eventID?: string) {
+function kirim(method: "track" | "trackCustom", name: string, params: Record<string, unknown>, eventID?: string) {
 	if (!window.fbq || !aktif.size) return;
+	if (eventID) {
+		if (terkirim.has(eventID)) return;
+		terkirim.add(eventID);
+	}
 	try {
-		window.fbq("track", name, params, eventID ? { eventID } : undefined);
+		window.fbq(method, name, params, eventID ? { eventID } : undefined);
 	} catch {
-		/* abaikan */
+		/* tracking tidak boleh mengganggu pendaftaran */
 	}
 }
 
-/** Custom (non-standard) browser-only event, e.g. form step reached. */
-export function trackPixelCustom(name: string, params: Record<string, unknown> = {}) {
-	if (!window.fbq || !aktif.size) return;
-	try {
-		window.fbq("trackCustom", name, params);
-	} catch {
-		/* abaikan */
+/** Standard event; fired at most once per eventID. */
+export function trackPixel(name: string, params: Record<string, unknown> = {}, eventID?: string) {
+	kirim("track", name, params, eventID);
+}
+
+/** Custom (non-standard) event; fired at most once per eventID. */
+export function trackPixelCustom(name: string, params: Record<string, unknown> = {}, eventID?: string) {
+	kirim("trackCustom", name, params, eventID);
+}
+
+/** Fire events configured on the server (standard or custom). */
+export function firePixelEvents(events: PixelEvent[] | undefined | null, params: Record<string, unknown> = {}) {
+	for (const ev of events ?? []) {
+		const p: Record<string, unknown> = { ...params };
+		if (ev.currency) {
+			p.value = ev.value ?? 0;
+			p.currency = ev.currency;
+		}
+		kirim(ev.custom ? "trackCustom" : "track", ev.name, p, ev.id || undefined);
 	}
 }

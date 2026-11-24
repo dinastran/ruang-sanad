@@ -178,6 +178,11 @@ func (s *RegistrationService) validateLink(ctx context.Context, req *models.Regi
 	if len(ParseMetaPixelIDs(req.MetaPixelExtra)) > 3 {
 		return errors.New("maksimal 3 Pixel ID tambahan")
 	}
+	events, err := NormalizeMetaEvents(req.MetaEvents)
+	if err != nil {
+		return err
+	}
+	req.MetaEvents = events
 	return nil
 }
 
@@ -193,6 +198,7 @@ func (s *RegistrationService) CreateLink(ctx context.Context, req models.Registr
 		return 0, err
 	}
 	cfg, _ := json.Marshal(req.FieldConfig)
+	metaEvents, _ := json.Marshal(req.MetaEvents)
 	now := s.nowUTC()
 	link, err := s.querier.CreateRegistrationLink(ctx, queries.CreateRegistrationLinkParams{
 		Slug: req.Slug, Judul: req.Judul, Deskripsi: req.Deskripsi, ProgramID: req.ProgramID, LeadSourceID: req.LeadSourceID,
@@ -201,6 +207,7 @@ func (s *RegistrationService) CreateLink(ctx context.Context, req models.Registr
 		IsAktif: boolInt(req.IsAktif), CreatedBy: sql.NullInt64{Int64: actorID, Valid: actorID > 0}, CreatedAt: now, UpdatedAt: now,
 		TampilKodeReferal: boolInt(req.TampilKodeReferal == nil || *req.TampilKodeReferal),
 		MetaTracking:      boolInt(req.MetaTracking == nil || *req.MetaTracking), MetaPixelExtra: req.MetaPixelExtra,
+		MetaEvents: string(metaEvents),
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
@@ -219,6 +226,7 @@ func (s *RegistrationService) UpdateLink(ctx context.Context, id int64, req mode
 		return err
 	}
 	cfg, _ := json.Marshal(req.FieldConfig)
+	metaEvents, _ := json.Marshal(req.MetaEvents)
 	err := s.querier.UpdateRegistrationLink(ctx, queries.UpdateRegistrationLinkParams{
 		Slug: req.Slug, Judul: req.Judul, Deskripsi: req.Deskripsi, ProgramID: req.ProgramID, LeadSourceID: req.LeadSourceID,
 		Mode: req.Mode, AfterSubmit: req.AfterSubmit, NominalOverride: nullAmount(req.NominalOverride),
@@ -226,6 +234,7 @@ func (s *RegistrationService) UpdateLink(ctx context.Context, id int64, req mode
 		IsAktif: boolInt(req.IsAktif), UpdatedAt: s.nowUTC(), ID: id,
 		TampilKodeReferal: boolInt(req.TampilKodeReferal == nil || *req.TampilKodeReferal),
 		MetaTracking:      boolInt(req.MetaTracking == nil || *req.MetaTracking), MetaPixelExtra: req.MetaPixelExtra,
+		MetaEvents: string(metaEvents),
 	})
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return errors.New("slug sudah dipakai link lain")
@@ -246,6 +255,7 @@ func linkToRequest(l queries.RegistrationLink) models.RegistrationLinkRequest {
 		Mode: l.Mode, AfterSubmit: l.AfterSubmit, NominalOverride: override, FieldConfig: parseFieldConfig(l.FieldConfig),
 		WaTemplate: l.WaTemplate, IzinkanManual: l.IzinkanManual == 1, IsAktif: l.IsAktif == 1,
 		TampilKodeReferal: &tampil, MetaTracking: &tracking, MetaPixelExtra: l.MetaPixelExtra,
+		MetaEvents: ParseMetaEvents(l.MetaEvents),
 	}
 }
 

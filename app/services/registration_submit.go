@@ -190,6 +190,10 @@ func (s *RegistrationService) Submit(ctx context.Context, slug string, raw model
 	res := &models.RegistrationResult{Next: link.AfterSubmit}
 	actor := formActor(link.ID)
 	pixels := s.linkPixelIDs(link)
+	webSig := MetaWebSignals{
+		Fbp: MetaFbp(meta.Fbp), Fbc: MetaFbc(meta.Fbc, meta.PageURL, s.nowUTC()),
+		IP: meta.IP, UserAgent: meta.UserAgent, SourceURL: meta.PageURL,
+	}
 	// Funnel events this submit reached, fired by the Pixel after the tx.
 	var metaEvents []string
 	var metaLead queries.Lead
@@ -296,10 +300,7 @@ func (s *RegistrationService) Submit(ctx context.Context, slug string, raw model
 		}
 		metaLead = l
 		if len(pixels) > 0 && l.Status != LeadStatusDoNotContact {
-			if err := saveWebSignals(ctx, q, l.ID, MetaWebSignals{
-				Fbp: MetaFbp(meta.Fbp), Fbc: MetaFbc(meta.Fbc, meta.PageURL, now),
-				IP: meta.IP, UserAgent: meta.UserAgent, SourceURL: meta.PageURL,
-			}, now); err != nil {
+			if err := saveWebSignals(ctx, q, l.ID, webSig, now); err != nil {
 				return err
 			}
 		}
@@ -334,7 +335,7 @@ func (s *RegistrationService) Submit(ctx context.Context, slug string, raw model
 		return nil, err
 	}
 	if len(pixels) > 0 && metaLead.Status != LeadStatusDoNotContact {
-		res.Meta = browserTracking(metaLead, metaEvents)
+		res.Meta = s.browserTracking(link, metaLead, metaEvents, prog.Nama, webSig)
 	}
 	res.WaURL = waURL(settings.CsWaNumber, fillWaTemplate(link.WaTemplate, in.Nama, prog.Nama, in.jadwalLabel, res.LeadRef))
 	return res, nil

@@ -2,7 +2,8 @@
 	import Logo from "@components/Logo.svelte";
 	import DaftarFields from "@components/registration/DaftarFields.svelte";
 	import { formKosong, rupiah, type DaftarForm, type JadwalOpsi, type PublicLink } from "@components/registration/types";
-	import { initPixel, setPixelUser, trackPixel, trackPixelCustom } from "@lib/metaPixel";
+	import { firePixelEvents, initPixel, setPixelUser, trackPixel } from "@lib/metaPixel";
+	import { onMount } from "svelte";
 	import { ArrowLeft, ArrowRight, CircleAlert, CircleCheck, Clock, LoaderCircle, LockKeyhole, MessageCircle, ShieldCheck } from "lucide-svelte";
 
 	interface Props {
@@ -57,7 +58,9 @@
 	});
 
 	// Meta Pixel: PageView + ViewContent (eventID shared with the CAPI copy).
-	$effect(() => {
+	// onMount, not $effect: Inertia re-sends the page props right after the
+	// first render, which re-ran an effect and fired ViewContent twice.
+	onMount(() => {
 		if (!link?.meta || galat) return;
 		if (initPixel(link.meta.pixel_ids)) {
 			trackPixel("ViewContent", { content_name: link.program_nama, content_category: "pendaftaran" }, link.meta.view_event_id);
@@ -129,10 +132,15 @@
 		if (pertama) fokus(pertama);
 		return !pertama;
 	}
+	// Step-1 events have no server event_id: fire them once per page view.
+	let langkah1Terkirim = false;
 	function lanjut() {
 		if (!cekLangkah1()) return;
 		langkah = 2;
-		trackPixelCustom("DaftarLangkah2", { program: link?.program_nama });
+		if (!langkah1Terkirim) {
+			langkah1Terkirim = true;
+			firePixelEvents(link?.meta?.langkah1, { content_name: link?.program_nama });
+		}
 		document.getElementById("form-daftar")?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 	}
 
@@ -177,9 +185,7 @@
 			hapusDraft();
 			if (data.meta) {
 				setPixelUser(data.meta.user);
-				for (const ev of data.meta.events ?? []) {
-					trackPixel(ev.name, { value: ev.value, currency: ev.currency, content_name: link.program_nama }, ev.id);
-				}
+				firePixelEvents(data.meta.events, { content_name: link.program_nama });
 			}
 			if (data.next === "bayar" && data.bayar_url) {
 				// Give the Pixel a moment to send before leaving the page.

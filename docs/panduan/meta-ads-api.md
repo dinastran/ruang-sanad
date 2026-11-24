@@ -418,7 +418,14 @@ Halaman form publik Dashboard memasang Pixel sendiri. Pengaturan:
 | InitiateCheckout | submit link mode bayar | ✓ | ✓ antrean CRM | `rs-lead-<id>-initiatecheckout` |
 | AddPaymentInfo | unggah bukti transfer | ✓ | ✓ antrean CRM | `rs-lead-<id>-addpaymentinfo` |
 
-Karena `event_id` dan nama event sama, Meta menghitung sekali (deduplikasi). Saat submit, server menyimpan `_fbp`, `_fbc` (atau `fbclid` dari URL), IP, user agent, dan URL halaman di tabel `lead_web_signals`. Event CRM yang terjadi ≤15 menit dari sinyal itu dikirim sebagai `action_source=website` lengkap dengan sinyal browser; event lain (mis. Purchase) tetap `system_generated` tetapi ikut membawa `fbp`/`fbc` agar pencocokan lebih tinggi. Data pribadi untuk Pixel (advanced matching) dikirim ke browser dalam bentuk hash SHA-256, bukan teks asli.
+Tabel di atas adalah **bawaan**. Event per momen bisa diubah per link (Leads → Link Pendaftaran → Ubah → *Meta Pixel & Conversions API*), maks. 5 event per momen, event standar Meta atau nama custom:
+
+- **Mode WA**: untuk link mode WA. Bila diisi (mis. `Contact`), pengunjung melihat halaman singkat ±0,7 detik yang memuat Pixel lalu diarahkan ke WhatsApp; kosong = langsung diarahkan seperti biasa.
+- **Lolos langkah 1**: hanya dari browser.
+- **Submit form** dan **Unggah bukti bayar**: event funnel CRM (`Lead`, `CompleteRegistration`, `InitiateCheckout` di submit; `AddPaymentInfo` di unggah bukti) hanya bisa dipilih di momen itu dan memakai `event_id` CRM. Event lain mendapat `event_id` sendiri (`rs-ev-…`) dan dikirim Pixel + CAPI langsung.
+- `Purchase` tidak bisa dipilih: dikirim CRM saat lead menjadi santri/peserta. Funnel CRM global tidak berubah.
+
+Karena `event_id` dan nama event sama, Meta menghitung sekali (deduplikasi). Pixel di browser juga menolak `event_id` yang sudah pernah dikirim di halaman yang sama. Saat submit, server menyimpan `_fbp`, `_fbc` (atau `fbclid` dari URL), IP, user agent, dan URL halaman di tabel `lead_web_signals`. Event CRM yang terjadi ≤15 menit dari sinyal itu dikirim sebagai `action_source=website` lengkap dengan sinyal browser; event lain (mis. Purchase) tetap `system_generated` tetapi ikut membawa `fbp`/`fbc` agar pencocokan lebih tinggi. Data pribadi untuk Pixel (advanced matching) dikirim ke browser dalam bentuk hash SHA-256, bukan teks asli.
 
 ## Langkah 14: Ambil Dataset ID dan token CAPI
 

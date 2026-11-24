@@ -1070,6 +1070,7 @@ type RegistrationLink struct {
 	TampilKodeReferal int64
 	MetaTracking      int64
 	MetaPixelExtra    string
+	MetaEvents        string
 }
 
 type RegistrationLinkStat struct {

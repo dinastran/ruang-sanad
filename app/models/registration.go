@@ -45,6 +45,9 @@ type RegistrationLinkRequest struct {
 	MetaTracking *bool `json:"meta_tracking"`
 	// MetaPixelExtra: extra Pixel IDs (comma separated), browser only.
 	MetaPixelExtra string `json:"meta_pixel_extra"`
+	// MetaEvents: events per trigger (wa, langkah1, submit, bukti); nil =
+	// defaults.
+	MetaEvents map[string][]string `json:"meta_events"`
 }
 
 // RegistrationLinkRow is one link on the admin page, with 30-day stats.
@@ -89,6 +92,8 @@ type PublicRegistrationLink struct {
 type PublicMeta struct {
 	PixelIDs    []string `json:"pixel_ids"`
 	ViewEventID string   `json:"view_event_id"`
+	// Langkah1: browser-only events fired when form step 1 is completed.
+	Langkah1 []MetaBrowserEvent `json:"langkah1"`
 }
 
 // MetaBrowserEvent is one Pixel event the browser fires after a submit,
@@ -98,6 +103,8 @@ type MetaBrowserEvent struct {
 	ID       string `json:"id"`
 	Value    int64  `json:"value"`
 	Currency string `json:"currency"`
+	// Custom: not a Meta standard event (fbq trackCustom).
+	Custom bool `json:"custom"`
 }
 
 // MetaBrowserTracking is returned after a submit: events to fire and the
@@ -105,6 +112,8 @@ type MetaBrowserEvent struct {
 type MetaBrowserTracking struct {
 	Events []MetaBrowserEvent `json:"events"`
 	User   map[string]string  `json:"user"`
+	// PixelIDs is set when the page has not loaded the Pixel yet (mode WA).
+	PixelIDs []string `json:"pixel_ids,omitempty"`
 }
 
 type RegistrationSettings struct {
@@ -172,10 +181,8 @@ type BayarInfo struct {
 // BayarMeta lets the payment page fire AddPaymentInfo after a proof upload,
 // with the event_id of the CRM CAPI event (deduplicated by Meta).
 type BayarMeta struct {
-	PixelIDs         []string          `json:"pixel_ids"`
-	AddPaymentInfoID string            `json:"add_payment_info_id"`
-	Value            int64             `json:"value"`
-	User             map[string]string `json:"user"`
+	PixelIDs []string          `json:"pixel_ids"`
+	User     map[string]string `json:"user"`
 }
 
 type LeadRegistrationRow struct {
@@ -328,4 +335,8 @@ type AffiliateLedgerRow struct {
 type MetaPixelInfo struct {
 	PixelID   string `json:"pixel_id"`
 	CAPIAktif bool   `json:"capi_aktif"`
+	// Choices for the per-trigger event picker.
+	StandardEvents []string            `json:"standard_events"`
+	FunnelTrigger  map[string]string   `json:"funnel_trigger"`
+	DefaultEvents  map[string][]string `json:"default_events"`
 }
