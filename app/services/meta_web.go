@@ -178,12 +178,24 @@ func MetaBrowserUserData(l queries.Lead) map[string]string {
 // webEventSlots caps concurrent direct sends (ViewContent per page view).
 var webEventSlots = make(chan struct{}, 8)
 
-// SendViewContentAsync sends a ViewContent server event for a page view,
-// sharing eventID with the browser Pixel. It never blocks the request: when
+// MetaWebEvent is one website event sent directly through CAPI (not via
+// the CRM queue): ViewContent on page view and the per-link events that are
+// not CRM funnel events.
+type MetaWebEvent struct {
+	Name, ID string
+	Custom   map[string]any
+	// UserData: extra hashed customer data (from metaUserData), optional.
+	UserData map[string]any
+	Signals  MetaWebSignals
+}
+
+// SendWebEventAsync sends a website event through CAPI without blocking the
+// request. The browser Pixel fires the same event with the same ID. When
 // CAPI is off or too many sends are in flight, the event is skipped (the
 // Pixel still fires).
-func (s *MetaCAPIService) SendViewContentAsync(eventID, contentName string, sig MetaWebSignals) {
-	if s == nil || !s.Enabled() || eventID == "" || sig.UserAgent == "" || sig.SourceURL == "" {
+func (s *MetaCAPIService) SendWebEventAsync(ev MetaWebEvent) {
+	sig := ev.Signals
+	if s == nil || !s.Enabled() || ev.ID == "" || ev.Name == "" || sig.UserAgent == "" || sig.SourceURL == "" {
 		return
 	}
 	select {
@@ -191,7 +203,11 @@ func (s *MetaCAPIService) SendViewContentAsync(eventID, contentName string, sig 
 	default:
 		return
 	}
-	ud := map[string]any{"client_user_agent": sig.UserAgent}
+	ud := map[string]any{}
+	for k, v := range ev.UserData {
+		ud[k] = v
+	}
+	ud["client_user_agent"] = sig.UserAgent
 	if sig.IP != "" {
 		ud["client_ip_address"] = sig.IP
 	}
@@ -201,17 +217,28 @@ func (s *MetaCAPIService) SendViewContentAsync(eventID, contentName string, sig 
 	if sig.Fbc != "" {
 		ud["fbc"] = sig.Fbc
 	}
+	custom := ev.Custom
+	if custom == nil {
+		custom = map[string]any{}
+	}
 	event := map[string]any{
-		"event_name": "ViewContent", "event_time": s.nowUTC().Unix(), "event_id": eventID,
-		"action_source": "website", "event_source_url": sig.SourceURL, "user_data": ud,
-		"custom_data": map[string]any{"content_name": truncateRunes(contentName, 120), "content_category": "pendaftaran"},
+		"event_name": ev.Name, "event_time": s.nowUTC().Unix(), "event_id": ev.ID,
+		"action_source": "website", "event_source_url": sig.SourceURL, "user_data": ud, "custom_data": custom,
 	}
 	go func() {
 		defer func() { <-webEventSlots }()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		if _, err := s.post(ctx, event); err != nil {
-			slog.Warn("Meta CAPI ViewContent gagal", "error", err)
+			slog.Warn("Meta CAPI event web gagal", "event", ev.Name, "error", err)
 		}
 	}()
+}
+
+// SendViewContentAsync sends the CAPI copy of a page's ViewContent.
+func (s *MetaCAPIService) SendViewContentAsync(eventID, contentName string, sig MetaWebSignals) {
+	s.SendWebEventAsync(MetaWebEvent{
+		Name: "ViewContent", ID: eventID, Signals: sig,
+		Custom: map[string]any{"content_name": truncateRunes(contentName, 120), "content_category": "pendaftaran"},
+	})
 }

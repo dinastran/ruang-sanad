@@ -2,7 +2,7 @@
 	import Logo from "@components/Logo.svelte";
 	import { rupiah } from "@components/registration/types";
 	import { onMount } from "svelte";
-	import { initPixel, setPixelUser, trackPixel } from "@lib/metaPixel";
+	import { firePixelEvents, initPixel, setPixelUser } from "@lib/metaPixel";
 	import { ChevronDown, CircleAlert, CircleCheck, Clock, Copy, FileText, MessageCircle, QrCode, Upload } from "lucide-svelte";
 
 	interface BayarInfo {
@@ -17,7 +17,7 @@
 		wa_url: string;
 		gateway_aktif: boolean;
 		sesi_aktif: boolean;
-		meta?: { pixel_ids: string[]; add_payment_info_id: string; value: number; user: Record<string, string> };
+		meta?: { pixel_ids: string[]; user: Record<string, string> };
 	}
 	interface Props { info?: BayarInfo; ref?: string; galat?: string }
 	let { info, ref = "", galat = "" }: Props = $props();
@@ -122,7 +122,7 @@
 				return;
 			}
 			status = "menunggu_verifikasi";
-			if (info?.meta) trackPixel("AddPaymentInfo", { value: info.meta.value, currency: "IDR", content_name: info.program_nama }, info.meta.add_payment_info_id);
+			if (data.meta) firePixelEvents(data.meta.events, { content_name: info?.program_nama });
 		} catch {
 			pesanError = "Koneksi terputus. Periksa internet lalu coba lagi.";
 		} finally {

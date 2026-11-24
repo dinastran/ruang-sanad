@@ -1,3 +1,4 @@
+import type { PixelEvent } from "@lib/metaPixel";
 export interface FieldRule {
 	tampil: boolean;
 	wajib: boolean;
@@ -21,7 +22,7 @@ export interface PublicLink {
 	field_config: Record<string, FieldRule>;
 	izinkan_manual: boolean;
 	kode_referal?: boolean;
-	meta?: { pixel_ids: string[]; view_event_id: string };
+	meta?: { pixel_ids: string[]; view_event_id: string; langkah1?: PixelEvent[] };
 }
 export interface JadwalOpsi {
 	kode: string;

@@ -1,7 +1,13 @@
 <script lang="ts" module>
 	import type { FieldRule } from "./types";
 	export interface Option { id: number; nama: string; info?: string; aktif: boolean }
-	export interface MetaPixelInfo { pixel_id: string; capi_aktif: boolean }
+	export interface MetaPixelInfo {
+		pixel_id: string;
+		capi_aktif: boolean;
+		standard_events?: string[];
+		funnel_trigger?: Record<string, string>;
+		default_events?: Record<string, string[]>;
+	}
 	export interface LinkRow {
 		id: number;
 		slug: string;
@@ -19,6 +25,7 @@
 		tampil_kode_referal?: boolean;
 		meta_tracking?: boolean;
 		meta_pixel_extra?: string;
+		meta_events?: Record<string, string[]>;
 		program_nama?: string;
 		sumber_nama?: string;
 		harga_label?: string;
@@ -42,17 +49,44 @@
 	];
 	const DEFAULT_SHORT = new Set(["usia", "domisili"]);
 
+	// Meta events per trigger (wa, langkah1, submit, bukti).
+	const TRIGGERS: [string, string, string][] = [
+		["wa", "Mode WA (link dibuka)", "Pixel dimuat ±0,7 detik sebelum diarahkan ke WhatsApp. Kosong = langsung diarahkan tanpa event. Saran: Contact."],
+		["langkah1", "Lolos langkah 1", "Saat klik Lanjut di langkah 1 form. Hanya dikirim dari browser (Pixel)."],
+		["submit", "Submit form", "Lead, CompleteRegistration, dan InitiateCheckout memakai event funnel CRM (event_id sama, tidak dobel): Lead hanya untuk kontak baru, InitiateCheckout hanya untuk link bayar. Event lain dikirim Pixel + CAPI."],
+		["bukti", "Unggah bukti bayar", "Saat bukti transfer berhasil diunggah di halaman bayar. AddPaymentInfo memakai event funnel CRM."],
+	];
+	const triggerTampil = (t: string, mode: string, after: string) =>
+		t === "wa" ? mode === "wa" : mode !== "wa" && (t !== "bukti" || after === "bayar");
+	const opsiEvent = (t: string) =>
+		(metaPixel.standard_events ?? []).filter((e) => {
+			const ft = metaPixel.funnel_trigger?.[e];
+			return (!ft || ft === t) && !form.meta_events[t]?.includes(e);
+		});
+	let customTeks = $state<Record<string, string>>({});
+	function tambahEvent(t: string, nama: string) {
+		nama = nama.trim();
+		if (!nama || form.meta_events[t].includes(nama) || form.meta_events[t].length >= 5) return;
+		form.meta_events[t] = [...form.meta_events[t], nama];
+	}
+	function hapusEvent(t: string, nama: string) {
+		form.meta_events[t] = form.meta_events[t].filter((e) => e !== nama);
+	}
+
 	function awal() {
 		const base = initial ?? {
 			slug: "", judul: "", deskripsi: "", program_id: programs.find((p) => p.aktif && p.info !== "belum terhubung ke produk")?.id ?? 0,
 			lead_source_id: 0, mode: "short", after_submit: "wa", nominal_override: null, field_config: {}, wa_template: "", izinkan_manual: true, is_aktif: true, tampil_kode_referal: true,
-			meta_tracking: true, meta_pixel_extra: "",
+			meta_tracking: true, meta_pixel_extra: "", meta_events: undefined as Record<string, string[]> | undefined,
 		};
 		const cfg: Record<string, FieldRule> = {};
 		for (const [k] of OPSIONAL) {
 			cfg[k] = base.field_config?.[k] ?? { tampil: base.mode === "full" || DEFAULT_SHORT.has(k), wajib: false };
 		}
-		return { ...base, tampil_kode_referal: base.tampil_kode_referal ?? true, meta_tracking: base.meta_tracking ?? true, meta_pixel_extra: base.meta_pixel_extra ?? "", field_config: cfg, nominal_text: base.nominal_override == null ? "" : String(base.nominal_override) };
+		const defaults = metaPixel.default_events ?? {};
+		const meta_events: Record<string, string[]> = {};
+		for (const [t] of TRIGGERS) meta_events[t] = [...(base.meta_events?.[t] ?? defaults[t] ?? [])];
+		return { ...base, tampil_kode_referal: base.tampil_kode_referal ?? true, meta_tracking: base.meta_tracking ?? true, meta_pixel_extra: base.meta_pixel_extra ?? "", meta_events, field_config: cfg, nominal_text: base.nominal_override == null ? "" : String(base.nominal_override) };
 	}
 	let form = $state(awal());
 	let menyimpan = $state(false);
@@ -205,7 +239,38 @@
 					<input class={field + " mt-1 font-mono"} bind:value={form.meta_pixel_extra} maxlength="80" inputmode="numeric" placeholder="mis. 123456789012345, 987654321098765" />
 					<span class="mt-1 block font-normal text-neutral-400">Maks. 3, pisahkan koma. Pixel tambahan hanya menerima event browser; CAPI dikirim ke dataset utama.</span>
 				</label>
-				<p class="mt-2 text-xs text-neutral-500">Event: PageView, ViewContent (buka halaman), Lead, CompleteRegistration, InitiateCheckout (submit), AddPaymentInfo (unggah bukti). Browser &amp; server memakai event_id yang sama sehingga tidak dobel.</p>
+				<p class="mt-3 text-xs text-neutral-500">Selalu dikirim: PageView{form.mode !== "wa" ? " + ViewContent saat halaman form dibuka" : ""}. Atur event tiap momen di bawah (maks. 5 per momen, standar Meta atau nama custom).</p>
+				<ul class="mt-2 divide-y divide-neutral-100 rounded-lg border border-neutral-200 dark:divide-white/[0.06] dark:border-white/10">
+					{#each TRIGGERS.filter(([t]) => triggerTampil(t, form.mode, form.after_submit)) as [t, judul, hint] (t)}
+						<li class="px-3 py-2.5">
+							<p class="text-sm font-medium text-neutral-800 dark:text-neutral-200">{judul}</p>
+							<p class="mt-0.5 text-[11px] leading-snug text-neutral-500">{hint}</p>
+							<div class="mt-2 flex flex-wrap items-center gap-1.5">
+								{#each form.meta_events[t] as e (e)}
+									<span class="inline-flex h-7 items-center gap-1 rounded-full border border-brand-500/40 bg-brand-500/10 pl-2.5 pr-1 text-xs font-medium text-brand-800 dark:text-brand-200">
+										{e}{#if metaPixel.funnel_trigger?.[e]}<span class="font-normal opacity-70">· funnel</span>{:else if !(metaPixel.standard_events ?? []).includes(e)}<span class="font-normal opacity-70">· custom</span>{/if}
+										<button type="button" class="flex h-5 w-5 items-center justify-center rounded-full hover:bg-brand-500/20" aria-label={`Hapus ${e} dari ${judul}`} onclick={() => hapusEvent(t, e)}>×</button>
+									</span>
+								{:else}
+									<span class="text-xs text-neutral-400">Tidak ada event</span>
+								{/each}
+							</div>
+							{#if form.meta_events[t].length < 5}
+								<div class="mt-2 flex flex-wrap gap-2">
+									<select class={field + " max-w-52"} aria-label={`Tambah event standar untuk ${judul}`} value="" onchange={(e) => { tambahEvent(t, e.currentTarget.value); e.currentTarget.value = ""; }}>
+										<option value="">+ Event standar…</option>
+										{#each opsiEvent(t) as e (e)}<option value={e}>{e}{metaPixel.funnel_trigger?.[e] ? " (funnel CRM)" : ""}</option>{/each}
+									</select>
+									<div class="flex gap-1.5">
+										<input class={field + " w-44 font-mono"} maxlength="40" placeholder="NamaEventCustom" aria-label={`Nama event custom untuk ${judul}`} bind:value={customTeks[t]}
+											onkeydown={(e) => { if (e.key === "Enter") { e.preventDefault(); tambahEvent(t, customTeks[t] ?? ""); customTeks[t] = ""; } }} />
+										<button type="button" class={btn + " border border-neutral-200 text-neutral-700 dark:border-white/10 dark:text-neutral-300"} disabled={!customTeks[t]?.trim()} onclick={() => { tambahEvent(t, customTeks[t] ?? ""); customTeks[t] = ""; }}>Tambah</button>
+									</div>
+								</div>
+							{/if}
+						</li>
+					{/each}
+				</ul>
 			{/if}
 		</div>
 
