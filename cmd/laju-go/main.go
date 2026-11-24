@@ -281,6 +281,7 @@ func main() {
 		RegistrationLinks:           handlers.NewRegistrationLinkHandler(registrationService, sessionStore, inertiaService),
 		XenditWebhook:               handlers.NewXenditWebhookHandler(registrationService, cfg.XenditCallbackToken),
 		LeadPrograms:                handlers.NewLeadProgramHandler(leadService, leadProgramService, productCRMService, sessionStore, inertiaService, routes.LeadSourceEditorRoles),
+		ProgramKelas:                handlers.NewProgramKelasHandler(leadProgramService, sessionStore, inertiaService),
 		LeadClosing:                 handlers.NewLeadClosingHandler(leadService, sessionStore, inertiaService),
 		LeadLaporan:                 handlers.NewLeadLaporanHandler(leadService, sessionStore, inertiaService).WithIntegrations(metaAdsService, metaCAPIService),
 		LeadSources:                 handlers.NewLeadSourceHandler(leadService, sessionStore, inertiaService),

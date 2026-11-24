@@ -26,7 +26,7 @@
 	let noWA = $state(nomorTersimpan());
 	let mengirim = $state(false);
 	let pesanError = $state("");
-	let hasil = $state<{ nama: string; sudah_tercatat: boolean } | null>(null);
+	let hasil = $state<{ nama: string; sudah_tercatat: boolean; kelas?: string; zoom_url?: string } | null>(null);
 
 	let tanggalPanjang = $derived.by(() => {
 		if (!sesi) return "";
@@ -97,6 +97,12 @@
 							<p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
 								Kehadiran <span class="font-medium text-neutral-900 dark:text-white">{hasil.nama}</span> di sesi {sesi.ke} {hasil.sudah_tercatat ? "sudah tercatat sebelumnya" : "tercatat"}.
 							</p>
+							{#if hasil.kelas}
+								<p class="mt-3 text-sm text-neutral-600 dark:text-neutral-400">Kelas Anda: <span class="font-semibold text-neutral-900 dark:text-white">{hasil.kelas}</span></p>
+								{#if hasil.zoom_url}
+									<a href={hasil.zoom_url} target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl bg-brand-700 px-5 text-sm font-semibold text-white transition hover:bg-brand-800">Buka Zoom kelas</a>
+								{/if}
+							{/if}
 						</div>
 					{:else if sesi.status === "belum"}
 						<div class="flex gap-3 rounded-xl bg-sky-500/10 p-4 text-sm text-sky-800 dark:text-sky-300">

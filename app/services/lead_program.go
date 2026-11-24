@@ -47,6 +47,17 @@ func NewLeadProgramService(q *queries.Querier) *LeadProgramService {
 
 func (s *LeadProgramService) normalize(ctx context.Context, id int64, r *models.LeadProgramRequest) error {
 	r.Nama = strings.Join(strings.Fields(r.Nama), " ")
+	if r.KapasitasKelas == 0 {
+		r.KapasitasKelas = DefaultKapasitasKelas
+		if id > 0 {
+			if cur, err := s.querier.GetLeadProgram(ctx, id); err == nil && cur.KapasitasKelas > 0 {
+				r.KapasitasKelas = cur.KapasitasKelas
+			}
+		}
+	}
+	if r.KapasitasKelas < 1 || r.KapasitasKelas > 500 {
+		return errors.New("maksimal peserta per kelas harus 1–500")
+	}
 	r.Keterangan = strings.TrimSpace(r.Keterangan)
 	if r.Nama == "" || utf8.RuneCountInString(r.Nama) > 80 {
 		return errors.New("nama program wajib diisi, maksimal 80 karakter")
@@ -213,6 +224,7 @@ type ProgramDetail struct {
 	Program models.LeadProgram      `json:"program"`
 	Sesi    []models.ProgramSesi    `json:"sesi"`
 	Peserta []models.ProgramPeserta `json:"peserta"`
+	Kelas   []models.ProgramKelas   `json:"kelas"`
 }
 
 func (s *LeadProgramService) Detail(id int64) (*ProgramDetail, error) {
@@ -231,7 +243,7 @@ func (s *LeadProgramService) Detail(id int64) (*ProgramDetail, error) {
 			p.SumberIDs = append(p.SumberIDs, sid)
 		}
 	}
-	d := &ProgramDetail{Program: *p, Sesi: []models.ProgramSesi{}, Peserta: []models.ProgramPeserta{}}
+	d := &ProgramDetail{Program: *p, Sesi: []models.ProgramSesi{}, Peserta: []models.ProgramPeserta{}, Kelas: []models.ProgramKelas{}}
 	if d.Sesi, err = s.querier.ListProgramSesi(ctx, id); err != nil {
 		return nil, err
 	}
@@ -239,6 +251,15 @@ func (s *LeadProgramService) Detail(id int64) (*ProgramDetail, error) {
 		if d.Peserta, err = s.querier.ListProgramPeserta(ctx, p.ProdukID, p.ProdukBatchID); err != nil {
 			return nil, err
 		}
+	}
+	if p.Jenis == LeadProgramJenisProgram && p.ProdukID > 0 {
+		// Place new participants first, so the page always shows classes.
+		kelas, rows, peserta, err := s.syncKelas(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		d.Kelas, d.Peserta = kelas, peserta
+		applyKelas(d.Peserta, rows)
 	}
 	hadir, err := s.querier.ListProgramKehadiran(ctx, id)
 	if err != nil {
@@ -420,6 +441,9 @@ func (s *LeadProgramService) HadirInfo(token string) (*HadirInfo, *models.Progra
 type HadirHasil struct {
 	Nama          string `json:"nama"`
 	SudahTercatat bool   `json:"sudah_tercatat"`
+	// Kelas and ZoomURL: the participant's class, shown after a valid check-in.
+	Kelas   string `json:"kelas,omitempty"`
+	ZoomURL string `json:"zoom_url,omitempty"`
 }
 
 // Hadir records attendance from the public link: the WhatsApp number must
@@ -456,7 +480,8 @@ func (s *LeadProgramService) Hadir(token, noWA string) (*HadirHasil, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &HadirHasil{Nama: samarkanNama(x.Nama), SudahTercatat: !baru}, nil
+		kelas, zoom := pesertaKelasInfo(ctx, s.querier, p.ID, x.OrderID)
+		return &HadirHasil{Nama: samarkanNama(x.Nama), SudahTercatat: !baru, Kelas: kelas, ZoomURL: zoom}, nil
 	}
 	return nil, errors.New("Nomor ini belum terdaftar sebagai peserta; pastikan nomornya sama dengan saat mendaftar, atau hubungi admin")
 }
@@ -576,6 +601,13 @@ func (s *LeadService) DaftarkanPeserta(ctx context.Context, leadID, actorID int6
 		if p.ProdukID <= 0 {
 			return fmt.Errorf("program %s belum punya produk di Produk CRM; atur di halaman Program", p.Nama)
 		}
+		jk := normalJK(req.JenisKelamin)
+		if jk == "" {
+			jk = normalJK(l.JenisKelamin)
+		}
+		if jk == "" {
+			return errors.New("pilih ikhwan atau akhwat agar peserta masuk kelas yang sesuai")
+		}
 		nama := strings.TrimSpace(req.Nama)
 		if nama == "" {
 			nama = strings.TrimSpace(l.Nama)
@@ -610,6 +642,16 @@ func (s *LeadService) DaftarkanPeserta(ctx context.Context, leadID, actorID int6
 			return err
 		}
 		now := s.nowUTC()
+		if err := q.UpsertProgramPesertaKelas(ctx, p.ID, orderID, jk, 0, "auto", now); err != nil {
+			return err
+		}
+		pesertaProgram, err := q.ListProgramPeserta(ctx, p.ProdukID, p.ProdukBatchID)
+		if err != nil {
+			return err
+		}
+		if _, _, err := syncProgramKelas(ctx, q, p, pesertaProgram, s.nowUTC); err != nil {
+			return err
+		}
 		n, err := q.MarkLeadWonProgram(ctx, leadID, actorID, now)
 		if err != nil {
 			return err

@@ -106,7 +106,7 @@ func (h *LeadProgramHandler) Show(c *fiber.Ctx) error {
 		return err
 	}
 	return h.inertiaService.Render(c, "app/LeadProgramDetail", fiber.Map{
-		"user": sessionUser(sess), "program": detail.Program, "sesi": detail.Sesi, "peserta": detail.Peserta,
+		"user": sessionUser(sess), "program": detail.Program, "sesi": detail.Sesi, "peserta": detail.Peserta, "kelas": detail.Kelas,
 		"sources": sources, "produk": produk, "can_edit": h.canEdit(c),
 	})
 }
