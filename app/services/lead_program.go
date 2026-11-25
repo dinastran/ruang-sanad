@@ -266,6 +266,13 @@ func (s *LeadProgramService) Detail(id int64) (*ProgramDetail, error) {
 	if d.MenungguVerifikasi, err = s.querier.ListProgramMenungguVerifikasi(ctx, id); err != nil {
 		return nil, err
 	}
+	// The driver stores DATETIME as Go text ("... +0000 UTC"), which the
+	// browser cannot parse; send RFC3339 in WIB instead.
+	for i := range d.MenungguVerifikasi {
+		if t, ok := queries.ParseStoredTime(d.MenungguVerifikasi[i].Diunggah); ok {
+			d.MenungguVerifikasi[i].Diunggah = formatLeadTime(t)
+		}
+	}
 	leadIDs := []int64{}
 	for _, x := range d.Peserta {
 		if x.LeadID > 0 {

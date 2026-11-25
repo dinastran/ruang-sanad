@@ -180,7 +180,9 @@
 	let menunggu = $derived(props.menunggu_verifikasi ?? []);
 	const buktiURL = (leadID: number, paymentID: number) => `/app/leads/${leadID}/payments/${paymentID}/bukti`;
 	const fmtWaktu = (t: string) => {
-		const d = new Date(t.replace(" ", "T").replace(/(\.\d+)?(Z|[+-]\d\d:\d\d)?$/, "Z"));
+		// Server sends RFC3339 with offset; bare "YYYY-MM-DD HH:MM:SS" is UTC.
+		const iso = t.replace(" ", "T");
+		const d = new Date(/(Z|[+-]\d\d:\d\d)$/.test(iso) ? iso : iso + "Z");
 		return Number.isNaN(d.getTime()) ? t : d.toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }) + " WIB";
 	};
 

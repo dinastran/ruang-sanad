@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -72,6 +73,41 @@ func decodeLeadCursor(cursor string, f *queries.LeadListFilter) {
 	f.AfterPrio, f.AfterID, f.AfterAct, f.HasCursor = prio, id, parts[2], true
 }
 
+// applyLeadSearch turns the search box text into list filters: "L-171" is
+// exactly that lead; "171" matches lead 171 (pinned first by List) plus
+// names and phone numbers containing it.
+func applyLeadSearch(f *queries.LeadListFilter, q string) {
+	if id, ok := parseLeadRef(q); ok {
+		f.OnlyID = id
+		return
+	}
+	f.Search = truncateRunes(q, 80)
+	if id, err := strconv.ParseInt(strings.TrimPrefix(q, "#"), 10, 64); err == nil && id > 0 {
+		f.SearchID = id
+	}
+	digits := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, q)
+	if len(digits) >= 4 {
+		f.PhoneSearch = strings.TrimPrefix(digits, "0")
+	}
+}
+
+var leadRefPattern =regexp.MustCompile(`^[Ll]\s*-?\s*(\d+)$`)
+
+// parseLeadRef reads a lead reference such as "L-171" or "l171".
+func parseLeadRef(q string) (int64, bool) {
+	m := leadRefPattern.FindStringSubmatch(q)
+	if m == nil {
+		return 0, false
+	}
+	id, err := strconv.ParseInt(m[1], 10, 64)
+	return id, err == nil && id > 0
+}
+
 // wibDayStart parses YYYY-MM-DD as the start of that day in WIB.
 func wibDayStart(date string) (time.Time, bool) {
 	t, err := time.ParseInLocation(time.DateOnly, strings.TrimSpace(date), wib)
@@ -116,16 +152,7 @@ func (s *LeadService) List(ctx context.Context, p models.LeadListParams) (*model
 	}
 	f.NeedsReview = p.NeedsReview
 	if q := strings.TrimSpace(p.Search); q != "" {
-		f.Search = truncateRunes(q, 80)
-		digits := strings.Map(func(r rune) rune {
-			if r >= '0' && r <= '9' {
-				return r
-			}
-			return -1
-		}, q)
-		if len(digits) >= 4 {
-			f.PhoneSearch = strings.TrimPrefix(digits, "0")
-		}
+		applyLeadSearch(&f, q)
 	}
 	if t, ok := wibDayStart(p.From); ok {
 		f.CreatedFrom = t
@@ -140,6 +167,17 @@ func (s *LeadService) List(ctx context.Context, p models.LeadListParams) (*model
 	if p.Cursor != "" {
 		decodeLeadCursor(p.Cursor, &f)
 	}
+	var pinned []queries.LeadListRow
+	if f.SearchID > 0 {
+		if !f.HasCursor {
+			pf := f
+			pf.Search, pf.PhoneSearch, pf.SearchID, pf.OnlyID, pf.Limit = "", "", 0, f.SearchID, 1
+			if pinned, err = s.querier.ListLeads(ctx, pf); err != nil {
+				return nil, err
+			}
+		}
+		f.ExcludeID = f.SearchID
+	}
 	rows, err := s.querier.ListLeads(ctx, f)
 	if err != nil {
 		return nil, err
@@ -153,6 +191,7 @@ func (s *LeadService) List(ctx context.Context, p models.LeadListParams) (*model
 		rows = rows[:leadListPageSize]
 		resp.NextCursor = encodeLeadCursor(rows[len(rows)-1])
 	}
+	rows = append(pinned, rows...)
 	ids := make([]int64, len(rows))
 	for i, r := range rows {
 		ids[i] = r.ID
