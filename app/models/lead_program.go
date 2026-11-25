@@ -91,7 +91,7 @@ type ProgramMenungguVerifikasi struct {
 	JenisKelamin string `json:"jenis_kelamin"`
 	PaymentID    int64  `json:"payment_id"`
 	Amount       int64  `json:"amount"`
-	Diunggah     string `json:"diunggah"` // UTC timestamp text
+	Diunggah     string `json:"diunggah"` // RFC3339 (WIB)
 	PerluTinjau  bool   `json:"perlu_tinjau"`
 }
 

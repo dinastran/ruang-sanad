@@ -60,7 +60,7 @@
 		</div>
 		<form class="relative min-w-0 flex-1" onsubmit={(e) => { e.preventDefault(); onfilter({ q: search.trim() }); }}>
 			<Search size={16} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-			<input type="search" bind:value={search} placeholder="Cari nama, nama WA, atau nomor" aria-label="Cari lead" class={field + " h-10 pl-9 lg:h-[42px]"} />
+			<input type="search" bind:value={search} placeholder="Cari nama, nomor, atau ID (171 / L-171)" aria-label="Cari lead" class={field + " h-10 pl-9 lg:h-[42px]"} />
 		</form>
 		<button type="button" onclick={() => (moreOpen = !moreOpen)} aria-expanded={moreOpen} aria-controls="lead-filter-more"
 			class={"inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 lg:h-[42px] " +

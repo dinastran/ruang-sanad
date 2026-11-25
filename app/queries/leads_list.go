@@ -25,6 +25,13 @@ type LeadListFilter struct {
 	NeedsReview bool
 	Search      string
 	PhoneSearch string
+	// SearchID > 0 also matches the lead with this id in the Search condition.
+	SearchID int64
+	// OnlyID > 0 restricts the list to one lead id (search "L-171").
+	OnlyID int64
+	// ExcludeID > 0 drops one lead from ListLeads only (it is pinned
+	// separately); CountLeadsByColumn ignores it so totals stay correct.
+	ExcludeID int64
 	DateField string // converted only when explicitly requested
 	CreatedFrom time.Time
 	CreatedTo   time.Time
@@ -111,7 +118,15 @@ func leadListWhere(f LeadListFilter) ([]string, []any) {
 			cond += " OR l.phone LIKE ?"
 			args = append(args, "%"+f.PhoneSearch+"%")
 		}
+		if f.SearchID > 0 {
+			cond += " OR l.id = ?"
+			args = append(args, f.SearchID)
+		}
 		where = append(where, cond+")")
+	}
+	if f.OnlyID > 0 {
+		where = append(where, "l.id = ?")
+		args = append(args, f.OnlyID)
 	}
 	dateColumn := "l.created_at"
  if f.DateField == "converted" { dateColumn = "l.converted_at" }
@@ -128,6 +143,10 @@ func leadListWhere(f LeadListFilter) ([]string, []any) {
 
 func (q *Queries) ListLeads(ctx context.Context, f LeadListFilter) ([]LeadListRow, error) {
 	where, args := leadListWhere(f)
+	if f.ExcludeID > 0 {
+		where = append(where, "l.id != ?")
+		args = append(args, f.ExcludeID)
+	}
 	if f.HasCursor {
 		where = append(where, "("+leadPrioExpr+" < ? OR ("+leadPrioExpr+" = ? AND "+leadActExpr+" < ?) OR ("+leadPrioExpr+" = ? AND "+leadActExpr+" = ? AND l.id < ?))")
 		args = append(args, f.AfterPrio, f.AfterPrio, f.AfterAct, f.AfterPrio, f.AfterAct, f.AfterID)
